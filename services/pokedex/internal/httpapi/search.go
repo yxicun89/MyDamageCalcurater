@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"sort"
@@ -44,6 +45,13 @@ var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 // likePattern は q を前方一致のパターンにする(省略・空は全件 "%")。
 func likePattern(q string) string {
 	return likeEscaper.Replace(q) + "%"
+}
+
+// SpeciesSearchPatterns は種族検索の LIKE のパターンの組を返す(ADR-0324)。
+// pattern は q の前方一致、megaPattern は「メガ + q」の前方一致(メガ種族だけに使う)。
+// 後者で、メガを除いた基本種名(ルカリオ)でもメガ種族(メガルカリオ)が当たる。
+func SpeciesSearchPatterns(q string) (pattern, megaPattern string) {
+	return likePattern(q), likeEscaper.Replace(master.MegaNamePrefix) + likePattern(q)
 }
 
 func derefStr(p *string) string {
@@ -110,8 +118,9 @@ func (s *Server) SearchSpecies(ctx *echo.Context, params api.SearchSpeciesParams
 	if err != nil {
 		return unavailable("SearchSpecies/GetDefaultRegulation", err)
 	}
+	pattern, megaPattern := SpeciesSearchPatterns(derefStr(params.Q))
 	rows, err := s.q.SearchSpecies(reqCtx, store.SearchSpeciesParams{
-		RegulationID: reg.ID, Pattern: likePattern(derefStr(params.Q)), Limit: limit,
+		RegulationID: reg.ID, Pattern: pattern, MegaPattern: megaPattern, Limit: limit,
 	})
 	if err != nil {
 		return unavailable("SearchSpecies", err)
@@ -143,12 +152,29 @@ func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) er
 	out := make([]api.Move, 0, len(rows))
 	for _, r := range rows {
 		priority := int(r.Priority)
+		target, err := publicMoveTarget(r.ID, r.Target)
+		if err != nil {
+			return err
+		}
 		out = append(out, api.Move{
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
-			Power: int(r.Power), Priority: &priority,
+			Power: int(r.Power), Priority: &priority, Target: target,
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)
+}
+
+// publicMoveTarget は技の対象を公開 API の分類(single/spread)にする。NULL はキーを省く(nil)。
+// 未知の値は分類できないので 503 master_unavailable(ADR-0223 §4。効果と同じ扱い)。
+func publicMoveTarget(moveID string, v sql.NullString) (*api.MoveTarget, error) {
+	if !v.Valid {
+		return nil, nil
+	}
+	if !master.IsMoveTarget(v.String) {
+		return nil, unavailable("move target: "+moveID, fmt.Errorf("未知の技の対象: %q", v.String))
+	}
+	out := api.MoveTarget(master.MoveTarget(v.String).Engine())
+	return &out, nil
 }
 
 // SearchItems は GET /api/pokedex/items。
@@ -241,10 +267,19 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 		BaseStats: api.StatBlock{Hp: int(sp.BaseHp), Atk: int(sp.BaseAtk), Def: int(sp.BaseDef), Spa: int(sp.BaseSpa), Spd: int(sp.BaseSpd), Spe: int(sp.BaseSpe)},
 		Abilities: abilities, Learnset: &learnset,
 	}
+	isMega := sp.IsMega
+	detail.IsMega = &isMega
 	if err := tx.Commit(); err != nil {
 		return unavailable("GetSpecies/Commit", err)
 	}
-	return ctx.JSON(http.StatusOK, detail)
+	return ctx.JSON(http.StatusOK, speciesDetailBody{SpeciesDetail: detail, RequiredItemId: nullStringPtr(sp.RequiredItemID)})
+}
+
+// speciesDetailBody は SpeciesDetail の応答本文。requiredItemId は契約上 optional なので生成型は omitempty だが、
+// 公開 API はメガでなくてもキーを出す(null)。外側の同名フィールドが埋め込み側より優先され、キーが重複しない。
+type speciesDetailBody struct {
+	api.SpeciesDetail
+	RequiredItemId *string `json:"requiredItemId"`
 }
 
 // GetMove は GET /api/pokedex/moves/{key}。使用可能集合の外の技も返す(絞り込みは検索の仕事)。
@@ -258,9 +293,13 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 		return unavailable("GetMove", err)
 	}
 	priority := int(row.Priority)
+	target, err := publicMoveTarget(row.ID, row.Target)
+	if err != nil {
+		return err
+	}
 	move := api.Move{
 		Id: row.ID, NameJa: row.NameJa, Type: api.PokeType(row.Type), Category: api.MoveCategory(row.Category),
-		Power: int(row.Power), Priority: &priority,
+		Power: int(row.Power), Priority: &priority, Target: target,
 	}
 	return ctx.JSON(http.StatusOK, move)
 }
@@ -291,9 +330,13 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 			continue
 		}
 		priority := int(r.Priority)
+		target, err := publicMoveTarget(r.ID, r.Target)
+		if err != nil {
+			return err
+		}
 		out = append(out, api.Move{
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
-			Power: int(r.Power), Priority: &priority,
+			Power: int(r.Power), Priority: &priority, Target: target,
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)

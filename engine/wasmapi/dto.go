@@ -219,6 +219,10 @@ type speciesDTO struct {
 	Types     []string `json:"types"`
 	BaseStats statsDTO `json:"baseStats"`
 	Abilities []string `json:"abilities"`
+	// IsMega・RequiredItemID はメガシンカ後の種族の印と必須の持ち物(issue #505。ADR-0321)。
+	// engine.Species には渡さず、境界の持ち物検証(mega.go)だけが使う。省略は通常の種族。
+	IsMega         bool   `json:"isMega"`
+	RequiredItemID string `json:"requiredItemId"`
 }
 
 func (s speciesDTO) toEngine(path string) (engine.Species, error) {
@@ -248,6 +252,8 @@ type moveDTO struct {
 	Priority int    `json:"priority"`
 	// Mechanisms は技の機構(ADR-0121。省略・空は通常の技)。未対応の印に使う(ADR-0123)。
 	Mechanisms []string `json:"mechanisms"`
+	// Target は技の対象("" | single | spread。ADR-0222)。省略は不明。
+	Target string `json:"target"`
 }
 
 func (m moveDTO) toEngine(path string) (engine.Move, error) {
@@ -263,8 +269,14 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	if err != nil {
 		return engine.Move{}, err
 	}
+	target := engine.MoveTarget(m.Target)
+	switch target {
+	case "", engine.MoveTargetSingle, engine.MoveTargetSpread:
+	default:
+		return engine.Move{}, enumError(path+".target", m.Target)
+	}
 	return engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
-		Mechanisms: mechanisms}, nil
+		Mechanisms: mechanisms, Target: target}, nil
 }
 
 // parseMechanisms は技の機構を検証する(未知の値は invalid_enum、重複は invalid_input)。

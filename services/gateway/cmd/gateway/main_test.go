@@ -3,13 +3,20 @@ package main
 // gateway の起動(設定の読み込み・待ち受け・停止)の受け入れテスト(ADR-0202 §2。AC-G9)。
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"slices"
+	"strings"
 	"testing"
 	"time"
+
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 const testCalcURL = "http://calc.example.test:8080"
@@ -31,9 +38,9 @@ func envWith(mutate func(map[string]string)) map[string]string {
 
 // 環境変数の名前は運用(k8s の manifest・README)が依存するので固定する。
 func TestEnvNames(t *testing.T) {
-	got := []string{envAddr, envCalcURL, envPokedexURL, envRecordURL, envTeamURL, envBalanceURL, envSpeedURL,
+	got := []string{envAddr, envMetricsAddr, envCalcURL, envPokedexURL, envRecordURL, envTeamURL, envBalanceURL, envSpeedURL,
 		envJudgeURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL}
-	want := []string{"GATEWAY_ADDR", "GATEWAY_CALC_URL", "GATEWAY_POKEDEX_URL", "GATEWAY_RECORD_URL", "GATEWAY_TEAM_URL",
+	want := []string{"GATEWAY_ADDR", "GATEWAY_METRICS_ADDR", "GATEWAY_CALC_URL", "GATEWAY_POKEDEX_URL", "GATEWAY_RECORD_URL", "GATEWAY_TEAM_URL",
 		"GATEWAY_BALANCE_URL", "GATEWAY_SPEED_URL", "GATEWAY_JUDGE_URL", "GATEWAY_ASSETS_URL",
 		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT", "GATEWAY_WEB_URL"}
 	if !slices.Equal(got, want) {
@@ -208,12 +215,15 @@ func freeAddr(t *testing.T) string {
 
 // AC-G9: run は待ち受けて /healthz に答え、ctx の終了で nil を返して止まる。
 func TestRunServesAndStopsOnContextCancel(t *testing.T) {
-	addr := freeAddr(t)
+	addr, metricsAddr := freeAddr(t), freeAddr(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		done <- run(ctx, lookupFrom(envWith(func(e map[string]string) { e[envAddr] = addr })))
+		done <- run(ctx, lookupFrom(envWith(func(e map[string]string) {
+			e[envAddr] = addr
+			e[envMetricsAddr] = metricsAddr
+		})))
 	}()
 
 	client := &http.Client{Timeout: time.Second}
@@ -238,6 +248,22 @@ func TestRunServesAndStopsOnContextCancel(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
+	// issue #216: /metrics はメトリクス専用ポートだけが返し、公開ポートは 404。
+	get := func(url string) (int, string) {
+		resp, err := client.Get(url)
+		if err != nil {
+			t.Fatalf("GET %s: %v", url, err)
+		}
+		defer resp.Body.Close()
+		return resp.StatusCode, resp.Header.Get("Content-Type")
+	}
+	if code, ct := get("http://" + metricsAddr + "/metrics"); code != http.StatusOK || !strings.HasPrefix(ct, "text/plain") {
+		t.Errorf("メトリクス専用ポートの /metrics = %d %q, want 200 text/plain", code, ct)
+	}
+	if code, _ := get("http://" + addr + "/metrics"); code != http.StatusNotFound {
+		t.Errorf("公開ポートの /metrics = %d, want 404", code)
+	}
+
 	cancel()
 	select {
 	case err := <-done:
@@ -254,5 +280,46 @@ func TestRunFailsOnInvalidConfig(t *testing.T) {
 	err := run(context.Background(), lookupFrom(map[string]string{}))
 	if !errors.Is(err, errInvalidConfig) {
 		t.Fatalf("run = %v, want errInvalidConfig を包む", err)
+	}
+}
+
+// issue #216: メトリクス専用の待ち受けは既定 :9090 で、公開側と同じアドレスは起動エラー。
+func TestLoadConfigMetricsAddr(t *testing.T) {
+	got, err := loadConfig(lookupFrom(envWith(nil)))
+	if err != nil || got.MetricsAddr != ":9090" {
+		t.Fatalf("既定: MetricsAddr = %q, err = %v, want :9090", got.MetricsAddr, err)
+	}
+	got, err = loadConfig(lookupFrom(envWith(func(e map[string]string) { e[envMetricsAddr] = "127.0.0.1:19090" })))
+	if err != nil || got.MetricsAddr != "127.0.0.1:19090" {
+		t.Fatalf("指定: MetricsAddr = %q, err = %v", got.MetricsAddr, err)
+	}
+	_, err = loadConfig(lookupFrom(envWith(func(e map[string]string) { e[envAddr], e[envMetricsAddr] = ":7000", ":7000" })))
+	if !errors.Is(err, errInvalidConfig) {
+		t.Errorf("同じアドレス: err = %v, want errInvalidConfig", err)
+	}
+}
+
+// issue #217・#246: 起動ログの 1 行目(JSON)に version が出る。
+func TestRunLogsVersionAsJSON(t *testing.T) {
+	prevVersion, prevLogger := version.Version, slog.Default()
+	t.Cleanup(func() { version.Version = prevVersion; slog.SetDefault(prevLogger) })
+	version.Version = "abc1234"
+	var buf bytes.Buffer
+	slog.SetDefault(reqlog.NewLogger(&buf, slog.LevelInfo))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // 起動ログを出した直後に止まる
+	if err := run(ctx, lookupFrom(envWith(func(e map[string]string) {
+		e[envAddr], e[envMetricsAddr] = freeAddr(t), freeAddr(t)
+	}))); err != nil {
+		t.Fatalf("run = %v", err)
+	}
+	first, _, _ := strings.Cut(buf.String(), "\n")
+	var rec map[string]any
+	if err := json.Unmarshal([]byte(first), &rec); err != nil {
+		t.Fatalf("起動ログの 1 行目が JSON でない: %q: %v", first, err)
+	}
+	if rec["version"] != "abc1234" {
+		t.Errorf("起動ログ = %v, want version=abc1234", rec)
 	}
 }

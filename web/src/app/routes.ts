@@ -1,59 +1,38 @@
 // P4-10: URL で画面を切り替える(ルーターのライブラリは入れない。ADR-0300 §1)。
-// 画面 ID ↔ パスの区切り・タブの表示名・文書のタイトルの対応を1か所(この表)に置く。
-// 画面を増やすときは、SCREEN_ROUTES に1件・表示名を i18n/ja.ts に1件・画面のコンポーネントを
-// app/screens.tsx の SCREEN_COMPONENTS に1件足す(App.tsx は触らない。足し忘れは型エラーになる)。
+// 画面 ID ↔ パスの区切り・タブの表示名・文書のタイトルの対応は、各画面の登録ファイル(`*.screen.tsx`)が正で、
+// app/screens.tsx が集めた SCREENS からこの表を導く(ADR-0323。画面を足すときこのファイルは触らない)。
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対として扱う。
 
 import { aboutText, appText } from "../i18n/ja";
+import { ABOUT_SEGMENT, SCREENS } from "./screens";
 
 /** 画面 ID・URL の区切り・タブの表示名の1エントリ。 */
 export interface ScreenRoute {
   readonly id: string;
   /** base からの相対パスの1セグメント目(先頭・末尾の "/" は含まない)。 */
   readonly segment: string;
-  /** タブの表示名(appText の語をそのまま使う)。 */
+  /** タブの表示名(文言資源の語をそのまま使う)。 */
   readonly label: string;
   /**
    * issue 308(ADR-0304 追記6): この画面がマスタ(MasterData)を使うか。false の画面は、マスタの
-   * 読み込みに失敗していてもタブを選んで使える(app/screens.tsx の ScreenProps.master は使わない画面だけ
-   * 省略できる)。画面を追加するときは必ずどちらかを書く(省略できないので足し忘れは型エラーになる)。
+   * 読み込みに失敗していてもタブを選んで使える。
    */
   readonly usesMaster: boolean;
 }
 
 /**
- * 画面の定義順(タブの並び順・ロービング tabIndex の移動順もこの順)。
- * 画面を追加するときはここに1件足す(P4-12 のタイプバランスなど)。
+ * 画面 ID(登録ファイルの id。ADR-0323 で登録ファイルからの導出に変えたため文字列。
+ * 重複・欠落は app/screens.tsx の buildScreenRegistry と app/screenRegistry.test.ts が守る)。
  */
-export const SCREEN_ROUTES = [
-  { id: "calc", segment: "calc", label: appText.calcTabLabel, usesMaster: true },
-  { id: "reverse", segment: "reverse", label: appText.reverseTabLabel, usesMaster: true },
-  // P4-12a(ADR-0303 §2): タイプバランス。
-  { id: "balance", segment: "balance", label: appText.balanceTabLabel, usesMaster: true },
-  // SP3(ADR-0604 §2): 素早さ比較。engine(WASM)・master(pokedex のマスタ)のどちらも使わない
-  // (ADR-0604 §5)。issue 308: マスタの読み込みに失敗していても、このタブだけは使える。
-  { id: "speed", segment: "speed", label: appText.speedTabLabel, usesMaster: false },
-  // JD5(ADR-0705 §1): 判定(抜けて倒せるか・返り討ちに遭うか)。
-  { id: "judge", segment: "judge", label: appText.judgeTabLabel, usesMaster: true },
-  // P5-5 PR-A1(ADR-0309 §1): 構築ビルダー(一覧・新規作成・名前変更・削除)。PR-A1 自体はマスタ不要だが、
-  // PR-A2 のメンバー編集で種族・技・持ち物・特性の名前解決にマスタが要るため、最初から usesMaster: true。
-  { id: "team", segment: "team", label: appText.teamTabLabel, usesMaster: true },
-  // AJ6(ADR-0319 §1): 調整(指数・16n・SP 配分・最小 SP)。API 専用でマスタを使う。
-  { id: "adjust", segment: "adjust", label: appText.adjustTabLabel, usesMaster: true },
-] as const satisfies readonly ScreenRoute[];
+export type ScreenId = string;
 
-/** 画面 ID(SCREEN_ROUTES から導出する。手で union を書かない)。 */
-export type ScreenId = (typeof SCREEN_ROUTES)[number]["id"];
-
-/**
- * issue 308(ADR-0304 追記6): マスタを使わない画面 ID だけの union(usesMaster: false の行から導出する。
- * 手で union を書かない)。app/screens.tsx の `MASTERLESS_SCREEN_COMPONENTS` が `Record<MasterlessScreenId, ...>`
- * なので、usesMaster: false の画面を足したのに対応するコンポーネントを登録し忘れると型エラーになる。
- */
-export type MasterlessScreenId = Extract<
-  (typeof SCREEN_ROUTES)[number],
-  { readonly usesMaster: false }
->["id"];
+/** 画面の定義順(タブの並び順・ロービング tabIndex の移動順もこの順。登録ファイルの order の昇順)。 */
+export const SCREEN_ROUTES: readonly ScreenRoute[] = SCREENS.map(({ id, segment, label, usesMaster }) => ({
+  id,
+  segment,
+  label,
+  usesMaster,
+}));
 
 /** 既定の画面(未知のパス・"/" のとき)。 */
 export const DEFAULT_SCREEN: ScreenId = "calc";
@@ -61,7 +40,7 @@ export const DEFAULT_SCREEN: ScreenId = "calc";
 function findRoute(id: ScreenId): ScreenRoute {
   const route = SCREEN_ROUTES.find((candidate) => candidate.id === id);
   if (route === undefined) {
-    // SCREEN_ROUTES が ScreenId を過不足なく覆っている限り起きない(型で保証)。
+    // 未知の画面 ID(登録ファイルに無い id)。呼び出し側は SCREEN_ROUTES の id だけを渡す。
     throw new Error(`unknown screen id: ${id}`);
   }
   return route;
@@ -96,11 +75,8 @@ export function screenUsesMaster(id: ScreenId): boolean {
   return findRoute(id).usesMaster;
 }
 
-/**
- * issue 308: id がマスタを使わない画面か(型ガード)。App.tsx はこれで `tab: ScreenId` を
- * `MasterlessScreenId` に絞り込み、`MASTERLESS_SCREEN_COMPONENTS[tab]` を型キャスト無しで引く。
- */
-export function isMasterlessScreen(id: ScreenId): id is MasterlessScreenId {
+/** issue 308: id がマスタを使わない画面か。 */
+export function isMasterlessScreen(id: ScreenId): boolean {
   return !screenUsesMaster(id);
 }
 
@@ -114,11 +90,9 @@ export function documentTitle(id: ScreenId): string {
   return `${findRoute(id).label} | ${appText.siteTitle}`;
 }
 
-/**
- * 「このアプリについて」(ADR-0314)。タブ(SCREEN_ROUTES)ではない情報ページなので、画面 ID の表とは別に持つ。
- * パスの読み方は screenFromPath と同じ(末尾の "/" 1つは同じ画面。大文字小文字違い・深いパスは別物)。
- */
-const ABOUT_SEGMENT = "about";
+// 「このアプリについて」(ADR-0314)。タブ(SCREEN_ROUTES)ではない情報ページなので、segment(ABOUT_SEGMENT)は
+// 画面の登録とは別に app/screens.tsx が持つ(登録ファイルがこの segment を使うと検証で弾く)。
+// パスの読み方は screenFromPath と同じ(末尾の "/" 1つは同じ画面。大文字小文字違い・深いパスは別物)。
 
 /** pathname が情報ページ(/about)か。 */
 export function isAboutPath(pathname: string, base: string): boolean {

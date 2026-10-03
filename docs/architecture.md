@@ -29,9 +29,9 @@ flowchart LR
   iOS --> GW
   Web -.-> WASM
   GW --> Calc & Pokedex
-  Web -- Ingress /api/balance --> Balance
-  Web -- Ingress /api/speed --> Speed
-  Web -- Ingress /api/judge --> Judge
+  Web -- gateway /api/balance --> Balance
+  Web -- gateway /api/speed --> Speed
+  Web -- gateway /api/judge --> Judge
   Calc -- 内部API: マスタ --> Pokedex
   Pokedex --> MySQL
   Import --> MySQL
@@ -55,7 +55,7 @@ flowchart LR
 | engine | ダメージ・確定数・一括計算・逆算・実数値(I/O なし) | データ | [engine/](../engine/README.md) |
 | pokedex-svc / importer | マスタの DB・取込(calc・Showdown・PokeAPI)・マスタ API | データ | [services/pokedex/](../services/pokedex/README.md) |
 | calc-svc | 計算 API(engine を呼ぶだけ) | API | [services/calc/](../services/calc/README.md) |
-| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed・judge は各自の Ingress で公開 | API | [services/gateway/](../services/gateway/README.md) |
+| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed・judge も gateway が転送(各自の Ingress は撤去。ADR-0414・0416) | API | [services/gateway/](../services/gateway/README.md) |
 | balance-svc | 構築のタイプバランス | タイプバランス | [services/balance/](../services/balance/README.md) |
 | speed-svc | 素早さ比較 | 素早さ | [services/speed/](../services/speed/README.md) |
 | judge-svc | 素早さ×ダメージ連動の判定(抜けるか・倒せるか)。pokedex-svc・calc-svc の公開 API を呼ぶだけ | 判定 | [services/judge/](../services/judge/README.md) |
@@ -80,7 +80,7 @@ flowchart LR
 ## Kustomize overlay
 
 `deploy/k8s/base`(gateway・calc・pokedex・web の Deployment/Service/Ingress)と、balance・speed・judge 各サービス自身の
-`deploy/k8s/base`(独立した Ingress)を、環境ごとの overlay で組み合わせる。
+`deploy/k8s/base`(Ingress なし)を、環境ごとの overlay で組み合わせる。
 
 | overlay | 用途 |
 |---|---|

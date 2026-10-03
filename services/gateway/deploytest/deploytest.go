@@ -548,7 +548,16 @@ type Workload struct {
 	// ReadinessPath は readinessProbe のパス。空なら HealthzPath(liveness と同じ)。
 	// calc-svc はマスタの取得前に Service の宛先へ入らないよう /readyz を使う(ADR-0204 §3)。
 	ReadinessPath string
+	// MetricsPort は 0 でなければ、メトリクス専用ポート(containerPort の名前 metrics・Service の metrics ポート。
+	// issue #216)を持つことを求める。MetricsAddrEnv・DefaultMetricsAddr はその待ち受けアドレスの環境変数名と既定値。
+	// Ingress は http ポートだけを向くので、このポートは公開入口から届かない。
+	MetricsPort        int
+	MetricsAddrEnv     string
+	DefaultMetricsAddr string
 }
+
+// MetricsPortName はメトリクス専用ポートの名前(containerPort と Service 共通。ServiceMonitor の port もこれ)。
+const MetricsPortName = "metrics"
 
 // ServicePort は Service の公開ポート。gateway は上流を http://<Service 名> で指すので 80 に固定する(ADR-0203 §3)。
 const ServicePort = 80
@@ -587,8 +596,24 @@ func AssertWorkload(t *testing.T, w Workload) {
 		t.Errorf("imagePullPolicy = %q, want IfNotPresent か Never(k3d image import したイメージを使う)", c.ImagePullPolicy)
 	}
 
-	if len(c.Ports) != 1 || c.Ports[0].Name != "http" || c.Ports[0].ContainerPort <= 0 {
-		t.Fatalf("ports = %+v, want 名前 http のポート1つ", c.Ports)
+	wantPorts := 1
+	if w.MetricsPort != 0 {
+		wantPorts = 2
+	}
+	if len(c.Ports) != wantPorts || c.Ports[0].Name != "http" || c.Ports[0].ContainerPort <= 0 {
+		t.Fatalf("ports = %+v, want 名前 http のポートが先頭の %d 個", c.Ports, wantPorts)
+	}
+	if w.MetricsPort != 0 {
+		if c.Ports[1].Name != MetricsPortName || c.Ports[1].ContainerPort != w.MetricsPort {
+			t.Errorf("ports[1] = %+v, want %s:%d", c.Ports[1], MetricsPortName, w.MetricsPort)
+		}
+		maddr := w.DefaultMetricsAddr
+		if env := c.EnvMap(t); env[w.MetricsAddrEnv] != "" {
+			maddr = env[w.MetricsAddrEnv]
+		}
+		if _, port, _ := strings.Cut(maddr, ":"); port != itoa(w.MetricsPort) {
+			t.Errorf("メトリクスの待ち受けアドレス %q(%s か既定値)のポートが %d と違う", maddr, w.MetricsAddrEnv, w.MetricsPort)
+		}
 	}
 	containerPort := c.Ports[0].ContainerPort
 	addr := w.DefaultAddr
@@ -668,8 +693,8 @@ func AssertWorkload(t *testing.T, w Workload) {
 			t.Errorf("Service の selector %s=%s が Pod テンプレートのラベルに無い", k, v)
 		}
 	}
-	if len(svc.Spec.Ports) != 1 {
-		t.Fatalf("Service のポートが %d 個(1個であること)", len(svc.Spec.Ports))
+	if len(svc.Spec.Ports) != wantPorts {
+		t.Fatalf("Service のポートが %d 個(%d 個であること)", len(svc.Spec.Ports), wantPorts)
 	}
 	sp := svc.Spec.Ports[0]
 	if sp.Name != "http" || sp.Port != ServicePort {
@@ -677,6 +702,15 @@ func AssertWorkload(t *testing.T, w Workload) {
 	}
 	if tp := sp.TargetPort.Value; tp != "http" && tp != itoa(containerPort) {
 		t.Errorf("Service の targetPort = %q, want http か %d", tp, containerPort)
+	}
+	if w.MetricsPort != 0 {
+		mp := svc.Spec.Ports[1]
+		if mp.Name != MetricsPortName || mp.Port != w.MetricsPort {
+			t.Errorf("Service の 2 つ目のポート = %s:%d, want %s:%d", mp.Name, mp.Port, MetricsPortName, w.MetricsPort)
+		}
+		if tp := mp.TargetPort.Value; tp != MetricsPortName && tp != itoa(w.MetricsPort) {
+			t.Errorf("Service の metrics targetPort = %q, want %s か %d", tp, MetricsPortName, w.MetricsPort)
+		}
 	}
 }
 

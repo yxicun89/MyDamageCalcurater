@@ -301,7 +301,7 @@ func (q *Queries) GetItemEffect(ctx context.Context, itemID string) (ItemEffect,
 }
 
 const getMove = `-- name: GetMove :one
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id = ?
 `
@@ -313,6 +313,7 @@ type GetMoveRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
@@ -325,12 +326,13 @@ func (q *Queries) GetMove(ctx context.Context, id string) (GetMoveRow, error) {
 		&i.Category,
 		&i.Power,
 		&i.Priority,
+		&i.Target,
 	)
 	return i, err
 }
 
 const getMovesByIDs = `-- name: GetMovesByIDs :many
-SELECT id, name_ja, type, category, power, priority
+SELECT id, name_ja, type, category, power, priority, target
 FROM moves
 WHERE id IN (/*SLICE:ids*/?)
 `
@@ -342,6 +344,7 @@ type GetMovesByIDsRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesByIDsRow, error) {
@@ -370,6 +373,7 @@ func (q *Queries) GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesBy
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -530,8 +534,8 @@ func (q *Queries) InsertLearnset(ctx context.Context, arg InsertLearnsetParams) 
 }
 
 const insertMove = `-- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertMoveParams struct {
@@ -545,6 +549,7 @@ type InsertMoveParams struct {
 	Accuracy     sql.NullInt16
 	Pp           uint8
 	Priority     int8
+	Target       sql.NullString
 }
 
 func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
@@ -559,6 +564,7 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 		arg.Accuracy,
 		arg.Pp,
 		arg.Priority,
+		arg.Target,
 	)
 	return err
 }
@@ -1219,7 +1225,7 @@ func (q *Queries) ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, erro
 }
 
 const listMoves = `-- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id
 `
@@ -1244,6 +1250,7 @@ func (q *Queries) ListMoves(ctx context.Context) ([]Move, error) {
 			&i.Accuracy,
 			&i.Pp,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -1804,7 +1811,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 }
 
 const searchMoves = `-- name: SearchMoves :many
-SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority
+SELECT m.id, m.name_ja, m.type, m.category, m.power, m.priority, m.target
 FROM moves m
 JOIN regulation_moves rm ON rm.move_id = m.id
 WHERE rm.regulation_id = ? AND m.name_ja LIKE ?
@@ -1825,6 +1832,7 @@ type SearchMovesRow struct {
 	Category string
 	Power    uint16
 	Priority int8
+	Target   sql.NullString
 }
 
 func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error) {
@@ -1843,6 +1851,7 @@ func (q *Queries) SearchMoves(ctx context.Context, arg SearchMovesParams) ([]Sea
 			&i.Category,
 			&i.Power,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -1862,7 +1871,8 @@ const searchSpecies = `-- name: SearchSpecies :many
 SELECT s.` + "`" + `key` + "`" + `, s.dex_no, s.form, s.name_ja, s.type1, s.type2
 FROM species s
 JOIN regulation_species rs ON rs.species_key = s.` + "`" + `key` + "`" + `
-WHERE rs.regulation_id = ? AND s.name_ja LIKE ?
+WHERE rs.regulation_id = ?
+  AND (s.name_ja LIKE ? OR (s.is_mega AND s.name_ja LIKE ?))
 ORDER BY s.dex_no, s.form
 LIMIT ?
 `
@@ -1870,6 +1880,7 @@ LIMIT ?
 type SearchSpeciesParams struct {
 	RegulationID string
 	Pattern      string
+	MegaPattern  string
 	Limit        int32
 }
 
@@ -1886,8 +1897,15 @@ type SearchSpeciesRow struct {
 // 公開の検索 API(/api/pokedex/*。ADR-0105 §3)。pattern は呼び出し側が LIKE の特殊文字(\ % _)を
 // \ でエスケープし、末尾に % を付けた前方一致のパターン。name_ja の照合順序は utf8mb4_ja_0900_as_cs
 // (ADR-0100 §2。ひらがなとカタカナを区別しない)。
+// 種族は、メガ種族だけ「メガ + q」の前方一致でも当てる(mega_pattern。メガを除いた基本種名で検索すると基本種と
+// メガの両方が出る。ADR-0324)。メガの接頭辞は呼び出し側が mega_pattern に入れる(SQL に名前を書かない)。
 func (q *Queries) SearchSpecies(ctx context.Context, arg SearchSpeciesParams) ([]SearchSpeciesRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchSpecies, arg.RegulationID, arg.Pattern, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, searchSpecies,
+		arg.RegulationID,
+		arg.Pattern,
+		arg.MegaPattern,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}

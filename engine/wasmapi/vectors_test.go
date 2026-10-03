@@ -41,6 +41,10 @@ type vector struct {
 	Tags    []string        `json:"tags"`
 	Source  string          `json:"source"`
 	Request json.RawMessage `json:"request"`
+	// ExpectError は失敗が期待値のベクタのエラー code(issue #505。省略は成功ベクタ)。
+	// 成功の一致テストは対象外にし、TestErrorVectorsReturnExpectedCode が code を固定する。
+	// Go/WASM の一致(scripts/wasm-conformance.mjs)では、成功ベクタと同じくバイト一致を見る。
+	ExpectError string `json:"expectError"`
 }
 
 // typeChartDoc はベクタ先頭で1度だけ定義する相性表(ADR-0013 §P1-13.4)。
@@ -90,7 +94,38 @@ func loadVectors(t *testing.T) []vector {
 	if err != nil {
 		t.Fatalf("%v", err)
 	}
-	return f.Vectors
+	var out []vector
+	for _, v := range f.Vectors {
+		if v.ExpectError == "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// TestErrorVectorsReturnExpectedCode は expectError を持つベクタが、その code の失敗封筒を返すことを固定する
+// (成功ベクタとは別の読み口。Go/WASM の一致は Node 側のバイト比較が見る)。
+func TestErrorVectorsReturnExpectedCode(t *testing.T) {
+	f, err := loadVectorFile()
+	if err != nil {
+		t.Fatalf("%v", err)
+	}
+	n := 0
+	for _, v := range f.Vectors {
+		if v.ExpectError == "" {
+			continue
+		}
+		n++
+		t.Run(v.Name, func(t *testing.T) {
+			e := decodeError(t, invoke(t, v.Fn, requestWithTypeChart(t, v.Request)))
+			if e.Code != v.ExpectError {
+				t.Errorf("code = %q, want %q; message=%q", e.Code, v.ExpectError, e.Message)
+			}
+		})
+	}
+	if n == 0 {
+		t.Error("expectError を持つベクタが無い")
+	}
 }
 
 // sharedTypeChart はベクタ先頭の表を engine の値にしたもの。
@@ -523,6 +558,10 @@ func TestVectorsCoverRequiredScenarios(t *testing.T) {
 		"bulk", "itemVariants",
 		"reverse", "percent", "percentTenths", "damage", "defender", "attacker", "multiObservation", "itemCandidates",
 		"float", "defaults",
+		// issue #232 / ADR-0160: テラス・ダブルの「未対応」の印を Go/WASM で照合する。
+		"unsupported", "tera", "double",
+		// ADR-0224: テラスを計算に反映する入力(タイプ一致・「そのタイプを持つか」)の数値を Go/WASM で照合する。
+		"teraStab", "teraHasType",
 	}
 	for _, tag := range required {
 		if tags[tag] == 0 {

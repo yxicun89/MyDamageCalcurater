@@ -65,6 +65,13 @@ export interface Species {
   readonly types: readonly string[];
   readonly baseStats: Stats;
   readonly abilities: readonly string[];
+  /**
+   * メガシンカ後の種族か(issue 505・ADR-0321)。境界(engine/wasmapi)が持ち物規則の検証に使う。
+   * メガでない種族では省略する(境界の既定は false)。
+   */
+  readonly isMega?: boolean;
+  /** メガ種族が持てる持ち物(メガストーン)の ID。isMega が true のときだけ渡す。 */
+  readonly requiredItemId?: string | null;
 }
 
 /** 技。 */
@@ -224,6 +231,9 @@ export interface ReverseRequest {
 /**
  * 「未対応」の印の対象(engine.UnsupportedTarget の写し。ADR-0123 §2)。
  * attacker / defender は**その計算から見た**役割(攻撃側・防御側)。
+ * engine は ADR-0160 で attacker_tera_type・defender_tera_type・format(未知の形式だけ。double には
+ * ADR-0222 §5 で付けない)も返すが、この型への追加と
+ * 表示(ラベル)は後続(ADR-0160 §5)。それまでは UnsupportedMark.target の汎用表示(ADR-0215)で出る。
  */
 export type UnsupportedTarget =
   "move" | "attacker_item" | "attacker_ability" | "defender_item" | "defender_ability";
@@ -231,6 +241,7 @@ export type UnsupportedTarget =
 /**
  * 「未対応」の印の理由(engine.UnsupportedReason の写し。ADR-0123 §2)。技は機構の値(13 種)か
  * zero_power(威力 0 の攻撃技)、持ち物・特性は unsupported_effect(効果スキーマで表せない)。
+ * テラス・未知の対戦形式(ADR-0160)も unsupported_effect。
  */
 export type UnsupportedReason =
   | "alt_defense_stat"
@@ -252,7 +263,7 @@ export type UnsupportedReason =
 /**
  * 「この結果は正しく計算できていない可能性がある」印 1 件(engine.UnsupportedMark の写し。ADR-0123)。
  * 数値は通常の式のまま返るので、印が付いても行・候補は消さない(issue 271 / issue 270)。
- * 並びは engine が決める(技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性。
+ * 並びは engine が決める(技 → 攻撃側の持ち物 → 攻撃側の特性 → 防御側の持ち物 → 防御側の特性 → 攻撃側のテラス → 防御側のテラス → 形式。
  * 技は理由の昇順で zero_power が最後)。Web は並べ替え・重複除去をしない(ADR-0300 §8)。
  */
 export interface UnsupportedMark {
@@ -263,7 +274,7 @@ export interface UnsupportedMark {
   readonly target: string;
   /** 既知の値は {@link UnsupportedReason}。target と同じく未知の値も受け取る(ADR-0215)。 */
   readonly reason: string;
-  /** 印が付いた技・持ち物・特性の ID。 */
+  /** 印が付いた技・持ち物・特性の ID(テラス・形式の印ではテラスタイプの ID・形式の値)。 */
   readonly id: string;
 }
 

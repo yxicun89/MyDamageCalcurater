@@ -6,6 +6,7 @@
 import typeChartData from "@typechart";
 import { appText } from "../../i18n/ja";
 import type { Ability, Move } from "../../engine/types";
+import { searchSpeciesByName } from "../speciesNameMatch";
 import { typeChartFromData } from "../typeChart";
 import type {
   MasterData,
@@ -179,15 +180,14 @@ export function createCachedOfflineMasterSource(
           return [];
         }
         const record = await requireRecord();
-        return Object.values(record.species)
-          .filter((species) => species.nameJa.startsWith(trimmed))
-          .map((species) => ({
-            key: species.key,
-            dexNo: species.dexNo,
-            form: species.form,
-            nameJa: species.nameJa,
-            types: species.types,
-          }));
+        // オンライン(pokedex-svc)と同じ規則・並び(ADR-0324。メガ種族は「メガ + q」でも当たる)。
+        return searchSpeciesByName(Object.values(record.species), trimmed).map((species) => ({
+          key: species.key,
+          dexNo: species.dexNo,
+          form: species.form,
+          nameJa: species.nameJa,
+          types: species.types,
+        }));
       },
       async resolveSpecies(key): Promise<MasterSpeciesResolution> {
         const record = await requireRecord();

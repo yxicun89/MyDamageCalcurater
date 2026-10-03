@@ -60,8 +60,16 @@ const SPECIES_DETAIL_KEYS = [
   "abilities",
   "learnset",
 ] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
+// 省略可のキー(issue #515: メガシンカ。isMega は常に返るが、古いサーバーとの互換で契約上は optional)。
+const SPECIES_DETAIL_OPTIONAL_KEYS = [
+  "isMega",
+  "requiredItemId",
+] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
 export type SpeciesDetailKeysAreComplete = AssertNever<
-  Exclude<keyof Schemas["SpeciesDetail"], (typeof SPECIES_DETAIL_KEYS)[number]>
+  Exclude<
+    keyof Schemas["SpeciesDetail"],
+    (typeof SPECIES_DETAIL_KEYS)[number] | (typeof SPECIES_DETAIL_OPTIONAL_KEYS)[number]
+  >
 >;
 
 const MOVE_KEYS = [
@@ -72,7 +80,11 @@ const MOVE_KEYS = [
   "power",
   "priority",
 ] as const satisfies readonly (keyof Schemas["Move"])[];
-export type MoveKeysAreComplete = AssertNever<Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number]>>;
+// 省略可のキー(issue 288・ADR-0223: 対象を取り込んだ技だけが target を伴う。値は single / spread)。
+const MOVE_OPTIONAL_KEYS = ["target"] as const satisfies readonly (keyof Schemas["Move"])[];
+export type MoveKeysAreComplete = AssertNever<
+  Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number] | (typeof MOVE_OPTIONAL_KEYS)[number]>
+>;
 
 const ABILITY_KEYS = ["id", "nameJa"] as const satisfies readonly (keyof Schemas["Ability"])[];
 // 省略可のキー(issue #211・ADR-0218: 効果を持つ特性だけが effect を伴う)。
@@ -204,20 +216,23 @@ function isSpeciesSummary(value: unknown): value is Schemas["SpeciesSummary"] {
 
 function isSpeciesDetail(value: unknown): value is Schemas["SpeciesDetail"] {
   return (
-    hasExactKeys(value, [...SPECIES_DETAIL_KEYS]) &&
+    hasKeys(value, [...SPECIES_DETAIL_KEYS], [...SPECIES_DETAIL_OPTIONAL_KEYS]) &&
     isSpeciesSummaryShape(value) &&
     isRecord(value) &&
     isStatBlock(value.baseStats) &&
     Array.isArray(value.abilities) &&
     value.abilities.every(isAbility) &&
     Array.isArray(value.learnset) &&
-    value.learnset.every(isString)
+    value.learnset.every(isString) &&
+    // メガの項目(issue 515)は省略可。在るときは型まで確かめる(requiredItemId は null も可)。
+    (value.isMega === undefined || typeof value.isMega === "boolean") &&
+    (value.requiredItemId === undefined || value.requiredItemId === null || isString(value.requiredItemId))
   );
 }
 
 function isMove(value: unknown): value is Schemas["Move"] {
   return (
-    hasExactKeys(value, [...MOVE_KEYS]) &&
+    hasKeys(value, [...MOVE_KEYS], [...MOVE_OPTIONAL_KEYS]) &&
     isRecord(value) &&
     isString(value.id) &&
     isString(value.nameJa) &&
@@ -225,7 +240,8 @@ function isMove(value: unknown): value is Schemas["Move"] {
     isString(value.category) &&
     MOVE_CATEGORIES.includes(value.category as Schemas["MoveCategory"]) &&
     isNumber(value.power) &&
-    isNumber(value.priority)
+    isNumber(value.priority) &&
+    (value.target === undefined || value.target === "single" || value.target === "spread")
   );
 }
 
@@ -291,19 +307,28 @@ function fireSpeciesKey(): string {
 // --- 正常系: 契約のスキーマちょうど ---------------------------------------------------------------
 
 describe("正常系の本文が公開 API のスキーマを過不足なく満たす(api/openapi.yaml)", () => {
-  test("GET /api/pokedex/items は Item[](id と nameJa だけ。例データの effect を漏らさない)", () => {
+  test("GET /api/pokedex/items は Item[](効果を持つ持ち物だけ effect を伴い、形は PascalCase)", () => {
     const body = okArray(get("/api/pokedex/items", { limit: String(SEARCH_LIMIT_MAX) }));
     expect(body.length).toBe(master.items.length);
     for (const item of body) {
       expect(isItem(item), `Item の契約に合わない: ${JSON.stringify(item)}`).toBe(true);
-      // 契約上 effect は省略可(ADR-0218)だが、例データの effect は Web 内部の形(camelCase)で、
-      // 公開 API の形(item_effects の JSON そのまま)ではない。フィクスチャが effect を返すようにするのは
-      // Web レーンの #211 追従で(形の変換を含めて)行う。それまでは漏らさない。
-      expect(item, `例データの effect が漏れた: ${JSON.stringify(item)}`).not.toHaveProperty("effect");
+      // 契約上 effect は省略可(ADR-0218): 効果を持つ持ち物だけ伴い、キーは DB の形(PascalCase)。
+      const source = master.items.find((candidate) => candidate.id === (item as Schemas["Item"]).id);
+      expect(
+        Object.hasOwn(item as object, "effect"),
+        `effect の有無が例データと違う: ${JSON.stringify(item)}`,
+      ).toBe(source?.effect != null);
+      if ("effect" in (item as object)) {
+        expect(Object.keys((item as Schemas["Item"]).effect ?? {}).every((key) => /^[A-Z]/.test(key))).toBe(
+          true,
+        );
+      }
     }
     expect(new Set(body.map((item) => (item as Schemas["Item"]).id))).toEqual(
       new Set(master.items.map((item) => item.id)),
     );
+    // effects を有効にする(ADR-0322)ので、効果を持つ持ち物が1件以上ある。
+    expect(body.some((item) => "effect" in (item as object))).toBe(true);
   });
 
   test("GET /api/pokedex/natures は Nature[](全件・無補正は plus/minus が null)", () => {
@@ -338,8 +363,11 @@ describe("正常系の本文が公開 API のスキーマを過不足なく満�
     expect(detail.learnset).toEqual(source?.learnset);
     expect(detail.abilities.map((ability) => ability.id)).toEqual(source?.abilities);
     for (const ability of detail.abilities) {
-      // Item と同じ理由で、フィクスチャはまだ effect を返さない(Web レーンの #211 追従で変える)。
-      expect(ability, `例データの effect が漏れた: ${JSON.stringify(ability)}`).not.toHaveProperty("effect");
+      const abilitySource = master.abilities.find((candidate) => candidate.id === ability.id);
+      expect(
+        Object.hasOwn(ability, "effect"),
+        `effect の有無が例データと違う: ${JSON.stringify(ability)}`,
+      ).toBe(abilitySource?.effect != null);
     }
   });
 

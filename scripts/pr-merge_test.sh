@@ -62,6 +62,12 @@ cat >"$BIN/npm" <<'EOF'
 #!/usr/bin/env bash
 echo "npm $*" >>"$FAKE_CALLS"
 EOF
+# iOS ゲート(run_ios_gate)は xcodebuild の存在を確かめる。Linux の CI には無いので偽物を置く
+# (実際の xcodebuild は呼ばない。make ios-test も偽の make が受ける)。無いときの中止は別のテストで確かめている場合のみ PATH から外す。
+cat >"$BIN/xcodebuild" <<'EOF'
+#!/usr/bin/env bash
+echo "xcodebuild $*" >>"$FAKE_CALLS"
+EOF
 chmod +x "$BIN"/*
 
 # run_gate 引数... — 環境変数は呼び出し側で設定。結果は GATE_RC・$WORK/out・$WORK/calls。
@@ -135,6 +141,21 @@ FAKE_FILES=engine/x.go run_gate 5
 grep -q '^make test-golden$' "$WORK/calls" && ok || ng "engine 変更で test-golden を流していない"
 FAKE_FILES=docs/a.md run_gate 5
 grep -q '^make test-golden$' "$WORK/calls" && ng "docs だけで test-golden を流した" || ok
+
+begin "iOS: ios/ または OpenAPI 契約を変える PR だけ make ios-test も流す"
+for f in ios/PokeCalc/RootView.swift api/openapi.yaml services/speed/api/openapi.yaml; do
+  FAKE_FILES="$f" run_gate 5
+  grep -q '^make ios-test$' "$WORK/calls" && ok || ng "$f の変更で make ios-test を流していない"
+  [ "$GATE_RC" = 0 ] && ok || ng "iOS ゲートを通ればマージするはず($f): $(cat "$WORK/out")"
+done
+FAKE_FILES=docs/a.md run_gate 5
+grep -q '^make ios-test$' "$WORK/calls" && ng "docs だけで make ios-test を流した" || ok
+FAKE_FILES=services/pokedex/x.go run_gate 5
+grep -q '^make ios-test$' "$WORK/calls" && ng "Go だけで make ios-test を流した" || ok
+
+begin "iOS: make ios-test が失敗したらマージしない(make test が通っていても)"
+FAKE_FILES=ios/PokeCalc/RootView.swift FAKE_MAKE_FAIL=ios-test run_gate 5
+expect_stop "ローカル検証に失敗"
 
 begin "PR の先頭が取得した SHA と違えば中止"
 FAKE_SHA_FORCE=0000000000000000000000000000000000000001 run_gate 5

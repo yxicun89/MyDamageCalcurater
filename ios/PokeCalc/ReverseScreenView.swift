@@ -16,13 +16,19 @@ struct ReverseScreenView: View {
     /// テンキーには Return が無いので、キーボード上部の「完了」で閉じる(ADR-0501「実装メモ」の
     /// 「テンキーの「完了」ボタン」)。
     @FocusState private var focusedObservationID: Int?
+    @State private var frequentOpponents: FrequentOpponentsViewModel
     private let backendDescription: String
 
     /// 読み込み中インジケータの高さ(`CalcScreenView` と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String) {
+    init(
+        service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
+        frequentOpponentsService: (any FrequentOpponentsService)? = nil
+    ) {
         _viewModel = State(initialValue: ReverseViewModel(service: service, teamStore: teamStore))
+        _frequentOpponents = State(
+            initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
         self.backendDescription = backendDescription
     }
 
@@ -127,12 +133,12 @@ struct ReverseScreenView: View {
             if dynamicTypeSize >= .accessibility1 {
                 VStack(spacing: SpacingToken.x2) {
                     ReverseMyCardView(viewModel: viewModel)
-                    ReverseOpponentCardView(viewModel: viewModel)
+                    ReverseOpponentCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
                 }
             } else {
                 HStack(alignment: .top, spacing: SpacingToken.x2) {
                     ReverseMyCardView(viewModel: viewModel)
-                    ReverseOpponentCardView(viewModel: viewModel)
+                    ReverseOpponentCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
                 }
             }
         }

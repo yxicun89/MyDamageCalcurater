@@ -2,9 +2,10 @@
 // パーティ全体を update(全置換)する。応答を待ってから親の一覧を書き換える(楽観更新しない。失敗時は下書きを残す)。
 // 領域は開いている間だけ mount される(閉じると未保存の下書きは捨てる)。
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
-import { teamMemberText } from "../i18n/ja";
+import { megaStoneItemIds } from "../domain/mega";
+import { megaItemText, teamMemberText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
 import { selectableAbilities } from "../domain/requests";
@@ -12,7 +13,15 @@ import { useSpeciesResolutions } from "../screens/speciesResolution";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
 import type { TeamClient, TeamError } from "./teamClient";
-import { changeSpecies, blankDraft, draftToMember, memberToDraft, type MemberDraft } from "./teamMember";
+import {
+  changeSpecies,
+  blankDraft,
+  correctMegaItem,
+  draftToMember,
+  memberToDraft,
+  type MegaItemCorrection,
+  type MemberDraft,
+} from "./teamMember";
 import { defaultNatureId } from "./teamMemberOptions";
 
 type Schemas = components["schemas"];
@@ -37,6 +46,8 @@ export interface TeamMemberEditorProps {
 interface Entry {
   readonly id: number;
   readonly draft: MemberDraft;
+  /** 古い保存データを開いたときに直した内容(issue 515。種族を変えると消える。未保存の変更)。 */
+  readonly correction: MegaItemCorrection | null;
 }
 
 interface EditorState {
@@ -44,11 +55,32 @@ interface EditorState {
   readonly nextId: number;
 }
 
-function initialState(members: readonly Schemas["TeamMember"][]): EditorState {
+/**
+ * 開いたときの状態。種族の一覧があるマスタでは、メガ種族の古い保存データ(別の持ち物)をここで1回だけ直す。
+ * 一覧が無いマスタ(オンライン)は種族の解決後に直す(TeamMemberEditor の effect)。
+ */
+function initialState(members: readonly Schemas["TeamMember"][], master: MasterData): EditorState {
+  const hasSpeciesList = masterCapabilities(master).speciesList;
   return {
-    entries: members.map((member, id) => ({ id, draft: memberToDraft(member) })),
+    entries: members.map((member, id) => {
+      const draft = memberToDraft(member);
+      if (!hasSpeciesList) {
+        return { id, draft, correction: null };
+      }
+      const species = master.species.find((candidate) => candidate.key === member.speciesKey) ?? null;
+      return { id, ...correctMegaItem(draft, species, master.items) };
+    }),
     nextId: members.length,
   };
+}
+
+function correctionNoticeText(correction: MegaItemCorrection | null): string | null {
+  if (correction === null) {
+    return null;
+  }
+  return correction.kind === "fixed"
+    ? megaItemText.correctedNotice(correction.item.nameJa)
+    : megaItemText.clearedNotice;
 }
 
 export function TeamMemberEditor({
@@ -62,13 +94,17 @@ export function TeamMemberEditor({
   onSavingChange,
   locked,
 }: TeamMemberEditorProps): ReactNode {
-  const [state, setState] = useState<EditorState>(() => initialState(team.members));
+  const [state, setState] = useState<EditorState>(() => initialState(team.members, master));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<TeamError | null>(null);
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
   const resolutions = useSpeciesResolutions();
   const { register } = resolutions;
+  const stoneIds = useMemo(
+    () => megaStoneItemIds([...master.species, ...resolutions.resolvedSpecies]),
+    [master.species, resolutions.resolvedSpecies],
+  );
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const [focusAddToken, setFocusAddToken] = useState(0);
 
@@ -79,11 +115,23 @@ export function TeamMemberEditor({
       return;
     }
     let cancelled = false;
+    // 開いた時点のメンバー(id は初期の並び順)。解決した種族に合わせて、古い保存データの持ち物を1回だけ直す。
+    const openedCount = team.members.length;
     for (const key of new Set(team.members.map((member) => member.speciesKey))) {
       masterSearch.resolveSpecies(key).then(
         (resolution) => {
           if (!cancelled) {
             register(resolution);
+            setState((current) => ({
+              ...current,
+              entries: current.entries.map((entry) => {
+                if (entry.id >= openedCount || entry.draft.speciesKey !== key) {
+                  return entry;
+                }
+                return { id: entry.id, ...correctMegaItem(entry.draft, resolution.species, master.items) };
+              }),
+            }));
+            setSaved(false);
           }
         },
         () => {
@@ -113,7 +161,17 @@ export function TeamMemberEditor({
   }
 
   function updateDraft(id: number, next: MemberDraft): void {
-    edit((entries) => entries.map((entry) => (entry.id === id ? { ...entry, draft: next } : entry)));
+    edit((entries) =>
+      entries.map((entry) =>
+        entry.id === id
+          ? {
+              ...entry,
+              draft: next,
+              correction: next.speciesKey === entry.draft.speciesKey ? entry.correction : null,
+            }
+          : entry,
+      ),
+    );
   }
 
   function handleResolved(id: number, resolution: MasterSpeciesResolution): void {
@@ -127,7 +185,15 @@ export function TeamMemberEditor({
                 entry.draft,
                 resolution.species,
                 selectableAbilities(resolution.species, resolution.abilities),
+                {
+                  previous:
+                    entry.draft.speciesKey === null
+                      ? null
+                      : resolutions.speciesFor(master.species, entry.draft.speciesKey),
+                  items: master.items,
+                },
               ),
+              correction: null,
             }
           : entry,
       ),
@@ -139,7 +205,10 @@ export function TeamMemberEditor({
       return;
     }
     setState((current) => ({
-      entries: [...current.entries, { id: current.nextId, draft: blankDraft(defaultNatureId(master)) }],
+      entries: [
+        ...current.entries,
+        { id: current.nextId, draft: blankDraft(defaultNatureId(master)), correction: null },
+      ],
       nextId: current.nextId + 1,
     }));
     setSaved(false);
@@ -212,6 +281,8 @@ export function TeamMemberEditor({
             abilityPool={key === null ? master.abilities : resolutions.abilitiesFor(master.abilities, key)}
             movePool={key === null ? master.moves : resolutions.movesFor(master.moves, key)}
             resolveFailed={key !== null && species === null && failedKeys.has(key)}
+            stoneIds={stoneIds}
+            correctionNotice={correctionNoticeText(entry.correction)}
             onChange={(next) => {
               updateDraft(entry.id, next);
             }}

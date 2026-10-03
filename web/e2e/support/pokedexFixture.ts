@@ -15,7 +15,9 @@
 
 import type { components } from "../../src/api/openapi.gen";
 import type { Move } from "../../src/engine/types";
+import { toCalcSnapshotAbilityEffect, toCalcSnapshotItemEffect } from "../../src/master/exportSnapshot";
 import { MOVES_BATCH_MAX_IDS } from "../../src/master/onlineSource";
+import { matchesSpeciesName } from "../../src/master/speciesNameMatch";
 import type { MasterData } from "../../src/master/types";
 
 type Schemas = components["schemas"];
@@ -61,7 +63,7 @@ export const SEARCH_LIMIT_MAX = 200;
  * | `GET /api/pokedex/species/{key}` | 200 `SpeciesDetail`(`abilities` は `Ability` の配列・`learnset` は技の ID 配列) |
  * | `GET /api/pokedex/moves/batch?ids=…` | 200 `Move[]`。`ids` の順のまま、マスタに無い ID は詰めて省き、重複した ID は重複したまま返す |
  *
- * 応答の本文は**公開 API のスキーマちょうど**にする(例データが持つ `Item.effect`・`Ability.effect`・
+ * 応答の本文は**公開 API のスキーマちょうど**にする(例データの `Item.effect`・`Ability.effect` は公開 API の形(PascalCase)に直して返し、
  * `MasterSpecies.learnset` を `SpeciesSummary` に混ぜる、といった漏れを起こさない)。
  *
  * エラー(本文は `Error` = `{ code, message }`):
@@ -140,9 +142,11 @@ function handleItems(master: MasterData, query: URLSearchParams): FixtureRespons
   }
   const filtered = prefixFilter(master.items, query.get("q"), (item) => item.nameJa);
   const sorted = sortByNameThenId(filtered);
-  const body: Schemas["Item"][] = sorted
-    .slice(0, limit)
-    .map((item) => ({ id: item.id, nameJa: item.nameJa }));
+  const body: Schemas["Item"][] = sorted.slice(0, limit).map((item) => {
+    // issue 211・ADR-0218: 効果を持つ持ち物だけ effect を伴う(キーごと省く)。形は DB の形(PascalCase)。
+    const effect = toCalcSnapshotItemEffect(item.effect);
+    return { id: item.id, nameJa: item.nameJa, ...(effect === null ? {} : { effect }) };
+  });
   return { status: 200, body };
 }
 
@@ -162,7 +166,9 @@ function handleSpeciesSearch(master: MasterData, query: URLSearchParams): Fixtur
   if (limit === null) {
     return errorResponse(400, "invalid_input", "limit が不正");
   }
-  const filtered = prefixFilter(master.species, query.get("q"), (species) => species.nameJa);
+  // pokedex-svc の検索と同じ規則(ADR-0324。メガ種族は「メガ + q」でも当たる)。
+  const q = query.get("q");
+  const filtered = master.species.filter((species) => matchesSpeciesName(species, q ?? ""));
   const sorted = [...filtered].sort((a, b) => compareStrings(a.key, b.key));
   const body: Schemas["SpeciesSummary"][] = sorted.slice(0, limit).map((species) => ({
     key: species.key,
@@ -191,6 +197,9 @@ function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
     baseStats: species.baseStats,
     abilities: species.abilities.map((id) => resolveAbility(master, id)),
     learnset: [...species.learnset],
+    // issue 515: optional の契約でも pokedex-svc は isMega・requiredItemId を常に出す(省略は非メガ・null)。
+    isMega: species.isMega === true,
+    requiredItemId: species.requiredItemId ?? null,
   };
   return { status: 200, body };
 }
@@ -265,7 +274,8 @@ function resolveAbility(master: MasterData, id: string): Schemas["Ability"] {
   if (ability === undefined) {
     throw new Error(`例データに ability ${id} が無い(species.abilities と abilities のずれ)`);
   }
-  return { id: ability.id, nameJa: ability.nameJa };
+  const effect = toCalcSnapshotAbilityEffect(ability.effect);
+  return { id: ability.id, nameJa: ability.nameJa, ...(effect === null ? {} : { effect }) };
 }
 
 function errorResponse(status: number, code: Schemas["ErrorCode"], message: string): FixtureResponse {

@@ -117,7 +117,23 @@ overlay(または base 直下)で完結させる。クラウド選定(issue #149
 ## 却下した案
 - OpenTelemetry Collector 経由でメトリクスを送る: 個人利用規模でこの層を挟む理由がない(直接 scrape で十分)。将来分散トレーシングが
   要るようになったら別ADRで検討する。
-- 各サービスにメトリクス用の別ポート・別サーバーを立てる: Echo/net/http に1ルート足すだけで十分。運用(Service定義)を複雑にしない。
+- 各サービスにメトリクス用の別ポート・別サーバーを立てる: Echo/net/http に1ルート足すだけで十分。運用(Service定義)を複雑にしない。(gateway だけは追記のとおり撤回: issue #216)
 - 共有 Go module(`services/internal`)を balance/speed/judge からも `go.work` 経由で直接 import する: レーン間の Go module 依存を
   作ってしまい、1レーンの変更が他レーンの `go.mod`/`go.sum` に影響しうる。ADR-0012 のサービス境界の精神に反するため複製を選んだ。
 - Grafana/Prometheus を Ingress で公開する: issue #148(私設サービスを維持する)の決定に反する。
+
+## 追記(2026-10-02。issue #216・#244。gateway の `/metrics` を公開入口から隠す)
+
+- **gateway だけ `/metrics` をメトリクス専用ポートに分ける**(§1 の「public Ingress には出さない」の実現。却下した案
+  「各サービスにメトリクス用の別ポート・別サーバーを立てる」は、gateway については公開入口の `/` Prefix が `/metrics` も
+  通してしまうため撤回する)。`GATEWAY_METRICS_ADDR`(既定 `:9090`)に専用 `http.Server` を立て、`/metrics` はそこだけに登録する。
+  公開側(`GATEWAY_ADDR`)の `/metrics` は予約パス(`reservedFirstSegments` に `metrics`)として Web の SPA フォールバックにも
+  流さず、Error 形式の 404 `not_found`。Service に `metrics`(9090)ポートを足し、Ingress は `http` のまま。ServiceMonitor
+  (gateway)は `port: metrics`。NetworkPolicy は gateway の 9090 を Prometheus にだけ許可(`allow-prometheus-gateway-metrics`)し、
+  `allow-prometheus-metrics` の対象から gateway を外す。Traefik 設定・ヘッダ判定には依存しない(案 B・C は却下)。
+- calc・pokedex・balance・speed・judge はクラスタ内 Service にしか無く Ingress の向き先ではないので、従来どおり `http` ポートの
+  `/metrics`(対象外)。そのため **`httpmetrics` の複製(balance・speed・judge)は変更していない**(§2 の同期は不要)。
+- **#244 path ラベル**: gateway は Echo のルートが `/*` の 1 つだけで、`c.Path()` が常に `/*` になっていた。`serve` が決めた
+  `routeKind` を `echo.Context` に預け、`httpmetrics` の内側のミドルウェア(`pathLabelMiddleware`)が応答後に `c.SetPath` で
+  固定名(`healthz`・`calc`・`pokedex`・`record`・`team`・`balance`・`speed`・`judge`・`assets`・`web`・未知は `none`)へ置き換える。
+  `httpmetrics` に hook を足す案は、3 つの複製の同期が要るので採らなかった(ルーティング完了後の書き換えなので副作用は計測ラベルだけ)。

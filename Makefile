@@ -58,7 +58,7 @@ test-services: ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
@@ -71,10 +71,14 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/gitops_test.sh
 	@./scripts/make-targets_test.sh
 	@./scripts/check-master-version_test.sh
+	@./scripts/master-release_test.sh
 	@./scripts/require-k3d-context_test.sh
 	@./scripts/image-tag_test.sh
+	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
 	@./scripts/test-db-docker_test.sh
+	@./scripts/db-backup_test.sh
+	@./scripts/db-restore_test.sh
 	@./scripts/check-plan_test.sh
 
 .PHONY: lint
@@ -208,6 +212,18 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 test-db-docker: ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
 	@./scripts/test-db-docker.sh
 
+.PHONY: db-backup
+db-backup: ## DB のバックアップ(MODE=full|journal KIND=pokedex|record|team。接続は DB_HOST/DB_PORT/DB_USER/DB_NAME と MYSQL_PWD。docs/runbooks/data.md。ADR-0225)
+	@./scripts/db-backup.sh "$(or $(MODE),full)" "$(KIND)"
+
+.PHONY: db-restore
+db-restore: ## DB の復元(KIND=… GEN=<世代|latest>。上書きなので CONFIRM_RESTORE=<DB名> が必須。サービスを止めてから。ADR-0225)
+	@./scripts/db-restore.sh "$(KIND)" "$(or $(GEN),latest)"
+
+.PHONY: test-db-backup
+test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
+	@./scripts/db-backup-restore_docker_test.sh
+
 .PHONY: test-nats
 test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
 	@if [ -z "$(CALC_TEST_NATS_URL)" ]; then \
@@ -280,6 +296,14 @@ import-check-upstream: ## 上流(calc/Showdown/PokeAPI)の最新版を検出し�
 .PHONY: check-master-version
 check-master-version: ## calc・balance・speed が export した read model と同じ dataVersion で動いているか確かめる(読み取りだけ。要 k3d の context。ADR-0135)
 	@./scripts/check-master-version.sh
+
+.PHONY: master-release
+master-release: ## マスタ更新を calc・balance・speed へ反映する(import Job 完了待ち→export 検証→変化なしなら終了→入れ替え・rollout→版一致→smoke。要 k3d の context。ADR-0135)
+	@./scripts/master-release.sh
+
+.PHONY: pokedex-export-k3d
+pokedex-export-k3d: ## k3d の mysql から read model を data/generated/readmodel/ に書く(port-forward と DSN の取得を内部で行う。make up・import 済みが前提)
+	@./scripts/pokedex-export-local.sh
 
 .PHONY: pokedex-export
 pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)

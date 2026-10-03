@@ -632,10 +632,8 @@ func TestCalcBulkLowHPDefender(t *testing.T) {
 }
 
 // 受け入れ条件 f: format=double でも行の構成は single と同じで、各行は Format=double の CalcDamage と一致する。
-// 実態: CalcDamage は現状 Format を一切参照しない(ダブル固有補正は ADR-0005 の未対応範囲)ため、
-// このテストが固定するのは「行構成が Format に依存しないこと」だけで、Format が CalcDamage へ
-// 素通しされていること自体は検証できない(bulk.go が Format を FormatSingle に固定しても通る = 等価変異)。
-// CalcDamage がダブル補正を持ったら、single/double で結果が変わる入力を足して素通しを検証すること。
+// 注記: このテストが固定するのは「行構成が Format に依存しないこと」だけ。CalcDamage がダブルの壁・全体技を
+// 持った(ADR-0222)ので、Format の素通しは double_test.go の TestCalcBulkFormatDoubleAppliesScreensAndSpread が検証する。
 func TestCalcBulkFormatDouble(t *testing.T) {
 	single := bulkInput(CategoryPhysical, TypeWater)
 	double := bulkInput(CategoryPhysical, TypeWater)
@@ -1190,6 +1188,8 @@ func TestCalcBulkPassesThroughAllOptionsCombined(t *testing.T) {
 		{"やけど", func(in *BulkInput) { in.Attacker.Status = StatusNone }, true},
 		{"攻撃側の持ち物", func(in *BulkInput) { in.Attacker.Item = nil }, true},
 		{"攻撃側の特性", func(in *BulkInput) { in.Attacker.Ability = Ability{} }, true},
+		// ADR-0224: テラス(元タイプと同じ水)× てきおうりょくは ×2.25。剥がすと ×2.0 に戻る。
+		{"攻撃側のテラス", func(in *BulkInput) { in.Attacker.TeraType = TypeNone }, true},
 	}
 	for _, critical := range []bool{false, true} {
 		name := "非急所"
@@ -1231,11 +1231,12 @@ func TestCalcBulkPassesThroughAllOptionsCombined(t *testing.T) {
 			}
 		})
 	}
-	// TeraType は CalcDamage が参照しない(未実装)ため、結果には現れない。
-	// フィクスチャには載せてあり、CalcDamage が使うようになれば checkedBulk が素通しを検証する。
+	// TeraType は ADR-0224 で CalcDamage が参照するようになったので、上の strips(「攻撃側のテラス」)で
+	// 剥がすと全行のダメージが変わること・checkedBulk が素通しを検証することで守る。
+	// ここでは向き(テラス=元タイプ × てきおうりょく ×2.25 > テラス無し ×2.0)も確かめる。
 	withTera := checkedBulk(t, sink(false))
 	in := sink(false)
 	in.Attacker.TeraType = TypeNone
 	withoutTera := checkedBulk(t, in)
-	maxDamageCompare(t, "TeraType は現状ダメージに影響しない", withTera, withoutTera, 0)
+	maxDamageCompare(t, "TeraType(元タイプ)× てきおうりょくはダメージを上げる", withTera, withoutTera, 1)
 }

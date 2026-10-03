@@ -61,10 +61,12 @@ export interface CalcSnapshotSpecies {
   readonly abilities: readonly CalcSnapshotSpeciesAbility[];
 }
 
-/** スナップショットの技(MasterMove。例データに追加効果・機構は無いので effect は null・mechanisms は空配列)。 */
+/** スナップショットの技(MasterMove。例データに追加効果・機構・対象は無いので effect・target は null・mechanisms は空配列)。 */
 export interface CalcSnapshotMove extends Move {
   readonly effect: null;
   readonly mechanisms: readonly string[];
+  /** 技の対象(MasterMove.target。例データは対象を持たないので null。ADR-0223) */
+  readonly target: null;
 }
 
 /** 共通マスタ(services/internal/master/effects.go)が読む形にした効果(キーは PascalCase)。 */
@@ -136,11 +138,11 @@ function toPascalCaseEffect(effect: object | null): CalcSnapshotEffect | null {
   return out;
 }
 
-function toCalcSnapshotItemEffect(effect: ItemEffect | null): CalcSnapshotEffect | null {
+export function toCalcSnapshotItemEffect(effect: ItemEffect | null): CalcSnapshotEffect | null {
   return toPascalCaseEffect(effect);
 }
 
-function toCalcSnapshotAbilityEffect(effect: AbilityEffect | null): CalcSnapshotEffect | null {
+export function toCalcSnapshotAbilityEffect(effect: AbilityEffect | null): CalcSnapshotEffect | null {
   return toPascalCaseEffect(effect);
 }
 
@@ -184,9 +186,9 @@ export function toCalcSnapshot(master: MasterData): CalcSnapshot {
       type1,
       type2: type2 ?? null,
       baseStats: entry.baseStats,
-      isMega: false,
+      isMega: entry.isMega === true,
       baseSpeciesKey: null,
-      requiredItemId: null,
+      requiredItemId: entry.requiredItemId ?? null,
       abilities: entry.abilities.map((abilityId, index) => ({ slot: index + 1, abilityId })),
     };
   });
@@ -202,6 +204,7 @@ export function toCalcSnapshot(master: MasterData): CalcSnapshot {
     priority: move.priority,
     effect: null,
     mechanisms: [],
+    target: null,
   }));
 
   const items: CalcSnapshotItem[] = master.items.map((item) => ({

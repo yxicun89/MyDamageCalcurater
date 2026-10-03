@@ -2,8 +2,9 @@
 // 状態は持たない(下書きは TeamMemberEditor が持つ)。選択肢はマスタ(と、オンラインでは検索で解決した実体)から作る。
 
 import { useId, type ReactNode } from "react";
+import { megaItemLock, selectableItems } from "../domain/mega";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL, selectableAbilities } from "../domain/requests";
-import type { Ability, Move, StatKey } from "../engine/types";
+import type { Ability, Item, Move, StatKey } from "../engine/types";
 import { isTypeId, statLetterJa, teamMemberText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
@@ -13,6 +14,7 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { AbilitySelect } from "../screens/AbilitySelect";
+import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import {
   MAX_MEMBER_MOVES,
@@ -39,6 +41,10 @@ export interface TeamMemberFieldsProps {
   readonly movePool: readonly Move[];
   /** 種族の解決に失敗した(オンラインで保存済みメンバーを引けなかった)。 */
   readonly resolveFailed: boolean;
+  /** メガストーンの持ち物 ID(master.species + 検索で解決した種族から導く。単独の選択肢から除く)。 */
+  readonly stoneIds: ReadonlySet<string>;
+  /** 古い保存データを直したときの通知(issue 515。無ければ null)。この枠の中に role="status" で出す。 */
+  readonly correctionNotice: string | null;
   readonly onChange: (next: MemberDraft) => void;
   readonly onResolved: (resolution: MasterSpeciesResolution) => void;
   readonly onRemove: () => void;
@@ -50,10 +56,12 @@ interface LabeledSelectProps {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly children: ReactNode;
+  readonly disabled?: boolean;
+  readonly describedBy?: string;
 }
 
 /** 見えるラベル付きの select(accessible name はラベルから)。 */
-function LabeledSelect({ label, value, onChange, children }: LabeledSelectProps) {
+function LabeledSelect({ label, value, onChange, children, disabled, describedBy }: LabeledSelectProps) {
   const id = useId();
   return (
     <div className="team-member__field">
@@ -61,6 +69,8 @@ function LabeledSelect({ label, value, onChange, children }: LabeledSelectProps)
       <select
         id={id}
         value={value}
+        disabled={disabled}
+        aria-describedby={describedBy}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -85,6 +95,21 @@ function issueMessage(issue: MemberIssue): string {
   }
 }
 
+/**
+ * 非メガの持ち物欄の選択肢: メガストーンを除いたマスタの持ち物。非メガの現在値がメガストーンのとき
+ * (直さない。API が検査しないため)は、名前を引いて選択肢に足す(足さないと ID が出る)。
+ */
+function pickableItemChoices(
+  items: readonly Item[],
+  stoneIds: ReadonlySet<string>,
+  currentId: string | null,
+): readonly Item[] {
+  const pickable = selectableItems(items, stoneIds);
+  const current =
+    currentId !== null && stoneIds.has(currentId) ? items.find((item) => item.id === currentId) : undefined;
+  return itemOptions(current === undefined ? pickable : [...pickable, current], currentId);
+}
+
 export function TeamMemberFields({
   position,
   count,
@@ -95,11 +120,14 @@ export function TeamMemberFields({
   abilityPool,
   movePool,
   resolveFailed,
+  stoneIds,
+  correctionNotice,
   onChange,
   onResolved,
   onRemove,
   onMove,
 }: TeamMemberFieldsProps) {
+  const itemReasonId = useId();
   const hasSpeciesList = masterCapabilities(master).speciesList;
   const spCheck = checkSpDraft(draft.sp);
   const result = draftToMember(draft);
@@ -108,6 +136,9 @@ export function TeamMemberFields({
     ...(resolveFailed ? [teamMemberText.speciesResolveError] : []),
   ];
   const abilities = species === null ? [] : selectableAbilities(species, abilityPool);
+  // issue 515・ADR-0320: メガ種族の持ち物はメガストーンに固定する(固定は種族から毎回導く)。
+  const itemLock = megaItemLock(species, master.items);
+  const itemChoices = pickableItemChoices(master.items, stoneIds, draft.itemId);
 
   function pickSpecies(key: string): void {
     const next = master.species.find((candidate) => candidate.key === key);
@@ -115,7 +146,12 @@ export function TeamMemberFields({
       onChange({ ...draft, speciesKey: null });
       return;
     }
-    onChange(changeSpecies(draft, next, selectableAbilities(next, master.abilities)));
+    onChange(
+      changeSpecies(draft, next, selectableAbilities(next, master.abilities), {
+        previous: species,
+        items: master.items,
+      }),
+    );
   }
 
   // マスタのタイプ一覧に無い現在値も選択肢に足す(足さないと「(なし)」と表示され保存値とずれる)。
@@ -198,18 +234,27 @@ export function TeamMemberFields({
 
       <LabeledSelect
         label={teamMemberText.itemLabel}
-        value={draft.itemId ?? ""}
+        value={
+          itemLock.kind === "locked"
+            ? itemLock.item.id
+            : itemLock.kind === "missing"
+              ? ""
+              : (draft.itemId ?? "")
+        }
+        disabled={itemLock.kind !== "none"}
+        describedBy={itemLock.kind === "none" ? undefined : itemReasonId}
         onChange={(value) => {
           onChange({ ...draft, itemId: value === "" ? null : value });
         }}
       >
         <option value="">{teamMemberText.itemNone}</option>
-        {itemOptions(master.items, draft.itemId).map((item) => (
+        {(itemLock.kind === "locked" ? [itemLock.item] : itemChoices).map((item) => (
           <option key={item.id} value={item.id}>
             {item.nameJa}
           </option>
         ))}
       </LabeledSelect>
+      <MegaItemReason id={itemReasonId} lock={itemLock} className="team-member__reason" />
 
       <div className="team-member__field">
         <AbilitySelect
@@ -270,6 +315,12 @@ export function TeamMemberFields({
           {teamMemberText.spSummary(spCheck.total, MAX_SP_TOTAL, spCheck.remaining)}
         </p>
       </fieldset>
+
+      {correctionNotice !== null && (
+        <p role="status" className="team-member__notice">
+          {correctionNotice}
+        </p>
+      )}
 
       {messages.length > 0 && (
         <div role="alert" className="team-member__error">

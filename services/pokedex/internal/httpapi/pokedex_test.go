@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/master"
 	"example.com/pokecalc/services/pokedex/internal/store"
 	"example.com/pokecalc/services/pokedex/internal/storetest"
 )
@@ -107,6 +108,36 @@ func TestSearchPassesPatternLimitAndRegulation(t *testing.T) {
 			}
 			if limit != tt.wantLimit {
 				t.Errorf("limit = %d, want %d", limit, tt.wantLimit)
+			}
+		})
+	}
+}
+
+// 種族検索は、メガ種族だけ「メガ + q」の前方一致でも当てるためのパターン(MegaPattern)を DB に渡す(ADR-0324)。
+// 接頭辞はコードの定数 master.MegaNamePrefix から来る(SQL には書かない)。LIKE の特殊文字はエスケープする。
+func TestSearchSpeciesPassesMegaPattern(t *testing.T) {
+	tests := []struct {
+		name, target, wantPattern, wantMegaPattern string
+	}{
+		{"q 省略", "/api/pokedex/species", "%", master.MegaNamePrefix + "%"},
+		{"メガを除いた基本種名", "/api/pokedex/species?q=" + url.QueryEscape("ルカリオ"), "ルカリオ%", master.MegaNamePrefix + "ルカリオ%"},
+		{"メガ込みの名前", "/api/pokedex/species?q=" + url.QueryEscape("メガルカリオ"), "メガルカリオ%", master.MegaNamePrefix + "メガルカリオ%"},
+		{"特殊文字のエスケープ", "/api/pokedex/species?q=" + url.QueryEscape(`テ%_`), `テ\%\_%`, master.MegaNamePrefix + `テ\%\_%`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			q := storetest.New()
+			rec := do(t, newHandler(t, q), http.MethodGet, tt.target, true)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d\nbody=%s", rec.Code, rec.Body.String())
+			}
+			calls := q.CallsOf("SearchSpecies")
+			if len(calls) != 1 {
+				t.Fatalf("SearchSpecies の呼び出し %d 回, want 1", len(calls))
+			}
+			got := calls[0].(store.SearchSpeciesParams)
+			if got.Pattern != tt.wantPattern || got.MegaPattern != tt.wantMegaPattern {
+				t.Errorf("(pattern, megaPattern) = (%q, %q), want (%q, %q)", got.Pattern, got.MegaPattern, tt.wantPattern, tt.wantMegaPattern)
 			}
 		})
 	}
@@ -268,7 +299,9 @@ func TestGetMove(t *testing.T) {
 	}
 	var m api.Move
 	decodeStrict(t, rec.Body.Bytes(), &m)
-	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40}
+	// target: fixture の teststrike は単体技(Showdown の normal)なので single(issue 288・ADR-0223)。
+	single := api.MoveTargetSingle
+	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Target: &single}
 	priority := 1
 	want.Priority = &priority
 	if !reflect.DeepEqual(m, want) {
@@ -318,7 +351,8 @@ func TestGetMovesByIds(t *testing.T) {
 		t.Errorf("ids = %v, want %v(ids の順・未知は省く)", ids, want)
 	}
 	priority := 1
-	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority}
+	single := api.MoveTargetSingle // issue 288・ADR-0223(fixture の teststrike は単体技)
+	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority, Target: &single}
 	if !reflect.DeepEqual(moves[1], wantStrike) {
 		t.Errorf("moves[1] = %+v, want %+v", moves[1], wantStrike)
 	}
@@ -508,6 +542,44 @@ func TestPublicUnavailable(t *testing.T) {
 			rec := do(t, h, http.MethodGet, tt.target, true)
 			assertError(t, rec, http.StatusServiceUnavailable, api.MasterUnavailable)
 			validateAgainstContract(t, http.MethodGet, tt.target, true, rec)
+		})
+	}
+}
+
+// AC-P4c: 種族の詳細は isMega(常に)と requiredItemId(キーは常に。メガでなければ null)を返す(issue 515)。
+// requiredItemId は契約上 optional なので生成型は omitempty だが、公開 API は null でもキーを出す。
+func TestGetSpeciesMegaFields(t *testing.T) {
+	h := newHandler(t, storetest.New())
+	tests := []struct {
+		name     string
+		key      string
+		isMega   bool
+		wantItem any // nil は JSON の null
+	}{
+		{"メガ種族", "9001-001", true, "teststone"},
+		{"非メガ種族", "9001-000", false, nil},
+		{"レギュレーション外の非メガ", "9003-000", false, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			rec := do(t, h, http.MethodGet, "/api/pokedex/species/"+tt.key, true)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d\nbody=%s", rec.Code, rec.Body.String())
+			}
+			var raw map[string]any
+			if err := json.Unmarshal(rec.Body.Bytes(), &raw); err != nil {
+				t.Fatal(err)
+			}
+			if got, ok := raw["isMega"]; !ok || got != tt.isMega {
+				t.Errorf("isMega = %v (present=%v), want %v", got, ok, tt.isMega)
+			}
+			got, ok := raw["requiredItemId"]
+			if !ok {
+				t.Fatalf("requiredItemId のキーが無い: %s", rec.Body.String())
+			}
+			if got != tt.wantItem {
+				t.Errorf("requiredItemId = %v, want %v", got, tt.wantItem)
+			}
 		})
 	}
 }

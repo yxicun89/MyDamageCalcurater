@@ -1,6 +1,6 @@
 // P4-2: engine に渡すリクエストの組み立て(純粋関数)。形は ADR-0011 §3 の WASM 境界の DTO
 // (engine/wasmapi/dto.go・requests.go)。境界は未知のフィールドを拒否する(unknown_field)ので、
-// 画面のための追加フィールド(learnset)を engine に渡さない(toEngineSpecies)。
+// 画面のための追加フィールド(learnset)を engine に渡さない(toEngineSpecies)。isMega・requiredItemId は渡す(ADR-0321)。
 // 一括計算は presetKeys / presets を省き、engine の既定(技の分類で HB 系 / HD 系の5行)を使う(ADR-0009、ADR-0300 §6)。
 
 import type {
@@ -51,10 +51,17 @@ export const NO_ABILITY: Ability = { id: "", nameJa: "", effect: null };
  */
 export const NEUTRAL_MODIFIER = 4096;
 
-/** マスタの種族から engine の Species の形だけにする(画面のための learnset を落とす)。 */
+/**
+ * マスタの種族から engine の Species の形にする(画面のための learnset を落とす)。メガ種族だけ isMega・requiredItemId を
+ * 残す: 境界(engine/wasmapi)がオンライン(calc-svc)と同じ持ち物の検証をするため(issue 505・ADR-0321)。
+ */
 export function toEngineSpecies(species: MasterSpecies): Species {
   const { key, dexNo, form, nameJa, types, baseStats, abilities } = species;
-  return { key, dexNo, form, nameJa, types, baseStats, abilities };
+  const base = { key, dexNo, form, nameJa, types, baseStats, abilities };
+  if (species.isMega !== true) {
+    return base;
+  }
+  return { ...base, isMega: true, requiredItemId: species.requiredItemId ?? null };
 }
 
 /** 種族の特性の先頭(特性一覧に解決できるもの)を使う。1つも解決できなければ特性なし。 */

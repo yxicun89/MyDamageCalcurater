@@ -22,6 +22,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import type { Ability } from "../engine/types";
 import { typeNameJa, isTypeId } from "../i18n/ja";
 import { localPath } from "../test/localPath";
+import { MEGA_FIRE_STONE, MEGA_WATER_STONE } from "../test/megaMaster";
 import { exampleMasterSource } from "./exampleSource";
 import { toCalcSnapshot } from "./exportSnapshot";
 import type { MasterData } from "./types";
@@ -223,16 +224,18 @@ describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
     });
   });
 
-  test("技は MasterMove の必須フィールドちょうど(例データに追加効果・機構は無いので effect は null・mechanisms は空配列)", () => {
+  test("技は MasterMove の必須フィールドちょうど(例データに追加効果・機構・対象は無いので effect は null・mechanisms は空配列・target は null)", () => {
     const snapshot = toCalcSnapshot(master);
     expect(snapshot.moves).toHaveLength(master.moves.length);
     snapshot.moves.forEach((move, index) => {
       const source = master.moves[index];
       expect(sortedKeys(move)).toEqual(
-        ["category", "effect", "id", "mechanisms", "nameJa", "power", "priority", "type"].sort(),
+        ["category", "effect", "id", "mechanisms", "nameJa", "power", "priority", "target", "type"].sort(),
       );
       expect(move.effect).toBeNull();
       expect(move.mechanisms).toEqual([]);
+      // 技の対象(MasterMove.target。issue 288・ADR-0223)は必須キーで、例データは対象を持たないので null(不明)。
+      expect(move.target).toBeNull();
       expect(move.id).toBe(source?.id);
       expect(move.nameJa).toBe(source?.nameJa);
       expect(move.type).toBe(source?.type);
@@ -318,7 +321,10 @@ describe("web/scripts/export-example-master.mjs", () => {
         timeout: 60_000,
       });
       const written = JSON.parse(readFileSync(outPath, "utf8")) as unknown;
-      expect(written).toEqual(toCalcSnapshot(master));
+      // issue 211: 書き出しは pokedex フィクスチャが足す架空のメガストーンの持ち物も含む(scripts の注記を参照)。
+      expect(written).toEqual(
+        toCalcSnapshot({ ...master, items: [...master.items, MEGA_FIRE_STONE, MEGA_WATER_STONE] }),
+      );
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }

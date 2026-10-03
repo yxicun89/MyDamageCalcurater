@@ -1,5 +1,7 @@
 package engine
 
+import "fmt"
+
 // ダメージ計算コア。第9世代の式を 4096基準の固定小数・五捨五超入(pokeRound)で実装する。
 // float 近似はしない(CLAUDE.md ドメイン規約)。
 //
@@ -23,6 +25,10 @@ const (
 	// ModifierHalf は ×0.5(4096 に対する比 1/2)。やけど・壁・ミストフィールド・
 	// 天候による弱化・半減きのみなど、半減する補正すべてで共通。
 	ModifierHalf = 2048
+	// ModifierDoubleScreen はダブルの壁 ×2732/4096(ADR-0222)。
+	ModifierDoubleScreen = 2732
+	// ModifierSpread はダブルの全体技 ×3072/4096(×0.75。ADR-0222)。
+	ModifierSpread = 3072
 	// ModifierStab はタイプ一致補正 ×1.5。
 	ModifierStab = 6144
 	// ModifierAdaptability はタイプ一致補正を上げる特性(てきおうりょく)の一致補正 ×2.0。
@@ -152,15 +158,32 @@ func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 
 // stabModifier はタイプ一致補正値を返す(通常 ModifierStab、てきおうりょく等 AbilityEffect.StabMod
 // (ModifierAdaptability)、不一致 Modifier4096)。
+// 4096 を基準に、元のタイプ一致で +2048、テラスタイプ一致(teraType 指定時。ADR-0224)で +2048 を足す
+// (テラス = 元のタイプ = 技で ×2.0、テラスが別タイプでも元タイプの技は ×1.5 のまま、テラスだけ一致で ×1.5)。
+// 特性の強化分(StabMod − ModifierStab)は「そのタイプを持つ」技のときだけ足し、テラスが元のタイプのときは
+// その半分にする(@smogon/calc の getStabMod と同じ)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
-	if moveType == TypeNone || !hasType(in.Attacker, moveType) {
+	if moveType == TypeNone {
 		return Modifier4096, false
 	}
-	mod := ModifierStab
-	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 {
-		mod = ae.StabMod
+	const stabBonus = ModifierStab - Modifier4096 // 一致1種類あたりの加算分
+	mod := Modifier4096
+	if hasOriginalType(in.Attacker, moveType) {
+		mod += stabBonus
 	}
-	return mod, true
+	teraMatch := in.Attacker.TeraType != TypeNone && in.Attacker.TeraType == moveType
+	if teraMatch {
+		mod += stabBonus
+	}
+	// てきおうりょく等: 技のタイプを持つときだけ加算。テラスが元タイプのときは半分(ADR-0224)。
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.StabMod != 0 && hasType(in.Attacker, moveType) {
+		bonus := ae.StabMod - ModifierStab
+		if teraMatch && hasOriginalType(in.Attacker, moveType) {
+			bonus /= 2
+		}
+		mod += bonus
+	}
+	return mod, mod != Modifier4096
 }
 
 // burnModifier は物理やけどによる攻撃半減(ModifierHalf)を返す。
@@ -251,6 +274,11 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	if err := validateAgainstTypeChart(in); err != nil {
 		return DamageResult{}, false, err
 	}
+	switch in.Move.Target {
+	case "", MoveTargetSingle, MoveTargetSpread:
+	default:
+		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
+	}
 
 	res = DamageResult{
 		Category:    in.Move.Category,
@@ -288,6 +316,10 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	power := max(1, pokeRound(in.Move.Power, powerModifier(in)))
 	base := (((2*level/5+2)*power*atk)/def)/50 + 2
 
+	// ダブルの全体技(ADR-0222)。天候・急所より前。
+	if in.Format == FormatDouble && in.Move.Target == MoveTargetSpread {
+		base = pokeRound(base, ModifierSpread)
+	}
 	// 基礎段階の補正(天候のダメージ倍率は個別に pokeRound)→ 急所
 	if wm := weatherDamageMod(in.Field.Weather, moveType); wm != Modifier4096 {
 		base = pokeRound(base, wm)

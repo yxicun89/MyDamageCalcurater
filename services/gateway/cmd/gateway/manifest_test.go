@@ -26,6 +26,10 @@ const (
 	// balanceServiceName は gateway が /api/balance/* を転送する balance-svc の Service 名
 	// (services/balance/deploy/k8s/base。issue #284)。
 	balanceServiceName = "balance"
+	// speedServiceName・judgeServiceName は gateway が /api/speed/*・/api/judge/* を転送する Service 名
+	// (services/{speed,judge}/deploy/k8s/base。issue #284)。
+	speedServiceName = "speed"
+	judgeServiceName = "judge"
 )
 
 // assertServiceURL は cfg の上流 URL が Service 名の 80 番(パス・クエリなし)であることを確かめる。
@@ -46,12 +50,26 @@ func assertServiceURL(t *testing.T, envName string, u *url.URL, service string) 
 func TestManifestGatewayWorkload(t *testing.T) {
 	deploytest.AssertWorkload(t, deploytest.Workload{
 		Service: gatewayService, ImageRepo: gatewayImageRepo, AddrEnv: envAddr, DefaultAddr: defaultAddr,
+		MetricsPort: 9090, MetricsAddrEnv: envMetricsAddr, DefaultMetricsAddr: defaultMetricsAddr,
 	})
+}
+
+// issue #216: /metrics はメトリクス専用ポートにだけあり、公開入口(Ingress)は http ポートだけを向く。
+func TestManifestGatewayIngressDoesNotExposeMetrics(t *testing.T) {
+	var ing deploytest.Ingress
+	deploytest.Find(t, deploytest.BaseObjects(t, gatewayService), "Ingress", gatewayService).Decode(t, &ing)
+	for _, rule := range ing.Spec.Rules {
+		for _, p := range rule.HTTP.Paths {
+			if port := p.Backend.Service.Port; port.Name == deploytest.MetricsPortName || port.Number == 9090 {
+				t.Errorf("Ingress の backend が metrics ポート %+v を向いている(公開入口に /metrics を出さない)", port)
+			}
+		}
+	}
 }
 
 // AC-S3: gateway の Ingress は traefik・path "/" Prefix・ホスト指定なしで gateway の Service を指す
 // (balance の "/api/balance" は gateway が転送する。balance の直結 Ingress は issue #284 で撤去。
-// speed・judge の直結 Ingress は残っている)。
+// speed・judge の直結 Ingress も ADR-0416 で撤去)。
 func TestManifestGatewayIngress(t *testing.T) {
 	var ing deploytest.Ingress
 	deploytest.Find(t, deploytest.BaseObjects(t, gatewayService), "Ingress", gatewayService).Decode(t, &ing)
@@ -111,6 +129,18 @@ func TestManifestGatewayBalanceURL(t *testing.T) {
 		t.Fatalf("base の環境変数で loadConfig が失敗: %v", err)
 	}
 	assertServiceURL(t, envBalanceURL, cfg.Gateway.BalanceURL, balanceServiceName)
+}
+
+// issue #284(ADR-0416): GATEWAY_SPEED_URL・GATEWAY_JUDGE_URL も speed・judge の Service 名(80 番)を指す。
+func TestManifestGatewaySpeedJudgeURL(t *testing.T) {
+	d := deploytest.BaseDeployment(t, gatewayService)
+	env := d.Container(t, gatewayService).EnvMap(t)
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
+		t.Fatalf("base の環境変数で loadConfig が失敗: %v", err)
+	}
+	assertServiceURL(t, envSpeedURL, cfg.Gateway.SpeedURL, speedServiceName)
+	assertServiceURL(t, envJudgeURL, cfg.Gateway.JudgeURL, judgeServiceName)
 }
 
 // AC-S4 / AC-P2(ADR-0206): local overlay(base + deploy/k8s/overlays/local/api)の環境変数で loadConfig が通り、

@@ -1,8 +1,7 @@
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: Claude Code(2026-10-01 再開。#284 は PR #416 で main 統合済み。キューを順に消化中)
-Branch: feat/api-unsupported-mark-string(作業ディレクトリ ~/MyDamageCalcurater-api。P5-4はPR #409、#284はPR #416で統合済み。
-P5-2・P5-3・issue #271/#270はmain統合済み〈PR #372〉)
+Active: なし(2026-10-03 時点で、このレーンの実装・issue 対応は main 統合済み。次のセッションは下の Next から続ける)
+Branch: なし(作業ディレクトリ ~/MyDamageCalcurater-api。直近の PR: #463・#468・#469・#483・#488・#490・#506・#510・#536・#539・#542 はすべて main 統合済み)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
 Status(追記): P3-7 `GET /api/pokedex/moves/{key}`(getMove)を実装(判定レーン JD4 の依頼。ADR-0105 §3 追記)。契約・`services/pokedex/`(データレーンの範囲。越境理由と触ったファイル一覧は DECISIONS.md)まで一括実装。critic PASS(3往復)・**main 統合済み(PR #161)**。判定レーンは JD4 に着手し main 統合済み(PR #169)。
@@ -73,12 +72,17 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
 Status(追記): 2026-10-02、issue #236 の judge 分を完了(ADR-0219。ブランチ fix/api-236-header-validation、PR 待ち。balance は PR #458)。端末ID・セッションIDを gateway・speed と同じ正準 UUID 検証に揃え、code は `missing_header`/`invalid_header`。judge は非 UUID を calc へ転送しない。judge の openapi・Web 生成型・ja.ts を更新。
+Status(追記): 2026-10-03、ダブルの壁・全体技を engine・wasmapi に反映(issue #232 のダブル分。ADR-0222。実装済み・critic 待ち)。API 契約は形・enum 不変(説明のみ)。`move.target` は engine・WASM のみ(OpenAPI には無い)。技の対象がマスタに無い間はダブルの全攻撃技に move_target_unknown の印。
+
 Status(追記): 2026-10-03 issue #315 のメガ部分実装済み(メガ種族+requiredItemId 以外の持ち物は 400 invalid_input。ADR-0200 §4 追記。テラスタイプは別作業)。
 
 Status(追記): 2026-10-02 issue #211 の API 分(ADR-0218)実装済み・critic PASS・コミット前。公開の `Item` / `Ability` に省略可の `effect` を足し、pokedex-svc が共通マスタで検証して返す(不正は 503)。Web・iOS への連絡は DECISIONS.md。
-Next: キュー順に対応:
-(2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
-issue #284のdeployment.yaml配線も含む。優先度低)。
-issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
-60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
-Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic 待ち)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
+Next(2026-10-03 更新):
+(1) 人間の判断待ち: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=承認が必要。ADR-0224 Q1)。teraType は PR #555 でオプション機能として反映済み(指定時のみ。省略時は従来どおり)。ダブルは現状のまま(なんでもよいとのユーザー回答)。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
+(2) 追跡中: #498(calc の打ち切り。engine は純粋なまま)、#505(wasmapi のメガ持ち物検証。データ・Web)、#211 の Web 追従(effect の写し)。
+(3) マージ後の実機確認: k3d で gateway の /metrics が公開側 404・専用ポート 9090 で取得、/healthz に version、/api/record・/api/team の疎通(#469・#490)。
+Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic PASS・PR #490 で main 統合済み。失効 CronJob は承認まで suspend)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
+Status(追記): issue #288 の API 分(ADR-0223)実装済み(critic PASS・PR #536 で main 統合済み)。内部 API `MasterMove.target`(必須・nullable)・calc-svc→`engine.Move.Target`(`master.MoveTarget.Engine()`)・公開 `Move.target`(省略可 single/spread。NULL は省く・未知は 503)を配線。使い捨て mysql:9.7.2 で `go test -tags mysql -p 1 ./pokedex/...` 全緑。Web への連絡は decisions/2026-10-03-api-move-target-wiring.md
+Status(追記): 2026-10-03 issue 514 完了(PR #539 で main 統合済み。ADR-0802 追記)。gateway が `/api/*` の上流の非 JSON 5xx を 503 `upstream_unavailable` に正規化(上流の 500 も 503 になり `Retry-After` 等は落ちる)。閉じた下書き(fix/api-325-error-shape)の gateway 部分だけを現 main の proxy.go に手で再適用。critic PASS・PR #542 で main 統合済み。
+Status(追記): 2026-10-03 issue 538 完了(ブランチ fix/api-538-flaky-deadline-test。ADR-0801 追記)。`httpguard.Expired` が期限直後の context を取りこぼす競合を修正(4 複製)。critic PASS・PR #542 で main 統合済み。
+Status(追記): ADR-0224 テラスタルのオプション反映を engine に実装(feat/engine-tera-optional。攻撃側の印を外し防御側の印は残す。ゴールデン tera 全件一致・known_diffs 追加なし)。critic 待ち。

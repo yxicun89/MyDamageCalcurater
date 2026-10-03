@@ -26,6 +26,20 @@ make test-golden            # 生成済みベクタで engine を照合
 うちダメージが変わるもので定義の無いものは、`unsupported-effects.json` に理由付きで載っているものだけを許す
 (生成時に一致しなければ止まる)。
 
+## ダブル(ADR-0222)
+
+`doubles.json`(壁・全体技の各ケースと、その対照)と `doubles-random.jsonl.gz`(別の乱数列 3000 件)だけが
+形式 double と技の対象(`Move.Target`: single / spread)を持つ。既存ファイルのバイト列は変えない。
+ダブルのベクタはテラスを持たない。
+
+## テラスタル(ADR-0224)
+
+ポケモンチャンピオンズ本編には無いが、オプションの機能として照合する。`tera.json`(ADR-0224 §1 の表 T1〜T11・組合せ・
+18タイプの総当たり。各ケースは生成時にテラスを外した対照と比べ、oracle が変わる/変わらないを確かめる)と
+`tera-random.jsonl.gz`(別の乱数列 3000 件。シングルのみ)だけが `Attacker.TeraType` / `Defender.TeraType` を持つ。
+防御側のテラスは oracle(Champions 世代)がタイプ相性に反映しないので、engine もそれに合わせる(本編 SV とは違う)。
+既存ファイルのバイト列は変えない。
+
 ## 関連 ADR
 
-[0002](../../docs/adr/0002-master-data-source.md)(追記 P2-1b。oracle を Champions 世代へ切り替え)、[0120](../../docs/adr/0120-effects-data-coverage.md)(効果定義の網羅と未対応一覧)。
+[0002](../../docs/adr/0002-master-data-source.md)(追記 P2-1b。oracle を Champions 世代へ切り替え)、[0120](../../docs/adr/0120-effects-data-coverage.md)(効果定義の網羅と未対応一覧)、[0222](../../docs/adr/0222-engine-double-screens-and-spread.md)(ダブルの壁・全体技)、[0224](../../docs/adr/0224-engine-optional-terastal.md)(テラスタル)。

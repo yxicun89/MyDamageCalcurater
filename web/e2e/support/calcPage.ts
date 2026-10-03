@@ -10,6 +10,15 @@ export const SPECIES = {
   water: { key: "9002-000", nameJa: "テストみず" },
 } as const;
 
+/**
+ * issue #515・ADR-0320: 架空のメガ種族とそのメガストーン(src/test/megaMaster.ts。pokedex フィクスチャが返す)。
+ * 理由の文言は src/i18n/ja.ts の megaItemText.lockedReason(iOS と同じ語)。
+ */
+export const MEGA = {
+  fire: { nameJa: "メガテストほのお", stoneNameJa: "テストほのおナイト" },
+  lockedReason: "メガシンカ: メガストーンを持ちます",
+} as const;
+
 /** 計算結果の1行が持つ表示%の書式(domain/format.ts formatPercentRange)。 */
 export const PERCENT_RANGE_PATTERN = /(\d+\.\d)〜(\d+\.\d)%/;
 

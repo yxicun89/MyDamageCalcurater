@@ -13,6 +13,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -204,7 +205,9 @@ func TestGoldenDamage(t *testing.T) {
 		t.Fatalf("%s が空(Champions に無い効果の計算式が検証されていない)", goldenLegacyEffectsFile)
 	}
 	// legacy-effects も全件一致を要求する(known_diffs には何も足さない。P2-1b 決定 5)。
-	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz", goldenLegacyEffectsFile} {
+	// ダブル(doubles / doubles-random。issue #232 案B のダブル分・ADR-0222)も全件一致を要求する。
+	// テラス(tera / tera-random。オプションの機能。ADR-0224)も全件一致を要求する。
+	for _, name := range []string{"fixed.json", "random.jsonl.gz", "attack-species.jsonl.gz", "defense-species.jsonl.gz", goldenLegacyEffectsFile, goldenDoublesFile, goldenDoublesRandomFile, goldenTeraFile, goldenTeraRandomFile} {
 		t.Run(name, func(t *testing.T) {
 			count, failures := 0, 0
 			seen := map[string]bool{}
@@ -227,7 +230,7 @@ func TestGoldenDamage(t *testing.T) {
 					}
 				}
 			}
-			if name == "fixed.json" {
+			if strings.HasSuffix(name, ".json") { // fixed.json・doubles.json・tera.json は JSON 配列
 				var cases []goldenCase
 				if err := json.Unmarshal(goldenFile(t, meta, name), &cases); err != nil {
 					t.Fatal(err)

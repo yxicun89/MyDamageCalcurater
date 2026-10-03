@@ -2628,6 +2628,496 @@
       }
     },
     {
+      "name": "calc/tera-double-marks",
+      "fn": "calc",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "source": "手書き(issue #232・ADR-0160・ADR-0224。既存ベクタに teraType と format=double を足す。攻撃側のテラスは計算に反映して印を付けず、防御側のテラスは相性に反映せず印を付ける。印と数値が Go/WASM で一致することを見る)",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "fire"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "ghost"
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/tera-stab-adaptability",
+      "fn": "calc",
+      "tags": [
+        "tera",
+        "teraStab",
+        "ability",
+        "stab"
+      ],
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T5: テラス=元タイプ × てきおうりょく ×2.25",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "Adaptability",
+            "effect": {
+              "stabMod": 8192
+            }
+          },
+          "item": null,
+          "teraType": "normal"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/tera-only-stab",
+      "fn": "calc",
+      "tags": [
+        "tera",
+        "teraStab",
+        "effectiveness"
+      ],
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T3: テラスだけが技と一致 ×1.5",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "fighting"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "brickbreak",
+          "type": "fighting",
+          "category": "physical",
+          "power": 75,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/tera-defender-sand",
+      "fn": "calc",
+      "tags": [
+        "tera",
+        "teraHasType",
+        "weather",
+        "unsupported"
+      ],
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T9: テラスいわの防御側はすなあらしで特防 ×1.5。相性には反映しない(防御側のテラスの印)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "rock"
+        },
+        "move": {
+          "id": "thunderbolt",
+          "type": "electric",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "sand",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/tera-attacker-flying-terrain",
+      "fn": "calc",
+      "tags": [
+        "tera",
+        "teraHasType",
+        "terrain"
+      ],
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T6: テラスひこうの攻撃側は浮いてエレキフィールドの補正が掛からない",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null,
+          "teraType": "flying"
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "thunderbolt",
+          "type": "electric",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "electric",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
       "name": "bulk/default-presets-physical",
       "fn": "calcBulk",
       "tags": [
@@ -3050,6 +3540,226 @@
       }
     },
     {
+      "name": "bulk/tera-double-marks",
+      "fn": "calcBulk",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "normal"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          },
+          {
+            "id": "assaultvest",
+            "nameJa": "テストもちもの2",
+            "effect": {
+              "statMods": {
+                "spd": 6144
+              }
+            }
+          }
+        ]
+      },
+      "source": "手書き(issue #232・ADR-0160・ADR-0224。既存ベクタに teraType と format=double を足す。攻撃側のテラスは計算に反映して印を付けず、防御側のテラスは相性に反映せず印を付ける。印と数値が Go/WASM で一致することを見る)"
+    },
+    {
+      "name": "bulk/tera-stab",
+      "fn": "calcBulk",
+      "tags": [
+        "tera",
+        "teraStab",
+        "bulk"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "fighting"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "brickbreak",
+          "nameJa": "テストわざ2",
+          "type": "fighting",
+          "category": "physical",
+          "power": 75,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          },
+          {
+            "id": "assaultvest",
+            "nameJa": "テストもちもの2",
+            "effect": {
+              "statMods": {
+                "spd": 6144
+              }
+            }
+          }
+        ]
+      },
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T3: 一括計算の全行に攻撃側のテラスを反映(プリセットの防御側はテラス無し)"
+    },
+    {
       "name": "reverse/defender-percent-single-observation",
       "fn": "calcReverse",
       "tags": [
@@ -3444,6 +4154,163 @@
         ],
         "maxCandidates": 10
       }
+    },
+    {
+      "name": "reverse/tera-double-marks",
+      "fn": "calcReverse",
+      "tags": [
+        "unsupported",
+        "tera",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "normal"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percent": 45
+          }
+        ],
+        "maxCandidates": 10
+      },
+      "source": "手書き(issue #232・ADR-0160・ADR-0224。既存ベクタに teraType と format=double を足す。攻撃側のテラスは計算に反映して印を付けず、防御側のテラスは相性に反映せず印を付ける。印と数値が Go/WASM で一致することを見る)"
+    },
+    {
+      "name": "reverse/tera-known-defender-sand",
+      "fn": "calcReverse",
+      "tags": [
+        "tera",
+        "teraHasType",
+        "reverse",
+        "unsupported"
+      ],
+      "request": {
+        "format": "single",
+        "side": "attacker",
+        "known": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "spd",
+            "minus": "atk"
+          },
+          "sp": {
+            "hp": 32,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 32,
+            "spe": 0
+          },
+          "status": "none",
+          "teraType": "rock"
+        },
+        "unknownSpecies": {
+          "key": "snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "move": {
+          "id": "thunderbolt",
+          "nameJa": "テストわざ3",
+          "type": "electric",
+          "category": "special",
+          "power": 90,
+          "priority": 0
+        },
+        "field": {
+          "weather": "sand",
+          "terrain": "none"
+        },
+        "critical": false,
+        "observations": [
+          {
+            "percent": 20
+          }
+        ],
+        "maxCandidates": 10
+      },
+      "source": "手書き(ADR-0224。テラスを計算に反映する入力の数値と印が Go/WASM で一致することを見る。値の正しさは testdata/golden/tera*.json が担保) T9: 相手が攻撃側。既知の防御側のテラス(いわ)がすなあらしの特防に効き、防御側のテラスの印が全候補に付く"
     },
     {
       "name": "adjust/indices-physical-with-modifiers",
@@ -3992,6 +4859,1617 @@
           "thresholdPercent": 50
         }
       }
+    },
+    {
+      "name": "calc/double-screen-reflect",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "screens"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/screen/reflect",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "dragonclaw",
+          "type": "dragon",
+          "category": "physical",
+          "power": 80,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-screen-light-screen-critical",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "screens",
+        "critical"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/screen/light-screen/critical",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "charizard",
+            "types": [
+              "fire",
+              "flying"
+            ],
+            "baseStats": {
+              "hp": 78,
+              "atk": 84,
+              "def": 78,
+              "spa": 109,
+              "spd": 85,
+              "spe": 100
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 90,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": true,
+            "auroraVeil": false
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/double-spread-earthquake",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/all-adjacent/earthquake",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-rock-slide",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/all-adjacent-foes/rock-slide",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "tyranitar",
+            "types": [
+              "rock",
+              "dark"
+            ],
+            "baseStats": {
+              "hp": 100,
+              "atk": 134,
+              "def": 110,
+              "spa": 95,
+              "spd": 100,
+              "spe": 61
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "charizard",
+            "types": [
+              "fire",
+              "flying"
+            ],
+            "baseStats": {
+              "hp": 78,
+              "atk": 84,
+              "def": 78,
+              "spa": 109,
+              "spd": 85,
+              "spe": 100
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "rockslide",
+          "type": "rock",
+          "category": "physical",
+          "power": 75,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-rain",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "weather"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/rain",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "blastoise",
+            "types": [
+              "water"
+            ],
+            "baseStats": {
+              "hp": 79,
+              "atk": 83,
+              "def": 100,
+              "spa": 85,
+              "spd": 105,
+              "spe": 78
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "surf",
+          "type": "water",
+          "category": "special",
+          "power": 90,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "rain",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-spread-critical",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "critical"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/critical",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": true
+      }
+    },
+    {
+      "name": "calc/double-spread-reflect",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "spread",
+        "screens"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/spread/reflect",
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/single-spread-earthquake",
+      "fn": "calc",
+      "tags": [
+        "spread"
+      ],
+      "source": "testdata/golden/doubles.json#doubles/single-control/spread/all-adjacent/earthquake",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "calc/double-move-target-unknown",
+      "fn": "calc",
+      "tags": [
+        "double",
+        "unsupported"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "garchomp",
+            "types": [
+              "dragon",
+              "ground"
+            ],
+            "baseStats": {
+              "hp": 108,
+              "atk": 130,
+              "def": 95,
+              "spa": 80,
+              "spd": 85,
+              "spe": 102
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "earthquake",
+          "type": "ground",
+          "category": "physical",
+          "power": 100,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/double-spread-reflect",
+      "fn": "calcBulk",
+      "tags": [
+        "bulk",
+        "double",
+        "spread"
+      ],
+      "request": {
+        "format": "double",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0,
+          "target": "spread"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "reverse/defender-double-reflect",
+      "fn": "calcReverse",
+      "tags": [
+        "reverse",
+        "damage",
+        "defender",
+        "double"
+      ],
+      "request": {
+        "format": "double",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "blissey",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          }
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0,
+          "target": "single"
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "eviolite",
+            "nameJa": "テストもちもの1",
+            "effect": {
+              "statMods": {
+                "def": 6144,
+                "spd": 6144
+              }
+            }
+          }
+        ],
+        "observations": [
+          {
+            "damage": 100
+          }
+        ],
+        "maxCandidates": 8
+      }
+    },
+    {
+      "name": "calc/mega-required-item",
+      "fn": "calc",
+      "tags": [
+        "mega",
+        "item"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "mega-snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            },
+            "isMega": true,
+            "requiredItemId": "snorlaxite"
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
+      "name": "bulk/mega-item-variants",
+      "fn": "calcBulk",
+      "tags": [
+        "mega",
+        "itemVariants"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        ]
+      }
+    },
+    {
+      "name": "reverse/mega-item-candidates",
+      "fn": "calcReverse",
+      "tags": [
+        "mega",
+        "itemCandidates"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "snorlaxite",
+            "nameJa": "テストメガストーン"
+          }
+        ],
+        "observations": [
+          {
+            "damage": 150
+          }
+        ],
+        "maxCandidates": 8
+      }
+    },
+    {
+      "name": "calc/mega-wrong-item-rejected",
+      "fn": "calc",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "mega-snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            },
+            "isMega": true,
+            "requiredItemId": "snorlaxite"
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      },
+      "expectError": "invalid_input"
+    },
+    {
+      "name": "bulk/mega-wrong-item-variant-rejected",
+      "fn": "calcBulk",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "defenderSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "attackerScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          },
+          "defenderScreens": {
+            "reflect": true,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "presetKeys": [
+          "none",
+          "hp",
+          "hb_boost",
+          "hb",
+          "hb_full"
+        ],
+        "itemVariants": [
+          null,
+          {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        ]
+      },
+      "expectError": "invalid_input"
+    },
+    {
+      "name": "reverse/mega-wrong-item-candidate-rejected",
+      "fn": "calcReverse",
+      "tags": [
+        "mega",
+        "error"
+      ],
+      "request": {
+        "format": "single",
+        "side": "defender",
+        "known": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "status": "none"
+        },
+        "unknownSpecies": {
+          "key": "mega-snorlax",
+          "types": [
+            "normal"
+          ],
+          "baseStats": {
+            "hp": 255,
+            "atk": 10,
+            "def": 10,
+            "spa": 75,
+            "spd": 135,
+            "spe": 55
+          },
+          "isMega": true,
+          "requiredItemId": "snorlaxite"
+        },
+        "move": {
+          "id": "bodyslam",
+          "nameJa": "テストわざ1",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none"
+        },
+        "critical": false,
+        "itemCandidates": [
+          null,
+          {
+            "id": "lifeorb",
+            "nameJa": "テストもちもの3",
+            "effect": {
+              "damageMod": 5324
+            }
+          }
+        ],
+        "observations": [
+          {
+            "damage": 150
+          }
+        ],
+        "maxCandidates": 8
+      },
+      "expectError": "invalid_input"
     }
   ]
 }

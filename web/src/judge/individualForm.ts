@@ -1,11 +1,12 @@
 // 判定の画面の1体分の入力の状態と、その更新(種族・技の選択、調整プリセット)。純粋関数だけで、React を使わない。
 // issue 309(ADR-0711): 技は種族の learnset から選び、調整はプリセット(SP と性格がまとめて入る)で入れる。
 
+import { itemIdAfterSpeciesChange } from "../domain/mega";
 import { attackerPresetLabel, resolveAttackerPreset } from "../domain/attackerPresets";
 import { defenderPresetLabel, resolveDefenderPreset } from "../domain/defenderPresets";
 import { firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { MAX_SP_PER_STAT, ZERO_SP } from "../domain/requests";
-import type { Move, MoveCategory, Nature, Ranks, StatKey, Stats } from "../engine/types";
+import type { Item, Move, MoveCategory, Nature, Ranks, StatKey, Stats } from "../engine/types";
 import { judgeScreenText } from "../i18n/ja";
 import type { MasterNature, MasterSpecies } from "../master/types";
 
@@ -23,11 +24,26 @@ export type JudgePresetKey = "none" | "fastest" | "attack" | "hb" | "hd";
 
 export const JUDGE_PRESET_KEYS: readonly JudgePresetKey[] = ["none", "fastest", "attack", "hb", "hd"];
 
+/** 状態異常の選択肢(表示順。契約の StatusCondition と同じ。none が既定で先頭。issue 235)。 */
+export const JUDGE_STATUS_KEYS = [
+  "none",
+  "burn",
+  "paralysis",
+  "poison",
+  "badly_poison",
+  "sleep",
+  "freeze",
+] as const;
+
+export type JudgeStatusKey = (typeof JUDGE_STATUS_KEYS)[number];
+
 /** 1体分の入力の状態(自分・候補で共通の形。ADR-0705 §4)。 */
 export interface IndividualFormState {
   readonly speciesKey: string;
   /** 選んだ種族の表示名(結果の行に出す。オンライン検索では master.species が空なのでここに持つ)。 */
   readonly speciesName: string;
+  /** 選んだ種族の実体(メガの持ち物固定の導出元。オンライン検索ではここにだけ持つ)。未選択は null。 */
+  readonly species: MasterSpecies | null;
   readonly natureId: string;
   readonly sp: Stats;
   /**
@@ -37,6 +53,8 @@ export interface IndividualFormState {
   readonly ranks: Record<RankKey, string>;
   readonly abilityId: string;
   readonly itemId: string;
+  /** 状態異常。none は送らない(省略と同じ)。 */
+  readonly status: JudgeStatusKey;
   /** 選んだ種族が覚える技(learnset の順)。技の select の選択肢。 */
   readonly moves: readonly Move[];
   /** 選んだ技の ID(Move.id)。 */
@@ -50,11 +68,13 @@ export function emptyIndividual(): IndividualFormState {
   return {
     speciesKey: "",
     speciesName: "",
+    species: null,
     natureId: "",
     sp: { ...ZERO_SP },
     ranks: { atk: "0", def: "0", spa: "0", spd: "0", spe: "0" },
     abilityId: "",
     itemId: "",
+    status: "none",
     moves: [],
     moveId: "",
     presetKey: "none",
@@ -169,13 +189,15 @@ function reconcilePreset(state: IndividualFormState, natures: readonly MasterNat
 
 /**
  * 種族を選ぶ。技の候補は種族の learnset(`pool` は技の実体の引き元)で、既定は最初のダメージ技。
- * 種族を替えると前の種族の技は残さない。
+ * 種族を替えると前の種族の技は残さない。持ち物はメガ種族ならメガストーン、メガから非メガなら未選択に整える
+ * (issue 515・ADR-0320。`items` はストーンを引くマスタの持ち物)。
  */
 export function chooseSpecies(
   state: IndividualFormState,
   species: MasterSpecies,
   pool: readonly Move[],
   natures: readonly MasterNature[],
+  items: readonly Item[],
 ): IndividualFormState {
   const moves = learnsetMoves(species, pool);
   const defaultMove = firstDamagingMove(species, pool) ?? moves[0];
@@ -183,6 +205,13 @@ export function chooseSpecies(
     ...state,
     speciesKey: species.key,
     speciesName: species.nameJa,
+    species,
+    itemId: itemIdAfterSpeciesChange({
+      previous: state.species,
+      next: species,
+      items,
+      currentItemId: state.itemId,
+    }),
     moves,
     moveId: defaultMove?.id ?? "",
   };

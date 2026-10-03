@@ -7,12 +7,15 @@
 
 API_CLUSTER ?= $(CLUSTER)
 API_URL ?= http://localhost:8080
+# イメージに埋め込むビルドの版(起動ログと /healthz に出る。issue #217)。k3d へ入れるイメージのタグと同じ
+# コミット識別(HEAD の12桁+未コミットなら -dirty。scripts/image-tag.sh。issue #291)。git が無ければ 0.0.0-dev。
+API_VERSION ?= $(shell ./scripts/image-tag.sh services engine 2>/dev/null || echo 0.0.0-dev)
 
 .PHONY: api-docker-build api-k3d-deploy api-smoke api-kustomize
 
 api-docker-build: ## calc・gateway のイメージを local タグでビルドする
-	@docker build -f services/calc/Dockerfile -t pokecalc/calc:local .
-	@docker build -f services/gateway/Dockerfile -t pokecalc/gateway:local .
+	@docker build -f services/calc/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/calc:local .
+	@docker build -f services/gateway/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/gateway:local .
 
 # クラスタ全体の立ち上げ(namespace・mysql・pokedex-migrate Job を含む)は `make up`
 # (scripts/up.sh)が担う。`deploy/k8s/overlays/local`(共有)を丸ごと apply すると、
@@ -22,12 +25,7 @@ api-docker-build: ## calc・gateway のイメージを local タグでビルド�
 # `deploy/k8s/overlays/local-api`(base/calc・base/gateway と Component local/api だけ)で
 # apply する。他レーンのリソースには一切触らない(ADR-0203 追記「apply の分離」)。
 api-k3d-deploy: api-docker-build ## k3d(既存クラスタ。make up 済み)へ calc・gateway だけをデプロイする
-	@CLUSTER=$(API_CLUSTER) ./scripts/require-k3d-context.sh api-k3d-deploy
-	@k3d image import pokecalc/calc:local pokecalc/gateway:local --cluster $(API_CLUSTER)
-	@kubectl apply -k deploy/k8s/overlays/local-api
-	@kubectl -n pokecalc rollout restart deployment/calc deployment/gateway
-	@kubectl -n pokecalc rollout status deployment/calc --timeout=120s
-	@kubectl -n pokecalc rollout status deployment/gateway --timeout=120s
+	@CLUSTER=$(API_CLUSTER) TAG_PATHS="services engine" ./scripts/k3d-deploy-tagged.sh api-k3d-deploy deploy/k8s/overlays/local-api pokecalc/calc pokecalc/gateway
 
 api-smoke: ## gateway 経由のスモーク(既定 http://localhost:8080。API_URL で上書き)
 	@API_URL=$(API_URL) services/gateway/scripts/smoke.sh

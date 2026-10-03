@@ -104,6 +104,16 @@ extension Components {
             case storeUnavailable = "store_unavailable"
             case upstreamUnavailable = "upstream_unavailable"
         }
+        /// 対戦形式。計算(/api/calc・/api/calc/bulk・/api/calc/reverse)では double のとき次を掛ける(issue 232 案B のダブル分・ADR-0222)。
+        /// - 防御側の壁(リフレクター・ひかりのかべ・オーロラベール): ×2732/4096(single は ×1/2)。急所は壁を無視する
+        /// - 全体技(技の対象が相手全体・自分以外全体): 基礎ダメージに ×3072/4096(天候・急所より前)。
+        ///   1対1の計算なので、全体技は常に2体以上に当たる前提で掛ける。味方の効果(てだすけ等)は扱わない
+        /// 技の対象をマスタが持たない間(issue 288)は、double の攻撃技に UnsupportedMark
+        /// (target=move・reason=move_target_unknown)を付け、全体技の補正は掛けない(壁は掛ける)。
+        /// double は計算に反映するので形式の印は付けない。engine に未知の形式が届いたときだけ安全側で
+        /// target format・reason unsupported_effect の印が付く(ADR-0160・ADR-0222 §5)。
+        ///
+        ///
         /// - Remark: Generated from `#/components/schemas/Format`.
         @frozen public enum Format: String, Codable, Hashable, Sendable, CaseIterable {
             case single = "single"
@@ -232,25 +242,46 @@ extension Components {
                 ///
                 /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/learnset`.
                 public var learnset: [Swift.String]?
+                /// メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                /// 古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/isMega`.
+                public var isMega: Swift.Bool?
+                /// メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                /// (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
+                /// isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/requiredItemId`.
+                public var requiredItemId: Swift.String?
                 /// Creates a new `Value2Payload`.
                 ///
                 /// - Parameters:
                 ///   - baseStats:
                 ///   - abilities:
                 ///   - learnset: 覚える技の ID 一覧
+                ///   - isMega: メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
+                ///   - requiredItemId: メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 public init(
                     baseStats: Components.Schemas.StatBlock,
                     abilities: [Components.Schemas.Ability],
-                    learnset: [Swift.String]? = nil
+                    learnset: [Swift.String]? = nil,
+                    isMega: Swift.Bool? = nil,
+                    requiredItemId: Swift.String? = nil
                 ) {
                     self.baseStats = baseStats
                     self.abilities = abilities
                     self.learnset = learnset
+                    self.isMega = isMega
+                    self.requiredItemId = requiredItemId
                 }
                 public enum CodingKeys: String, CodingKey {
                     case baseStats
                     case abilities
                     case learnset
+                    case isMega
+                    case requiredItemId
                 }
             }
             /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2`.
@@ -447,6 +478,29 @@ extension Components {
             public var power: Swift.Int
             /// - Remark: Generated from `#/components/schemas/Move/priority`.
             public var priority: Swift.Int?
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            @frozen public enum TargetPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case single = "single"
+                case spread = "spread"
+            }
+            /// 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
+            /// (Showdown の allAdjacent・allAdjacentFoes。ダブルで ×3072/4096)、`single` はそれ以外(単体技・自分・味方・場の技)。
+            /// 値は engine の `MoveTarget`(WASM の技の `target`)と同じで、クライアントはそのまま渡せる。
+            /// pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
+            /// 対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
+            /// クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Move/target`.
+            public var target: Components.Schemas.Move.TargetPayload?
             /// Creates a new `Move`.
             ///
             /// - Parameters:
@@ -456,13 +510,15 @@ extension Components {
             ///   - category:
             ///   - power: 威力(0 は変化技/固定ダメージ)
             ///   - priority:
+            ///   - target: 技の対象の分類(issue 288・ADR-0223)。ダブルの計算に使う: `spread` は相手の場の複数に当たる全体技
             public init(
                 id: Swift.String,
                 nameJa: Swift.String,
                 _type: Components.Schemas.PokeType,
                 category: Components.Schemas.MoveCategory,
                 power: Swift.Int,
-                priority: Swift.Int? = nil
+                priority: Swift.Int? = nil,
+                target: Components.Schemas.Move.TargetPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
@@ -470,6 +526,7 @@ extension Components {
                 self.category = category
                 self.power = power
                 self.priority = priority
+                self.target = target
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -478,6 +535,7 @@ extension Components {
                 case category
                 case power
                 case priority
+                case target
             }
         }
         /// - Remark: Generated from `#/components/schemas/Item`.
@@ -662,6 +720,16 @@ extension Components {
             public var sp: Components.Schemas.Individual.SpPayload
             /// - Remark: Generated from `#/components/schemas/Individual/ranks`.
             public var ranks: Components.Schemas.RankBlock?
+            /// テラスタイプ。省略・null はテラスタル無し(従来どおり)。ポケモンチャンピオンズ本編には無いが、
+            /// 指定したときだけテラスタル済みとして計算に反映する(オプションの機能。ADR-0224)。照合の正は
+            /// @smogon/calc 0.12.0 の Champions 世代: 攻撃側はタイプ一致補正(テラス=元タイプ=技 ×2.0、
+            /// テラスだけ一致 ×1.5、てきおうりょくはテラス=元タイプ ×2.25・テラスだけ一致 ×2.0)に、
+            /// 両側とも「そのタイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆきの防御補正)に使う。
+            /// 防御側のテラスはタイプ相性に反映しない(照合先の Champions 世代の挙動。本編 SV とは違う)ので、
+            /// 防御側に指定すると結果の unsupported に target defender_tera_type・reason unsupported_effect・
+            /// id テラスタイプの印が付く(ADR-0160・ADR-0224 §3)。攻撃側のテラスには印を付けない。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public struct TeraTypePayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/Individual/teraType/value1`.
@@ -680,6 +748,16 @@ extension Components {
                     try encoder.encodeToSingleValueContainer(self.value1)
                 }
             }
+            /// テラスタイプ。省略・null はテラスタル無し(従来どおり)。ポケモンチャンピオンズ本編には無いが、
+            /// 指定したときだけテラスタル済みとして計算に反映する(オプションの機能。ADR-0224)。照合の正は
+            /// @smogon/calc 0.12.0 の Champions 世代: 攻撃側はタイプ一致補正(テラス=元タイプ=技 ×2.0、
+            /// テラスだけ一致 ×1.5、てきおうりょくはテラス=元タイプ ×2.25・テラスだけ一致 ×2.0)に、
+            /// 両側とも「そのタイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆきの防御補正)に使う。
+            /// 防御側のテラスはタイプ相性に反映しない(照合先の Champions 世代の挙動。本編 SV とは違う)ので、
+            /// 防御側に指定すると結果の unsupported に target defender_tera_type・reason unsupported_effect・
+            /// id テラスタイプの印が付く(ADR-0160・ADR-0224 §3)。攻撃側のテラスには印を付けない。
+            ///
+            ///
             /// - Remark: Generated from `#/components/schemas/Individual/teraType`.
             public var teraType: Components.Schemas.Individual.TeraTypePayload?
             /// - Remark: Generated from `#/components/schemas/Individual/status`.
@@ -694,7 +772,7 @@ extension Components {
             ///   - itemId: 持ち物。メガシンカ後の種族(isMega)は、その requiredItemId の持ち物か持ち物なし(null・省略)だけ受け付け、
             ///   - sp: 能力ポイント。各 0..32、合計 <= 66
             ///   - ranks:
-            ///   - teraType:
+            ///   - teraType: テラスタイプ。省略・null はテラスタル無し(従来どおり)。ポケモンチャンピオンズ本編には無いが、
             ///   - status:
             public init(
                 speciesKey: Components.Schemas.SpeciesKey,
@@ -915,12 +993,16 @@ extension Components {
             }
         }
         /// 「この結果は正しくない可能性がある」印1つ(ADR-0123)。engine が正しく計算できない技の機構・
-        /// 持ち物・特性に、数値は通常の式のまま付ける(400 で拒否しない)。
+        /// 持ち物・特性と、タイプ相性に反映しない防御側のテラスタイプ・未知の対戦形式(ADR-0160・ADR-0222 §5・
+        /// ADR-0224 §3)に、数値は通常の式のまま付ける(400 で拒否しない)。
         ///
         ///
         /// - Remark: Generated from `#/components/schemas/UnsupportedMark`.
         public struct UnsupportedMark: Codable, Hashable, Sendable {
-            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            /// 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
+            /// attacker_tera_type・defender_tera_type・format(並びもこの順)。format は engine に未知の形式が
+            /// 届いたときだけ(double は計算に反映するので付かない。ADR-0222 §5)。attacker_tera_type は
+            /// 攻撃側のテラスを計算に反映したので現在は付かない(値は互換のため残す。ADR-0224 §3)。
             /// 値を足しても古いクライアントが応答全体をデコードできなくなるのを避けるため、enum にしない
             /// (クライアントは未知の値を「対象不明の印」として扱い、id をそのまま表示する。ADR-0215)。
             ///
@@ -930,23 +1012,27 @@ extension Components {
             /// 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
             /// always_crit・effectiveness_change・field_specific・fixed_damage・ignore_defense_ranks・
             /// move_specific・multi_hit・ohko・priority_change・type_change・variable_power)か
-            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)、持ち物・特性は
-            /// unsupported_effect(効果スキーマで表せない)。target と同じ理由で enum にしない
+            /// zero_power(威力0の攻撃技。威力が技の処理で決まるため)・move_target_unknown(double で技の対象が
+            /// 不明なため全体技の補正を判断できない。ADR-0222)、持ち物・特性は
+            /// unsupported_effect(効果スキーマで表せない)、防御側のテラスタイプ・未知の対戦形式も unsupported_effect
+            /// (効果を計算に反映していない。防御側のテラスはタイプ相性に反映しない。ADR-0160・ADR-0224 §3)。target と同じ理由で enum にしない
             /// (クライアントは未知の値を汎用の文言で扱う。ADR-0215)。
             ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/reason`.
             public var reason: Swift.String
-            /// 技・持ち物・特性の ID
+            /// 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
+            /// (PokeType の値)、format のときは対戦形式(Format の値)。
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/UnsupportedMark/id`.
             public var id: Swift.String
             /// Creates a new `UnsupportedMark`.
             ///
             /// - Parameters:
-            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability。
+            ///   - target: 印の対象。現在の値は move・attacker_item・attacker_ability・defender_item・defender_ability・
             ///   - reason: 印の理由。技は機構の値(MasterMove.mechanisms と同じ13種: alt_defense_stat・alt_offense_stat・
-            ///   - id: 技・持ち物・特性の ID
+            ///   - id: 技・持ち物・特性の ID。target が attacker_tera_type / defender_tera_type のときはテラスタイプ
             public init(
                 target: Swift.String,
                 reason: Swift.String,

@@ -12,6 +12,7 @@
 | 変数 | 必須 | 既定 | 意味 | 検証 |
 |---|---|---|---|---|
 | `GATEWAY_ADDR` | 任意 | `:8080` | 待ち受け | — |
+| `GATEWAY_METRICS_ADDR` | 任意 | `:9090` | メトリクス専用の待ち受け(`/metrics` はここだけ。公開側は 404。issue #216) | `GATEWAY_ADDR` と同じ値は起動エラー |
 | `GATEWAY_CALC_URL` | **必須** | — | calc-svc の基底 URL(`/api/calc*` の転送先) | http/https・ホストあり(`:142`) |
 | `GATEWAY_POKEDEX_URL` | 任意 | 未設定 | pokedex-svc(`/api/pokedex/*`)。未設定 → 503 | 同上 |
 | `GATEWAY_ASSETS_URL` | 任意 | 未設定 | 画像配信元(`/assets/*`)。未設定 → 404 | 同上 |
@@ -157,7 +158,7 @@
 |---|---|---|
 | サービス実装が読む環境変数(名前の異なるもの) | gateway 7・calc 4(廃止 1 含む)・pokedex 3(`POKEDEX_ADDR`・`POKEDEX_DATABASE_DSN`・`POKEDEX_TEST_DSN`)・balance 4(`PORT` 含む)・speed 2・judge 5 | 各 `main.go`/`config.go` の定数と一致 |
 | 上記のうちマニフェストが注入する名前 | `GATEWAY_CALC_URL`・`GATEWAY_POKEDEX_URL`・`GATEWAY_CORS_ALLOWED_ORIGINS`・`GATEWAY_WEB_URL`・`CALC_MASTER_URL`・`POKEDEX_DATABASE_DSN`・`PORT`・`BALANCE_*_PATH`×3・`SPEED_POKEMON_PATH`・`JUDGE_POKEDEX_BASE_URL`・`JUDGE_CALC_BASE_URL`(+ `GOMEMLIMIT`・`HOME`・`npm_config_cache`・`MYSQL_*`) | §2 |
-| 未注入(既定値で動く) | `GATEWAY_ADDR`・`GATEWAY_ASSETS_URL`・`GATEWAY_UPSTREAM_TIMEOUT`・`CALC_ADDR`・`CALC_MASTER_PATH`・`POKEDEX_ADDR`・`JUDGE_UPSTREAM_TIMEOUT`・`JUDGE_CHOICE_SCARF_ITEM_ID` | — |
+| 未注入(既定値で動く) | `GATEWAY_ADDR`・`GATEWAY_METRICS_ADDR`・`GATEWAY_ASSETS_URL`・`GATEWAY_UPSTREAM_TIMEOUT`・`CALC_ADDR`・`CALC_MASTER_PATH`・`POKEDEX_ADDR`・`JUDGE_UPSTREAM_TIMEOUT`・`JUDGE_CHOICE_SCARF_ITEM_ID` | — |
 | ConfigMap | 6 種(生成 3+1 を含めると名前 8) | §3。実クラスタの存在確認は未実施 |
 | Secret | 実体 1(`mysql-auth`)+ 例 1 | `grep '^kind: Secret'` は 0 件(`up.sh` が作成) |
 

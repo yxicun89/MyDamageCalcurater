@@ -11,8 +11,10 @@ root=${1:-"$(cd "$(dirname "$0")/.." && pwd)"}
 index="$root/docs/plan.md"
 dir="$root/docs/plan"
 
-# 分割前(ADR-0172 の時点)から別のタスクで同じ ID を使っていたもの。内容を変えずに移したので許可する。新しく足さない。
-allowed_dup_ids=" P4-17 P5-5c P5-5d P6-21 "
+# 分割前(ADR-0172 の時点)の main で ID が重複していたもの。内容を変えずに移したので許可する。新しく足さない。
+# P6-24 は main で同じ行が [ ] と [x] の 2 回ある(マージで古い行が残った)。iOS レーンが古い行を消したらここから外す。
+# 許可した ID の行は、4(同じ本文の行)の検査からも外す。
+allowed_dup_ids=" P4-17 P5-5c P5-5d P6-21 P6-24 "
 
 errors=0
 fail() {
@@ -64,7 +66,13 @@ items=$(find "$dir" -type f -name '*.md' | sort | while IFS= read -r file; do
 done)
 
 # 4. 同じ本文の行が 2 回現れない。
-dups=$(printf '%s\n' "$items" | awk -F'\t' 'NF > 1 { n[$2]++; at[$2] = at[$2] " " $1 } END { for (k in n) if (n[k] > 1) print at[k] "\t" k }')
+dups=$(printf '%s\n' "$items" | awk -F'\t' -v allowed="$allowed_dup_ids" 'NF > 1 {
+    body = $2
+    sub(/^\*\*/, "", body)
+    split(body, w, /[^0-9A-Za-z-]/)
+    if (index(allowed, " " w[1] " ") > 0) next
+    n[$2]++; at[$2] = at[$2] " " $1
+  } END { for (k in n) if (n[k] > 1) print at[k] "\t" k }')
 if [ -n "$dups" ]; then
   fail "同じタスクの行が複数あります(マージの解消で二重になっていないか確認する):"
   printf '%s\n' "$dups" >&2

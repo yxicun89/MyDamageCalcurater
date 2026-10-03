@@ -55,7 +55,17 @@ type AbilityEffect struct {
 	UnsupportedDefender bool
 }
 
+// hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る
+// (@smogon/calc の Pokemon.hasType。ADR-0224)。テラス無しは元のタイプ。
 func hasType(in Individual, t Type) bool {
+	if in.TeraType != TypeNone {
+		return in.TeraType == t
+	}
+	return hasOriginalType(in, t)
+}
+
+// hasOriginalType は種族の元のタイプを持つかを返す(テラスを見ない。oracle の hasOriginalType)。
+func hasOriginalType(in Individual, t Type) bool {
 	for _, ty := range in.Species.Types {
 		if ty == t {
 			return true
@@ -89,7 +99,7 @@ func weatherDamageMod(w Weather, moveType Type) int {
 // @smogon/calc 0.12.0 の util.isGrounded のうち engine がモデル化している条件だけを見る:
 // ひこうタイプでない、かつ特性の効果が Airborne(ふゆう等)でない。
 // じゅうりょく・くろいてっきゅう(必ず接地)と、ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。
-// テラスタイプは他の補正と同じく見ない(engine は種族のタイプで相性・一致を判定している)。
+// テラスタル中はテラスタイプで判定する(hasType。ADR-0224)。
 func isGrounded(in Individual) bool {
 	if hasType(in, TypeFlying) {
 		return false
@@ -126,17 +136,21 @@ func terrainDamageMod(terr Terrain, moveType Type, attackerGrounded, defenderGro
 }
 
 // screenDamageMod は壁による軽減倍率を返す。急所は壁を貫通するため呼び出し側で除外する。
-// シングルは ModifierHalf(×0.5)。
+// シングル・形式未指定は ModifierHalf(×0.5)、ダブルは ModifierDoubleScreen(2732/4096。ADR-0222)。
 func screenDamageMod(in DamageInput) int {
 	s := in.Field.DefenderScreens
+	half := ModifierHalf
+	if in.Format == FormatDouble {
+		half = ModifierDoubleScreen
+	}
 	switch in.Move.Category {
 	case CategoryPhysical:
 		if s.Reflect || s.AuroraVeil {
-			return ModifierHalf
+			return half
 		}
 	case CategorySpecial:
 		if s.LightScreen || s.AuroraVeil {
-			return ModifierHalf
+			return half
 		}
 	}
 	return Modifier4096

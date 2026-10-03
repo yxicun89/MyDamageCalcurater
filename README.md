@@ -53,7 +53,7 @@ main 上なら既存の未コミット変更を保持して `git switch -c feat/
 Claude Code は `.claude/skills/` の `/phase <タスクID>`、`/improve`、`/verify` を使用できます。
 Codex は同じタスク ID を指定して [共通ワークフロー](docs/development-workflow.md) に従います。
 役割定義は `.codex/agents/`。単純な作業はメインだけ、重要な計算変更は独立レビューを挟みます。
-`KICKOFF.md` は当初の M1 開始指示です。既存リポジトリを再初期化する手順として使わないでください。
+`docs/history/KICKOFF.md` は当初の M1 開始指示(履歴)です。既存リポジトリを再初期化する手順として使わないでください。
 
 ## ツールと検証
 

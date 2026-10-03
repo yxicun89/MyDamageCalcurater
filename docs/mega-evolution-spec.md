@@ -13,7 +13,7 @@
 ## 2. すでに決まっていること(再決定しない)
 
 - **ADR-0002 決定 10(回答済み)**: メガシンカ後の姿を**別のポケモンとして登録**する。そのポケモンを選ぶと持ち物にメガストーンが自動で入り、**変更できない**(固定)。
-- **マスタに必要な項目は既にある**(公開 API `MasterSpecies` / `SpeciesDetail`。`api/openapi.yaml`):
+- **マスタに必要な項目は公開 API にある**(`MasterSpecies`、および issue #515 で足した `SpeciesDetail`。検索 `SpeciesSummary` には無い。`api/openapi.yaml`。`SpeciesDetail` の `isMega` は常に返り、`requiredItemId` はメガでなくても null でキーが出る。`baseSpeciesKey` は `SpeciesDetail` に無い):
   - `isMega: boolean`
   - `baseSpeciesKey: string | null`(メガシンカ前の種族キー。メガでなければ null)
   - `requiredItemId: string | null`(メガシンカに要る持ち物の ID。メガでなければ null)
@@ -89,7 +89,7 @@ Web・iOS とも、種族を選んだあとの持ち物は独立した選択に�
 ## 6. 進め方(推奨順)
 
 1. **データレーン**: §4-1 → §4-2。実データで名前を確認し、ADR(データ帯 0100〜)に生成規則と検索の仕様を書く。
-2. **Web レーン・iOS レーン**: §4-3。`isMega` / `requiredItemId` は公開 API に既にあるので、1 と並行して進められる(名前の検索だけが 1 に依存する)。
+2. **Web レーン・iOS レーン**: §4-3。`isMega` / `requiredItemId` は `MasterSpecies` と `SpeciesDetail`(issue #515 で追加)にあり `SpeciesSummary` には無いので、1 と並行して進められる(名前の検索だけが 1 に依存する)。
 3. API・wasmapi の検証(#506・#505)は別 issue で進行中。UI 側は依存しない。
 
 ## 7. 未決の点(既定案で進めてよい)

@@ -100,6 +100,11 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
       (`web/src/app/withOnlineMaster.tsx`。読めなければ日本語の案内と再試行)。balance のエラーはコードを日本語の文言に写像し、
       英語の message を出さない(`balanceErrorText`)。ヘッダーの切替の名前を「ダメージ計算の実行場所」に変更。契約・生成物の変更なし。
       判定のエラー補助行(サーバー message)は未対応(別 issue 候補)
+- [x] issue #216・#244・#246・#217(APIレーン。ADR-0406 追記・ADR-0202 追記): gateway の `/metrics` をメトリクス専用ポート(`GATEWAY_METRICS_ADDR` 既定 :9090・Service の `metrics` ポート・ServiceMonitor・NetworkPolicy `allow-prometheus-gateway-metrics`)に分け、公開側は 404 /
+  メトリクスの path ラベルをルート種別(calc・pokedex・assets・web・healthz・none 等)に(`httpmetrics` の複製は不変更) /
+  ログを JSON 1 形式にしアクセスログと `X-Request-Id`(生成・検証・上流転送・応答)を gateway・calc に(`services/internal/reqlog`) /
+  `version.Version` を Dockerfile の `ARG VERSION` と `-ldflags -X` で埋め込み、起動ログと `/healthz` に出す(`make api-docker-build` が git の短縮 SHA を渡す)。契約変更なし。
+
 - [x] issue #316・#245(APIレーン。ADR-0200 §4 追記): (#316) calc-svc が契約で必須の `sp`(と StatBlock の6キー)の欠落を 400 `invalid_input` にする
       (calc の attacker・defender、bulk の attacker、reverse の known。`decodeStrict` が生の JSON でキーの有無を確かめる。judge と同じ方式、生成型は不変)。
       (#245) `Individual.moveId` を契約から削除(Web は参照なし、iOS は同じ PR で追従。`attacker.moveId` は `unknown_field`)、pokedex の searchSpecies・getSpecies・searchMoves・searchItems に
@@ -129,7 +134,16 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #113(Web/iOS/APIレーン)入力変更時の古い計算要求を抑止・キャンセルする、のAPIレーン連携分(「クライアントのcancel伝播」)
 - [x] P4-17(Web/APIレーン)技のID解決の欠落を解消(ADR-0304 §3)
 - [x] issue #276
-- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+- [x] issue #232(データ/APIレーン)テラス・ダブルを指定した計算に「未対応」の印を付ける(ADR-0160)。Web・iOS の表示文言(ラベル・型)は別 issue。#510(ADR-0222)の後に取り込み、ADR-0222 §5 で format=double の印を外した(未知の形式とテラスの印は残す)
+- [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
+- [x] issue #232 のテラス分(ADR-0224)テラスタルをオプションの機能として engine・wasmapi に反映(ユーザー決定 2026-10-03「機能だけ追加し、オプションで選択できる」)。teraType を指定したときだけ、攻撃側のタイプ一致補正(元タイプ一致・テラス一致・てきおうりょく)と「タイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆき)に反映。省略時は従来と完全に同じ。攻撃側の attacker_tera_type の印は外し、防御側の defender_tera_type の印は残す(防御側テラスは oracle に合わせて相性に反映しない)。ゴールデン tera・tera-random 全件一致、既存9ファイルは不変、known_diffs への追加なし。**人間の確認待ち(既定案付き)**: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=人間の承認が必要。ADR-0224 Q1)
+
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業)
+- [x] issue #505(データレーン)wasmapi(オフライン計算)にメガ種族の持ち物検証を入れ calc-svc と揃える(ADR-0321。parity テスト・Go/WASM 一致ベクタ。Web の toEngineSpecies がメガ種族の isMega・requiredItemId を境界へ渡す変更も同じ PR)
+- [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
+- [x] issue #515 の Web 分 PR-A(ADR-0320): メガ種族の持ち物をメガストーンに固定する共通ドメイン(`web/src/domain/mega.ts`。PR-B〈構築の編集・判定〉が再利用)と、計算画面・逆算画面(持ち物欄 disabled+理由+aria-describedby、メガストーンは単独の選択肢・候補比較・逆算の持ち物候補に出さない、防御側/相手がメガのときは探索しない)。マスタ写像(`isMega`・`requiredItemId`)・キャッシュのスキーマ版 1→2・E2E フィクスチャ(`withMegaFixture`)まで。構築の編集・判定と古い保存データの補正は PR-B
+- [x] issue #515 の Web 分 PR-B(ADR-0320): 構築のメンバー編集(`changeSpecies` の持ち物整合・`correctMegaItem`・持ち物欄の固定+理由+ストーン名表示。古い保存データは開いたとき〈一覧の無いマスタは種族の解決後〉に1回だけストーンへ直し、メンバーの枠に `role="status"` で通知。未保存の変更として持ち、自動保存しない)と、判定画面の自分・相手の候補の個体入力(同じ固定。要求の `itemId` にストーン)。これで issue #515 の Web 分は完了
+- [x] issue #515 のデータ・検索・Web 分(ADR-0324): メガ種族の `nameJa` を、上流(上書き・PokeAPI)に無いときだけ「メガ + 基本種名 + フォーム識別子(Mega-X → X)」から importer が生成(`name_ja_source` = `generated`〈migration 000011〉・警告 `name-generated`・report の `names.species.generated`。基本種名が無ければ生成せず英語名のまま)。メガストーンの名前は機械的に作れないので生成せず上書き設定と report の欠落一覧で扱う(ADR に既知の制約)。検索は「`nameJa` が q で始まる、またはメガ種族で `メガ`+q で始まる」に統一(pokedex の SQL・Web のオフライン検索・テストの偽物・E2E フィクスチャ。`q=ルカリオ` で基本種とメガの両方、`q=メガ` で全メガ)。API 契約は不変。iOS の入力 UI(自動固定・UI テスト)は iOS レーンに残る(issue #515 は閉じない)
 
 - [x] issue #211(API レーン分。ADR-0218): 公開 API の Item / Ability に省略可の `effect` を足した(searchItems・getSpecies.abilities。共通マスタで厳格に検証し、不正は 503 master_unavailable。内部 API は変更なし。critic PASS)
 
@@ -138,7 +152,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   オンラインで取得した持ち物・性格と、解決した種族・特性・技を IndexedDB に保存(`master/cache/`。`MasterCacheStore`・
   スキーマ版つき。書き込み・読み出しの失敗は握りつぶす)し、オフラインはそのキャッシュだけから読む(オンラインを呼ばない・
   架空データを出さない。空・壊れ・版違いは `appText.masterCacheEmptyError` の案内+再試行)。`main.tsx` は例データをやめて
-  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(公開 API に効果データが無い)。
+  `createCachedMasterSources` に差し替え。オフラインでは持ち物の候補比較は選べない(キャッシュは効果データを使わない)。オンラインは issue #211 で公開 API の effect により選べる(ADR-0322)。
   実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
   種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
   E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)
@@ -156,3 +170,6 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
   - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
+- [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
+- [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
+- [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。

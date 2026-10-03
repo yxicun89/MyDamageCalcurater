@@ -1,5 +1,5 @@
-# gateway(クライアントの唯一の入口。ADR-0202)。GATEWAY_CALC_URL・GATEWAY_POKEDEX_URL・GATEWAY_BALANCE_URL・GATEWAY_RECORD_URL・GATEWAY_TEAM_URL は
-# calc・pokedex・balance・record・team の Service 名(クラウドでも同じなので base に置く。ADR-0206 §1)。GATEWAY_ASSETS_URL は画像配信ができるまで
+# gateway(クライアントの唯一の入口。ADR-0202)。GATEWAY_CALC_URL・GATEWAY_POKEDEX_URL・GATEWAY_BALANCE_URL・GATEWAY_SPEED_URL・GATEWAY_JUDGE_URL・GATEWAY_RECORD_URL・GATEWAY_TEAM_URL は
+# calc・pokedex・balance・speed・judge・record・team の Service 名(クラウドでも同じなので base に置く。ADR-0206 §1)。GATEWAY_ASSETS_URL は画像配信ができるまで
 # 未設定(→ 404。ADR-0203 §3)。
 apiVersion: apps/v1
 kind: Deployment
@@ -29,15 +29,24 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+            # メトリクス専用ポート(GATEWAY_METRICS_ADDR の既定 :9090)。/metrics はここだけ。Ingress は http のまま
+            # (公開入口から見せない。issue #216・ADR-0406 §1 追記)。
+            - name: metrics
+              containerPort: 9090
           env:
             - name: GATEWAY_CALC_URL
               value: http://calc
             - name: GATEWAY_POKEDEX_URL
               value: http://pokedex
             # balance は Traefik 直結をやめ gateway 経由にした(issue #284・ADR-0414)。Service 名はクラウドでも同じ。
-            # balance 未デプロイの間、/api/balance/* は上流到達不可のエラーになる。speed・judge は各レーンで後続。
+            # balance 未デプロイの間、/api/balance/* は上流到達不可のエラーになる。
             - name: GATEWAY_BALANCE_URL
               value: http://balance
+            # speed・judge も同様に直結 Ingress をやめ gateway 経由にした(issue #284・ADR-0416)。
+            - name: GATEWAY_SPEED_URL
+              value: http://speed
+            - name: GATEWAY_JUDGE_URL
+              value: http://judge
             # record・team の Service 名(クラウドでも同じ。ADR-0220 §1)。TiDB が無くても gateway は起動し、
             # /api/record/*・/api/team/* が 503 upstream_unavailable になるだけ(calc・pokedex は影響しない)。
             - name: GATEWAY_RECORD_URL
