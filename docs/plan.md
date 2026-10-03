@@ -139,19 +139,24 @@
 - [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
 - [x] P5-4 team-svc
 - [x] P5-4b team-svc の残作業(実装: ADR-0220。P5-3b と同じ形)(P5-3b と対): (1) `deploy/k8s/base/team` に Deployment・Service を追加し `GATEWAY_TEAM_URL` を配線、k3d で `/api/team/*` が届く(`scripts/up.sh` に `team` を追加)。(2) ADR-0209 §4 の失効ジョブ(構築540日・devices 行30日・purge journal 90日を `TEAM_*` 環境変数で判定。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
-- [ ] P5-5 【担当: Web レーン。M2 の必須】 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
+- [x] P5-5 【担当: Web レーン。M2 の必須】 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
   - [x] **P5-5a 構築ビルダーの骨格(PR-A1。2026-09-26)**: 構築の一覧・新規作成(名前だけ)・名前変更・削除。ADR-0309。詳細は plan-archive.md。
   - [x] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
     マスタ(種族・技・持ち物・特性の名前解決)を使うのはここから。実装: `web/src/team/` の `TeamMemberEditor`・`TeamMemberFields`・
     `teamMember`(純粋関数)・`teamMemberOptions`。update 全置換・応答待ち・失敗時は下書き保持・SP は明示エラー。ADR-0316。
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
   - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
-  - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
+  - [x] **P5-5c よく計算する相手(完了。ADR-0317)**: 計算結果の下のチップ。**履歴一覧は record-svc に取得 API が無いため対象外**(API が入ったら別タスク)。端末データの削除は P5-5d
   - [x] **P5-5d 端末データの削除(Web。issue #103 の Web 分。ADR-0318)**: 情報ページの「データの扱い」節に説明(ADR-0209 §8)と
     「この端末のデータを削除」(アプリ内 alertdialog・初期フォーカス=キャンセル)。`recordClient`/`teamClient` の `deleteDeviceData`、
     手順は純粋関数 `deviceData/deleteDeviceData.ts`(record/team 独立・partial は対象ごと最大20回・通信エラーは自動再送せず再試行)。
     ローカルの端末 ID・設定は消さない(iOS と同じ)。team が消えたら構築一覧を取り直す(`reloadToken`)。
     `web` の vitest 1998件・typecheck・lint・`make web-e2e`(49件)・`make check-publishable` green
+  - [x] **P5-5e 構築ビルダーの Showdown 形式の取り込み・書き出し UI(ADR-0321)**: 取り込みは「内容を確認 → この内容で作成」の2段階(新しい構築だけ作る。
+    取り込めるメンバーが1体以上ならその分だけ作り、問題は日本語の一覧に出す)・メガの持ち物はストーンに補正して一覧に出す。書き出しは構築の行から読み取り専用 textarea+コピー
+    (クリップボードが使えなければ全選択して手動コピーを案内)。一覧の無いマスタ(オンライン・キャッシュ)は `masterSearch` で必要な種族だけ引いて名前引き用のマスタを作る
+    (`showdownMaster.ts`・`showdownImportPlan.ts`・`TeamShowdownImport/Export.tsx`・`i18n/team.ts` の `teamShowdownText`)。日本語名のみ(英語名は別 ADR)。変換部 `showdownFormat.ts` は不変。
+    `web` vitest 2659件・typecheck・lint・`make web-e2e`(65件)・`make web-e2e-online`・`make web-e2e-container`・`make check-publishable` green
 - [x] P5-6 技の追加効果
 
 - [x] issue #219(Web 配信にセキュリティヘッダが無い)
@@ -489,7 +494,6 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
-  - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
 - [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
 - [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
 - [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。
