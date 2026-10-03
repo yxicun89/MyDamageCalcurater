@@ -48,7 +48,7 @@ run_backup() {
 }
 gen_id() { date -u -r "$1" +%Y%m%dT%H%M%SZ 2>/dev/null || date -u -d "@$1" +%Y%m%dT%H%M%SZ; }
 iso_us() { date -u -r "$1" +%Y-%m-%dT%H:%M:%S.000000Z 2>/dev/null || date -u -d "@$1" +%Y-%m-%dT%H:%M:%S.000000Z; }
-mode_of() { stat -f %Lp "$1" 2>/dev/null || stat -c %a "$1"; }
+mode_of() { stat -c %a "$1" 2>/dev/null || stat -f %Lp "$1"; }  # GNU(Linux)を先に。BSD の stat -f は GNU ではファイルシステム情報を返し失敗にならない
 
 day=86400
 
