@@ -1,0 +1,64 @@
+# PWA の静的配信(nginx。非 root で 8080)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wishlist-web
+  labels:
+    app.kubernetes.io/name: wishlist-web
+    app.kubernetes.io/part-of: wishlist
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wishlist-web
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wishlist-web
+        app.kubernetes.io/part-of: wishlist
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: web
+          image: wishlist/web:0.1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 5m
+              memory: 8Mi
+            limits:
+              cpu: 100m
+              memory: 32Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tmp
+          emptyDir: {}

@@ -1,0 +1,38 @@
+# wishlist 名前空間は既定で受信を拒否し、Traefik → api/web の 8080 だけ許す。
+# (MySQL 側〈pokecalc 名前空間〉の許可は共有基盤の変更。docs/design.md §5 の提案を参照)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    app.kubernetes.io/part-of: wishlist
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-traefik-ingress
+  labels:
+    app.kubernetes.io/part-of: wishlist
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values: [wishlist-api, wishlist-web]
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: traefik
+      ports:
+        - protocol: TCP
+          port: 8080

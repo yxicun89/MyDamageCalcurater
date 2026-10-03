@@ -1,0 +1,49 @@
+# 入口(docs/design.md W-03)。ダメ計の gateway がホスト指定なしの "/" を持つため、`/wishlist` 前置で分ける。
+# Traefik は長いパスを優先するので、/wishlist/* はこちらに来る。前置は Middleware で外してから渡す
+# (api は /api/*・/images/*、web は / で待つ)。local(k3d/Traefik)専用。ホスト指定・TLS なし。
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: wishlist-strip
+  labels:
+    app.kubernetes.io/part-of: wishlist
+spec:
+  stripPrefix:
+    prefixes:
+      - /wishlist
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wishlist
+  labels:
+    app.kubernetes.io/part-of: wishlist
+  annotations:
+    # <名前空間>-<Middleware 名>@kubernetescrd
+    traefik.ingress.kubernetes.io/router.middlewares: wishlist-wishlist-strip@kubernetescrd
+spec:
+  ingressClassName: traefik
+  rules:
+    - http:
+        paths:
+          - path: /wishlist/api
+            pathType: Prefix
+            backend:
+              service:
+                name: wishlist-api
+                port:
+                  name: http
+          - path: /wishlist/images
+            pathType: Prefix
+            backend:
+              service:
+                name: wishlist-api
+                port:
+                  name: http
+          - path: /wishlist
+            pathType: Prefix
+            backend:
+              service:
+                name: wishlist-web
+                port:
+                  name: http
