@@ -12,7 +12,6 @@ Traefik は最長一致で選ぶ。ホスト 8080 が入口(`deploy/k3d.yaml`)�
 | Ingress | path(Prefix) | 転送先 Service:port | 定義 |
 |---|---|---|---|
 | `gateway` | `/` | `gateway`:http(80) | `deploy/k8s/base/gateway/ingress.yaml`(cloud overlay では削除) |
-| `balance` | `/api/balance` | `balance`:http | `services/balance/deploy/k8s/base/ingress.yaml` |
 | `speed` | `/api/speed` | `speed`:http | `services/speed/deploy/k8s/base/ingress.yaml` |
 | `judge` | `/api/judge` | `judge`:http | `services/judge/deploy/k8s/base/ingress.yaml` |
 
@@ -84,7 +83,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 - pokedex は起動時に DB へ接続しない(`sql.Open` のみ)。DB 不通・未投入は各操作が 503(`errors.go:53` `unavailable`)。
 - サブコマンド(HTTP ではない): `pokedex serve`・`pokedex export -out <dir>`(`cmd/pokedex/main.go:67`)。
 
-## 6. balance-svc(`services/balance`。Traefik `/api/balance`)
+## 6. balance-svc(`services/balance`。gateway の `/api/balance/*` が転送。独自の Ingress は無い。ADR-0414)
 
 `internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは gateway と同じ正準形 UUID 検証(ADR-0413)、欠落は 400 `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
 
@@ -102,8 +101,8 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 
 ## 7. speed-svc(`services/speed`。Traefik `/api/speed`)/ judge-svc(`services/judge`。Traefik `/api/judge`)
 
-ID ヘッダの検証: judge は非空のみ、不足は 400 `invalid_request`(`server.go:79`)。speed は gateway と同じ正準形 UUID
-検証(ADR-0606)、欠落は `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。
+ID ヘッダの検証: judge・speed とも gateway と同じ正準形 UUID 検証(speed は ADR-0606、judge は ADR-0219)、
+欠落は `missing_header`・不正/重複は `invalid_header`(各 `requestctx.go`)。
 
 | サービス | # | メソッド | パス | operationId | ID ヘッダ | ハンドラ | 契約のステータス |
 |---|---|---|---|---|---|---|---|
@@ -137,7 +136,7 @@ ID ヘッダの検証: judge は非空のみ、不足は 400 `invalid_request`(`
 | gateway・calc・pokedex(ルート契約 `ErrorCode`) | `api/openapi.yaml` `ErrorCode`(24 値) | `invalid_json`・`unknown_field`・`invalid_enum`・`invalid_input`・`unknown_preset`・`duplicate_preset`・`invalid_preset`・`invalid_reverse_side`・`no_observation`・`invalid_observation`・`unknown_type`・`missing_header`・`invalid_header`・`unknown_species`/`move`/`item`/`ability`/`nature` | `not_found` | — | — | `internal`・`type_chart_missing`・`invalid_type_chart`(calc `errors.go:42` `statusForCode`) | `master_unavailable`・`upstream_unavailable` |
 | balance | `services/balance/api/openapi.yaml` | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_pokemon`・`unknown_move`・`unknown_ability` | `internal_error` | `master_unavailable` |
 | speed | 同上 | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_pokemon` | `internal_error` | `master_unavailable` |
-| judge | 同上 | `invalid_request` | — | `request_too_large` | `unknown_species`・`unknown_nature` | `internal_error` | `upstream_unavailable` |
+| judge | 同上 | `missing_header`・`invalid_header`・`invalid_request` | — | `request_too_large` | `unknown_species`・`unknown_nature` | `internal_error` | `upstream_unavailable` |
 
 - 400/404 の切り分けの目安: gateway が返す 400(`missing_header`/`invalid_header`)は ID ヘッダ、404 `not_found` は gateway のルート外(または `/internal/*`)か、上流の担当外。詳細な切り分けは D 章で扱う。
 

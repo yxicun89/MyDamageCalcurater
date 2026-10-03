@@ -77,8 +77,9 @@ export interface paths {
      *
      *     素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
      *     順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
-     *     五捨五超入する(各補正ごとに丸めない)。状態異常(麻痺など)・特性・持ち物(スカーフ以外)・天候による
-     *     素早さの変化は反映しない(Individual に status は無い)。反映した補正は *SpeedApplied、
+     *     五捨五超入する(各補正ごとに丸めない)。状態異常は麻痺(paralysis)だけを素早さに反映し(連結・丸めのあとに
+     *     floor(x × 50 / 100)。@smogon/calc 0.12.0 の getFinalSpeed と同じ。ADR-0712)、特性・持ち物(スカーフ以外)・天候による
+     *     素早さの変化は反映しない。反映した補正は *SpeedApplied、
      *     指定されたのに反映していない入力は *SpeedIgnored で各行に返す(ADR-0710)。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
      *
      *     場の効果は 2 つの欄に分かれる(ADR-0702 §1)。ダメージに効く weather / terrain / screens は
@@ -184,7 +185,8 @@ export interface components {
     };
     /**
      * @description 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-     *     status(状態異常)と teraType は JD1 では受け取らない(ADR-0701 §2)。
+     *     teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
+     *     すべて calc-svc へそのまま転送する(ADR-0712)。
      */
     Individual: {
       speciesKey: components["schemas"]["SpeciesKey"];
@@ -199,6 +201,13 @@ export interface components {
        *     と一致するときだけ素早さに ×1.5 を掛ける。
        */
       itemId?: string | null;
+      /**
+       * @description 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+       *     calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+       * @enum {string|null}
+       */
+      status?: "none" | "burn" | "paralysis" | "poison" | "badly_poison" | "sleep" | "freeze" | null;
     };
     /**
      * @description 相手候補 1 件(ADR-0704 §1)。Individual の全欄に加えて、**この候補が撃ち返してくる技
@@ -222,6 +231,13 @@ export interface components {
        *     (既定 choicescarf。ADR-0701 §3)と一致するときだけ素早さに ×1.5 を掛ける。
        */
       itemId?: string | null;
+      /**
+       * @description 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
+       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+       *     calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
+       * @enum {string|null}
+       */
+      status?: "none" | "burn" | "paralysis" | "poison" | "badly_poison" | "sleep" | "freeze" | null;
       /**
        * @description この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
        *     この技によるダメージは calc-svc を逆方向(この候補が攻撃側・自分が防御側)で
@@ -455,8 +471,8 @@ export interface components {
       defenderKoUnsupported: components["schemas"]["UnsupportedMark"][];
       /**
        * @description attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
-       *     tailwind(追い風)・choiceScarf(こだわりスカーフ)。効かせた補正が無ければ空配列
-       *     (null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf で固定。
+       *     tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
+       *     効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
        */
       attackerSpeedApplied: components["schemas"]["SpeedFactor"][];
       /** @description defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。 */
@@ -468,7 +484,7 @@ export interface components {
        *     fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
        *     **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
        *     (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
-       *     状態異常(麻痺など)は入力に無いので、この欄にも現れない。画面は空でないとき
+       *     状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
        *     「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
        *     空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
        */
@@ -477,10 +493,10 @@ export interface components {
       defenderSpeedIgnored: components["schemas"]["SpeedIgnoredInput"][];
     };
     /**
-     * @description 素早さの計算に効かせた補正(ADR-0710)。
+     * @description 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
      * @enum {string}
      */
-    SpeedFactor: "rank" | "tailwind" | "choiceScarf";
+    SpeedFactor: "rank" | "tailwind" | "choiceScarf" | "paralysis";
     /**
      * @description 素早さに影響しうるが反映していない入力(ADR-0710)。
      * @enum {string}
@@ -493,7 +509,9 @@ export interface components {
     /**
      * @description エラーの区分。judge は上流の事情(HTTP のステータス・接続エラーの文面・URL)をそのまま返さず、
      *     ADR-0700 §3・ADR-0701 §6 の対応表でこの列挙に畳む。
-     *     invalid_request: ヘッダー・request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
+     *     missing_header: X-Device-Id / X-Session-Id が無い・空(ADR-0219。gateway と同じ判定)。
+     *     invalid_header: X-Device-Id / X-Session-Id が正準形 UUID でない、または同名ヘッダが重複している(ADR-0219)。
+     *     invalid_request: request body が契約に合わない、または calc-svc が計算要求を受け付けなかった。
      *     unknown_species: speciesKey が pokedex-svc のマスタに無い。
      *     unknown_move: moveId が pokedex-svc の技のマスタに無い(攻撃側・候補側のどちらも。ADR-0704 §6)。
      *     unknown_nature: natureId が性格の一覧に無い。
@@ -504,6 +522,8 @@ export interface components {
      * @enum {string}
      */
     ErrorCode:
+      | "missing_header"
+      | "invalid_header"
       | "invalid_request"
       | "unknown_species"
       | "unknown_move"
@@ -515,7 +535,17 @@ export interface components {
   };
   responses: never;
   parameters: {
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     DeviceId: string;
+    /**
+     * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+     *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+     *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+     */
     SessionId: string;
   };
   requestBodies: never;
@@ -568,7 +598,17 @@ export interface operations {
     parameters: {
       query?: never;
       header: {
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+         *     32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+         *     the header more than once is invalid_header (ADR-0219, same rule as the gateway).
+         */
         "X-Session-Id": components["parameters"]["SessionId"];
       };
       path?: never;
@@ -590,7 +630,8 @@ export interface operations {
         };
       };
       /**
-       * @description X-Device-Id / X-Session-Id が無い・空、body が 1 つの JSON オブジェクトでない・未知の欄がある、
+       * @description X-Device-Id / X-Session-Id が無い・空(missing_header)、正準形 UUID でない・重複(invalid_header。ADR-0219)、
+       *     body が 1 つの JSON オブジェクトでない・未知の欄がある、
        *     必須の欄が無い(候補の moveId を含む)、defenders が 1 件未満・6 件超、sp / ranks / format が範囲外、
        *     または calc-svc が計算要求を受け付けなかった(invalid_request。ADR-0701 §6・ADR-0703 §4)
        */

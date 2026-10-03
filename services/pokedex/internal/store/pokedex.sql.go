@@ -530,8 +530,8 @@ func (q *Queries) InsertLearnset(ctx context.Context, arg InsertLearnsetParams) 
 }
 
 const insertMove = `-- name: InsertMove :exec
-INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertMoveParams struct {
@@ -545,6 +545,7 @@ type InsertMoveParams struct {
 	Accuracy     sql.NullInt16
 	Pp           uint8
 	Priority     int8
+	Target       sql.NullString
 }
 
 func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
@@ -559,6 +560,7 @@ func (q *Queries) InsertMove(ctx context.Context, arg InsertMoveParams) error {
 		arg.Accuracy,
 		arg.Pp,
 		arg.Priority,
+		arg.Target,
 	)
 	return err
 }
@@ -1219,7 +1221,7 @@ func (q *Queries) ListMoveMechanisms(ctx context.Context) ([]MoveMechanism, erro
 }
 
 const listMoves = `-- name: ListMoves :many
-SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority
+SELECT id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target
 FROM moves
 ORDER BY id
 `
@@ -1244,6 +1246,7 @@ func (q *Queries) ListMoves(ctx context.Context) ([]Move, error) {
 			&i.Accuracy,
 			&i.Pp,
 			&i.Priority,
+			&i.Target,
 		); err != nil {
 			return nil, err
 		}
@@ -1515,9 +1518,10 @@ func (q *Queries) ListSpeciesAbilities(ctx context.Context, speciesKey string) (
 }
 
 const listSpeciesAbilityNames = `-- name: ListSpeciesAbilityNames :many
-SELECT sa.slot, a.id, a.name_ja
+SELECT sa.slot, a.id, a.name_ja, ae.effect
 FROM species_abilities sa
 JOIN abilities a ON a.id = sa.ability_id
+LEFT JOIN ability_effects ae ON ae.ability_id = a.id
 WHERE sa.species_key = ?
 ORDER BY sa.slot
 `
@@ -1526,6 +1530,7 @@ type ListSpeciesAbilityNamesRow struct {
 	Slot   uint8
 	ID     string
 	NameJa string
+	Effect *json.RawMessage
 }
 
 func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string) ([]ListSpeciesAbilityNamesRow, error) {
@@ -1537,7 +1542,12 @@ func (q *Queries) ListSpeciesAbilityNames(ctx context.Context, speciesKey string
 	var items []ListSpeciesAbilityNamesRow
 	for rows.Next() {
 		var i ListSpeciesAbilityNamesRow
-		if err := rows.Scan(&i.Slot, &i.ID, &i.NameJa); err != nil {
+		if err := rows.Scan(
+			&i.Slot,
+			&i.ID,
+			&i.NameJa,
+			&i.Effect,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -1752,9 +1762,10 @@ func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 }
 
 const searchItems = `-- name: SearchItems :many
-SELECT i.id, i.name_ja
+SELECT i.id, i.name_ja, ie.effect
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
+LEFT JOIN item_effects ie ON ie.item_id = i.id
 WHERE ri.regulation_id = ? AND i.name_ja LIKE ?
 ORDER BY i.name_ja, i.id
 LIMIT ?
@@ -1769,6 +1780,7 @@ type SearchItemsParams struct {
 type SearchItemsRow struct {
 	ID     string
 	NameJa string
+	Effect *json.RawMessage
 }
 
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
@@ -1780,7 +1792,7 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 	var items []SearchItemsRow
 	for rows.Next() {
 		var i SearchItemsRow
-		if err := rows.Scan(&i.ID, &i.NameJa); err != nil {
+		if err := rows.Scan(&i.ID, &i.NameJa, &i.Effect); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -12,6 +12,7 @@ let package = Package(
     products: [
         .library(name: "PokeCalcAPI", targets: ["PokeCalcAPI"]),
         .library(name: "PokeCalcSpeedAPI", targets: ["PokeCalcSpeedAPI"]),
+        .library(name: "PokeCalcBalanceAPI", targets: ["PokeCalcBalanceAPI"]),
         .library(name: "PokeCalcCore", targets: ["PokeCalcCore"]),
         .library(name: "PokeCalcDesign", targets: ["PokeCalcDesign"]),
     ],
@@ -25,6 +26,14 @@ let package = Package(
         // swift-openapi-generator の生成物だけ(手で編集しない。`make ios-gen` で作る。ADR-0500 §2)
         .target(
             name: "PokeCalcAPI",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+            ]
+        ),
+        // balance 契約(services/balance/api/openapi.yaml)の生成物だけ。schema 名が PokeCalcAPI と衝突するので別モジュール(ADR-0415)
+        .target(
+            name: "PokeCalcBalanceAPI",
             dependencies: [
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
@@ -46,6 +55,7 @@ let package = Package(
             dependencies: [
                 "PokeCalcAPI",
                 "PokeCalcSpeedAPI",
+                "PokeCalcBalanceAPI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             ],
@@ -58,6 +68,7 @@ let package = Package(
                 "PokeCalcCore",
                 "PokeCalcAPI",
                 "PokeCalcSpeedAPI",
+                "PokeCalcBalanceAPI",
                 // PokeType の全ケースにタイプ色があることの同期テストに使う
                 "PokeCalcDesign",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),

@@ -24,8 +24,9 @@ import (
 const outspeedPath = "/api/judge/v1/outspeed-and-ko"
 
 const (
-	testDeviceID  = "test-device"
-	testSessionID = "test-session"
+	// 正準形 UUID(ADR-0219: judge も gateway と同じ検証をする。calc へ非 UUID を転送しない)。
+	testDeviceID  = "11111111-1111-4111-8111-111111111111"
+	testSessionID = "22222222-2222-4222-8222-222222222222"
 )
 
 // 架空の種族・性格・技(実マスタは使わない。CLAUDE.md のドメイン規約)。
@@ -1161,7 +1162,95 @@ func TestOutspeedAndKoForwardsField(t *testing.T) {
 	})
 }
 
-// TestOutspeedAndKoRejectsInvalidRequest: ヘッダー・body の検査は上流より先(ADR-0701 §5)。
+// TestOutspeedAndKoRejectsBadHeaders: X-Device-Id / X-Session-Id は gateway と同じ判定(ADR-0219):
+// 欠落・空は 400 missing_header、正準形 UUID でない値・同名ヘッダの重複は 400 invalid_header。
+// ヘッダーは body より先に見られ(ADR-0701 §5)、**上流(calc/pokedex)を 1 回も呼ばない**
+// = 非 UUID の端末ID・セッションIDが calc へ転送されない。
+func TestOutspeedAndKoRejectsBadHeaders(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		extra   [][2]string // 同名ヘッダを追加で足す(重複)
+		want    api.ErrorCode
+	}{
+		{"ヘッダーが両方無い", map[string]string{}, nil, api.MissingHeader},
+		{"X-Device-Id が無い", map[string]string{"X-Session-Id": testSessionID}, nil, api.MissingHeader},
+		{"X-Session-Id が無い", map[string]string{"X-Device-Id": testDeviceID}, nil, api.MissingHeader},
+		{"X-Device-Id が空", map[string]string{"X-Device-Id": "", "X-Session-Id": testSessionID}, nil, api.MissingHeader},
+		{"欠落と不正が同時なら missing_header", map[string]string{"X-Device-Id": "not-a-uuid"}, nil, api.MissingHeader},
+		{"X-Device-Id が UUID でない", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": testSessionID}, nil, api.InvalidHeader},
+		{"X-Session-Id が UUID でない", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": "test-session"}, nil, api.InvalidHeader},
+		{"ハイフン無し32桁", map[string]string{"X-Device-Id": strings.ReplaceAll(testDeviceID, "-", ""), "X-Session-Id": testSessionID}, nil, api.InvalidHeader},
+		{"X-Device-Id の重複", map[string]string{"X-Device-Id": testDeviceID, "X-Session-Id": testSessionID}, [][2]string{{"X-Device-Id", testDeviceID}}, api.InvalidHeader},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			stub := &upstreams{}
+			request := httptest.NewRequest(http.MethodPost, outspeedPath, bytes.NewReader(mustJSON(validBody())))
+			request.Header.Set("Content-Type", "application/json")
+			for key, value := range tt.headers {
+				request.Header.Set(key, value)
+			}
+			for _, kv := range tt.extra {
+				request.Header.Add(kv[0], kv[1])
+			}
+			recorder := serve(newUpstreams(t, stub), request)
+
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, tt.want)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoAcceptsUppercaseUUID: 大文字の正準形 UUID は通り、そのまま上流へ転送される。
+func TestOutspeedAndKoAcceptsUppercaseUUID(t *testing.T) {
+	t.Parallel()
+
+	upper := strings.ToUpper(testDeviceID)
+	stub := &upstreams{}
+	recorder := postOutspeed(newUpstreams(t, stub), validBody(), map[string]string{"X-Device-Id": upper, "X-Session-Id": testSessionID})
+	if recorder.Code == http.StatusBadRequest {
+		t.Fatalf("status = 400, body = %s; 大文字の UUID は通るはず", recorder.Body.String())
+	}
+	if len(stub.deviceIDs) == 0 {
+		t.Fatal("上流が 1 回も呼ばれていない")
+	}
+	for i, got := range stub.deviceIDs {
+		if got != upper {
+			t.Errorf("上流 %d 回目の X-Device-Id = %q, want %q(そのまま転送)", i, got, upper)
+		}
+	}
+}
+
+// TestOutspeedAndKoHeaderErrorWinsOverBadBody: body も不正でヘッダも不正なら、ヘッダの code を返す
+// (ADR-0701 §5: ヘッダ検査が先)。
+func TestOutspeedAndKoHeaderErrorWinsOverBadBody(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		want    api.ErrorCode
+	}{
+		{"欠落", map[string]string{}, api.MissingHeader},
+		{"非 UUID", map[string]string{"X-Device-Id": "test-device", "X-Session-Id": testSessionID}, api.InvalidHeader},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			stub := &upstreams{}
+			recorder := postOutspeed(newUpstreams(t, stub), "not json", tt.headers)
+			assertStatusAndCode(t, recorder, http.StatusBadRequest, tt.want)
+			assertNoUpstreamCalls(t, stub)
+		})
+	}
+}
+
+// TestOutspeedAndKoRejectsInvalidRequest: body の検査は上流より先(ADR-0701 §5)。
 // 400 invalid_request を返し、**上流を 1 回も呼ばない**(無駄な往復をしない。ADR-0700 §3 と同じ立場)。
 func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 	t.Parallel()
@@ -1177,10 +1266,6 @@ func TestOutspeedAndKoRejectsInvalidRequest(t *testing.T) {
 		body    any
 		headers map[string]string
 	}{
-		{"ヘッダーが両方無い", validBody(), map[string]string{}},
-		{"X-Device-Id が無い", validBody(), map[string]string{"X-Session-Id": testSessionID}},
-		{"X-Session-Id が無い", validBody(), map[string]string{"X-Device-Id": testDeviceID}},
-		{"X-Device-Id が空", validBody(), map[string]string{"X-Device-Id": "", "X-Session-Id": testSessionID}},
 		{"body が JSON でない", "not json", nil},
 		{"body が JSON 値を 2 つ含む", `{"format":"single"} {"format":"single"}`, nil},
 		{"body が配列", `[]`, nil},
@@ -2482,7 +2567,7 @@ func TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate(t *testing.T) {
 		defaultKO := api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}
 		// 印が無い正常系は各行とも空配列(null にはしない。ADR-0708 §3)。
 		noMarks := []api.UnsupportedMark{}
-		noFactors, noIgnored := []api.SpeedFactor{api.Tailwind}, []api.SpeedIgnoredInput{}
+		noFactors, noIgnored := []api.SpeedFactor{api.SpeedFactorTailwind}, []api.SpeedIgnoredInput{}
 		want := []api.Matchup{
 			{DefenderIndex: 0, Outspeeds: true, AttackerSpeed: 240, DefenderSpeed: 220,
 				AttackerMovesFirst: true, AttackerKo: defaultKO, DefenderKo: defaultKO,
@@ -3479,7 +3564,7 @@ func TestOutspeedAndKoSpeedAppliedAndIgnored(t *testing.T) {
 				attackerOf(b)["itemId"] = "choicescarf"
 				b["speedField"] = map[string]any{"attackerTailwind": true}
 			},
-			factors(api.Rank, api.Tailwind, api.ChoiceScarf), factors(), ignored(), ignored(),
+			factors(api.SpeedFactorRank, api.SpeedFactorTailwind, api.SpeedFactorChoiceScarf), factors(), ignored(), ignored(),
 		},
 		{
 			"特性だけ指定: abilityId を無視した印",
@@ -3492,7 +3577,7 @@ func TestOutspeedAndKoSpeedAppliedAndIgnored(t *testing.T) {
 				attackerOf(b)["itemId"] = "choicescarf"
 				defenderAt(b, 0)["itemId"] = "test-item-other"
 			},
-			factors(api.ChoiceScarf), factors(), ignored(), ignored(api.ItemId),
+			factors(api.SpeedFactorChoiceScarf), factors(), ignored(), ignored(api.ItemId),
 		},
 		{
 			"天候だけ(特性なし)は無視した印にならない",
@@ -3553,4 +3638,186 @@ func TestOutspeedAndKoSpeedNotesJSONNeverNull(t *testing.T) {
 			t.Errorf("応答に %q:[] が無い(null や欠落にしない): %s", key, body)
 		}
 	}
+}
+
+// speedNames は SpeedFactor / SpeedIgnoredInput の enum 定数名(状態異常の enum と衝突して
+// 生成名が変わりうる)に依存しないよう、文字列で比べるための変換。
+func speedNames[T ~string](in []T) []string {
+	out := make([]string, 0, len(in))
+	for _, v := range in {
+		out = append(out, string(v))
+	}
+	return out
+}
+
+// TestOutspeedAndKoStatusParalysis: status(状態異常)を attacker・各 defender 候補が持つ
+// (issue #235。ユーザー決定 2026-10-03)。まひは素早さ ×0.5(連結・五捨五超入のあとに切り捨て)で、
+// *SpeedApplied に "paralysis" が最後に入る。他の状態異常は素早さに影響せず Applied に出ない。
+func TestOutspeedAndKoStatusParalysis(t *testing.T) {
+	t.Parallel()
+
+	// neutralBody は自分 150 または 120 など既存の値を持つ。ここでは差分で見る。
+	speedsOf := func(t *testing.T, mutate func(body map[string]any)) api.Matchup {
+		t.Helper()
+		body := neutralBody()
+		mutate(body)
+		recorder := postOutspeed(newUpstreams(t, &upstreams{}), body, nil)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+		}
+		return onlyMatchup(t, recorder)
+	}
+	base := speedsOf(t, func(map[string]any) {})
+
+	t.Run("status 省略と none は既存の応答と同じ(回帰)", func(t *testing.T) {
+		t.Parallel()
+		none := speedsOf(t, func(b map[string]any) {
+			attackerOf(b)["status"] = "none"
+			defenderAt(b, 0)["status"] = "none"
+		})
+		if none.AttackerSpeed != base.AttackerSpeed || none.DefenderSpeed != base.DefenderSpeed {
+			t.Errorf("none の素早さ = %d/%d, want %d/%d", none.AttackerSpeed, none.DefenderSpeed, base.AttackerSpeed, base.DefenderSpeed)
+		}
+		if len(none.AttackerSpeedApplied) != len(base.AttackerSpeedApplied) {
+			t.Errorf("none で Applied が変わった: %v", none.AttackerSpeedApplied)
+		}
+	})
+
+	t.Run("自分がまひ: 自分の素早さだけ半分になり Applied に paralysis", func(t *testing.T) {
+		t.Parallel()
+		got := speedsOf(t, func(b map[string]any) { attackerOf(b)["status"] = "paralysis" })
+		if got.AttackerSpeed != base.AttackerSpeed/2 || got.DefenderSpeed != base.DefenderSpeed {
+			t.Errorf("素早さ = %d/%d, want %d/%d", got.AttackerSpeed, got.DefenderSpeed, base.AttackerSpeed/2, base.DefenderSpeed)
+		}
+		if want := []string{"paralysis"}; !reflect.DeepEqual(speedNames(got.AttackerSpeedApplied), want) || len(got.DefenderSpeedApplied) != 0 {
+			t.Errorf("Applied = %v / %v, want %v / []", got.AttackerSpeedApplied, got.DefenderSpeedApplied, want)
+		}
+	})
+
+	t.Run("相手候補がまひ: 相手の素早さだけ半分になり Applied に paralysis", func(t *testing.T) {
+		t.Parallel()
+		got := speedsOf(t, func(b map[string]any) { defenderAt(b, 0)["status"] = "paralysis" })
+		if got.DefenderSpeed != base.DefenderSpeed/2 || got.AttackerSpeed != base.AttackerSpeed {
+			t.Errorf("素早さ = %d/%d, want %d/%d", got.AttackerSpeed, got.DefenderSpeed, base.AttackerSpeed, base.DefenderSpeed/2)
+		}
+		if want := []string{"paralysis"}; !reflect.DeepEqual(speedNames(got.DefenderSpeedApplied), want) || len(got.AttackerSpeedApplied) != 0 {
+			t.Errorf("Applied = %v / %v, want [] / %v", got.AttackerSpeedApplied, got.DefenderSpeedApplied, want)
+		}
+	})
+
+	t.Run("追い風・スカーフ・まひ: 連結してから 1 回丸め、そのあと半分(rank → tailwind → choiceScarf → paralysis)", func(t *testing.T) {
+		t.Parallel()
+		got := speedsOf(t, func(b map[string]any) {
+			attackerOf(b)["ranks"] = map[string]any{"spe": 1}
+			attackerOf(b)["itemId"] = "choicescarf"
+			attackerOf(b)["status"] = "paralysis"
+			b["speedField"] = map[string]any{"attackerTailwind": true}
+		})
+		want := []string{"rank", "tailwind", "choiceScarf", "paralysis"}
+		if !reflect.DeepEqual(speedNames(got.AttackerSpeedApplied), want) {
+			t.Errorf("AttackerSpeedApplied = %v, want %v", got.AttackerSpeedApplied, want)
+		}
+		// 120 → ランク +1 で 180 → ×3 で 540 → まひで 270。
+		if got.AttackerSpeed != 270 {
+			t.Errorf("attackerSpeed = %d, want 270", got.AttackerSpeed)
+		}
+	})
+
+	t.Run("他の状態異常は素早さも Applied も変えない", func(t *testing.T) {
+		t.Parallel()
+		for _, status := range []string{"burn", "poison", "badly_poison", "sleep", "freeze"} {
+			got := speedsOf(t, func(b map[string]any) {
+				attackerOf(b)["status"] = status
+				defenderAt(b, 0)["status"] = status
+			})
+			if got.AttackerSpeed != base.AttackerSpeed || got.DefenderSpeed != base.DefenderSpeed {
+				t.Errorf("%s: 素早さ = %d/%d, want %d/%d", status, got.AttackerSpeed, got.DefenderSpeed, base.AttackerSpeed, base.DefenderSpeed)
+			}
+			if len(got.AttackerSpeedApplied) != 0 || len(got.DefenderSpeedApplied) != 0 {
+				t.Errorf("%s: Applied = %v / %v, want 空", status, got.AttackerSpeedApplied, got.DefenderSpeedApplied)
+			}
+		}
+	})
+
+	t.Run("まひと特性が同時: まひは常に反映し、abilityId は無視した印に残す(はやあし等は引けない)", func(t *testing.T) {
+		t.Parallel()
+		got := speedsOf(t, func(b map[string]any) {
+			attackerOf(b)["status"] = "paralysis"
+			attackerOf(b)["abilityId"] = "test-ability"
+		})
+		if got.AttackerSpeed != base.AttackerSpeed/2 {
+			t.Errorf("attackerSpeed = %d, want %d(特性があってもまひは掛ける)", got.AttackerSpeed, base.AttackerSpeed/2)
+		}
+		if want := []string{"paralysis"}; !reflect.DeepEqual(speedNames(got.AttackerSpeedApplied), want) {
+			t.Errorf("AttackerSpeedApplied = %v, want %v", got.AttackerSpeedApplied, want)
+		}
+		if want := []string{"abilityId"}; !reflect.DeepEqual(speedNames(got.AttackerSpeedIgnored), want) {
+			t.Errorf("AttackerSpeedIgnored = %v, want %v", got.AttackerSpeedIgnored, want)
+		}
+	})
+
+	t.Run("status は calc-svc へ順方向・逆方向とも転送される(省略時は送らない)", func(t *testing.T) {
+		t.Parallel()
+		stub := &upstreams{}
+		body := neutralBody()
+		attackerOf(body)["status"] = "paralysis"
+		defenderAt(body, 0)["status"] = "burn"
+		if recorder := postOutspeed(newUpstreams(t, stub), body, nil); recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d; body=%s", recorder.Code, recorder.Body.String())
+		}
+		stub.mu.Lock()
+		bodies := append([]map[string]any(nil), stub.calcBodies...)
+		stub.mu.Unlock()
+		if len(bodies) != 2 {
+			t.Fatalf("calc を %d 回呼んでいる。順方向 + 逆方向 = 2 回", len(bodies))
+		}
+		// 順方向: attacker=自分(まひ)・defender=候補(やけど)。逆方向は入れ替わる。
+		wants := [][2]string{{"paralysis", "burn"}, {"burn", "paralysis"}}
+		for i, sent := range bodies {
+			a, _ := sent["attacker"].(map[string]any)
+			d, _ := sent["defender"].(map[string]any)
+			if a["status"] != wants[i][0] || d["status"] != wants[i][1] {
+				t.Errorf("calc %d 回目の status = %v / %v, want %v", i, a["status"], d["status"], wants[i])
+			}
+		}
+
+		omitted := &upstreams{}
+		if recorder := postOutspeed(newUpstreams(t, omitted), neutralBody(), nil); recorder.Code != http.StatusOK {
+			t.Fatalf("status = %d", recorder.Code)
+		}
+		omitted.mu.Lock()
+		defer omitted.mu.Unlock()
+		for _, sent := range omitted.calcBodies {
+			// 省略時は attacker・defender とも status のキーそのものを送らない(ADR-0712 §2)。
+			for _, role := range []string{"attacker", "defender"} {
+				side, _ := sent[role].(map[string]any)
+				if _, has := side["status"]; has {
+					t.Errorf("省略時に %s へ status=%v を送っている(キーごと送らない)", role, side["status"])
+				}
+			}
+		}
+	})
+
+	t.Run("不正な status は 400 invalid_request で上流を呼ばない(attacker・候補とも・大文字小文字厳密)", func(t *testing.T) {
+		t.Parallel()
+		for _, bad := range []any{"Paralysis", "PARALYSIS", "paralyzed", "", 1, true, []any{"paralysis"}} {
+			for _, target := range []string{"attacker", "defender"} {
+				body := neutralBody()
+				if target == "attacker" {
+					attackerOf(body)["status"] = bad
+				} else {
+					defenderAt(body, 0)["status"] = bad
+				}
+				stub := &upstreams{}
+				recorder := postOutspeed(newUpstreams(t, stub), body, nil)
+				assertStatusAndCode(t, recorder, http.StatusBadRequest, api.InvalidRequest)
+				stub.mu.Lock()
+				calls := len(stub.calcBodies)
+				stub.mu.Unlock()
+				if calls != 0 {
+					t.Errorf("%s status=%v: calc を %d 回呼んでいる", target, bad, calls)
+				}
+			}
+		}
+	})
 }

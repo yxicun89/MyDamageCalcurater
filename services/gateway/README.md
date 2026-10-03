@@ -34,11 +34,12 @@ flowchart LR
 | 名前 | 必須 | 意味 |
 |---|---|---|
 | `GATEWAY_ADDR` | いいえ(既定 `:8080`) | 待ち受けアドレス |
+| `GATEWAY_METRICS_ADDR` | いいえ(既定 `:9090`) | メトリクス専用の待ち受けアドレス。`/metrics` はここだけ(公開側は 404 `not_found`。Service の `metrics` ポート。issue #216)。`GATEWAY_ADDR` と同じ値は起動エラー |
 | `GATEWAY_CALC_URL` | はい | calc-svc の基底 URL |
 | `GATEWAY_POKEDEX_URL` | いいえ(base の既定は `http://pokedex`) | pokedex-svc の基底 URL。DB が空のクラスタでは初回の `make import-k8s` を実行するまで 503 |
 | `GATEWAY_RECORD_URL` | いいえ | record-svc の基底 URL(ADR-0209 §10・P5-3)。未設定なら `/api/record/*` は 503。**deployment.yaml への配線は未実施(P5-3b)** |
 | `GATEWAY_TEAM_URL` | いいえ | team-svc の基底 URL(ADR-0213・P5-4)。未設定なら `/api/team/*` は 503。**deployment.yaml への配線は未実施(P5-4b)** |
-| `GATEWAY_BALANCE_URL` | いいえ | balance-svc の基底 URL(issue #284)。未設定なら `/api/balance/*` は 503。**deployment.yaml への配線は未実施** |
+| `GATEWAY_BALANCE_URL` | いいえ | balance-svc の基底 URL(issue #284)。未設定なら `/api/balance/*` は 503。base の deployment.yaml で `http://balance` に配線済み(ADR-0414)。speed・judge は未配線 |
 | `GATEWAY_SPEED_URL` | いいえ | speed-svc の基底 URL(issue #284)。未設定なら `/api/speed/*` は 503。**deployment.yaml への配線は未実施** |
 | `GATEWAY_JUDGE_URL` | いいえ | judge-svc の基底 URL(issue #284)。未設定なら `/api/judge/*` は 503。**deployment.yaml への配線は未実施** |
 | `GATEWAY_ASSETS_URL` | いいえ | 画像配信(MinIO)の基底 URL。未設定なら `/assets/*` は 404 |

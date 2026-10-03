@@ -6,6 +6,7 @@ resources:
   - allow-mysql-ingress.yaml
   - allow-nats-ingress.yaml
   - allow-pokedex-ingress.yaml
+  - allow-prometheus-gateway-metrics.yaml
   - allow-prometheus-metrics.yaml
   - allow-tidb-client-ingress.yaml
   - allow-tidb-internal.yaml

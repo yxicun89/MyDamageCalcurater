@@ -23,6 +23,19 @@ export type JudgePresetKey = "none" | "fastest" | "attack" | "hb" | "hd";
 
 export const JUDGE_PRESET_KEYS: readonly JudgePresetKey[] = ["none", "fastest", "attack", "hb", "hd"];
 
+/** 状態異常の選択肢(表示順。契約の StatusCondition と同じ。none が既定で先頭。issue 235)。 */
+export const JUDGE_STATUS_KEYS = [
+  "none",
+  "burn",
+  "paralysis",
+  "poison",
+  "badly_poison",
+  "sleep",
+  "freeze",
+] as const;
+
+export type JudgeStatusKey = (typeof JUDGE_STATUS_KEYS)[number];
+
 /** 1体分の入力の状態(自分・候補で共通の形。ADR-0705 §4)。 */
 export interface IndividualFormState {
   readonly speciesKey: string;
@@ -37,6 +50,8 @@ export interface IndividualFormState {
   readonly ranks: Record<RankKey, string>;
   readonly abilityId: string;
   readonly itemId: string;
+  /** 状態異常。none は送らない(省略と同じ)。 */
+  readonly status: JudgeStatusKey;
   /** 選んだ種族が覚える技(learnset の順)。技の select の選択肢。 */
   readonly moves: readonly Move[];
   /** 選んだ技の ID(Move.id)。 */
@@ -55,6 +70,7 @@ export function emptyIndividual(): IndividualFormState {
     ranks: { atk: "0", def: "0", spa: "0", spd: "0", spe: "0" },
     abilityId: "",
     itemId: "",
+    status: "none",
     moves: [],
     moveId: "",
     presetKey: "none",

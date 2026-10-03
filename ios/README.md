@@ -29,6 +29,7 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。コミットする・手で編集しない) |
+| `PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated` | `services/balance/api/openapi.yaml` の生成物(タイプバランス。schema 名が衝突するので別モジュール。ADR-0415) |
 | `PokeCalcKit/Sources/PokeCalcCore` | ドメインの型・`PokeCalcService`(API 実装とモック)・ViewModel・表示の整形・設定・端末 ID |
 | `PokeCalcKit/Sources/PokeCalcCore/Resources` | モックの架空データ(JSON。名前はすべて「テスト」で始める) |
 | `PokeCalcKit/Sources/PokeCalcDesign` | デザイントークン(docs/design.md と同じ名前・値) |
@@ -56,6 +57,26 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
 素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
+
+### 構築のテキスト書き出し・取り込み(P6-20)
+
+構築編集画面の「テキストで書き出し・取り込み」でシートを開く。メンバーカードの「この1体を書き出す」は、その1体を書き出した状態で開く。
+書き出しはコピーと共有(ShareLink)。取り込みは貼り付けて「内容を確認」を押す。取り込めなかった行は行番号・内容・理由で一覧に出し、
+取り込める体があれば「取り込める N 体だけ追加」か「やめる」を選ぶ(取り込めなかった行が無ければ「N 体を追加」)。
+追加は構築編集の画面に入るだけで、保存は画面の「保存」。
+
+書式は Showdown と同じ行構成で、値は**日本語名**(実 Showdown の英語名のテキストとは互換にしない。取り込もうとすると名前が
+解決できず「取り込めなかった行」に出る)。能力は努力値ではなく SP(`SP: 32 Atk / 20 Spe`。0〜32・合計66)。`EVs:`・`IVs:` は取り込めない。
+決定は [ADR-0506](../docs/adr/0506-ios-showdown-text.md)。
+
+```
+ニック (ポケモン名) @ 持ち物
+Ability: 特性
+Tera Type: タイプ
+SP: 32 Atk / 20 Spe
+Nature: 性格
+- 技名
+```
 
 ## 関連 ADR
 

@@ -94,6 +94,12 @@ struct RootView: View {
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("openAdjustScreen")
 
+                        NavigationLink(value: BalanceScreenRoute()) {
+                            Text("タイプバランス")
+                        }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("openBalanceScreen")
+
                         NavigationLink(value: SpeedScreenRoute()) {
                             Text(SpeedLabels.openButton)
                         }
@@ -125,32 +131,37 @@ struct RootView: View {
                 }
             }
             .navigationDestination(for: CalcScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _) = environment {
+                if case .ready(let service, _, let backendDescription, _, _, _) = environment {
                     CalcScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: ReverseScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, _, _) = environment {
+                if case .ready(let service, _, let backendDescription, _, _, _) = environment {
                     ReverseScreenView(service: service, teamStore: teamStore, backendDescription: backendDescription)
                 }
             }
             .navigationDestination(for: TeamListScreenRoute.self) { _ in
-                if case .ready(let service, _, _, _) = environment {
+                if case .ready(let service, _, _, _, _, _) = environment {
                     TeamListView(store: teamStore, service: service, path: $path)
                 }
             }
             .navigationDestination(for: AdjustScreenRoute.self) { _ in
-                if case .ready(let service, _, let backendDescription, let adjust, _) = environment {
+                if case .ready(let service, _, let backendDescription, let adjust, _, _) = environment {
                     AdjustScreenView(service: service, adjust: adjust, backendDescription: backendDescription)
                 }
             }
+            .navigationDestination(for: BalanceScreenRoute.self) { _ in
+                if case .ready(let service, _, _, _, let balance, _) = environment {
+                    BalanceScreenView(balance: balance, service: service, teamStore: teamStore)
+                }
+            }
             .navigationDestination(for: SpeedScreenRoute.self) { _ in
-                if case .ready(_, _, _, _, let speed) = environment {
+                if case .ready(_, _, _, _, _, let speed) = environment {
                     SpeedScreenView(service: speed)
                 }
             }
             .navigationDestination(for: AboutScreenRoute.self) { _ in
-                if case .ready(_, let deviceData, _, _) = environment {
+                if case .ready(_, let deviceData, _, _, _, _) = environment {
                     AboutView(deviceDataService: deviceData)
                 } else {
                     AboutView()
@@ -177,7 +188,7 @@ struct RootView: View {
     @ViewBuilder
     private var statusBadge: some View {
         switch environment {
-        case .ready(_, _, let description, _, _):
+        case .ready(_, _, let description, _, _, _):
             Text(description)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
@@ -224,6 +235,9 @@ private struct TeamListScreenRoute: Hashable {}
 /// `NavigationPath` に積む調整画面の行き先(値だけで、状態は持たない。ADR-0502)。
 private struct AdjustScreenRoute: Hashable {}
 
+/// `NavigationPath` に積むタイプバランス画面の行き先(値だけで、状態は持たない。P6-21)。
+private struct BalanceScreenRoute: Hashable {}
+
 /// `NavigationPath` に積む素早さ比較画面の行き先(値だけで、状態は持たない。P6-24)。
 private struct SpeedScreenRoute: Hashable {}
 
@@ -235,7 +249,7 @@ private struct AboutScreenRoute: Hashable {}
         RootView(
             environment: .ready(
                 service: mock, deviceData: MockDeviceDataService(), backendDescription: "モックデータで動作中", adjust: adjust,
-                speed: MockSpeedService()))
+                balance: UnavailableBalanceService(), speed: MockSpeedService()))
     } else {
         Text("プレビュー用モックの読み込みに失敗")
     }

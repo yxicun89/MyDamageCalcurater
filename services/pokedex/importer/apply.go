@@ -154,6 +154,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 			ID: m.ID, NameJa: m.NameJa, NameJaSource: m.NameJaSource, NameEn: m.NameEn,
 			Type: m.Type, Category: m.Category, Power: uint16(m.Power),
 			Accuracy: accuracyToNull(m.Accuracy), Pp: uint8(m.PP), Priority: int8(m.Priority),
+			Target: sql.NullString{String: m.Target, Valid: true},
 		}); err != nil {
 			return err
 		}

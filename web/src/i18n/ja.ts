@@ -485,6 +485,8 @@ export const judgeClientText = {
  * この見出しとは別に、補助の行として画面が出す。未知のコードは message だけを出す。
  */
 export const judgeErrorText = {
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "入力の形が正しくありません",
   unknown_species: "このポケモンはマスタにありません",
   unknown_move: "この技の ID はマスタにありません",
@@ -511,6 +513,17 @@ export const judgeScreenText = {
   natureLabel: "性格",
   abilityLabel: "特性",
   itemLabel: "持ち物",
+  /** 状態異常の select の名前。選択肢は契約の StatusCondition(none が先頭で既定。issue 235)。 */
+  statusLabel: "状態異常",
+  statusOptionLabel: {
+    none: "なし",
+    burn: "やけど",
+    paralysis: "まひ",
+    poison: "どく",
+    badly_poison: "もうどく",
+    sleep: "ねむり",
+    freeze: "こおり",
+  } as const,
   unselectedOption: "未選択",
   // ---- issue 309: 技はポケモンの覚える技から選ぶ。調整はプリセット。数値欄は「詳細」に畳む ----
   /** 技の select の名前(自分側・候補で共通。計算画面の calcScreenText.moveLabel と同じ語)。 */
@@ -562,7 +575,12 @@ export const judgeScreenText = {
     `${side}の素早さに${names.join("・")}は反映していません`,
   speedSideSelf: "自分",
   speedSideOpponent: "相手",
-  speedFactorLabel: { rank: "ランク補正", tailwind: "追い風", choiceScarf: "こだわりスカーフ" } as const,
+  speedFactorLabel: {
+    rank: "ランク補正",
+    tailwind: "追い風",
+    choiceScarf: "こだわりスカーフ",
+    paralysis: "まひ",
+  } as const,
   speedIgnoredLabel: { abilityId: "特性", itemId: "持ち物", fieldWeather: "天候" } as const,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
   outspeedsTrueLabel: "素早さで上回る",
@@ -587,6 +605,19 @@ export const judgeScreenText = {
  */
 export const teamClientText = {
   unavailable: "構築の API に接続できません",
+} as const;
+
+/**
+ * P5-5c: 記録 API(record-svc)のクライアント(record/recordClient.ts、ADR-0317)の文言。
+ * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
+ */
+export const recordClientText = {
+  unavailable: "記録の API に接続できません",
+} as const;
+
+/** P5-5c: 計算画面の「よく計算する相手」チップ(ADR-0317)。 */
+export const frequentOpponentsText = {
+  groupLabel: "よく計算する相手",
 } as const;
 
 /**
@@ -629,6 +660,54 @@ export const teamScreenText = {
   createErrorHeading: "構築を作成できませんでした",
   renameErrorHeading: "構築の名前を変えられませんでした",
   deleteErrorHeading: "構築を削除できませんでした",
+} as const;
+
+/**
+ * P5-5b PR-A2(ADR-0316): 構築のメンバー編集の文言。画面は web/src/team/ にある。
+ * 種族・持ち物などのコントロールの accessible name は「メンバーの group(legend = 「1体目」)」の中で引くので、
+ * 体の番号は名前に含めない。SP の6欄だけは statLetterJa の1文字表記を使う。
+ */
+export const teamMemberText = {
+  /** 構築の行から編集領域を開く / 領域の名前 / 閉じる(未保存の編集は捨てる。API は呼ばない)。 */
+  editLabel: (name: string): string => `「${name}」のメンバーを編集`,
+  editorLabel: (name: string): string => `「${name}」のメンバー編集`,
+  closeLabel: "編集を閉じる",
+  /** パーティ全体を保存する(update は全置換。ADR-0309 §4)。 */
+  saveLabel: "メンバーを保存",
+  savedNotice: "保存しました",
+  saveErrorHeading: "メンバーを保存できませんでした",
+  /** メンバーの追加・削除・並べ替え。 */
+  addLabel: "メンバーを追加",
+  addDisabledNotice: (max: number): string => `メンバーは${max}体までです`,
+  memberLegend: (position: number): string => `${position}体目`,
+  removeLabel: (position: number): string => `${position}体目を削除`,
+  moveUpLabel: (position: number): string => `${position}体目を上へ`,
+  moveDownLabel: (position: number): string => `${position}体目を下へ`,
+  /** 各項目のラベル(メンバーの group の中で引く)。 */
+  speciesLabel: "ポケモン",
+  speciesPlaceholder: "選んでください",
+  unknownSpeciesOption: (key: string): string => `不明なポケモン(${key})`,
+  speciesResolveError: "ポケモンの情報を読み込めませんでした",
+  moveLabel: (slot: number): string => `技${slot}`,
+  moveNone: "(なし)",
+  itemLabel: "持ち物",
+  itemNone: "(なし)",
+  abilityLabel: "特性",
+  /** 特性が未設定(null)のメンバー用。開いた時点で先頭の特性で黙って埋めない(ADR-0316 §12)。 */
+  abilityUnset: "(未選択)",
+  natureLabel: "性格",
+  teraLabel: "テラスタイプ",
+  teraNone: "(なし)",
+  /** SP のグリッド。 */
+  spLegend: "能力ポイント(SP)",
+  spLabel: (letter: string): string => `SP ${letter}`,
+  spSummary: (total: number, max: number, remaining: number): string =>
+    `合計 ${total}/${max}(残り ${remaining})`,
+  /** 入力の検査(role="alert")。 */
+  spStatError: (letter: string, max: number): string => `${letter}は0〜${max}の整数で入力してください`,
+  spTotalError: (over: number, max: number): string => `合計が${max}を${over}超えています`,
+  speciesRequiredError: "ポケモンを選んでください",
+  moveDuplicateError: "同じ技は1体に1つだけ選べます",
 } as const;
 
 /**
@@ -1060,4 +1139,30 @@ export const aboutText = {
     { title: "使用可能なポケモン等の基準", detail: "Pokémon HOME・Pokémon Champions の公式情報" },
   ],
   backLabel: "計算に戻る",
+} as const;
+
+/**
+ * P5-5d: 「この端末のデータを削除」(ADR-0209 §8、ADR-0318 §5)。iOS(PokeCalcCore.DeviceDataText)と同じ文言(4文目だけ Web 追加)。
+ * 説明の2文目の括弧だけ Web 向け。4文目は Web 側の補足(計算は削除の成否に影響されない。絶対ルール5)。
+ */
+export const deviceDataText = {
+  sectionHeading: "データの扱い",
+  explanation: [
+    "アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた ID でサーバーに保存しています。",
+    "ID が変わると(ブラウザのサイトデータを消したとき)、前のデータは開けなくなります。元に戻す方法はありません。",
+    "開けなくなったデータは自動的に消えます。計算の履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です。",
+    "削除するのはサーバーに保存したデータだけです。計算・逆算は、削除の成否にかかわらず使えます。",
+  ],
+  deleteButton: "この端末のデータを削除",
+  confirmMessage: "履歴・お気に入り・構築をサーバーから削除します。元に戻せません。",
+  confirmAction: "削除する",
+  cancelAction: "キャンセル",
+  deleting: "削除しています…",
+  partialNotice: "まだ残っています。続けて削除します。",
+  failure: "サーバーに届きませんでした。通信を確認してもう一度お試しください。",
+  completed: "削除しました。",
+  retryButton: "もう一度削除する",
+  recordLabel: "履歴・お気に入り",
+  teamLabel: "構築",
+  partlyDeleted: (label: string): string => `${label}は削除済みです。`,
 } as const;
