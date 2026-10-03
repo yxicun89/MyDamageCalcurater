@@ -8,7 +8,7 @@
 cd "$(git rev-parse --show-toplevel)"
 make ios-test | grep '^ios-'
 ```
-確認: 出力が次の5行(`ios-gen-check: PokeCalcAPI/Generated は api/openapi.yaml と一致` / `ios-gen-check: PokeCalcSpeedAPI/Generated は services/speed/api/openapi.yaml と一致` / `ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
+確認: 出力が次の7行(`ios-gen-check: PokeCalcAPI/Generated は api/openapi.yaml と一致` / `ios-gen-check: PokeCalcSpeedAPI/Generated は services/speed/api/openapi.yaml と一致` / `ios-gen-check: PokeCalcJudgeAPI/Generated は services/judge/api/openapi.yaml と一致` / `ios-check-request-limits: OK…` / `ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
 
 ## 2. ルート画面を開く
 
@@ -51,7 +51,17 @@ make ios-sim-run IOS_SCREEN=speed
 確認: 「自分のポケモン」(入力の方法・ポケモン「未選択」・調整)の下に「素早さの表」があり、「表の絞り込み」の6つのボタンと、「テスト」で始まる名前の段が速い順に並ぶ。
 モックの挙動は `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error` で切り替える(ADR-0503 §8)。
 
-## 7. ダークモードと大きい文字で崩れないことを見る
+## 7. 判定画面を開く
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make ios-sim-run IOS_SCREEN=judge
+```
+確認: 「自分のポケモン」と「相手候補1」(ポケモン・性格・特性・持ち物・技・能力ポイント・ランク・構築から選ぶ)、「場の効果」の3つのボタン、「判定する」があり、結果の場所に「「判定する」を押すと結果が出ます」と出ている(性格は補正なしの最初が入っている)。
+ポケモンと技を選んで「判定する」を押すと、候補ごとに素早さ・優先度・行動順・双方の確定数の行が出る。
+モックの挙動は `POKECALC_MOCK_JUDGE=error|candidate-error|marks` で切り替える(ADR-0504 §8)。
+
+## 8. ダークモードと大きい文字で崩れないことを見る
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
@@ -59,10 +69,11 @@ make ios-sim-run IOS_SCREEN=calc IOS_APPEARANCE=dark IOS_CONTENT_SIZE=extra-extr
 make ios-sim-run IOS_SCREEN=reverse IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
 make ios-sim-run IOS_SCREEN=team IOS_APPEARANCE=dark IOS_CONTENT_SIZE=extra-extra-large
 make ios-sim-run IOS_SCREEN=speed IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
+make ios-sim-run IOS_SCREEN=judge IOS_APPEARANCE=dark IOS_CONTENT_SIZE=accessibility-large
 ```
 確認: 背景が黒に近く文字が白い。文字が1字ずつ縦に折り返したり「…」で切れたりしていない(accessibility-large ではカードが縦に並ぶ)。
 
-## 8. シミュレータを標準の表示に戻す
+## 9. シミュレータを標準の表示に戻す
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
