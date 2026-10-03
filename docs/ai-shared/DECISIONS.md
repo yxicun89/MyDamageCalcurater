@@ -2083,6 +2083,22 @@ Impact: **speed・judge レーンへ**: 同じ形(Ingress 削除・`GATEWAY_SPEE
 Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
 Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
 Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-03: iOS レーンのユーザー決定 4 件(iOS レーンから API・データ・判定・素早さ・タイプバランス・Web レーンへ)
+Decision: ユーザー(2026-10-03)が iOS レーンの未決事項に次のとおり回答した。
+1. **判定・素早さ比較・タイプバランスの画面を iOS にも作る**(ADR-0705「Web を出してから判断」を、この決定で「作る」に確定)。
+   iOS は P6-24(素早さ)・P6-25(判定)・P6-26(タイプバランス)として plan.md に追加。各レーンの契約は
+   `services/{speed,judge,balance}/api/openapi.yaml`(gateway の `/api/{speed,judge,balance}/*` 経由。PR #416)。
+   iOS の生成設定が root の `api/openapi.yaml` 前提のため、取り込み方(各契約を生成対象に足す/root へ統合)は P6-24 の spec で決め、
+   root への統合が要るなら API レーンへ依頼する。
+2. **テラスタル・ダブルはどちらも対象外**(issue #232 への回答。データレーンの既定案 A「拒否」と整合。iOS は今後も `teraType`・
+   `format: double` を送らない。構築の個体が持つテラスタイプは保存・Showdown 風テキストには残すが計算には使わない)。
+3. **お気に入り・計算履歴の表示は、API レーンに契約追加を依頼して待つ**: root 契約に favorites/history のパスが無い。
+   **API レーンへの依頼**: record-svc の `favorites`(ADR-0209 §3 #3)と計算履歴(生の履歴は ADR-0209 §3 #1)の取得・追加・削除を
+   `api/openapi.yaml` に出してほしい(端末ID・セッションIDヘッダは既存と同じ)。出たら iOS は追従する。
+4. **構築は端末内保存を維持**(team-svc への移行はしない。Web との共有が必要になった時点で再検討)。
+Reason: 要件(requirements.md §2)の範囲とレーンの優先度をユーザーが確定した。
+Impact: **API レーンへ**: 上の 3 の契約追加の検討をお願いしたい(急ぎではない)。**データレーンへ**: 上の 2 を #232 の判断材料に。
+**判定・素早さ・タイプバランスの各レーンへ**: iOS が契約を使い始めるので、応答の形・エラーの語彙の変更は iOS への連絡をお願いしたい。
 ## 2026-10-03: 技の対象(単体/全体)をマスタに持たせてほしい(判定レーン → データレーン。issue #288・ユーザー決定)
 
 - ダブルの壁(×2732/4096)・全体技(×3072/4096。相手2体に当たる技)の補正は engine がまだ持たない(`engine/modifiers.go` の `screenDamageMod` は format を見ない。ADR-0005)。
