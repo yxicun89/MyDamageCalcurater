@@ -24,6 +24,8 @@ type httpError struct {
 	status  int
 	code    api.ErrorCode
 	message string
+	// retryAfter は応答に Retry-After: 1 を付ける(締め切り超過の 503。guard の過負荷 503 と揃える)。
+	retryAfter bool
 }
 
 func (e *httpError) Error() string { return e.message }

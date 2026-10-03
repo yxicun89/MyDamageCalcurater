@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpguard"
 	"example.com/pokecalc/services/internal/httpmetrics"
 	"example.com/pokecalc/services/pokedex/internal/readtx"
 )
@@ -28,11 +29,15 @@ var _ api.ServerInterface = (*Server)(nil)
 const (
 	DefaultRequestTimeout   = 5 * time.Second
 	DefaultReadinessTimeout = 2 * time.Second
+	// DefaultMaxInflight は DB を使う操作を同時に処理する数(issue #299・ADR-0801)。接続プール(ADR-0112)より
+	// 大きく、超えた要求は DB を待たずに 503 upstream_unavailable + Retry-After。
+	DefaultMaxInflight = 64
 )
 
 type config struct {
 	requestTimeout   time.Duration
 	readinessTimeout time.Duration
+	maxInflight      int
 }
 
 // Option は NewHandler の設定(主にテストで短い締め切りを渡す)。本番は渡さない。
@@ -40,6 +45,9 @@ type Option func(*config)
 
 // WithRequestTimeout は DB を使う操作の締め切りを変える。
 func WithRequestTimeout(d time.Duration) Option { return func(c *config) { c.requestTimeout = d } }
+
+// WithMaxInflight は DB を使う操作の同時実行の上限を変える。
+func WithMaxInflight(n int) Option { return func(c *config) { c.maxInflight = n } }
 
 // WithReadinessTimeout は /readyz の締め切りを変える。
 func WithReadinessTimeout(d time.Duration) Option { return func(c *config) { c.readinessTimeout = d } }
@@ -56,7 +64,7 @@ func NewServer(q readtx.DB) *Server {
 // (ルート無し・メソッド違い)を Error 形式に揃えるエラーハンドラを含む。
 // serve は起動時に DB へ接続しない(sql.Open だけ)。DB が無くても起動し、DB を使う操作が 503 を返す。
 func NewHandler(q readtx.DB, opts ...Option) http.Handler {
-	cfg := config{requestTimeout: DefaultRequestTimeout, readinessTimeout: DefaultReadinessTimeout}
+	cfg := config{requestTimeout: DefaultRequestTimeout, readinessTimeout: DefaultReadinessTimeout, maxInflight: DefaultMaxInflight}
 	for _, o := range opts {
 		o(&cfg)
 	}
@@ -72,7 +80,8 @@ func NewHandler(q readtx.DB, opts ...Option) http.Handler {
 
 	// echo v5 の Group にミドルウェアを渡すと "" と "/*" に RouteNotFound が登録される。未登録パスは従来どおり
 	// 404(エラーハンドラで Error 形式)になり、metrics の route ラベルは "/*" にまとまる(件数は有限)。
-	g := e.Group("", deadlineMiddleware(cfg.requestTimeout))
+	g := e.Group("", deadlineMiddleware(cfg.requestTimeout),
+		httpguard.Middleware(httpguard.Config{MaxInflight: cfg.maxInflight, Code: string(api.UpstreamUnavailable)}))
 	registerPokedexRoutes(g, NewServer(q))
 	registerCalcNotFoundRoutes(g)
 	return e

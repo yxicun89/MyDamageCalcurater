@@ -15,6 +15,7 @@ import (
 const (
 	InternalError       ErrorCode = "internal_error"
 	InvalidRequest      ErrorCode = "invalid_request"
+	NotFound            ErrorCode = "not_found"
 	RequestTooLarge     ErrorCode = "request_too_large"
 	UnknownMove         ErrorCode = "unknown_move"
 	UnknownNature       ErrorCode = "unknown_nature"
@@ -28,6 +29,8 @@ func (e ErrorCode) Valid() bool {
 	case InternalError:
 		return true
 	case InvalidRequest:
+		return true
+	case NotFound:
 		return true
 	case RequestTooLarge:
 		return true
@@ -188,6 +191,7 @@ type Error struct {
 	// request_too_large: request body が上限(8 KiB)を超えている。
 	// upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
 	// internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+	// not_found: 契約に無い経路、またはメソッド違い(404。ADR-0802)。
 	Code    ErrorCode `json:"code"`
 	Message string    `json:"message"`
 }
@@ -201,6 +205,7 @@ type Error struct {
 // request_too_large: request body が上限(8 KiB)を超えている。
 // upstream_unavailable: pokedex-svc / calc-svc が未設定・接続できない・タイムアウト・5xx・契約に合わない応答。
 // internal_error: 想定外の内部エラー(message は固定文言で、内部の詳細を返さない)。
+// not_found: 契約に無い経路、またはメソッド違い(404。ADR-0802)。
 type ErrorCode string
 
 // FieldState ダメージに効く場の状態。judge は解釈せず calc-svc の field にそのまま転送する(省略時は送らない)。

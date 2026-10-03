@@ -276,9 +276,10 @@ flowchart LR
 | gateway | `/api/calc*`・`/api/pokedex/*` のみ(`routing.go:107` `requiresHeaderCheck`) | 各ヘッダがちょうど1つ・非空・正準 UUID `8-4-4-4-12`(`headers.go:19,51`) | 欠落・空 → 400 `missing_header`(優先)/ 不正・重複 → 400 `invalid_header` |
 | calc | 3 操作 | 欠落・空のみ(`server.go:164` `checkHeaders`)+ 生成ラッパの重複検出(`server.go:131` `errorBodyFor`) | 同上。UUID 形式は見ない |
 | pokedex | 公開 6 操作(`/internal` は不要) | 生成ラッパ(`errors.go:80` `errorBodyFor`) | `missing_header` / `invalid_header` |
-| balance・speed・judge | 業務エンドポイント | 非空のみ(各 `requireRequestContext`。balance `server.go:297`・speed `:210`・judge `server.go:79`) | 400。code は balance `missing_request_context`、speed・judge `invalid_request`(gateway 系と語彙が異なる) |
+| balance・speed | 業務エンドポイント | gateway と同じ正準 UUID(各 `requestctx.go` の複製。ADR-0413・ADR-0606) | 400 `missing_header` / `invalid_header` |
+| judge | 業務エンドポイント | 非空のみ(`server.go:79`) | 400 `invalid_request`(gateway 系と語彙が異なる) |
 
-- balance・speed・judge は Traefik から直接届くため gateway の UUID 検証を通らない(§3)。
+- balance・speed・judge は Traefik から直接届くため gateway の UUID 検証を通らない(§3)。balance・speed は自前で同じ検証を持つ。
 - Web/iOS は全リクエストに付与(`web/src/api/apiEngine.ts:240-241`)。
 
 ## 7. `/internal` API

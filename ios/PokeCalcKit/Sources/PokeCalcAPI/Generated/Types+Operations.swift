@@ -183,7 +183,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/get(searchSpecies)/responses/503`.
             ///
@@ -465,7 +465,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/species/{key}/get(getSpecies)/responses/503`.
             ///
@@ -703,7 +703,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/moves/get(searchMoves)/responses/503`.
             ///
@@ -987,7 +987,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/moves/{key}/get(getMove)/responses/503`.
             ///
@@ -1226,7 +1226,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/moves/batch/get(getMovesByIds)/responses/503`.
             ///
@@ -1781,7 +1781,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/items/get(searchItems)/responses/503`.
             ///
@@ -1990,7 +1990,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
+            /// gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202)
             ///
             /// - Remark: Generated from `#/paths//api/pokedex/natures/get(listNatures)/responses/503`.
             ///
@@ -2255,7 +2255,7 @@ public enum Operations {
                 }
             }
             /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
             ///
             ///
             /// - Remark: Generated from `#/paths//api/calc/post(calcDamage)/responses/503`.
@@ -2533,7 +2533,7 @@ public enum Operations {
                 }
             }
             /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
             ///
             ///
             /// - Remark: Generated from `#/paths//api/calc/bulk/post(calcBulk)/responses/503`.
@@ -2813,7 +2813,7 @@ public enum Operations {
                 }
             }
             /// 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-            /// gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+            /// gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
             ///
             ///
             /// - Remark: Generated from `#/paths//api/calc/reverse/post(calcReverse)/responses/503`.
