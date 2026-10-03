@@ -2112,6 +2112,18 @@ Impact: 復旧が必要なときは、下記の tip SHA から `git branch <名�
 - `fix/tb-runbooks`(tip 8faf353)
 - `fix/tb-tb0-done`(tip fcd83db)
 
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
+## 2026-10-02: issue #236 の judge 分を API レーンが実施(ADR-0219)
+Decision: #236 の judge 分を API レーンが実施した(判定レーンの範囲。判定レーンは #457/#480 と衝突する場合は取り込みで解消)。
+judge の `X-Device-Id`/`X-Session-Id` 検証を gateway・speed と同じ判定(欠落・空 → 400 `missing_header`、非正準 UUID・重複 →
+400 `invalid_header`)にし、複製方式(`requestctx.go`)で実装した。judge の openapi は 0.2.0 で `Error.code` に両 code を追加。
+judge は非 UUID を calc-svc・pokedex-svc へ転送しなくなった。balance 分は PR #458(ADR-0413)に委ねた。
+Reason: Traefik 直結のため gateway の検証が効かず、judge は非空チェックだけで ID をそのまま上流へ転送していた。
+Impact(Web レーンへ連絡): `web/src/judge/judge.gen.ts` を再生成し、`judgeErrorText`(`web/src/i18n/ja.ts`)に
+`missing_header`・`invalid_header` の文言を追加した(additive。既存キーは不変)。Web の通常操作は正準 UUID を送るため挙動は不変。
 ## 2026-10-02: 防御側のランクの文言を iOS も同じに揃える提案(Web レーン → iOS レーン。issue #274、ADR-0315)
 Decision: Web の「詳細」に防御側のランクを追加した。iOS も攻撃側のランクと同じ作りで揃えてほしい。
 文言は fieldset「防御側のランク」、ボタン「防御側のランクを上げる」「防御側のランクを下げる」、表示は「B +1」「D -2」「B ±0」。
