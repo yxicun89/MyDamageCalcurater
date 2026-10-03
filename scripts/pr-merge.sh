@@ -15,6 +15,10 @@
 #      engine/ または testdata/golden/ を変える PR は `make test-golden` も(make test に含まれるが明示して確認)。
 #      web/ に package-lock.json があれば先に `npm ci` する。機密・実データ・個人情報の混入は
 #      check-publishable が検査する(ユーザー指示 2026-10-03: 機密の公開と費用の発生だけは止める)。
+#   5. ios/ または OpenAPI 契約(api/openapi.yaml・services/*/api/openapi.yaml)を変える PR は、iOS のテスト
+#      `make ios-test`(lint・生成物の一致・件数上限の同期・XCTest・XCUITest・Info.plist。iOS レーンの完了条件)も通す。
+#      `make test` は Go 専用で iOS を含まないため。Xcode が無ければ中止する(スキップを成功と数えない)。
+#      XCUITest は十数分〜数十分かかる(シミュレータは IOS_SIMULATOR で指定。他のセッションと同じ機種を避ける)。
 #
 # マージ方式は --merge(従来どおり。履歴にブランチの区切りを残す)。ブランチは削除しない。
 # 使い方: scripts/pr-merge.sh 123            # ゲート → マージ
@@ -95,6 +99,21 @@ run_local_gate() {
   if printf '%s\n' "$files" | grep -qE '^(engine/|testdata/golden/)'; then
     make test-golden || return 1
   fi
+  if printf '%s\n' "$files" | grep -qE '^(ios/|api/openapi\.yaml$|services/[^/]+/api/openapi\.yaml$)'; then
+    run_ios_gate || return 1
+  fi
+}
+# iOS のゲート(手順 5)。コマンドラインツールだけが選ばれている環境でも動くよう、Xcode を DEVELOPER_DIR で指す。
+run_ios_gate() {
+  if [ -z "${DEVELOPER_DIR:-}" ] && [ -d /Applications/Xcode.app/Contents/Developer ]; then
+    export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+  fi
+  command -v xcodebuild >/dev/null 2>&1 || {
+    printf 'pr-merge: iOS のテストに Xcode(xcodebuild)が要りますが見つかりません\n' >&2
+    return 1
+  }
+  printf 'pr-merge: iOS の変更を含むので make ios-test も通します(時間がかかります)\n'
+  make ios-test
 }
 (run_local_gate) || die "ローカル検証に失敗しました(PR #$PR @ ${sha:0:7})"
 printf 'pr-merge: ローカル検証 OK(PR #%s @ %s)\n' "$PR" "${sha:0:7}"
