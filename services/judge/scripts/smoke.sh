@@ -3,12 +3,12 @@
 # POST /api/judge/v1/outspeed-and-ko の 200・400・422 を確かめる。
 #
 # 環境変数:
-#   JUDGE_URL   judge 自身の Ingress の基底 URL(既定 http://localhost:8080。judge は
-#               `/api/judge` prefix の自分の Ingress を持つ。ADR-0700 §6-3)
+#   JUDGE_URL   judge の入口(gateway)の基底 URL(既定 http://localhost:8080。
+#               judge は Ingress を持たず gateway が転送する。ADR-0416)
 #   API_URL     gateway の基底 URL(既定 http://localhost:8080。judge が使う性格・種族・技の ID を
 #               引くために使う。judge 自身は pokedex-svc の一覧系 API を公開しないため、
 #               gateway の公開 API 経由で引く。services/gateway/scripts/smoke.sh の ID 取得部分と
-#               同じ流儀。gateway・judge は同じ Traefik の別 path prefix なので既定値は同じでよい)
+#               同じ流儀。judge も gateway 経由なので既定値は同じでよい)
 #
 # 使用可能なポケモン・技のリストをこのスクリプトに直書きしない(CLAUDE.md ドメイン規約)。pokedex-svc へ
 # 未投入(gateway 経由で 503)のときは、gateway smoke と同じ例のマスタ(services/calc/testdata の架空 ID)を使い、

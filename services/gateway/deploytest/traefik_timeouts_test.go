@@ -1,8 +1,8 @@
 package deploytest_test
 
 // issue #299(ADR-0801): タイムアウトの連鎖は「内側 < 外側」。Traefik の既定は respondingTimeouts.writeTimeout = 0 と
-// forwardingTimeouts.responseHeaderTimeout = 0(どちらも無期限)で、balance・speed・judge の Ingress は gateway を
-// 通らず Traefik から直接届く。k3d の Traefik に有限の値を置き(deploy/k8s/overlays/local/traefik/)、
+// forwardingTimeouts.responseHeaderTimeout = 0(どちらも無期限)で、balance・speed・judge は(ADR-0414・0416 で直結 Ingress を撤去し)
+// gateway 経由になったが、Traefik と gateway の外側の締め切りは同じ関係で要る。k3d の Traefik に有限の値を置き(deploy/k8s/overlays/local/traefik/)、
 // 各サービスの writeTimeout より長いことをここで固定する。サービス側の値は各 cmd/main.go の定数から読み、
 // 数値を二重管理しない。
 
