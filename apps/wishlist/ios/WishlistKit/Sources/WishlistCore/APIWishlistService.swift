@@ -151,16 +151,39 @@ public struct APIWishlistService: WishlistService {
 
     public func estimates(itemID: Int) async throws -> ItemEstimates {
         try await call {
-            let e = try await client.getItemEstimates(path: .init(id: Int64(itemID))).ok.body.json
-            return ItemEstimates(
-                itemID: Int(e.itemId), summaryLow: e.summaryLow, summaryMid: e.summaryMid, summaryFetchedAt: e.summaryFetchedAt,
-                sites: e.sites.map { s in
-                    SiteEstimate(
-                        siteID: Int(s.siteId), low: s.low, mid: s.mid, count: s.count, suspiciousCount: s.suspiciousCount,
-                        status: EstimateStatus(rawValue: s.status.rawValue) ?? .failed, fetchedAt: s.fetchedAt)
-                },
-                refreshing: e.refreshing)
+            Self.estimates(try await client.getItemEstimates(path: .init(id: Int64(itemID))).ok.body.json)
         }
+    }
+
+    public func refreshEstimates(itemID: Int) async throws -> ItemEstimates {
+        try await call {
+            Self.estimates(try await client.refreshItemEstimates(path: .init(id: Int64(itemID))).accepted.body.json)
+        }
+    }
+
+    public func listings(itemID: Int, siteID: Int?) async throws -> [Listing] {
+        try await call {
+            let output = try await client.listItemListings(
+                path: .init(id: Int64(itemID)), query: .init(siteId: siteID.map(Int64.init)))
+            return try output.ok.body.json.listings.map { l in
+                Listing(
+                    id: Int(l.id), siteID: Int(l.siteId), title: l.title, price: l.price, url: l.url, imageURL: l.imageUrl,
+                    inStock: l.inStock, suspiciousReasons: l.suspiciousReasons.compactMap { SuspiciousReason(rawValue: $0.rawValue) },
+                    fetchedAt: l.fetchedAt)
+            }
+        }
+    }
+
+    private static func estimates(_ e: Schemas.ItemEstimates) -> ItemEstimates {
+        ItemEstimates(
+            itemID: Int(e.itemId), summaryLow: e.summaryLow, summaryMid: e.summaryMid, summaryFetchedAt: e.summaryFetchedAt,
+            sites: e.sites.map { s in
+                SiteEstimate(
+                    siteID: Int(s.siteId), low: s.low, mid: s.mid, count: s.count, suspiciousCount: s.suspiciousCount,
+                    inStockCount: s.inStockCount, status: EstimateStatus(rawValue: s.status.rawValue) ?? .failed,
+                    fetchedAt: s.fetchedAt)
+            },
+            refreshing: e.refreshing)
     }
 
     // MARK: - ジャンル・サイト

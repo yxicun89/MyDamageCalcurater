@@ -20,6 +20,8 @@ public final class FakeWishlistService: WishlistService {
         case deleteItem(id: Int)
         case replaceItemImage(id: Int, filename: String)
         case estimates(itemID: Int)
+        case refreshEstimates(itemID: Int)
+        case listings(itemID: Int, siteID: Int?)
         case createGenre(GenreCreate)
         case updateGenre(id: Int, patch: GenreUpdate)
         case createSite(SiteCreate)
@@ -35,7 +37,11 @@ public final class FakeWishlistService: WishlistService {
         var failure: WishlistError?
         var failOnce: WishlistError?
         var draft: ItemDraft?
-        var estimates: [Int: ItemEstimates] = [:]
+        /// 商品ごとの GET estimates の応答の列。呼ぶたびに先頭を返し、残りが 1 つになったらそれを返し続ける
+        var estimates: [Int: [ItemEstimates]] = [:]
+        var refreshResponses: [Int: ItemEstimates] = [:]
+        var listings: [Listing] = []
+        var gate: (@Sendable (Call) async -> Void)?
         var nextItemID: Int
         var nextGenreID: Int
         var nextSiteID: Int
@@ -72,7 +78,22 @@ public final class FakeWishlistService: WishlistService {
         set { state.withLock { $0.draft = newValue } }
     }
     public func failOnce(_ error: WishlistError) { state.withLock { $0.failOnce = error } }
-    public func setEstimates(_ estimates: ItemEstimates) { state.withLock { $0.estimates[estimates.itemID] = estimates } }
+    public func setEstimates(_ estimates: ItemEstimates) { state.withLock { $0.estimates[estimates.itemID] = [estimates] } }
+    /// GET estimates の応答を順に返す(最後の 1 つは返し続ける)。ポーリングのテスト用。空なら何もしない。
+    public func setEstimatesSequence(_ sequence: [ItemEstimates]) {
+        guard let first = sequence.first else { return }
+        state.withLock { $0.estimates[first.itemID] = sequence }
+    }
+    /// POST refresh の本文(未設定なら、GET の先頭の応答に `refreshing: true` を付けたもの)
+    public func setRefreshResponse(_ estimates: ItemEstimates) { state.withLock { $0.refreshResponses[estimates.itemID] = estimates } }
+    /// GET listings が返す出品(全商品分。`itemID` ごとに分けず、`siteID` だけで絞る。並びはそのまま)
+    public func setListings(_ listings: [Listing]) { state.withLock { $0.listings = listings } }
+    /// estimates・refreshEstimates・listings の応答を返す直前に呼ばれる(応答は呼び出し時点で決まる)。
+    /// 応答を保留して順序の入れ替わり(古い応答)をテストするために使う。
+    public var gate: (@Sendable (Call) async -> Void)? {
+        get { state.withLock { $0.gate } }
+        set { state.withLock { $0.gate = newValue } }
+    }
     public func replaceStoredItems(_ items: [Item]) { state.withLock { $0.items = items } }
 
     /// 呼び出しを記録し、失敗の設定があれば投げる。
@@ -184,7 +205,35 @@ public final class FakeWishlistService: WishlistService {
 
     public func estimates(itemID: Int) async throws -> ItemEstimates {
         try enter(.estimates(itemID: itemID))
-        return state.withLock { $0.estimates[itemID] ?? ItemEstimates(itemID: itemID) }
+        let response = state.withLock { s -> ItemEstimates in
+            guard var sequence = s.estimates[itemID], let head = sequence.first else { return ItemEstimates(itemID: itemID) }
+            if sequence.count > 1 {
+                sequence.removeFirst()
+                s.estimates[itemID] = sequence
+            }
+            return head
+        }
+        await state.withLock { $0.gate }?(.estimates(itemID: itemID))
+        return response
+    }
+
+    public func refreshEstimates(itemID: Int) async throws -> ItemEstimates {
+        try enter(.refreshEstimates(itemID: itemID))
+        let response = state.withLock { s -> ItemEstimates in
+            if let set = s.refreshResponses[itemID] { return set }
+            var base = s.estimates[itemID]?.first ?? ItemEstimates(itemID: itemID)
+            base.refreshing = true
+            return base
+        }
+        await state.withLock { $0.gate }?(.refreshEstimates(itemID: itemID))
+        return response
+    }
+
+    public func listings(itemID: Int, siteID: Int?) async throws -> [Listing] {
+        try enter(.listings(itemID: itemID, siteID: siteID))
+        let response = state.withLock { s in s.listings.filter { siteID == nil || $0.siteID == siteID } }
+        await state.withLock { $0.gate }?(.listings(itemID: itemID, siteID: siteID))
+        return response
     }
 
     public func createGenre(_ body: GenreCreate) async throws -> Genre {

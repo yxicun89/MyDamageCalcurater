@@ -257,15 +257,22 @@ public struct SiteEstimate: Codable, Sendable, Equatable {
     public var mid: Int?
     public var count: Int
     public var suspiciousCount: Int
+    /// 参考外を除き、在庫ありの件数(0 なら「在庫なし」)
+    public var inStockCount: Int
     public var status: EstimateStatus
+    /// `status` が failed のときは前回取得した時刻
     public var fetchedAt: Date
 
-    public init(siteID: Int, low: Int? = nil, mid: Int? = nil, count: Int, suspiciousCount: Int, status: EstimateStatus, fetchedAt: Date) {
+    public init(
+        siteID: Int, low: Int? = nil, mid: Int? = nil, count: Int, suspiciousCount: Int, inStockCount: Int = 0,
+        status: EstimateStatus, fetchedAt: Date
+    ) {
         self.siteID = siteID
         self.low = low
         self.mid = mid
         self.count = count
         self.suspiciousCount = suspiciousCount
+        self.inStockCount = inStockCount
         self.status = status
         self.fetchedAt = fetchedAt
     }
@@ -286,5 +293,41 @@ public struct ItemEstimates: Codable, Sendable, Equatable {
         self.summaryFetchedAt = summaryFetchedAt
         self.sites = sites
         self.refreshing = refreshing
+    }
+}
+
+/// 参考外と判定した理由(api/openapi.yaml の SuspiciousReason)
+public enum SuspiciousReason: String, Codable, Sendable, Equatable, CaseIterable {
+    case titleMismatch = "title_mismatch"
+    case tooCheap = "too_cheap"
+    case belowMin = "below_min"
+}
+
+/// 取得した出品 1 件(`GET /api/items/{id}/listings`)。`suspiciousReasons` が空なら参考にしている出品。
+public struct Listing: Codable, Sendable, Equatable, Identifiable {
+    public var id: Int
+    public var siteID: Int
+    public var title: String
+    /// 円(送料は含めない)
+    public var price: Int
+    public var url: String
+    public var imageURL: String?
+    public var inStock: Bool
+    public var suspiciousReasons: [SuspiciousReason]
+    public var fetchedAt: Date
+
+    public init(
+        id: Int, siteID: Int, title: String, price: Int, url: String, imageURL: String? = nil, inStock: Bool = true,
+        suspiciousReasons: [SuspiciousReason] = [], fetchedAt: Date = Date(timeIntervalSince1970: 1_790_985_600)
+    ) {
+        self.id = id
+        self.siteID = siteID
+        self.title = title
+        self.price = price
+        self.url = url
+        self.imageURL = imageURL
+        self.inStock = inStock
+        self.suspiciousReasons = suspiciousReasons
+        self.fetchedAt = fetchedAt
     }
 }

@@ -14,6 +14,10 @@ public protocol WishlistService: Sendable {
     func deleteItem(id: Int) async throws
     func replaceItemImage(id: Int, image: ImageUpload) async throws -> Item
     func estimates(itemID: Int) async throws -> ItemEstimates
+    /// `POST /api/items/{id}/estimates/refresh`(202。本文は GET と同じ形で、取得できる対象があれば `refreshing: true`)
+    func refreshEstimates(itemID: Int) async throws -> ItemEstimates
+    /// `GET /api/items/{id}/listings`(参考外も含む。`siteID` を渡すとそのサイトだけ)
+    func listings(itemID: Int, siteID: Int?) async throws -> [Listing]
 
     func listGenres() async throws -> [Genre]
     func createGenre(_ body: GenreCreate) async throws -> Genre

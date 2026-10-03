@@ -27,4 +27,50 @@ public enum WishlistFixtures {
                 imageURLPath: "images/00000000-0000-4000-8000-000000000011.png"),
         ]
     }
+
+    /// 目安価格のフィクスチャの取得時刻(JST 2026-10-03 9:30 → サマリは `10/3 時点`)
+    public static let estimateFetchedAt = Date(timeIntervalSince1970: 1_790_987_400)
+
+    /// 商品ごとの estimates(`WISHLIST_USE_FAKE=estimates` の XCUITest が依存する。架空の値)。
+    /// - 12 グリス: メルカリ(1)= ok ¥3,000〜¥4,500・5 件・在庫あり・参考外 1 件 / Amazon(2)= no_result(架空。実際の Amazon は link_only で目安を持たない)
+    /// - 11 ボルシャック: メルカリ(1)・Amazon(2)ともに no_result(→ サマリは「出品ないかも」)
+    public static var estimates: [Int: ItemEstimates] {
+        [
+            12: ItemEstimates(
+                itemID: 12, summaryLow: 3000, summaryMid: 4500, summaryFetchedAt: estimateFetchedAt,
+                sites: [
+                    SiteEstimate(
+                        siteID: 1, low: 3000, mid: 4500, count: 5, suspiciousCount: 1, inStockCount: 4, status: .ok,
+                        fetchedAt: estimateFetchedAt),
+                    SiteEstimate(siteID: 2, count: 0, suspiciousCount: 0, status: .noResult, fetchedAt: estimateFetchedAt),
+                ]),
+            11: ItemEstimates(
+                itemID: 11,
+                sites: [
+                    SiteEstimate(siteID: 1, count: 0, suspiciousCount: 0, status: .noResult, fetchedAt: estimateFetchedAt),
+                    SiteEstimate(siteID: 2, count: 0, suspiciousCount: 0, status: .noResult, fetchedAt: estimateFetchedAt),
+                ]),
+        ]
+    }
+
+    /// 商品 12 の出品(id 101 は参考にしている出品、id 102 が参考外 = 参考外の折りたたみに出る)
+    public static var listings: [Listing] {
+        [
+            Listing(
+                id: 102, siteID: 1, title: "グリス 変身ベルト(ジャンク)", price: 300, url: "https://item.example.com/102",
+                imageURL: "https://img.example.com/102.jpg", suspiciousReasons: [.titleMismatch, .tooCheap],
+                fetchedAt: estimateFetchedAt),
+            Listing(
+                id: 101, siteID: 1, title: "S.H.Figuarts グリス", price: 3000, url: "https://item.example.com/101",
+                fetchedAt: estimateFetchedAt),
+        ]
+    }
+
+    /// 目安価格つきのモック(`WISHLIST_USE_FAKE=estimates`)。商品・ジャンル・サイトは `items` / `genres` / `sites` と同じ。
+    public static func makeServiceWithEstimates() -> FakeWishlistService {
+        let service = FakeWishlistService(items: items, genres: genres, sites: sites)
+        for value in estimates.values { service.setEstimates(value) }
+        service.setListings(listings)
+        return service
+    }
 }

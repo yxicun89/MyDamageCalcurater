@@ -130,6 +130,51 @@ final class WishlistUITests: XCTestCase {
         _ = requireExists(app, "connectionTokenField")
     }
 
+    // MARK: - フェーズ3(目安価格。docs/phase3-ios-spec.md の AC-IOS-EST-UI-*)
+    // `WISHLIST_USE_FAKE=estimates`(目安価格つき。商品 12 はメルカリ = ok・Amazon = no_result、商品 11 は両方 no_result)。
+    // 追加の accessibilityIdentifier: `refreshButton`(ラベル「更新」)/ `suspiciousDisclosure`(ラベル「参考外 N件」)/
+    // `suspiciousListing-<出品 ID>`(ラベルにタイトル・価格・理由)。`siteRow-<siteID>` のラベルは `SiteRow.accessibilityLabel`
+    // (サイト名 + 目安・件数・在庫・注記)。
+
+    /// AC-IOS-EST-UI-01: 目安のあるサイトは金額・件数・在庫、no_result のサイトは「出品ないかも」だけ(金額なし・リンクは残る)。
+    /// 参考外は折りたたみで、開くと理由つきの出品が出る。
+    func testEstimateRowsShowPricesAndNoListingsAndSuspiciousDisclosure() {
+        let app = launch(fake: "estimates")
+        requireExists(app, "item-12").tap()
+        XCTAssertEqual(
+            requireExists(app, "summaryText").label, "だいたい ¥3,000〜¥4,500 で買えそう(10/3 時点)")
+        let mercari = requireExists(app, "siteRow-1").label
+        XCTAssertTrue(mercari.contains("¥3,000〜¥4,500"), mercari)
+        XCTAssertTrue(mercari.contains("5件"), mercari)
+        XCTAssertTrue(mercari.contains("在庫あり"), mercari)
+        let amazon = requireExists(app, "siteRow-2").label
+        XCTAssertTrue(amazon.contains("出品ないかも"), amazon)
+        XCTAssertFalse(amazon.contains("¥"), "no_result は金額を出さない: \(amazon)")
+        XCTAssertFalse(amazon.contains("件"), "no_result は件数を出さない: \(amazon)")
+        XCTAssertFalse(amazon.contains("在庫"), "no_result は在庫を出さない: \(amazon)")
+        XCTAssertTrue(requireExists(app, "refreshButton").isEnabled)
+
+        let disclosure = requireExists(app, "suspiciousDisclosure")
+        XCTAssertTrue(disclosure.label.contains("参考外 1件"), disclosure.label)
+        XCTAssertFalse(element(app, "suspiciousListing-102").exists, "開くまでは出品を出さない")
+        disclosure.tap()
+        let listing = requireExists(app, "suspiciousListing-102")
+        XCTAssertTrue(listing.label.contains("¥300"), listing.label)
+        XCTAssertTrue(listing.label.contains("商品名が一致しない"), listing.label)
+        XCTAssertTrue(listing.label.contains("安すぎる"), listing.label)
+        XCTAssertFalse(element(app, "suspiciousListing-101").exists, "参考にしている出品は出さない")
+    }
+
+    /// AC-IOS-EST-UI-02: すべて no_result なら、サマリは「出品ないかも」だけ(金額なし)。検索へのリンクは全サイト残り、参考外の欄は出ない。
+    func testAllNoResultShowsNoListingsSummaryAndKeepsLinks() {
+        let app = launch(fake: "estimates")
+        requireExists(app, "item-11").tap()
+        XCTAssertEqual(requireExists(app, "summaryText").label, "出品ないかも")
+        XCTAssertTrue(requireExists(app, "siteRow-1").label.contains("出品ないかも"))
+        XCTAssertTrue(requireExists(app, "siteRow-2").label.contains("出品ないかも"))
+        XCTAssertFalse(element(app, "suspiciousDisclosure").exists, "参考外の合計が 0 なら出さない")
+    }
+
     private func waitForDisappearance(_ target: XCUIElement) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: target)
         return XCTWaiter().wait(for: [expectation], timeout: Self.timeout) == .completed

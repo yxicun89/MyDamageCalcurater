@@ -8,6 +8,7 @@ struct ItemDetailSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var queryFocused: Bool
+    @State private var suspiciousExpanded = false
 
     init(item: Item, genre: Genre?, sites: [Site], service: any WishlistService, onSaved: @escaping (Item) -> Void) {
         _viewModel = State(initialValue: ItemDetailViewModel(item: item, genre: genre, sites: sites, service: service))
@@ -28,7 +29,20 @@ struct ItemDetailSheet: View {
                     .accessibilityIdentifier("summaryText")
                     .accessibilityLabel(viewModel.summaryText)
 
+                if let notice = viewModel.noticeText {
+                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+                }
+
+                Button("更新") { Task { await viewModel.refresh() } }
+                    .buttonStyle(.bordered)
+                    .disabled(!viewModel.canRefresh)
+                    .accessibilityIdentifier("refreshButton")
+
                 siteRows
+
+                if let title = viewModel.suspiciousTitle {
+                    suspiciousSection(title: title)
+                }
             }
             .padding(20)
         }
@@ -40,6 +54,7 @@ struct ItemDetailSheet: View {
         }
         .presentationDetents([.medium, .large])
         .task { await viewModel.loadEstimates() }
+        .onDisappear { viewModel.stopPolling() }
     }
 
     @ViewBuilder
@@ -82,13 +97,23 @@ struct ItemDetailSheet: View {
 
     private var siteRows: some View {
         VStack(spacing: 8) {
-            ForEach(viewModel.links, id: \.site.id) { link in
+            ForEach(viewModel.siteRows) { row in
                 Button {
                     // http(s) 以外は開かない(SiteLinks.resolve でも除いているが、開く直前にも確認する)
-                    if Deeplink.isHTTPURL(link.url.absoluteString) { UIApplication.shared.open(link.url) }
+                    if Deeplink.isHTTPURL(row.link.url.absoluteString) { UIApplication.shared.open(row.link.url) }
                 } label: {
-                    HStack {
-                        Text(link.site.name).font(.body.weight(.medium))
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(row.link.site.name).font(.body.weight(.medium))
+                            // 更新中の表示は文字だけ(スピナーは使わない)
+                            if let estimate = row.estimateText {
+                                Text([estimate, row.countText, row.stockText].compactMap { $0 }.joined(separator: "  "))
+                                    .font(.footnote).foregroundStyle(.secondary)
+                            }
+                            if let note = row.noteText {
+                                Text(note).font(.footnote).foregroundStyle(.secondary)
+                            }
+                        }
                         Spacer()
                         Image(systemName: "arrow.up.right.square").foregroundStyle(.secondary)
                     }
@@ -98,8 +123,65 @@ struct ItemDetailSheet: View {
                 }
                 .buttonStyle(.plain)
                 .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .accessibilityIdentifier("siteRow-\(link.site.id)")
+                .accessibilityLabel(row.accessibilityLabel)
+                .accessibilityIdentifier("siteRow-\(row.id)")
             }
         }
+    }
+
+    /// 参考外の折りたたみ(ボタンで開閉する自前の折りたたみ。DisclosureGroup は識別子が子要素と重なるため使わない)。開いたときに出品を取る。
+    private func suspiciousSection(title: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                suspiciousExpanded.toggle()
+                if suspiciousExpanded, viewModel.suspicious == .notLoaded {
+                    Task { await viewModel.loadSuspiciousListings() }
+                }
+            } label: {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Image(systemName: suspiciousExpanded ? "chevron.up" : "chevron.down")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(title)
+            .accessibilityValue(suspiciousExpanded ? "開いています" : "閉じています")
+            .accessibilityIdentifier("suspiciousDisclosure")
+
+            if suspiciousExpanded {
+                switch viewModel.suspicious {
+                case .notLoaded, .loading:
+                    Text("読み込み中").font(.footnote).foregroundStyle(.secondary)
+                case .failed(let message):
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                case .loaded(let rows):
+                    VStack(alignment: .leading, spacing: 10) {
+                        ForEach(rows) { row in suspiciousRow(row) }
+                    }
+                }
+            }
+        }
+    }
+
+    private func suspiciousRow(_ row: SuspiciousListingRow) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            if let imageURL = row.imageURL {
+                AsyncImage(url: imageURL) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).font(.subheadline)
+                Text(([row.priceText] + row.reasonTexts).joined(separator: "  ")).font(.footnote).foregroundStyle(.secondary)
+                if let url = row.linkURL {
+                    Button("開く") { UIApplication.shared.open(url) }.font(.footnote)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(([row.title, row.priceText] + row.reasonTexts).joined(separator: " "))
+        .accessibilityIdentifier("suspiciousListing-\(row.id)")
     }
 }
