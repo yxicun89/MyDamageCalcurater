@@ -289,6 +289,7 @@
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
+  - [~] 範囲確定とテスト先行(2026-10-03。ADR-0225。運用の空席をタイプバランスレーンが代行): スクリプト(`scripts/db-backup.sh`・`db-restore.sh`)+ Docker の使い捨て DB での自動テスト(`make test-scripts` の偽物テスト2本 + `make test-db-backup`)まで。**テストは赤で、実装が次**(implementer)。**対象外(ADR-0225 §7。人間判断/実クラスタ未配備)**: 共有クラスタ上の実バックアップ・クラウド保存先・PVC スナップショット・DB 外への purge journal の同時追記(サービス側)・Argo CD/レジストリ image の復元(#297)
 
 - [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
 

@@ -77,6 +77,8 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
 	@./scripts/test-db-docker_test.sh
+	@./scripts/db-backup_test.sh
+	@./scripts/db-restore_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -207,6 +209,10 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 .PHONY: test-db-docker
 test-db-docker: ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
 	@./scripts/test-db-docker.sh
+
+.PHONY: test-db-backup
+test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
+	@./scripts/db-backup-restore_docker_test.sh
 
 .PHONY: test-nats
 test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
