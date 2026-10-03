@@ -194,6 +194,21 @@ for stat in atk def spa spd spe; do
   check_judge "RankBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" maximum)" "$(domain_limit max)" RankLimits.max
 done
 
+# --- お気に入り(ADR-0227・ADR-0509): api/openapi.yaml の件数・ラベル長と RequestLimits が一致するか ---
+# paths.<path>.<method>.responses の 200 の配列の maxItems(`listFavorites`)。見つからなければ空。
+contract_response_max_items() {
+  awk -v path="$1" -v method="$2" '
+    /^  [^ ]/ { in_path = ($0 == "  " path ":"); in_method = 0; next }
+    in_path && /^    [a-z]+:/ { in_method = ($0 == "    " method ":"); next }
+    in_path && in_method && /^ +maxItems:/ { print $2; exit }
+  ' "$openapi"
+}
+
+check_value "/api/record/favorites get 応答の maxItems" \
+  "$(contract_response_max_items /api/record/favorites get)" maxFavorites
+check_value "FavoriteInput.label.maxLength" \
+  "$(schema_property_value "$openapi" FavoriteInput label maxLength)" maxFavoriteLabelLength
+
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"
 fi
