@@ -89,6 +89,7 @@ paths:
       description: |
         使用可能集合の外の種族も返す(絞り込みは検索の仕事)。`abilities` は slot 順、
         `learnset` は習得技 ∩ 既定のレギュレーションの使用可能な技(ID 昇順)。
+        `abilities` の各特性は効果を持てば `effect` を伴う(ADR-0218)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -293,7 +294,10 @@ paths:
       tags: [pokedex]
       operationId: searchItems
       summary: 持ち物を日本語名で前方一致検索
-      description: 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+      description: |
+        既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
+        各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
+        (クライアントが `effect` の有無で絞る)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -1134,6 +1138,15 @@ components:
       properties:
         id: { type: string }
         nameJa: { type: string }
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
 
     Move:
       type: object
@@ -1152,6 +1165,13 @@ components:
       properties:
         id: { type: string }
         nameJa: { type: string }
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
 
     Nature:
       type: object

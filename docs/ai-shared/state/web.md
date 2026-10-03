@@ -179,27 +179,16 @@ create/update/removeのレースコンディションで作成直後の構築が
 **critic 2回目PASS**。`npx vitest run`1745/1745・`make web-e2e`37/37・typecheck/lint無回帰。
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
-Next: P5-5b(構築ビルダーのメンバー編集。種族検索・技/持ち物/特性選択・SP直接入力グリッド0〜32・
-テラスタイプ。特性セレクト〈ADR-0311〉と `selectableAbilities` を再利用できる)に着手する。判定レーンのShowdown形式ブランチとの統合順を確認してから進める。その後
-P5-5c(よく計算する相手の表示。`GET /api/record/frequent-opponents`、design.mdに既にチップのモックアップ
-枠あり)・P5-5d(ADR-0209 §8の文言で「この端末のデータを削除」UI、record/team両方のdevice-data削除を呼ぶ)。
-P5-5完了時はdocs/verify-m1.md(またはM2用手順書)にM2動作確認手順を追加し、make deploy-latestの対象に
-record・team・TiDB・NATSが要るかAPIレーンと確認すること(オーケストレーターの依頼)。
-**2026-10-01〜02 に消化済み(1 issue = 1 PR)**: #218(PR #407 で解決済み・クローズ)・#219(PR #420・ADR-0310。nginx にセキュリティヘッダ)・
-#272 Web 分(PR #430・ADR-0311。特性セレクト)・#274 Web 分(PR #433・ADR-0312。計算画面の「詳細」)・#210(PR #451・ADR-0313。
-**既定の計算モードをオンラインに変更**〈ユーザー決定 2026-10-01〉+ IndexedDB キャッシュのオフライン)・#332 Web 分(PR #454。
-devDependencies 7 件と Web の Node 26.10.0)・#226(D29 でクローズ済み。Web 分に古い記述なし)・#271/#270 の Web 分は PR #412 で
-完了済み(issue にコメント)。**待ち**: #211(公開 API の Item/Ability に effect が必要。DECISIONS.md 2026-10-01 に API レーンへの提案を
-記録。入ったら Web が `effects:true` へ追従。オフラインのキャッシュは effect を持たないので「持ち物の候補も比較」は#211まで無効)・
-#332 の残り(`services/pokedex/Dockerfile` の Node〈データ〉・golang タグ統一・定期検出〈運用〉)・#274 の防御側ランク/状態異常
-(API の `defenderOverride.ranks/status` が未実装)・#271/#270 の判定画面表示(判定レーン)。
-**PR のマージは ADR-0800 §2 のガードで人間の端末実行が必須**(Claude は PR 作成と CI 確認まで。マージはユーザーが自分の端末で行う)。
-**新規キュー項目**: issue #328(非公開・私的利用・LICENSEなしで決定。design.mdに追記のうえ
-既存画面の邪魔にならない位置に出典・非公式である旨を表示。iOSは既にPR #415でmain統合済み〈AboutView.swift。
-非公式注記+データ出典4件〉。Webは同じ文言〈DECISIONS.md参照〉でフッターリンク→情報ページの形にする)。
-issue #284(balance/speed/judgeがgatewayの後ろに統一される。APIレーンの転送実装が出たら`/api/balance`・
-`/api/speed`・`/api/judge`の接続先を切り替える)。両方ともキューの末尾。
+Next: **Web レーンの実装は完了**(2026-10-03。#451・#459・#462・#481・#486・#489・#525 を ADR-0803 の手順〈CI 全件成功+`--match-head-commit`〉でマージ済み)。
+2026-10-01〜03 に消化した issue/タスク(1 issue = 1 PR): #218(PR #407)・#219(#420・ADR-0310。nginx のセキュリティヘッダ)・#272 Web 分(#430・ADR-0311。特性セレクト)・
+#274 Web 分(#433・ADR-0312「詳細」、#462・ADR-0315 防御側ランク)・#210(#451・ADR-0313。**既定の計算モードをオンラインに変更**+IndexedDB キャッシュのオフライン)・
+#332 Web 分(#454)・#328 Web 分(#459・ADR-0314。情報ページ)・P5-5b(#481・ADR-0316。メンバー編集)・P5-5c(#486・ADR-0317。よく計算する相手)・
+P5-5d(#489・ADR-0318。この端末のデータを削除。issue #103 の Web 側)。#226 は D29 でクローズ済み、#271/#270 の Web 分は #412 で完了。
+**待ち(他レーン)**: (1) #211: 公開 API の Item/Ability に `effect` が必要(API レーン。入ったら Web が `effects:true` へ追従。それまでオフライン〈キャッシュ〉の「持ち物の候補も比較」は無効)。
+(2) M2 の実機確認: `make deploy-latest` に record・team・TiDB・NATS が無い(API レーン。決定ファイル `decisions/2026-10-03-214-web-m2-k3d-deploy.md`)。入ったら `docs/verify-m2.md` §2 を実機で確認し前提の注記を直す。
+(3) #332 の残り(`services/pokedex/Dockerfile` の Node〈データ〉・golang タグ統一・定期検出〈運用〉)。(4) #271/#270 の判定画面での表示(判定レーン)。
+(5) iOS へ防御側ランク文言の統一提案(ADR-0315・`decisions/` の該当ファイル)。
 (3) P4-20: issue #148(アクセス境界・認証方針)。Web 側は既にコード上で条件を満たしていることを確認済み
 (apiBaseUrl の既定値は同一オリジン、CORSはgateway側の設定)。実際のtailnet名が決まってから運用レーンより
 連絡が来る想定。(5) 人間へのお願い:
-docs/verify-m1.md §4 を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)
+docs/verify-m1.md §6(ブラウザ確認)を Safari で確認(P4-5。issue #333のsafeキーワード確認も合わせて)

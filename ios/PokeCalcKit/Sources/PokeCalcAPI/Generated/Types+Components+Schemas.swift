@@ -382,21 +382,61 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Ability/nameJa`.
             public var nameJa: Swift.String
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Ability/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない特性は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeAbilityEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。古いサーバーはこのキーを
+            /// 返さないため、クライアントは「キーが無い」を「効果なし」と「効果データを返さない版」の
+            /// どちらとも区別できない。区別はクライアントの capabilities で行う(ADR-0304 A-1・ADR-0218 §4)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Ability/effect`.
+            public var effect: Components.Schemas.Ability.EffectPayload?
             /// Creates a new `Ability`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 特性の効果定義(ability_effects の JSON。`getMasterExport` の `MasterAbility.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Ability.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Move`.
@@ -454,21 +494,57 @@ extension Components {
             public var id: Swift.String
             /// - Remark: Generated from `#/components/schemas/Item/nameJa`.
             public var nameJa: Swift.String
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public struct EffectPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Item/effect/value1`.
+                public var value1: Components.Schemas.MasterEffect
+                /// Creates a new `EffectPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.MasterEffect) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            /// issue 211・ADR-0218)。効果を持たない持ち物は**キーごと省く**(null を返さない)。
+            /// pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeItemEffect`)で厳格に検証し、
+            /// 検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/effect`.
+            public var effect: Components.Schemas.Item.EffectPayload?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
+            ///   - effect: 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
             public init(
                 id: Swift.String,
-                nameJa: Swift.String
+                nameJa: Swift.String,
+                effect: Components.Schemas.Item.EffectPayload? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
+                self.effect = effect
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
+                case effect
             }
         }
         /// - Remark: Generated from `#/components/schemas/Nature`.
@@ -2859,6 +2935,29 @@ extension Components {
                 case maxIndex
                 case minSp
                 case unsupported
+            }
+        }
+        /// 効果定義(item_effects / ability_effects の JSON をそのまま。ADR-0005)。null は補正なし。
+        /// 形は共通マスタ(`services/internal/master` の DecodeItemEffect / DecodeAbilityEffect)が受け付けるもので、
+        /// 受け取った側がそこで厳格に検証する(未知のキー・4096 基準の整数でない値・空のオブジェクトは不正)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MasterEffect`.
+        public struct MasterEffect: Codable, Hashable, Sendable {
+            /// A container of undocumented properties.
+            public var additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer
+            /// Creates a new `MasterEffect`.
+            ///
+            /// - Parameters:
+            ///   - additionalProperties: A container of undocumented properties.
+            public init(additionalProperties: OpenAPIRuntime.OpenAPIObjectContainer = .init()) {
+                self.additionalProperties = additionalProperties
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                additionalProperties = try decoder.decodeAdditionalProperties(knownKeys: [])
+            }
+            public func encode(to encoder: any Swift.Encoder) throws {
+                try encoder.encodeAdditionalProperties(additionalProperties)
             }
         }
         /// 「よく使う相手」1件(ADR-0209 §3 #2)。端末内の計算イベントの集計で、他端末のイベントは混ざらない。
