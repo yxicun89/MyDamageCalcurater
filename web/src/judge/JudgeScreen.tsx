@@ -338,8 +338,8 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
               setFormat(event.target.value as Schemas["Format"]);
             }}
           >
-            {/* ダブルは壁・全体技の補正が未実装のため選択肢に出さない(issue 288。実装は技の対象データ待ち) */}
             <option value="single">{judgeScreenText.formatOption.single}</option>
+            <option value="double">{judgeScreenText.formatOption.double}</option>
           </select>
         </label>
 

@@ -22,6 +22,7 @@ import { beforeAll, describe, expect, test } from "vitest";
 import type { Ability } from "../engine/types";
 import { typeNameJa, isTypeId } from "../i18n/ja";
 import { localPath } from "../test/localPath";
+import { MEGA_FIRE_STONE, MEGA_WATER_STONE } from "../test/megaMaster";
 import { exampleMasterSource } from "./exampleSource";
 import { toCalcSnapshot } from "./exportSnapshot";
 import type { MasterData } from "./types";
@@ -320,7 +321,10 @@ describe("web/scripts/export-example-master.mjs", () => {
         timeout: 60_000,
       });
       const written = JSON.parse(readFileSync(outPath, "utf8")) as unknown;
-      expect(written).toEqual(toCalcSnapshot(master));
+      // issue 211: 書き出しは pokedex フィクスチャが足す架空のメガストーンの持ち物も含む(scripts の注記を参照)。
+      expect(written).toEqual(
+        toCalcSnapshot({ ...master, items: [...master.items, MEGA_FIRE_STONE, MEGA_WATER_STONE] }),
+      );
     } finally {
       rmSync(outDir, { recursive: true, force: true });
     }
