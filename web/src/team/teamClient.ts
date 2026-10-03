@@ -56,9 +56,19 @@ export interface TeamClient {
   remove(teamId: string): Promise<TeamResult<void>>;
 }
 
+/**
+ * 端末データの削除(ADR-0209 §5、ADR-0318 §1)。構築画面は使わないので TeamClient とは分け、
+ * createTeamClient の戻り値にだけ足す。1回の呼び出しは1回の HTTP 要求で、
+ * partial のときの繰り返しは呼び出し側(deviceData/deleteDeviceData.ts)の仕事。
+ */
+export interface TeamDeviceDataClient {
+  deleteDeviceData(): Promise<TeamResult<Schemas["TeamDeletionResult"]>>;
+}
+
 /** 構築 API のパス(api/openapi.yaml の paths。基点 URL からの相対)。 */
 export const TEAM_PATHS = {
   teams: "api/team/teams",
+  deviceData: "api/team/device-data",
   team: (teamId: string): string => `api/team/teams/${encodeURIComponent(teamId)}`,
 } as const;
 
@@ -79,6 +89,15 @@ function isErrorBody(value: unknown): value is Schemas["Error"] {
   return typeof record.code === "string" && typeof record.message === "string";
 }
 
+/** 200 の本文が削除結果の形(status が completed / partial)かの型ガード。 */
+function isDeletionResult(value: unknown): value is Schemas["TeamDeletionResult"] {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const status = (value as Record<string, unknown>).status;
+  return status === "completed" || status === "partial";
+}
+
 /** team_unavailable の失敗(speedClient.ts の unavailableResult と同じ形)。 */
 function unavailableResult<T>(): TeamResult<T> {
   return { ok: false, error: teamUnavailableError() };
@@ -88,7 +107,7 @@ function unavailableResult<T>(): TeamResult<T> {
  * 構築 API のクライアント実装(ADR-0309 §3)。
  * 応答をそのまま運び、Web で並べ替え・整形をしない。通信・応答の失敗は team_unavailable にする。
  */
-export function createTeamClient(input: CreateTeamClientInput): TeamClient {
+export function createTeamClient(input: CreateTeamClientInput): TeamClient & TeamDeviceDataClient {
   const { baseUrl, fetch: fetchImpl, ids } = input;
 
   function headers(withBody: boolean): Record<string, string> {
@@ -157,6 +176,14 @@ export function createTeamClient(input: CreateTeamClientInput): TeamClient {
       // T は remove() の宣言(Promise<TeamResult<void>>)から推論させる(void を明示の型引数にすると
       // @typescript-eslint/no-invalid-void-type に引っかかるため)。
       return request(TEAM_PATHS.team(teamId), "DELETE", undefined, true);
+    },
+    async deleteDeviceData() {
+      const result = await request<unknown>(TEAM_PATHS.deviceData, "DELETE", undefined, false);
+      if (!result.ok) {
+        return result;
+      }
+      // 200 でも status が completed / partial でなければ契約違反として扱う(黙って成功にしない)。
+      return isDeletionResult(result.value) ? { ok: true, value: result.value } : unavailableResult();
     },
   };
 }

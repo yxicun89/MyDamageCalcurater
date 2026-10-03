@@ -143,6 +143,11 @@
     Web: vitest 全件・typecheck・lint と e2e(`web/e2e/team.spec.ts`)
   - [x] Showdown 形式の変換部(判定レーン。`web/src/team/showdownFormat.ts`。ADR-0310。画面への配線は P5-5b 側)
   - [ ] **P5-5c 履歴・よく計算する相手・端末データの削除(PR-A3 以降)**: record-svc の API と ADR-0209 §8 の文言
+  - [x] **P5-5d 端末データの削除(Web。issue #103 の Web 分。ADR-0318)**: 情報ページの「データの扱い」節に説明(ADR-0209 §8)と
+    「この端末のデータを削除」(アプリ内 alertdialog・初期フォーカス=キャンセル)。`recordClient`/`teamClient` の `deleteDeviceData`、
+    手順は純粋関数 `deviceData/deleteDeviceData.ts`(record/team 独立・partial は対象ごと最大20回・通信エラーは自動再送せず再試行)。
+    ローカルの端末 ID・設定は消さない(iOS と同じ)。team が消えたら構築一覧を取り直す(`reloadToken`)。
+    `web` の vitest 1998件・typecheck・lint・`make web-e2e`(49件)・`make check-publishable` green
 - [x] P5-6 技の追加効果
 
 - [x] issue #219(Web 配信にセキュリティヘッダが無い)
