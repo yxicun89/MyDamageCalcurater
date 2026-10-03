@@ -45,6 +45,12 @@ func main() {
 		os.Exit(1)
 	}
 
+	speedEffects, err := speedEffectsFromEnv(os.LookupEnv, upstreams.Pokedex)
+	if err != nil {
+		slog.Error("judge API failed to configure speed effects", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr: ":" + port,
 		Handler: httpapi.New(httpapi.Dependencies{
@@ -53,6 +59,7 @@ func main() {
 			ChoiceScarfItemID: choiceScarfItemID,
 			RequestTimeout:    requestTimeout,
 			Guard:             guard,
+			SpeedEffects:      speedEffects,
 		}),
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,

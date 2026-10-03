@@ -1,6 +1,6 @@
 ## Judge
 Lane: 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めてもよい)
-Active: issue 271(判定画面の未対応の印。ADR-0713。実装・テスト完了、critic・PR 待ち)。issue 235 追加分(status・まひ。ADR-0712。実装完了、critic・PR 待ち)。issue 309(判定画面の技 select・調整プリセット・「詳細」・欄ごとの検証エラー。ADR-0711。実装・テスト完了、critic・PR 待ち)
+Active: issue 235 第2段(特性・持ち物の素早さ補正をマスタの効果データで反映。ADR-0714。実装・テスト完了、critic・PR 待ち)。issue 271(判定画面の未対応の印。ADR-0713。実装・テスト完了、critic・PR 待ち)。issue 235 追加分(status・まひ。ADR-0712。実装完了、critic・PR 待ち)。issue 309(判定画面の技 select・調整プリセット・「詳細」・欄ごとの検証エラー。ADR-0711。実装・テスト完了、critic・PR 待ち)
 Branch: 次は main から feat/judge-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-judge)
 Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
 JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)まで全段階が完了。`POST /api/judge/v1/outspeed-and-ko`
@@ -14,7 +14,7 @@ Status(追記): 2026-10-03 issue #288(ダブル)は、データレーン(PR #534
 Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・反映していない入力を応答と判定画面に出す。ADR-0710)を実装。
 第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Status(追記): 2026-10-03 issue #235 追加分: 判定に `status`(状態異常)を足し、まひを素早さに反映(ADR-0712。連結・丸めのあと floor(x×50/100)、`*SpeedApplied` の末尾に `paralysis`、全 status を calc-svc へ転送)。Web に「状態異常」select。
-Next: issue 271 判定画面の未対応の印(ADR-0713)の critic と PR。issue #235 追加分の critic と PR。issue 309 の critic レビューと PR(共通部品化〈MoveSelect・プリセット選択〉と SpeciesSearchField の aria-invalid 対応は別タスク提案。ADR-0711)。以降は新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
+Next: issue 235 第2段(ADR-0714)の critic と PR。iOS の判定応答は SpeedFactor が @frozen の厳格な enum なので ability・item を受けると復号に失敗する(iOS レーンで ios 側の生成物を再生成)。issue 271 判定画面の未対応の印(ADR-0713)の critic と PR。issue #235 追加分の critic と PR。issue 309 の critic レビューと PR(共通部品化〈MoveSelect・プリセット選択〉と SpeciesSearchField の aria-invalid 対応は別タスク提案。ADR-0711)。以降は新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):
 名前付きスキーマ `MoveId`/`NatureId`(pattern `^[a-z0-9]+(-[a-z0-9]+)*$`・maxLength 64)を契約に追加し、
@@ -35,4 +35,5 @@ gateway smoke の ID取得部分を流用し `POST /api/judge/v1/outspeed-and-ko
 ヘッダなし400・未知speciesKey 422・7候補400 を実クラスタ(k3d-pokecalc、実データ)で確認済み。
 `Makefile` に `API_URL` を追加、README の古い「JD0完了」表記も修正。
 iOS版JD5は要望が出たら判断(ADR-0705 却下案)
+Status(追記): 2026-10-04 issue 235 第2段: 判定の素早さに特性・持ち物の補正を、pokedex-svc の内部 API のマスタ(ADR-0139 の SpeedMods)の小表(遅延ロード・TTL 10分・フェイルソフト)で反映(ADR-0714)。契約 0.3.0(SpeedFactor に ability・item)。Ignored は「効き方を確定できない」だけに。まひの半減を受けない特性に対応(ADR-0712 §5 の差を解消)。デプロイ順: (1) calc-svc・Web(WASM と判定画面の i18n)→ (2) master-release で再取り込み → (3) judge。新しい judge は「マスタにあって SpeedMods の無い ID」を効果なしと確定して Ignored に出さないので、再取り込み前に出すと「すいすい+雨」で ×2 が掛からないのに Ignored も空になり全て反映済みに見える誤応答になる。Web より先に出すと speedFactorLabel の ability・item が未定義で文言が空になる。古い judge はマスタを読まないので、先に再取り込みしても安全(ADR-0714 §6)。
 Status(追記): 2026-10-03、P5-5 の Showdown 形式の変換部を `web/src/team/showdownFormat.ts` に実装(ADR-0310。ブランチ `feat/web-team-showdown-format`)。`parseShowdownTeam(text, master)` / `exportShowdownTeam(members, master)` の純粋関数。`EVs:` は SP をそのまま読み書き。画面への配線は Web レーンの P5-5b(`parse` の members を構築へ、issues を一覧表示)。
