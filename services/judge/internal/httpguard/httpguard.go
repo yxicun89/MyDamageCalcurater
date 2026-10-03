@@ -52,7 +52,16 @@ func (c Config) Validate(writeTimeout time.Duration) error {
 
 // Expired reports whether ctx is already done. Handlers call it before starting new work
 // (an engine call) so a request that cannot be answered in time does not keep computing.
-func Expired(ctx context.Context) bool { return ctx.Err() != nil }
+//
+// context.WithTimeout cancels from a timer goroutine, so right after a very short deadline passes
+// ctx.Err() can still be nil for a moment. Comparing the deadline with the clock closes that gap.
+func Expired(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return true
+	}
+	dl, ok := ctx.Deadline()
+	return ok && !time.Now().Before(dl)
+}
 
 // Middleware applies cfg. Register it inside the metrics middleware (so the 503 is counted) and
 // before routes.
