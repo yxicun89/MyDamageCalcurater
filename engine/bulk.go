@@ -290,16 +290,20 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 	}
 
 	// results[a][p][v] は特性 a・プリセット p・持ち物 v の CalcDamage。特性のまとめは全行の一致で決める。
+	// hasKO[a][p][v] はその結果が KO を持つ経路か。KO は代表の行だけ後で作る(ADR-0126 追記 2026-10-02)。
 	results := make([][][]DamageResult, len(abilities))
+	hasKO := make([][][]bool, len(abilities))
 	for a, ability := range abilities {
 		results[a] = make([][]DamageResult, len(presets))
+		hasKO[a] = make([][]bool, len(presets))
 		for pi, p := range presets {
 			results[a][pi] = make([]DamageResult, len(variants))
+			hasKO[a][pi] = make([]bool, len(variants))
 			for vi, item := range variants {
 				def := p.Defender(in.DefenderSpecies, item)
 				def.Ability = ability
 				in.DefenderOverride.apply(&def)
-				res, err := CalcDamage(DamageInput{
+				res, ko, err := calcDamageNoKO(DamageInput{
 					Format:    in.Format,
 					Attacker:  in.Attacker,
 					Defender:  def,
@@ -312,6 +316,7 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 					return BulkResult{}, fmt.Errorf("防御側プリセット %q・特性 %q の計算: %w", p.Key, ability.ID, err)
 				}
 				results[a][pi][vi] = res
+				hasKO[a][pi][vi] = ko
 			}
 		}
 	}
@@ -340,6 +345,9 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 					AbilityIDs:  slices.Clone(ids),
 					Defender:    def,
 					Result:      results[group[0]][pi][vi],
+				}
+				if hasKO[group[0]][pi][vi] {
+					row.Result.KO = ComputeKO(row.Result.Rolls, row.Result.DefenderHP)
 				}
 				if item != nil {
 					row.ItemID = item.ID

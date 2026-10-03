@@ -172,7 +172,7 @@
 | レイヤー | 構成要素 | 依存してよい先 |
 |---|---|---|
 | クライアント | `web/`(React)・`ios/`(SwiftUI)・engine.wasm(ブラウザ内) | 入口(Traefik → gateway / 各 Ingress)。WASM は engine のみ |
-| 入口 | k3d loadbalancer → Traefik(`Ingress`)→ `services/gateway` | calc・pokedex・web(gateway 経由)。balance・speed・judge は Traefik が直接振り分け |
+| 入口 | k3d loadbalancer → Traefik(`Ingress`)→ `services/gateway` | calc・pokedex・web(gateway 経由)。balance も gateway 経由(issue #284・ADR-0414)。speed・judge は Traefik が直接振り分け(残り) |
 | ドメインサービス | `services/calc`・`pokedex`・`balance`・`speed`・`judge` | 自分のデータ(MySQL / read model ファイル)。他サービスは HTTP のみ |
 | 計算コア | `engine/`(純粋 Go) | 標準ライブラリのみ(DB・HTTP・時刻・乱数なし。CLAUDE.md 絶対ルール2) |
 
@@ -214,7 +214,7 @@ flowchart LR
   Client -. "オフライン" .-> WASM["engine.wasm"]
 ```
 
-- Traefik は Ingress の最長一致で振り分ける(`/` → gateway、`/api/balance|speed|judge` → 各サービス)。gateway は `/api/balance` 等を持たず、そこに来ても 404 `not_found`(`services/gateway/internal/httpapi/routing.go:59` `matchRoute`)。
+- Traefik は Ingress の最長一致で振り分ける(`/` → gateway、`/api/speed|judge` → 各サービス)。`/api/balance` は balance の Ingress を撤去したので `/` の gateway に届き、gateway が `GATEWAY_BALANCE_URL`(`http://balance`)へ転送する(`services/gateway/internal/httpapi/routing.go` `routeBalance`)。speed・judge の gateway 転送も実装済みだが、直結 Ingress が残るため今は Traefik が先に届ける。
 - judge は gateway を経由せず Service 名 `http://pokedex`・`http://calc` を直接呼ぶ(`services/judge/deploy/k8s/base/deployment.yaml` の env)。
 - balance・speed は他サービスを HTTP で呼ばない。マスタは環境変数 `BALANCE_*_PATH`・`SPEED_POKEMON_PATH` が指す JSON ファイル(未設定なら 503 `master_unavailable` で起動は継続)。
 - record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。
@@ -279,7 +279,7 @@ flowchart LR
 | balance・speed | 業務エンドポイント | gateway と同じ正準 UUID(各 `requestctx.go` の複製。ADR-0413・ADR-0606) | 400 `missing_header` / `invalid_header` |
 | judge | 業務エンドポイント | 非空のみ(`server.go:79`) | 400 `invalid_request`(gateway 系と語彙が異なる) |
 
-- balance・speed・judge は Traefik から直接届くため gateway の UUID 検証を通らない(§3)。balance・speed は自前で同じ検証を持つ。
+- speed・judge は Traefik から直接届くため gateway の UUID 検証を通らない(§3)。balance は gateway 経由になったので gateway の UUID 検証も通る。balance・speed は自前で同じ検証を持つ。
 - Web/iOS は全リクエストに付与(`web/src/api/apiEngine.ts:240-241`)。
 
 ## 7. `/internal` API
