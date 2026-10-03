@@ -154,7 +154,9 @@ func (e IndividualStatus) Valid() bool {
 
 // Defines values for SpeedFactor.
 const (
+	SpeedFactorAbility     SpeedFactor = "ability"
 	SpeedFactorChoiceScarf SpeedFactor = "choiceScarf"
+	SpeedFactorItem        SpeedFactor = "item"
 	SpeedFactorParalysis   SpeedFactor = "paralysis"
 	SpeedFactorRank        SpeedFactor = "rank"
 	SpeedFactorTailwind    SpeedFactor = "tailwind"
@@ -163,7 +165,11 @@ const (
 // Valid indicates whether the value is a known member of the SpeedFactor enum.
 func (e SpeedFactor) Valid() bool {
 	switch e {
+	case SpeedFactorAbility:
+		return true
 	case SpeedFactorChoiceScarf:
+		return true
+	case SpeedFactorItem:
 		return true
 	case SpeedFactorParalysis:
 		return true
@@ -260,11 +266,13 @@ func (e Weather) Valid() bool {
 // ルートの api/openapi.yaml にある。attacker は技を 1 つだけ持ち(request 直下の moveId)、
 // 候補は候補ごとに違う技を持つので、型を分けて「候補は必ず技を持つ」を required で表す。
 type DefenderCandidate struct {
-	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+	// AbilityId 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+	// (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
 	AbilityId *string `json:"abilityId,omitempty"`
 
 	// ItemId 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
-	// (既定 choicescarf。ADR-0701 §3)と一致するときだけ素早さに ×1.5 を掛ける。
+	// (既定 choicescarf。ADR-0701 §3)と一致するときは素早さに ×1.5 を掛け、それ以外はマスタに
+	// この持ち物の素早さ効果があれば反映する(ADR-0714)。
 	ItemId *string `json:"itemId,omitempty"`
 
 	// MoveId この候補が使う技(1 つ)。優先度は GET /api/pokedex/moves/{key} で引き、
@@ -297,13 +305,15 @@ type DefenderCandidate struct {
 	SpeciesKey SpeciesKey `json:"speciesKey"`
 
 	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+	// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
 	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
 	Status *DefenderCandidateStatus `json:"status,omitempty"`
 }
 
 // DefenderCandidateStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
 // calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
 type DefenderCandidateStatus string
 
@@ -362,15 +372,16 @@ type Health struct {
 type HealthStatus string
 
 // Individual 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
-// すべて calc-svc へそのまま転送する(ADR-0712)。
+// teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺の半減と、特性の素早さ効果の
+// 「状態異常のとき」の条件に使い、すべて calc-svc へそのまま転送する(ADR-0712・ADR-0714)。
 type Individual struct {
-	// AbilityId 特性 ID。judge は解釈せず calc-svc にそのまま渡す。
+	// AbilityId 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+	// (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
 	AbilityId *string `json:"abilityId,omitempty"`
 
 	// ItemId 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
 	// (既定 choicescarf。環境変数 JUDGE_CHOICE_SCARF_ITEM_ID で上書きできる。ADR-0701 §3)
-	// と一致するときだけ素早さに ×1.5 を掛ける。
+	// と一致するときは素早さに ×1.5 を掛け、それ以外はマスタにこの持ち物の素早さ効果があれば反映する(ADR-0714)。
 	ItemId *string `json:"itemId,omitempty"`
 
 	// NatureId 性格 ID(Showdown ID: 小文字英数をハイフンで区切る)。GET /api/pokedex/natures の一覧で
@@ -396,13 +407,15 @@ type Individual struct {
 	SpeciesKey SpeciesKey `json:"speciesKey"`
 
 	// Status 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+	// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+	// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
 	// calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
 	Status *IndividualStatus `json:"status,omitempty"`
 }
 
 // IndividualStatus 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+// (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+// none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
 // calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
 type IndividualStatus string
 
@@ -454,18 +467,24 @@ type Matchup struct {
 	// 攻撃側は 1 つに固定なので、すべての matchups で同じ値になる。
 	AttackerSpeed int `json:"attackerSpeed"`
 
-	// AttackerSpeedApplied attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
-	// tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
-	// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
+	// AttackerSpeedApplied attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710・ADR-0714)。値は rank(素早さのランクが 0 でない)・
+	// tailwind(追い風)・ability(特性の素早さ効果の条件が成立して掛けた)・
+	// choiceScarf(こだわりスカーフ)・item(スカーフ以外の持ち物の素早さ効果を掛けた)・
+	// paralysis(status が paralysis で、連結のあとに ×0.5 を掛けた。まひの半減を受けない特性なら入らない)。
+	// choiceScarf と item は同時に入らない(持ち物は 1 つ)。
+	// 効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は計算の連鎖順
+	// rank → tailwind → ability → choiceScarf / item → paralysis で固定。
 	AttackerSpeedApplied []SpeedFactor `json:"attackerSpeedApplied"`
 
-	// AttackerSpeedIgnored 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
-	// 値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
-	// itemId(こだわりスカーフ以外の itemId が指定されている)・
-	// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
-	// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
-	// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
-	// 状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
+	// AttackerSpeedIgnored 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710・ADR-0714)。
+	// 値は abilityId(abilityId が指定され、その素早さへの効き方をマスタのデータで確定できなかった)・
+	// itemId(こだわりスカーフ以外の itemId が指定され、同じく確定できなかった)・
+	// fieldWeather(field.weather が none 以外で、かつ abilityId がこの欄に入っている。天候依存の素早さ特性があり得るため)。
+	// 「確定できない」のは、マスタの素早さ効果のデータが取得できない・その ID がマスタに無い・効果データの形が不正・
+	// judge が評価できない条件(持ち物を失った後など。judge はその入力を持たない)がある、のいずれか。
+	// マスタに素早さ効果が無いと分かった特性・持ち物と、条件を評価して不成立だった特性・持ち物は
+	// **入らない**(素早さに影響しないと確定したため。ADR-0714 で ADR-0710 の「指定されたら入る」を変更)。
+	// 状態異常は反映済みで、この欄には現れない。画面は空でないとき
 	// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
 	// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
 	AttackerSpeedIgnored []SpeedIgnoredInput `json:"attackerSpeedIgnored"`
@@ -604,7 +623,7 @@ type Screens struct {
 // Example: 0445-000
 type SpeciesKey = string
 
-// SpeedFactor 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
+// SpeedFactor 素早さの計算に効かせた補正(ADR-0710・ADR-0712・ADR-0714)。
 type SpeedFactor string
 
 // SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
@@ -630,7 +649,7 @@ type SpeedField struct {
 	TrickRoom *bool `json:"trickRoom,omitempty"`
 }
 
-// SpeedIgnoredInput 素早さに影響しうるが反映していない入力(ADR-0710)。
+// SpeedIgnoredInput 素早さに影響しうるが反映していない入力(ADR-0710・ADR-0714)。
 type SpeedIgnoredInput string
 
 // StatBlock 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。

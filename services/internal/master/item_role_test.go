@@ -75,6 +75,10 @@ func itemRoleCases() []itemRoleCase {
 		{name: "UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedDefender: true}, want: defenderOnly},
 		{name: "UnsupportedAttacker と UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedAttacker: true, UnsupportedDefender: true}, want: bothRoles},
 
+		// SpeedMods: 素早さの補正(ADR-0139)。ダメージ計算では読まないので役割にならない(判定・素早さの画面の役割は ADR-0175 の対象外)。
+		{name: "SpeedMods はダメージ計算で読まない", effect: &engine.ItemEffect{SpeedMods: []engine.SpeedMod{{Condition: engine.SpeedConditionAlways, Modifier: 2048}}}, want: noRoles},
+		{name: "SpeedMods と UnsupportedDefender(印の側だけ)", effect: &engine.ItemEffect{SpeedMods: []engine.SpeedMod{{Condition: engine.SpeedConditionAlways, Modifier: 2048}}, UnsupportedDefender: true}, want: defenderOnly},
+
 		// 攻撃側の項目と防御側の項目を両方持つ。
 		{name: "DamageMod と ResistBerryType", effect: &engine.ItemEffect{DamageMod: 5324, ResistBerryType: engine.TypeFire}, want: bothRoles},
 		{name: "PowerMod と UnsupportedDefender", effect: &engine.ItemEffect{PowerMod: 4505, UnsupportedDefender: true}, want: bothRoles},

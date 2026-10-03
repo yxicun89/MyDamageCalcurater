@@ -75,12 +75,16 @@ export interface paths {
      *     各行が持つ(ADR-0703 §2)。同じ speciesKey が候補に重複していても取りまとめず、
      *     候補の数だけ素直に上流を引く(ADR-0703 §6。技も同じで、同じ moveId をまとめない)。
      *
-     *     素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2・こだわりスカーフ ×1.5)の
-     *     順で求める(ADR-0701 §2・ADR-0702 §2)。補正は 4096 基準で 1 つに連結してから 1 回だけ
-     *     五捨五超入する(各補正ごとに丸めない)。状態異常は麻痺(paralysis)だけを素早さに反映し(連結・丸めのあとに
-     *     floor(x × 50 / 100)。@smogon/calc 0.12.0 の getFinalSpeed と同じ。ADR-0712)、特性・持ち物(スカーフ以外)・天候による
-     *     素早さの変化は反映しない。反映した補正は *SpeedApplied、
-     *     指定されたのに反映していない入力は *SpeedIgnored で各行に返す(ADR-0710)。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
+     *     素早さは 実数値(engine.RealStats)→ ランク補正 → 素早さ補正(追い風 ×2 → 特性 → 持ち物〈こだわりスカーフ ×1.5、
+     *     またはマスタの持ち物の素早さ効果〉)の順で求める(ADR-0701 §2・ADR-0702 §2・ADR-0714)。補正は 4096 基準で
+     *     1 つに連結してから 1 回だけ五捨五超入する(各補正ごとに丸めない)。特性・持ち物の素早さ補正は
+     *     pokedex-svc のマスタの効果データ(ADR-0139 の SpeedMods。天候・エレキフィールド・状態異常などの条件つき)から引き、
+     *     judge は特性・持ち物の ID ごとの分岐を持たない(ADR-0714)。麻痺(paralysis)は連結・丸めのあとに
+     *     floor(x × 50 / 100)(@smogon/calc 0.12.0 の getFinalSpeed と同じ。ADR-0712)で、まひの半減を受けない特性
+     *     (マスタの IgnoresParalysisSpeedDrop)なら掛けない。反映した補正は *SpeedApplied、
+     *     指定されたのに反映していない入力は *SpeedIgnored で各行に返す(ADR-0710・ADR-0714)。
+     *     素早さ効果のデータが引けないとき(マスタの取得失敗など)も判定は失敗させず、その特性・持ち物を
+     *     *SpeedIgnored に残して素早さには掛けない(ADR-0714)。ko は calc-svc の計算結果をそのまま転記する(judge は確定数を再計算しない)。
      *
      *     場の効果は 2 つの欄に分かれる(ADR-0702 §1)。ダメージに効く weather / terrain / screens は
      *     field に入れ、judge は解釈せず calc-svc へそのまま転送する。素早さにしか効かない
@@ -185,25 +189,29 @@ export interface components {
     };
     /**
      * @description 判定に使う個体。欄は docs/judge-design.md §3 JD1 の列挙そのまま。
-     *     teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺だけ素早さに反映し、
-     *     すべて calc-svc へそのまま転送する(ADR-0712)。
+     *     teraType は受け取らない(ADR-0701 §2)。status(状態異常)は省略可で、麻痺の半減と、特性の素早さ効果の
+     *     「状態異常のとき」の条件に使い、すべて calc-svc へそのまま転送する(ADR-0712・ADR-0714)。
      */
     Individual: {
       speciesKey: components["schemas"]["SpeciesKey"];
       natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
-      /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
+      /**
+       * @description 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+       *     (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
+       */
       abilityId?: string | null;
       /**
        * @description 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
        *     (既定 choicescarf。環境変数 JUDGE_CHOICE_SCARF_ITEM_ID で上書きできる。ADR-0701 §3)
-       *     と一致するときだけ素早さに ×1.5 を掛ける。
+       *     と一致するときは素早さに ×1.5 を掛け、それ以外はマスタにこの持ち物の素早さ効果があれば反映する(ADR-0714)。
        */
       itemId?: string | null;
       /**
        * @description 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+       *     none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
        *     calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
        * @enum {string|null}
        */
@@ -224,16 +232,21 @@ export interface components {
       natureId: components["schemas"]["NatureId"];
       sp: components["schemas"]["StatBlock"];
       ranks?: components["schemas"]["RankBlock"];
-      /** @description 特性 ID。judge は解釈せず calc-svc にそのまま渡す。 */
+      /**
+       * @description 特性 ID。calc-svc にそのまま渡すほか、マスタにこの特性の素早さ効果があれば素早さに反映する
+       *     (ID ごとの分岐は持たず、効果データの条件で評価する。ADR-0714)。
+       */
       abilityId?: string | null;
       /**
        * @description 持ち物 ID。judge は calc-svc にそのまま渡すほか、こだわりスカーフの ID
-       *     (既定 choicescarf。ADR-0701 §3)と一致するときだけ素早さに ×1.5 を掛ける。
+       *     (既定 choicescarf。ADR-0701 §3)と一致するときは素早さに ×1.5 を掛け、それ以外はマスタに
+       *     この持ち物の素早さ効果があれば反映する(ADR-0714)。
        */
       itemId?: string | null;
       /**
        * @description 状態異常(省略可。省略と none は同じ)。値はルートの api/openapi.yaml の StatusCondition と同じ
-       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)だけを素早さに反映し(×0.5。ADR-0712)、
+       *     (ADR-0706 §2 の方針で書き下している)。judge は麻痺(paralysis)を素早さに反映し(×0.5。ADR-0712)、
+       *     none 以外の値を特性の素早さ効果の「状態異常のとき」の条件に使う(ADR-0714)。
        *     calc-svc には全ての値をそのまま転送する。大文字小文字は区別し、未知の値は invalid_request。
        * @enum {string|null}
        */
@@ -358,20 +371,23 @@ export interface components {
      */
     UnsupportedMark: {
       /**
-       * @description 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
+       * @description 印の対象(move・attacker_item・attacker_ability・defender_item・defender_ability・format。
+       *     format は calc-svc に未知の形式が届いたときだけで、judge が送る single・double には付かない(ADR-0222 §5)。
+       *     テラスの attacker_tera_type / defender_tera_type は judge が teraType を受けないので届かないが、
+       *     値の意味はルートの契約に従う。ADR-0215 で enum にしない)。attacker / defender は**その計算から見た**役割で、judge の自分・相手とは
        *     一致しないことがある(ADR-0708 §5)。attackerKoUnsupported(順方向)では
        *     attacker_* = 自分・defender_* = その候補、defenderKoUnsupported(逆方向)では
        *     attacker_* = その候補・defender_* = 自分を指す。
        */
       target: string;
       /**
-       * @description 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)、持ち物・特性は
-       *     unsupported_effect(効果スキーマで表せない)。judge はこの値を検査せず、
+       * @description 印の理由。技は機構の値(13 種)か zero_power(威力 0 の攻撃技)・move_target_unknown(double で技の対象が
+       *     不明。ADR-0222)、持ち物・特性・テラス・未知の対戦形式は unsupported_effect(効果スキーマで表せない・計算に反映していない。ADR-0160)。judge はこの値を検査せず、
        *     この列挙に無い値もそのまま中継する(engine が理由を足したときに judge の版で落とさない。
        *     ADR-0708 §4・§6。契約は説明で、judge は印の意味を持たない)。
        */
       reason: string;
-      /** @description 印が付いた技・持ち物・特性の ID(calc-svc が返したまま)。 */
+      /** @description 印が付いた技・持ち物・特性の ID、または format の印では対戦形式の値(calc-svc が返したまま)。 */
       id: string;
     };
     OutspeedAndKoResponse: {
@@ -470,21 +486,27 @@ export interface components {
        */
       defenderKoUnsupported: components["schemas"]["UnsupportedMark"][];
       /**
-       * @description attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
-       *     tailwind(追い風)・choiceScarf(こだわりスカーフ)・paralysis(status が paralysis。連結のあとに ×0.5)。
-       *     効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf → paralysis で固定。
+       * @description attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710・ADR-0714)。値は rank(素早さのランクが 0 でない)・
+       *     tailwind(追い風)・ability(特性の素早さ効果の条件が成立して掛けた)・
+       *     choiceScarf(こだわりスカーフ)・item(スカーフ以外の持ち物の素早さ効果を掛けた)・
+       *     paralysis(status が paralysis で、連結のあとに ×0.5 を掛けた。まひの半減を受けない特性なら入らない)。
+       *     choiceScarf と item は同時に入らない(持ち物は 1 つ)。
+       *     効かせた補正が無ければ空配列(null にも欄の欠落にもしない)。順序は計算の連鎖順
+       *     rank → tailwind → ability → choiceScarf / item → paralysis で固定。
        */
       attackerSpeedApplied: components["schemas"]["SpeedFactor"][];
       /** @description defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。 */
       defenderSpeedApplied: components["schemas"]["SpeedFactor"][];
       /**
-       * @description 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
-       *     値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
-       *     itemId(こだわりスカーフ以外の itemId が指定されている)・
-       *     fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
-       *     **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
-       *     (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
-       *     状態異常は麻痺を反映済みで、この欄には現れない(麻痺と abilityId が同時でも麻痺は常に ×0.5 で、abilityId はここに残る。ADR-0712)。画面は空でないとき
+       * @description 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710・ADR-0714)。
+       *     値は abilityId(abilityId が指定され、その素早さへの効き方をマスタのデータで確定できなかった)・
+       *     itemId(こだわりスカーフ以外の itemId が指定され、同じく確定できなかった)・
+       *     fieldWeather(field.weather が none 以外で、かつ abilityId がこの欄に入っている。天候依存の素早さ特性があり得るため)。
+       *     「確定できない」のは、マスタの素早さ効果のデータが取得できない・その ID がマスタに無い・効果データの形が不正・
+       *     judge が評価できない条件(持ち物を失った後など。judge はその入力を持たない)がある、のいずれか。
+       *     マスタに素早さ効果が無いと分かった特性・持ち物と、条件を評価して不成立だった特性・持ち物は
+       *     **入らない**(素早さに影響しないと確定したため。ADR-0714 で ADR-0710 の「指定されたら入る」を変更)。
+       *     状態異常は反映済みで、この欄には現れない。画面は空でないとき
        *     「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
        *     空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
        */
@@ -493,12 +515,12 @@ export interface components {
       defenderSpeedIgnored: components["schemas"]["SpeedIgnoredInput"][];
     };
     /**
-     * @description 素早さの計算に効かせた補正(ADR-0710・ADR-0712)。
+     * @description 素早さの計算に効かせた補正(ADR-0710・ADR-0712・ADR-0714)。
      * @enum {string}
      */
-    SpeedFactor: "rank" | "tailwind" | "choiceScarf" | "paralysis";
+    SpeedFactor: "rank" | "tailwind" | "ability" | "choiceScarf" | "item" | "paralysis";
     /**
-     * @description 素早さに影響しうるが反映していない入力(ADR-0710)。
+     * @description 素早さに影響しうるが反映していない入力(ADR-0710・ADR-0714)。
      * @enum {string}
      */
     SpeedIgnoredInput: "abilityId" | "itemId" | "fieldWeather";

@@ -59,6 +59,7 @@ pokedex-svc が未投入なら例の架空 ID にフォールバックする(`se
 | `JUDGE_POKEDEX_BASE_URL` | pokedex-svc のベース URL。未設定なら起動はするが、判定の API は 503 |
 | `JUDGE_CALC_BASE_URL` | calc-svc のベース URL。同上 |
 | `JUDGE_UPSTREAM_TIMEOUT` | 上流 1 回ぶんのタイムアウト(duration。既定 `3s`) |
+| `JUDGE_SPEED_EFFECTS_TTL` | 特性・持ち物の素早さ効果の表(マスタから抜き出した小表)の更新間隔(duration。既定 `10m`。30 秒以下は起動しない。ADR-0714) |
 | `JUDGE_REQUEST_TIMEOUT` | 判定 1 リクエスト全体の期限(duration。既定 `12s`)。`http.Server` の `WriteTimeout`(既定 15s)未満でなければ起動しない |
 | `PORT` | 待受ポート(既定 8080) |
 

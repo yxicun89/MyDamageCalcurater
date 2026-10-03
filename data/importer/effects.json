@@ -122,5 +122,17 @@
     "seedsower": {"UnsupportedDefender": true},
     "stamina": {"UnsupportedDefender": true},
     "weakarmor": {"UnsupportedDefender": true}
+  },
+  "speedItems": {
+    "ironball": {"SpeedMods": [{"Condition": "always", "Modifier": 2048}]}
+  },
+  "speedAbilities": {
+    "chlorophyll": {"SpeedMods": [{"Condition": "weather_sun", "Modifier": 8192}]},
+    "swiftswim": {"SpeedMods": [{"Condition": "weather_rain", "Modifier": 8192}]},
+    "sandrush": {"SpeedMods": [{"Condition": "weather_sand", "Modifier": 8192}]},
+    "slushrush": {"SpeedMods": [{"Condition": "weather_snow", "Modifier": 8192}]},
+    "surgesurfer": {"SpeedMods": [{"Condition": "terrain_electric", "Modifier": 8192}]},
+    "quickfeet": {"SpeedMods": [{"Condition": "has_status", "Modifier": 6144}], "IgnoresParalysisSpeedDrop": true},
+    "unburden": {"SpeedMods": [{"Condition": "item_lost", "Modifier": 8192}]}
   }
 }

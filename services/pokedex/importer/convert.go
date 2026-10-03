@@ -202,13 +202,13 @@ func Convert(in Input) (Output, Report, error) {
 	abilityRows, abilityNameWarnings := buildNamedRows(abilityIDs, speciesConv.AbilityNameEn, in.PokeAPI.Abilities, in.Overrides.Abilities, in.Config.NameJaLanguages, usedOverrideAbilities)
 	warnings = append(warnings, abilityNameWarnings...)
 
-	itemEffectRows, itemEffectWarnings, err := buildItemEffects(in.Effects.Items, includedItems, chart)
+	itemEffectRows, itemEffectWarnings, err := buildItemEffects(in.Effects.Items, in.Effects.SpeedItems, includedItems, chart)
 	if err != nil {
 		return Output{}, Report{}, err
 	}
 	warnings = append(warnings, itemEffectWarnings...)
 
-	abilityEffectRows, abilityEffectWarnings, err := buildAbilityEffects(in.Effects.Abilities, abilityIDSet, chart)
+	abilityEffectRows, abilityEffectWarnings, err := buildAbilityEffects(in.Effects.Abilities, in.Effects.SpeedAbilities, abilityIDSet, chart)
 	if err != nil {
 		return Output{}, Report{}, err
 	}
