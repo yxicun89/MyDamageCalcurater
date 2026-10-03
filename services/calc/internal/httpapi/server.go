@@ -24,6 +24,8 @@ import (
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
 	"example.com/pokecalc/services/internal/httpmetrics"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
@@ -70,7 +72,9 @@ func NewServer(store master.Store, publisher EventPublisher) *Server {
 func NewHandler(store master.Store, publisher EventPublisher, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	e.Logger = slog.Default() // main が JSON ハンドラを既定にした後に呼ばれる(issue #246)
 	m := httpmetrics.New()
+	e.Use(reqlog.Middleware(slog.Default())) // 最も外側: ID の確定とアクセスログ(issue #246)
 	e.Use(m.Middleware())
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
@@ -124,7 +128,7 @@ func registerPokedexNotFoundRoutes(e *echo.Echo) {
 }
 
 func healthzHandler(c *echo.Context) error {
-	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+	return c.JSON(http.StatusOK, map[string]string{"status": "ok", "version": version.Version})
 }
 
 // limitedBody はリクエスト本文を maxRequestBodyBytes に制限した Reader にする(critic 指摘 R7)。

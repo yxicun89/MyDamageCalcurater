@@ -57,6 +57,7 @@ type Move struct {
 	Accuracy     sql.NullInt16
 	Pp           uint8
 	Priority     int8
+	Target       sql.NullString
 }
 
 type MoveEffect struct {

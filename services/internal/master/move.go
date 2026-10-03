@@ -19,6 +19,9 @@ type MoveRow struct {
 	Effect   []byte
 	// Mechanisms は Move で検証し、昇順に並べて engine.Move.Mechanisms に載せる(未対応の印。ADR-0123)。
 	Mechanisms []string
+	// Target は技の対象(Showdown の文字列。ADR-0136)。空は不明(取り込み前の行・内部 API がまだ運ばない経路)。
+	// Move で検証するが engine.Move には載せない。
+	Target string
 }
 
 // moveCategories は moves.category として許される値(ADR-0100 §3)。
@@ -57,6 +60,9 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 	}
 	mechanisms, err := MoveMechanismsOf(row)
 	if err != nil {
+		return engine.Move{}, err
+	}
+	if _, err := MoveTargetOf(row); err != nil {
 		return engine.Move{}, err
 	}
 	var effect *engine.MoveEffect

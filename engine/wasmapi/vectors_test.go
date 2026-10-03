@@ -523,6 +523,8 @@ func TestVectorsCoverRequiredScenarios(t *testing.T) {
 		"bulk", "itemVariants",
 		"reverse", "percent", "percentTenths", "damage", "defender", "attacker", "multiObservation", "itemCandidates",
 		"float", "defaults",
+		// issue #232 / ADR-0160: テラス・ダブルの「未対応」の印を Go/WASM で照合する。
+		"unsupported", "tera", "double",
 	}
 	for _, tag := range required {
 		if tags[tag] == 0 {

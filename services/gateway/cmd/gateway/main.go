@@ -3,6 +3,7 @@
 // 設定は環境変数で渡す(1か所で読み込み、必須値は起動時に検証する。docs/coding-rules.md §2):
 //
 //	GATEWAY_ADDR                  待ち受けアドレス(既定 ":8080")
+//	GATEWAY_METRICS_ADDR          メトリクス専用の待ち受けアドレス(既定 ":9090")。/metrics はここだけ(公開入口に出さない。issue #216)
 //	GATEWAY_CALC_URL              calc-svc の基底 URL。必須
 //	GATEWAY_POKEDEX_URL           pokedex-svc の基底 URL。任意(未設定なら /api/pokedex/* は 503)
 //	GATEWAY_RECORD_URL            record-svc の基底 URL。任意(未設定なら /api/record/* は 503。ADR-0209 §10)
@@ -30,11 +31,14 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/gateway/internal/httpapi"
+	"example.com/pokecalc/services/internal/reqlog"
+	"example.com/pokecalc/services/internal/version"
 )
 
 // 環境変数の名前(運用の manifest・README が依存する)。
 const (
 	envAddr               = "GATEWAY_ADDR"
+	envMetricsAddr        = "GATEWAY_METRICS_ADDR"
 	envCalcURL            = "GATEWAY_CALC_URL"
 	envPokedexURL         = "GATEWAY_POKEDEX_URL"
 	envRecordURL          = "GATEWAY_RECORD_URL"
@@ -50,6 +54,8 @@ const (
 
 	// defaultAddr は GATEWAY_ADDR が未設定・空のときの待ち受けアドレス。
 	defaultAddr = ":8080"
+	// defaultMetricsAddr は GATEWAY_METRICS_ADDR が未設定・空のときの、メトリクス専用の待ち受けアドレス。
+	defaultMetricsAddr = ":9090"
 	// defaultUpstreamTimeout は GATEWAY_UPSTREAM_TIMEOUT が未設定・空のときの既定値。
 	defaultUpstreamTimeout = 10 * time.Second
 
@@ -60,7 +66,9 @@ const (
 	readHeaderTimeout = 5 * time.Second
 	readTimeout       = 10 * time.Second
 	writeTimeout      = 60 * time.Second // assets の転送を早期に打ち切らない(ADR-0202 §5)
-	idleTimeout       = 60 * time.Second
+	// metricsWriteTimeout はメトリクス専用ポートの書き込み上限(scrape は小さな本文だけ)。
+	metricsWriteTimeout = 10 * time.Second
+	idleTimeout         = 60 * time.Second
 )
 
 // errInvalidConfig は設定の読み込みに失敗したとき loadConfig が包んで返すエラー。
@@ -68,8 +76,9 @@ var errInvalidConfig = errors.New("gateway の設定が不正")
 
 // config は gateway の設定(環境変数から1度だけ読む)。
 type config struct {
-	Addr    string
-	Gateway httpapi.Config
+	Addr        string
+	MetricsAddr string
+	Gateway     httpapi.Config
 }
 
 // loadConfig は環境変数から設定を読む。不正なら errInvalidConfig を包んで返す。
@@ -77,6 +86,15 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 	addr, _ := lookup(envAddr)
 	if addr == "" {
 		addr = defaultAddr
+	}
+
+	metricsAddr, _ := lookup(envMetricsAddr)
+	if metricsAddr == "" {
+		metricsAddr = defaultMetricsAddr
+	}
+	if metricsAddr == addr {
+		return config{}, fmt.Errorf("%w: %s と %s が同じ(%s)。メトリクスは公開側と別のポートにする",
+			errInvalidConfig, envMetricsAddr, envAddr, addr)
 	}
 
 	calcURL, ok := lookup(envCalcURL)
@@ -176,7 +194,8 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 	}
 
 	return config{
-		Addr: addr,
+		Addr:        addr,
+		MetricsAddr: metricsAddr,
 		Gateway: httpapi.Config{
 			CalcURL:            calc,
 			PokedexURL:         pokedex,
@@ -265,48 +284,77 @@ func validateOrigin(origin string) error {
 }
 
 // run は設定を読み、ctx が終わるまで待ち受ける。ctx が終わったらサーバを止めて nil を返す。
+// 公開側(Addr)とメトリクス専用(MetricsAddr)の 2 つの http.Server を立てる(issue #216)。
 func run(ctx context.Context, lookup func(string) (string, bool)) error {
 	cfg, err := loadConfig(lookup)
 	if err != nil {
 		return err
 	}
-	handler, err := httpapi.NewHandler(cfg.Gateway)
+	handlers, err := httpapi.NewHandlers(cfg.Gateway)
 	if err != nil {
 		return err
 	}
+	// どのビルドが動いているかを起動ログの先頭で分かるようにする(issue #217)。
+	slog.Info("gateway を起動する", "version", version.Version, "addr", cfg.Addr, "metrics_addr", cfg.MetricsAddr)
 
-	srv := &http.Server{
-		Addr:              cfg.Addr,
-		Handler:           handler,
-		ReadHeaderTimeout: readHeaderTimeout,
-		ReadTimeout:       readTimeout,
-		WriteTimeout:      writeTimeout,
-		IdleTimeout:       idleTimeout,
+	servers := []*http.Server{
+		newServer(cfg.Addr, handlers.Public, writeTimeout),
+		newServer(cfg.MetricsAddr, handlers.Metrics, metricsWriteTimeout),
 	}
-	serveErr := make(chan error, 1)
-	go func() {
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			serveErr <- err
-			return
+	serveErr := make(chan error, len(servers))
+	for _, srv := range servers {
+		go func() {
+			if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				serveErr <- err
+				return
+			}
+			serveErr <- nil
+		}()
+	}
+	stopAll := func() error {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		var errs []error
+		for _, srv := range servers {
+			errs = append(errs, srv.Shutdown(shutdownCtx))
 		}
-		serveErr <- nil
-	}()
+		return errors.Join(errs...)
+	}
 
 	select {
 	case err := <-serveErr:
+		// 片方が起動に失敗した(ポート使用中など)。残りも止めてからエラーを返す。
+		_ = stopAll()
+		if err == nil {
+			err = errors.New("gateway の待ち受けが予期せず終了した")
+		}
 		return err
 	case <-ctx.Done():
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-		if err := srv.Shutdown(shutdownCtx); err != nil {
+		if err := stopAll(); err != nil {
 			return err
 		}
-		<-serveErr
+		for range servers {
+			<-serveErr
+		}
 		return nil
 	}
 }
 
+// newServer はタイムアウトを揃えた http.Server を返す。
+func newServer(addr string, h http.Handler, writeTO time.Duration) *http.Server {
+	return &http.Server{
+		Addr:              addr,
+		Handler:           h,
+		ReadHeaderTimeout: readHeaderTimeout,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTO,
+		IdleTimeout:       idleTimeout,
+	}
+}
+
 func main() {
+	// ログは JSON 1 形式(Echo 内部のログも同じ handler。issue #246)。
+	reqlog.Install(os.Stderr)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := run(ctx, os.LookupEnv); err != nil {

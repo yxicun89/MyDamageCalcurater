@@ -12,3 +12,7 @@ spec:
     - name: http
       port: 80
       targetPort: http
+    # Prometheus(ServiceMonitor)専用。Ingress の backend は http だけ(issue #216)。
+    - name: metrics
+      port: 9090
+      targetPort: metrics

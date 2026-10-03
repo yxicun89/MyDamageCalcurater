@@ -23,10 +23,10 @@ func TestMetricsEndpointServesPrometheusText(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			env := newEnv(t)
-			if rec := metricsDo(env.handler, http.MethodGet, "/healthz", nil, ""); rec.Code != http.StatusOK {
+			if rec := metricsDo(combinedHandler(env), http.MethodGet, "/healthz", nil, ""); rec.Code != http.StatusOK {
 				t.Fatalf("GET /healthz: status = %d, want 200", rec.Code)
 			}
-			assertMetricsFormat(t, metricsScrape(t, env.handler))
+			assertMetricsFormat(t, metricsScrape(t, combinedHandler(env)))
 			env.assertNoUpstreamReached(t)
 		})
 	}
@@ -62,7 +62,7 @@ func gatewayCountedOnce(t *testing.T, h http.Handler, req metricsRequest, rawSeg
 // AC-S2: 上流へ転送したリクエスト・gateway 自身が答えたエラーが数えられる。
 func TestMetricsCountsAPIRequests(t *testing.T) {
 	env := newWebTestEnv(t)
-	h := env.handler
+	h := combinedHandler(env)
 
 	gatewayCountedOnce(t, h, metricsRequest{method: http.MethodGet, target: "/healthz"}, "")
 	// calc へ転送(偽の上流が 200)。
@@ -88,7 +88,7 @@ func TestMetricsCountsAPIRequests(t *testing.T) {
 // は req.method をそのままラベル値として期待するため使えず、ここでは直接送って集計する。
 func TestMetricsUnknownMethodsNormalizeToOther(t *testing.T) {
 	env := newWebTestEnv(t)
-	h := env.handler
+	h := combinedHandler(env)
 
 	for _, method := range []string{"XMETHOD1", "XMETHOD2", "XMETHOD3"} {
 		metricsDo(h, method, "/healthz", nil, "")
@@ -108,7 +108,7 @@ func TestMetricsUnknownMethodsNormalizeToOther(t *testing.T) {
 // AC-S3: /metrics 自体は数えない。
 func TestMetricsDoesNotCountItself(t *testing.T) {
 	env := newWebTestEnv(t)
-	metricsDo(env.handler, http.MethodGet, "/healthz", nil, "")
-	assertMetricsNotSelfCounted(t, env.handler)
+	metricsDo(combinedHandler(env), http.MethodGet, "/healthz", nil, "")
+	assertMetricsNotSelfCounted(t, combinedHandler(env))
 	env.assertNoUpstreamReached(t)
 }

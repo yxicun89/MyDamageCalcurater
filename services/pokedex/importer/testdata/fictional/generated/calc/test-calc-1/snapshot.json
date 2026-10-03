@@ -21,13 +21,13 @@
     {"name": "Testbug", "types": ["Grass"], "baseStats": {"hp": 1, "atk": 90, "def": 45, "spa": 30, "spd": 30, "spe": 40}}
   ],
   "moves": [
-    {"name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "priority": 0},
-    {"name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "priority": 1},
-    {"name": "Test Glare", "type": "Normal", "basePower": 0, "priority": 0},
-    {"name": "Test Old", "basePower": 0, "priority": 0},
-    {"name": "Test Revived", "basePower": 0, "priority": 0},
-    {"name": "(No Move)", "type": "Normal", "category": "Status", "basePower": 0, "priority": 0},
-    {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0}
+    {"name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "priority": 0, "target": "allAdjacentFoes"},
+    {"name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "priority": 1, "target": ""},
+    {"name": "Test Glare", "type": "Normal", "basePower": 0, "priority": 0, "target": ""},
+    {"name": "Test Old", "basePower": 0, "priority": 0, "target": ""},
+    {"name": "Test Revived", "basePower": 0, "priority": 0, "target": ""},
+    {"name": "(No Move)", "type": "Normal", "category": "Status", "basePower": 0, "priority": 0, "target": ""},
+    {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0, "target": ""}
   ],
   "items": ["Testmonite", "Test Orb", "Test Berry"],
   "abilities": ["Test Blaze", "Test Guard", "Test Leaf", "Test Stance"],

@@ -36,6 +36,8 @@ type MoveRow struct {
 	Accuracy     int
 	PP           int
 	Priority     int
+	// Target は技の対象(Showdown の文字列のまま。ADR-0136)。
+	Target string
 }
 
 // SpeciesRow は species + species_abilities の行。
@@ -297,7 +299,7 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 		}
 	}
 	for _, r := range out.Moves {
-		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID]}
+		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID], Target: r.Target}
 		if _, err := master.Move(row, chart); err != nil {
 			return fmt.Errorf("%w: 技 %s を engine の型に写像できない: %v", ErrInvalidData, r.ID, err)
 		}
