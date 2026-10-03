@@ -260,7 +260,8 @@
 - [x] issue #260 のタイプバランス分
 - [x] 判定の応答に calc-svc の「未対応」の印を中継する
 - [x] issue 309 判定画面の技を select(種族の learnset)に、調整をプリセット(無振り・最速・攻撃特化・HB/HD特化)に、SP6欄・ランク5欄を「詳細」に畳み、検証エラーを欄ごとに aria-invalid+文言で出す(ADR-0711。ADR-0705 §5 を置き換え)。critic PASS・PR #480
-- [x] issue #235 追加分 判定に status(状態異常)を足し、まひを素早さに反映(ADR-0712。契約・judge コア・Web の select・`*SpeedApplied` の paralysis)。特性・持ち物のデータ駆動(第2段)はデータレーン待ち
+- [x] issue #235 追加分 判定に status(状態異常)を足し、まひを素早さに反映(ADR-0712。契約・judge コア・Web の select・`*SpeedApplied` の paralysis)。特性・持ち物のデータ駆動(第2段)はデータレーン分(下の行)
+- [x] issue #235 第2段 データレーン分 素早さに効く特性7件・持ち物1件の効果データ(SpeedMods・IgnoresParalysisSpeedDrop。ADR-0139。engine 型・共通マスタ・importer の speedItems/speedAbilities 節・wasmapi・calc-svc)。判定側の利用は判定レーン。**デプロイ順: 先にアプリ(calc-svc・Web の WASM)をロールアウト → その後に master-release で再取り込み**
 
 ## AJ: 調整(ダメージ計算レーン。設計は ADR-0150。2026-10-01 ユーザー要望)
 

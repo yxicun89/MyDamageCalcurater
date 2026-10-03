@@ -246,7 +246,8 @@ func encodeSpeedMods(mods []engine.SpeedMod) []byte {
 	return buf.Bytes()
 }
 
-// decodeStatMods は ItemEffect.StatMods を検証つきで読む(atk/def/spa/spd/spe のみ、正の整数、空不可)。
+// decodeStatMods は ItemEffect.StatMods を検証つきで読む(atk/def/spa/spd のみ、正の整数、空不可)。
+// spe は拒否する(素早さの補正は SpeedMods だけで表す。ADR-0139 §2)。
 func decodeStatMods(raw json.RawMessage) (map[engine.StatKey]int, error) {
 	var obj map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &obj); err != nil {

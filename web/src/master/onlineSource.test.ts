@@ -636,6 +636,27 @@ describe("公開 API の effect(issue 211)", () => {
     ]);
   });
 
+  // ADR-0139 §4: トップレベルだけ camelCase になり、SpeedMods の配列の要素は PascalCase のまま WASM へ渡る
+  // (wasmapi は大文字小文字を区別せずに受ける。この形を仕様として固定する)。
+  test("素早さの補正(SpeedMods)は、トップレベルだけ camelCase にして要素は PascalCase のまま渡す", async () => {
+    const response: Schemas["Item"][] = [
+      {
+        id: "example-item-speed",
+        nameJa: "テストすばやさだま",
+        effect: { SpeedMods: [{ Condition: "always", Modifier: 2048 }] },
+      },
+    ];
+    const fetchMock = okFetch({ [PATHS.items]: () => jsonResponse(200, response) });
+    const master = await createSource(fetchMock).load();
+    expect(master.items).toEqual([
+      {
+        id: "example-item-speed",
+        nameJa: "テストすばやさだま",
+        effect: { speedMods: [{ Condition: "always", Modifier: 2048 }] },
+      },
+    ]);
+  });
+
   test("効果を持つ持ち物が1件でもあれば capabilities.effects は true(ほかは従来どおり)", async () => {
     const fetchMock = okFetch({ [PATHS.items]: () => jsonResponse(200, effectItemsResponse) });
     const master = await createSource(fetchMock).load();

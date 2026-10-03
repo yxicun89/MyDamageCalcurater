@@ -1,6 +1,6 @@
 # ADR-0139: 素早さに効く特性・持ち物の補正を、効果定義の正規化データとしてマスタに持たせる(issue #235 第2段のデータ)
 
-- 状態: 採用(テスト先行。実装は後続)
+- 状態: 採用
 - 日付: 2026-10-04
 - レーン: データ(効果定義・importer・共通マスタ)。engine は型と語彙だけ、wasmapi は受け口だけ
 - 関連: issue #235、ADR-0710(判定の Applied / Ignored。第2段の依頼)、ADR-0712(まひ)、ADR-0005(データ駆動の効果定義)、
@@ -81,7 +81,12 @@ type SpeedMod struct {
   「SpeedMods → 役割なし」の行を足す)。判定画面で素早さの持ち物を選ばせる役割が要るなら、別の値として別 ADR で足す。
 - calc-svc はロード時に共通マスタで検証するので、本変更と同時に更新される(Lookup のコピーは SpeedMods のスライスも複製する)。
 - WASM の入力境界(engine/wasmapi)は `speedMods`(`condition`・`modifier`)・`ignoresParalysisSpeedDrop` を受け付け、engine の型に写す
-  (Web は公開 API の effect を camelCase にしてそのまま渡し、境界は未知のフィールドを拒否するため)。語彙に無い条件は `invalid_enum`。
+  (Web の `fromPublicEffect` はトップレベルのフィールド名だけを camelCase にするので、WASM には
+  `"speedMods":[{"Condition":"always","Modifier":2048}]` のように**配列の要素は PascalCase のまま**渡る。境界は未知のフィールドを拒否するが、
+  キー名は大文字小文字を区別せずに受ける(encoding/json の照合)。この形を仕様として固定し、wasmapi・Web のテストで確かめる)。
+  語彙に無い条件は `invalid_enum`。`modifier` の範囲は境界では検証しない(ダメージ計算が読まない値で、共通マスタが取り込み時に検証済み)。
+- **デプロイ順**: 先にアプリ(calc-svc・Web の WASM)をロールアウトし、その後に master-release で再取り込みする
+  (逆だと旧アプリが SpeedMods を未知のフィールドとして拒否し、計算が失敗する)。
 
 ### 5. read model(変えない)
 

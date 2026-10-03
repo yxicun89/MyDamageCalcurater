@@ -54,3 +54,22 @@ func TestWasmRejectsInvalidSpeedCondition(t *testing.T) {
 		})
 	}
 }
+
+// Web の fromPublicEffect はトップレベルのキーだけ小文字始まりにするので、speedMods の要素は PascalCase のまま渡る
+// (ADR-0139 §4)。この形を仕様として固定する(持ち物・特性の両方)。
+func TestWasmAcceptsPascalCaseSpeedModElements(t *testing.T) {
+	base := decodeSuccess(t, invoke(t, "calc", mustJSON(t, baseCalc())))
+
+	req := baseCalc()
+	sub(t, req, "attacker")["item"] = map[string]any{"id": "testspeedball", "nameJa": "テストすばやさだま",
+		"effect": map[string]any{"speedMods": []any{map[string]any{"Condition": "always", "Modifier": 2048}}}}
+	sub(t, req, "attacker")["ability"] = map[string]any{"id": "testswift", "nameJa": "テストすいすい",
+		"effect": map[string]any{
+			"speedMods":                 []any{map[string]any{"Condition": "has_status", "Modifier": 6144}},
+			"ignoresParalysisSpeedDrop": true,
+		}}
+	got := decodeSuccess(t, invoke(t, "calc", mustJSON(t, req)))
+	if !bytes.Equal(got, base) {
+		t.Errorf("PascalCase の要素でダメージの結果が変わった:\n got=%s\nbase=%s", got, base)
+	}
+}

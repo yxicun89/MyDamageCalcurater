@@ -300,6 +300,8 @@ func parseMechanisms(path string, vs []string) ([]engine.MoveMechanism, error) {
 }
 
 // speedModDTO は素早さの補正の1行(ADR-0139)。語彙に無い条件は invalid_enum。
+// modifier の範囲は検証しない: ダメージ計算が読まない値で、共通マスタが取り込み時に検証済みのため。
+// Web は要素のキーを PascalCase のまま渡すが、encoding/json の照合は大文字小文字を区別しないので受け付ける(テストで固定)。
 type speedModDTO struct {
 	Condition string `json:"condition"`
 	Modifier  int    `json:"modifier"`
