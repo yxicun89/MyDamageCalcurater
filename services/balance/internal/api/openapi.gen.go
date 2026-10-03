@@ -109,15 +109,17 @@ func (e EffectSource) Valid() bool {
 
 // Defines values for ErrorCode.
 const (
-	InternalError         ErrorCode = "internal_error"
-	InvalidRequest        ErrorCode = "invalid_request"
-	MasterUnavailable     ErrorCode = "master_unavailable"
-	MissingRequestContext ErrorCode = "missing_request_context"
-	Overloaded            ErrorCode = "overloaded"
-	RequestTooLarge       ErrorCode = "request_too_large"
-	UnknownAbility        ErrorCode = "unknown_ability"
-	UnknownMove           ErrorCode = "unknown_move"
-	UnknownPokemon        ErrorCode = "unknown_pokemon"
+	InternalError     ErrorCode = "internal_error"
+	InvalidHeader     ErrorCode = "invalid_header"
+	InvalidRequest    ErrorCode = "invalid_request"
+	MasterUnavailable ErrorCode = "master_unavailable"
+	MissingHeader     ErrorCode = "missing_header"
+	NotFound          ErrorCode = "not_found"
+	Overloaded        ErrorCode = "overloaded"
+	RequestTooLarge   ErrorCode = "request_too_large"
+	UnknownAbility    ErrorCode = "unknown_ability"
+	UnknownMove       ErrorCode = "unknown_move"
+	UnknownPokemon    ErrorCode = "unknown_pokemon"
 )
 
 // Valid indicates whether the value is a known member of the ErrorCode enum.
@@ -125,11 +127,15 @@ func (e ErrorCode) Valid() bool {
 	switch e {
 	case InternalError:
 		return true
+	case InvalidHeader:
+		return true
 	case InvalidRequest:
 		return true
 	case MasterUnavailable:
 		return true
-	case MissingRequestContext:
+	case MissingHeader:
+		return true
+	case NotFound:
 		return true
 	case Overloaded:
 		return true
@@ -722,31 +728,66 @@ type SessionId = string
 
 // AnalyzeMoveRangeParams defines parameters for AnalyzeMoveRange.
 type AnalyzeMoveRangeParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // AnalyzeTeamBalanceParams defines parameters for AnalyzeTeamBalance.
 type AnalyzeTeamBalanceParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // AnalyzeTeamCoverageParams defines parameters for AnalyzeTeamCoverage.
 type AnalyzeTeamCoverageParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // RecommendTeamTypesParams defines parameters for RecommendTeamTypes.
 type RecommendTeamTypesParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 
 // AnalyzeTeamThreatsParams defines parameters for AnalyzeTeamThreats.
 type AnalyzeTeamThreatsParams struct {
-	XDeviceId  DeviceId  `json:"X-Device-Id"`
+	// XDeviceId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
+	XDeviceId DeviceId `json:"X-Device-Id"`
+
+	// XSessionId Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+	// 32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+	// the header more than once is invalid_header (ADR-0413, same rule as the gateway).
 	XSessionId SessionId `json:"X-Session-Id"`
 }
 

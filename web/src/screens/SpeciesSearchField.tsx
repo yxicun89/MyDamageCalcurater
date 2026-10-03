@@ -22,10 +22,11 @@ export interface SpeciesSearchFieldProps {
   /** 候補を選んで resolveSpecies が解決したときに呼ぶ。 */
   readonly onResolved: (resolution: MasterSpeciesResolution) => void;
   /**
-   * 選択済みの種族の名前(省略可。P5-5b: 構築の保存済みメンバーなど、最初から種族が決まっている欄で
-   * 入力欄に出す)。変わったときも入力欄に反映する。省略(undefined)なら従来どおり空の欄から始まる。
+   * 親が選択中の種族の名前(攻守入れ替えなど、検索欄の外で選択が変わったときに入力欄の表示を追従させる。
+   * ADR-0313: 既定がオンライン(検索欄)になり、入れ替えで名前が古いまま残るのを避ける)。省略・null は追従しない(null に戻っても入力欄の文字は残す。種族が外から消える操作は今は無く、
+   * 利用者が打っている途中の文字を勝手に消さないほうを選ぶ)。
    */
-  readonly selectedName?: string;
+  readonly selectedNameJa?: string | null;
 }
 
 /**
@@ -53,26 +54,27 @@ export function SpeciesSearchField({
   label,
   masterSearch,
   onResolved,
-  selectedName,
+  selectedNameJa = null,
 }: SpeciesSearchFieldProps) {
-  const [inputText, setInputText] = useState(selectedName ?? "");
+  const [inputText, setInputText] = useState(selectedNameJa ?? "");
   const [status, setStatus] = useState<SearchStatus>(
-    selectedName === undefined ? { kind: "empty" } : { kind: "resolved" },
+    selectedNameJa === null ? { kind: "empty" } : { kind: "resolved" },
   );
-  // 親が選択済みの名前を変えたら入力欄に反映する(描画中の state 調整。effect で setState しない)。
-  const [shownName, setShownName] = useState(selectedName);
-  if (selectedName !== shownName) {
-    setShownName(selectedName);
-    if (selectedName !== undefined) {
-      setInputText(selectedName);
-      setStatus({ kind: "resolved" });
-    }
-  }
   const debounceTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const [followedName, setFollowedName] = useState<string | null>(selectedNameJa);
   const hintId = useId();
   const listboxId = useId();
   const inputId = useId();
+
+  // 親の選択が変わったら(入れ替え等)、入力欄の文字を追従させ、候補・案内は閉じる(描画中の state 調整)。
+  if (selectedNameJa !== followedName) {
+    setFollowedName(selectedNameJa);
+    if (selectedNameJa !== null) {
+      setInputText(selectedNameJa);
+      setStatus({ kind: "resolved" });
+    }
+  }
 
   function clearDebounceTimer(): void {
     if (debounceTimerRef.current !== null) {

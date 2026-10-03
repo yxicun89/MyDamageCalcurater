@@ -56,11 +56,12 @@ S = 100(`Percent`)/ 1000(`PercentTenths`)、v = 観測値、`x = S·damage − v
 
 | 観測の種類 | `Matches`(説明できる) | `Distance`(説明できないときの近さ。0.1% 単位の整数) |
 |---|---|---|
-| `Percent` / `PercentTenths` | `abs(x) < maxHP`(真値が開区間 (v−1, v+1) に入る)。v が 100%(1000)なら `x ≥ 0` も可(瀕死で頭打ち) | 両立なら 0、それ以外 `(abs(x) / maxHP) × 10`(Percent)/ `× 1`(PercentTenths) |
+| `Percent`(整数%) | `0 ≤ x < maxHP`(真値が [v, v+1) に入る。実機は切り捨て表示。ADR-0134)。v = 100 は `x ≥ 0`(頭打ち) | 両立なら 0、それ以外 `max(1, 10·gap / maxHP)`(gap = −x(x<0)/ x−maxHP(x≥maxHP)) |
+| `PercentTenths` | `abs(x) < maxHP`(真値が開区間 (v−1, v+1) に入る)。v = 1000 なら `x ≥ 0` も可 | 両立なら 0、それ以外 `abs(x) / maxHP` |
 | `Damage` | `damage == D` | 一致なら 0、それ以外 `max(1, 1000·abs(damage − D) / maxHP)` |
 | maxHP ≤ 0 | false | `1 << 30`(0 にしない) |
 
-- 開区間 (v−1, v+1) は「切り捨て・四捨五入・切り上げのどれで観測 v を作っても真値が入る最小の区間」。実機の丸め規則が未確認のため(ADR-0010 §R2。`engine/reverse_test.go:534` `TestObservationMatchesAnyRounding`)。
+- 整数%は切り捨ての区間 [v, v+1)(ADR-0134。`engine/reverse_test.go` の `TestObservationPercentFloorIsUnique`・`TestObservationPercentFloorNarrowsOnly`)。0.1% は出所の丸めが未確認なので、開区間 (v−1, v+1) のまま(ADR-0010 §R2。`TestObservationMatchesRoundingRules`)。
 - 単位を 0.1% に揃えるのは、観測の種類が混ざっても距離を足せるようにするため(ADR-0010 §R2)。
 
 ### 4.2 候補(性格クラス × 持ち物)ごとの値

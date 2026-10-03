@@ -167,7 +167,7 @@ export function TeamMemberFields({
           label={teamMemberText.speciesLabel}
           masterSearch={masterSearch}
           onResolved={onResolved}
-          selectedName={species?.nameJa}
+          selectedNameJa={species?.nameJa ?? null}
         />
       )}
 
