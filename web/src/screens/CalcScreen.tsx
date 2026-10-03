@@ -28,6 +28,7 @@ import {
 import {
   DEFAULT_CALC_CONDITIONS,
   conditionRequestParts,
+  defenderRankStatFor,
   rankStatFor,
   type CalcConditions,
 } from "../domain/calcConditions";
@@ -552,6 +553,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
       defenderAbilities,
       ...(parts.critical === undefined ? {} : { critical: parts.critical }),
       ...(parts.field === undefined ? {} : { field: parts.field }),
+      ...(parts.defenderOverride === undefined ? {} : { defenderOverride: parts.defenderOverride }),
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
@@ -709,6 +711,7 @@ export function CalcScreen({ engine, master, masterSearch }: CalcScreenProps) {
         conditions={conditions}
         onChange={setConditions}
         rankStat={rankStatFor(move?.category ?? null)}
+        defenderRankStat={defenderRankStatFor(move?.category ?? null)}
       />
 
       <ResultsSection
@@ -830,6 +833,7 @@ function SpeciesCard({
           label={speciesSelectLabel}
           masterSearch={masterSearch}
           onResolved={onSpeciesResolved}
+          selectedNameJa={species?.nameJa ?? null}
         />
       )}
       {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない

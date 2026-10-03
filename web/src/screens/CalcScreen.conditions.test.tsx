@@ -131,10 +131,10 @@ describe("「詳細」の開閉", () => {
     expect(radio("フィールド", "なし")).toBeChecked();
   });
 
-  test("やけど以外の状態異常・攻撃側の壁・防御側のランクは出さない(契約が無い)", async () => {
+  test("やけど以外の状態異常・攻撃側の壁・防御側の状態異常は出さない(防御側のランクは CalcScreen.defenderRanks.test.tsx)", async () => {
     const { user } = await start();
     await openDetails(user);
-    for (const name of ["まひ", "どく", "もうどく", "ねむり", "こおり", "攻撃側の壁", "防御側のランク"]) {
+    for (const name of ["まひ", "どく", "もうどく", "ねむり", "こおり", "攻撃側の壁"]) {
       expect(screen.queryByText(name)).toBeNull();
     }
   });

@@ -35,6 +35,27 @@ contract_query_max_items() {
   ' "$openapi"
 }
 
+# paths.<path>.get.parameters[].(name==<name>).schema の1行の flow 形式(`schema: { ..., <key>: <数値> }`)から
+# <key> の値を取り出す(見つからなければ空)。`listMoveLearners` の `limit` の `default` 用(ADR-0502 §7)。
+contract_query_inline_schema_value() {
+  awk -v path="$1" -v name="$2" -v key="$3" '
+    /^  [^ ]/ { in_path = ($0 == "  " path ":"); in_param = 0; next }
+    in_path && /^        - / { in_param = ($0 == "        - name: " name); next }
+    in_path && in_param && /^          schema: \{/ {
+      if (match($0, key ": [0-9]+")) { value = substr($0, RSTART, RLENGTH); sub(/.*: /, "", value); print value }
+      exit
+    }
+  ' "$openapi"
+}
+
+# components.schemas.<schema>.<key>(スキーマ直下の数値。例 AdjustHits.maximum)を取り出す(見つからなければ空)。
+contract_schema_value() {
+  awk -v schema="$1" -v key="$2" '
+    /^    [A-Za-z]/ { in_schema = ($0 == "    " schema ":"); next }
+    in_schema && $0 ~ "^      " key ": " { print $2; exit }
+  ' "$openapi"
+}
+
 # RequestLimits.swift の `public static let <name> = <数値>` の値(見つからなければ空)。
 swift_limit() {
   sed -n "s/^ *public static let $1 = \([0-9][0-9]*\)$/\1/p" "$limits_swift"
@@ -71,10 +92,27 @@ check_query() {
   fi
 }
 
+# 契約の1つの値と RequestLimits の1つの定数を照合する(`check` / `check_query` の汎用版。ADR-0502 §7)。
+check_value() {
+  local label="$1" contract="$2" limit_name="$3"
+  local ios
+  ios="$(swift_limit "$limit_name")"
+  if [ -z "$contract" ] || [ -z "$ios" ]; then
+    echo "ios-check-request-limits: $label または RequestLimits.$limit_name が見つからない" >&2
+    status=1
+  elif [ "$contract" != "$ios" ]; then
+    echo "ios-check-request-limits: $label=$contract と RequestLimits.$limit_name=$ios が違う" >&2
+    status=1
+  fi
+}
+
 check ReverseRequest observations maxObservations
 check ReverseRequest itemCandidates maxItemCandidates
 check BulkCalcRequest itemVariants maxItemVariants
 check_query /api/pokedex/moves/batch ids maxMoveBatchIds
+check_value "/api/pokedex/moves/{key}/learners クエリ limit.default" \
+  "$(contract_query_inline_schema_value '/api/pokedex/moves/{key}/learners' limit default)" moveLearnersPageSize
+check_value "AdjustHits.maximum" "$(contract_schema_value AdjustHits maximum)" maxAdjustHits
 
 if [ "$status" -eq 0 ]; then
   echo "ios-check-request-limits: OK(RequestLimits は api/openapi.yaml と一致)"

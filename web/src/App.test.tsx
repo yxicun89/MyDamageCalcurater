@@ -212,14 +212,19 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // P5-5 PR-A1(ADR-0309 §1): 最後のタブは構築。判定・素早さ・タイプバランスは End からそれぞれ
-    // 1・2・3つ手前(JD5 の時点では判定が末尾だった)。
+    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・判定・素早さ・タイプバランスは End からそれぞれ
+    // 1・2・3・4つ手前(P5-5 PR-A1 の時点では構築、JD5 の時点では判定が末尾だった)。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
     const judgeTab = screen.getByRole("tab", { name: "判定" });
     const teamTab = screen.getByRole("tab", { name: "構築" });
+    const adjustTab = screen.getByRole("tab", { name: "調整" });
     calcTab.focus();
     await user.keyboard("{End}");
+    expect(adjustTab).toHaveAttribute("aria-selected", "true");
+    expect(adjustTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
     expect(teamTab).toHaveAttribute("aria-selected", "true");
     expect(teamTab).toHaveFocus();
 
@@ -246,7 +251,7 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
 });
 
 // P4-5: 計算モードの切り替え(ADR-0301 §4)。ヘッダーに「オフライン(WASM)/ オンライン(API)」の
-// radiogroup を置き、既定はオフライン。選択は localStorage に覚える。App は engines(offline・online)を
+// radiogroup を置き、既定はオンライン(ADR-0313 で ADR-0301 §4 の「既定はオフライン」を変更)。選択は localStorage に覚える。App は engines(offline・online)を
 // 受け取れ(テストで差し替える)、選択中のモードの engine だけで計算する。自動のフォールバックはしない。
 describe("P4-5 計算モード(オフライン / オンライン)の切り替え", () => {
   beforeEach(() => {
@@ -277,11 +282,19 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     };
   }
 
-  test("ヘッダーに「ダメージ計算の実行場所」の radiogroup があり、既定はオフライン(WASM)", () => {
+  // ADR-0313: 既定を「オンライン」にした(既定オフラインへの機械的な追従。テストの意図は変えない)。
+  test("ヘッダーに「ダメージ計算の実行場所」の radiogroup があり、既定はオンライン(API)", () => {
     render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
     const { offline, online } = modeRadios();
-    expect(offline).toBeChecked();
-    expect(online).not.toBeChecked();
+    expect(online).toBeChecked();
+    expect(offline).not.toBeChecked();
+  });
+
+  test("保存済みのモードがオフラインなら、既定のオンラインより優先してオフラインで開く(既存利用者の選択を尊重)", () => {
+    localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
+    render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
+    expect(modeRadios().offline).toBeChecked();
+    expect(modeRadios().online).not.toBeChecked();
   });
 
   test("engines を渡さず保存値がオンラインなら、既定の API 実装が /api/calc/bulk に POST する(WASM は使わない)", async () => {
@@ -320,7 +333,8 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     expect(fetchMock.mock.calls.some(([input]) => urlOf(input).includes("engine.wasm"))).toBe(false);
   });
 
-  test("既定(オフライン)では offline の engine で計算し、online の engine には触れない", async () => {
+  test("保存済みがオフラインなら offline の engine で計算し、online の engine には触れない", async () => {
+    localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
     const offlineEngine = createFakeEngine();
     const onlineEngine = createFakeEngine();
     const { attacker, defender } = await exampleSpeciesPair();
@@ -337,7 +351,26 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     expect(onlineEngine.calcRequests).toHaveLength(0);
   });
 
+  test("既定(オンライン)では online の engine で計算し、offline の engine には触れない", async () => {
+    const offlineEngine = createFakeEngine();
+    const onlineEngine = createFakeEngine();
+    const { attacker, defender } = await exampleSpeciesPair();
+    const user = userEvent.setup();
+    render(<App engines={{ offline: offlineEngine, online: onlineEngine }} />);
+
+    await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
+    await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
+
+    await waitFor(() => {
+      expect(onlineEngine.bulkRequests.length).toBeGreaterThan(0);
+    });
+    expect(offlineEngine.bulkRequests).toHaveLength(0);
+    expect(offlineEngine.calcRequests).toHaveLength(0);
+  });
+
   test("オンラインに切り替えると、以後の計算は online の engine に送り、offline の engine は呼ばない", async () => {
+    // 既定がオンラインになったため、オフラインから始める前提を保存値で明示する(ADR-0313)。
+    localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
     const offlineEngine = createFakeEngine();
     const onlineEngine = createFakeEngine();
     const { attacker, defender, other } = await exampleSpeciesPair();
@@ -406,6 +439,8 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
   });
 
   test("選んだモードは localStorage に保存され、アプリを開き直しても保たれる", async () => {
+    // 既定がオンラインになったため、オフライン保存済みから始めて切り替えを確かめる(ADR-0313)。
+    localStorage.setItem(CALC_MODE_STORAGE_KEY, "offline");
     const engines = { offline: createFakeEngine(), online: createFakeEngine() };
     const user = userEvent.setup();
     const { unmount } = render(<App engines={engines} />);
@@ -421,10 +456,10 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     expect(localStorage.getItem(CALC_MODE_STORAGE_KEY)).toBe("offline");
   });
 
-  test("保存値が壊れていてもオフラインで開く", () => {
+  test("保存値が壊れていても既定(オンライン)で開く", () => {
     localStorage.setItem(CALC_MODE_STORAGE_KEY, "broken");
     render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
-    expect(modeRadios().offline).toBeChecked();
+    expect(modeRadios().online).toBeChecked();
   });
 
   test("オンラインで API に届かなくても、自動でオフラインに切り替えない(エラーを出す)", async () => {

@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/internal/httpmetrics"
 	"example.com/pokecalc/services/record/internal/store"
 )
 
@@ -42,7 +43,10 @@ func NewServer(st store.Store) *Server {
 func NewHandler(st store.Store) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
+	m := httpmetrics.New()
+	e.Use(m.Middleware())
 	e.Use(recoverMiddleware)
+	e.GET(httpmetrics.Path, m.Handler())
 
 	registerRecordRoutes(e, NewServer(st))
 	e.GET("/healthz", healthzHandler)

@@ -1,4 +1,4 @@
-// issue 274(ADR-0312): 計算画面の「詳細」。開閉ボタンと、急所・やけど・天候・フィールド・防御側の壁・攻撃側のランクの入力。
+// issue 274(ADR-0312): 計算画面の「詳細」。開閉ボタンと、急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランクの入力。
 // 状態は持たない(条件は CalcScreen が持つ。閉じても消さない)。開閉の状態だけここに持つ。閉じている間は中を DOM に出さない。
 
 import { useId, useState, type ReactElement } from "react";
@@ -10,6 +10,7 @@ import {
   clampRank,
   formatRank,
   type CalcConditions,
+  type EditableDefenderRankStat,
   type EditableRankStat,
   type TerrainId,
   type WeatherId,
@@ -22,6 +23,8 @@ interface CalcConditionsPanelProps {
   readonly onChange: (next: CalcConditions) => void;
   /** 編集するランクのステータス(選択中の技の分類で決まる)。 */
   readonly rankStat: EditableRankStat;
+  /** 編集する防御側のランクのステータス(選択中の技の分類で決まる)。 */
+  readonly defenderRankStat: EditableDefenderRankStat;
 }
 
 interface RadioGroupProps<T extends string> {
@@ -60,13 +63,22 @@ export function CalcConditionsPanel({
   conditions,
   onChange,
   rankStat,
+  defenderRankStat,
 }: CalcConditionsPanelProps): ReactElement {
   const [open, setOpen] = useState(false);
   const bodyId = useId();
   const rank = conditions.ranks[rankStat];
+  const defenderRank = conditions.defenderRanks[defenderRankStat];
 
   function setRank(next: number): void {
     onChange({ ...conditions, ranks: { ...conditions.ranks, [rankStat]: clampRank(next) } });
+  }
+
+  function setDefenderRank(next: number): void {
+    onChange({
+      ...conditions,
+      defenderRanks: { ...conditions.defenderRanks, [defenderRankStat]: clampRank(next) },
+    });
   }
 
   return (
@@ -164,6 +176,34 @@ export function CalcConditionsPanel({
                 disabled={rank >= MAX_RANK}
                 onClick={() => {
                   setRank(rank + 1);
+                }}
+              >
+                {calcConditionsText.rankUpSymbol}
+              </button>
+            </fieldset>
+            <fieldset className="calc-conditions__group">
+              <legend className="calc-conditions__legend">{calcConditionsText.defenderRanksLabel}</legend>
+              <button
+                type="button"
+                className="calc-conditions__rank-button"
+                aria-label={calcConditionsText.defenderRankDownLabel}
+                disabled={defenderRank <= MIN_RANK}
+                onClick={() => {
+                  setDefenderRank(defenderRank - 1);
+                }}
+              >
+                {calcConditionsText.rankDownSymbol}
+              </button>
+              <span className="calc-conditions__rank-value">
+                {formatRank(defenderRankStat, defenderRank)}
+              </span>
+              <button
+                type="button"
+                className="calc-conditions__rank-button"
+                aria-label={calcConditionsText.defenderRankUpLabel}
+                disabled={defenderRank >= MAX_RANK}
+                onClick={() => {
+                  setDefenderRank(defenderRank + 1);
                 }}
               >
                 {calcConditionsText.rankUpSymbol}

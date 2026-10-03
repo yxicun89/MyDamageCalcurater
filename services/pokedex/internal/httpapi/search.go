@@ -23,6 +23,9 @@ const (
 	minSearchLimit     = 1
 	maxSearchLimit     = 200
 
+	// maxSearchOffset は learners の offset の上限(契約の maximum。int32 に収まる安全側の値)。
+	maxSearchOffset = 10000
+
 	// maxBatchIDsCount は getMovesByIds の ids の件数上限(契約の maxItems と同じ。ADR-0208 の
 	// 前例どおり、生成ラッパは配列のスキーマを検証しないためハンドラで自前に検査する)。
 	maxBatchIDsCount = 64
@@ -53,6 +56,17 @@ func resolveLimit(p *int) (int32, error) {
 	}
 	if *p < minSearchLimit || *p > maxSearchLimit {
 		return 0, newError(api.InvalidInput, "limit は %d〜%d でなければならない: %d", minSearchLimit, maxSearchLimit, *p)
+	}
+	return int32(*p), nil
+}
+
+// resolveOffset は offset の既定値(0)・範囲(0〜10000)を検証する。DB を呼ぶ前に行う。
+func resolveOffset(p *int) (int32, error) {
+	if p == nil {
+		return 0, nil
+	}
+	if *p < 0 || *p > maxSearchOffset {
+		return 0, newError(api.InvalidInput, "offset は 0〜%d でなければならない: %d", maxSearchOffset, *p)
 	}
 	return int32(*p), nil
 }
@@ -265,6 +279,43 @@ func (s *Server) ListNatures(ctx *echo.Context, params api.ListNaturesParams) er
 	out := make([]api.Nature, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, api.Nature{Id: r.ID, NameJa: r.NameJa, Plus: statKeyPtr(r.Plus), Minus: statKeyPtr(r.Minus)})
+	}
+	return ctx.JSON(http.StatusOK, out)
+}
+
+// ListMoveLearners は GET /api/pokedex/moves/{key}/learners(技を覚える種族の一覧。ADR-0251)。
+// 判定の順: 入力の検証 → 既定のレギュレーション(無ければ 503) → 技の存在(無ければ 404) → 逆引き。
+// 技がマスタにあって使用可能集合の外なら 200 []。
+func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.ListMoveLearnersParams) error {
+	limit, err := resolveLimit(params.Limit)
+	if err != nil {
+		return err
+	}
+	offset, err := resolveOffset(params.Offset)
+	if err != nil {
+		return err
+	}
+	reqCtx := ctx.Request().Context()
+	reg, err := s.q.GetDefaultRegulation(reqCtx)
+	if err != nil {
+		return unavailable("ListMoveLearners/GetDefaultRegulation", err)
+	}
+	move, err := s.q.GetMove(reqCtx, key)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return newError(api.NotFound, "技が無い: %s", key)
+		}
+		return unavailable("ListMoveLearners/GetMove", err)
+	}
+	rows, err := s.q.ListMoveLearners(reqCtx, store.ListMoveLearnersParams{
+		RegulationID: reg.ID, MoveID: move.ID, Limit: limit, Offset: offset,
+	})
+	if err != nil {
+		return unavailable("ListMoveLearners", err)
+	}
+	out := make([]api.SpeciesSummary, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, api.SpeciesSummary{Key: r.Key, DexNo: int(r.DexNo), Form: int(r.Form), NameJa: r.NameJa, Types: typesOf(r.Type1, r.Type2)})
 	}
 	return ctx.JSON(http.StatusOK, out)
 }

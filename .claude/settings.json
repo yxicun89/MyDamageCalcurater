@@ -3,6 +3,7 @@
   "permissions": {
     "defaultMode": "auto",
     "allow": [
+      "Bash(scripts/pr-merge.sh *)",
       "Bash(make test*)",
       "Bash(make lint*)",
       "Bash(make build*)",
