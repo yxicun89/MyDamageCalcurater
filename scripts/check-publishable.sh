@@ -108,7 +108,7 @@ readonly GOLDEN_DIR="testdata/golden"
 # NameJa は、この接頭辞で始まる架空名か、日本語を含まない値(プレースホルダ "?" など。
 # 実在の日本語名を入れないという目的に反しない)だけを許す。
 readonly FICTIONAL_NAME_PREFIX="テスト"
-readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors.json" "services/*_test.go" "services/pokedex/importer/testdata/*" "services/pokedex/internal/storetest/*")
+readonly -a NAMEJA_PATHSPECS=("engine/*_test.go" "engine/wasmapi/testdata/vectors*.json" "services/*_test.go" "services/pokedex/importer/testdata/*" "services/pokedex/internal/storetest/*")
 
 # importer の架空データ(JSON の文字列値すべてが対象。ADR-0101)。
 readonly IMPORTER_TESTDATA_DIR="services/pokedex/importer/testdata"
