@@ -4608,6 +4608,835 @@ public enum Operations {
             }
         }
     }
+    /// この端末のお気に入り(手動ピン留めした個体)を一覧する
+    ///
+    /// `X-Device-Id` の端末のお気に入りだけを、更新の新しい順(同時刻は `id` の新しい順)で返す
+    /// (requirements.md §2「お気に入り(手動ピン留め)」・ADR-0209 §3 #3・§6-1・§6-3・ADR-0227)。
+    /// 他端末のお気に入りは混ざらない。1件も無ければ空配列(404 にしない)。
+    ///
+    /// ページングは持たない(1端末が持てるお気に入りは **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0227 §3)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)`.
+    public enum ListFavorites {
+        public static let id: Swift.String = "listFavorites"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/record/favorites/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/GET/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/GET/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListFavorites.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListFavorites.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListFavorites.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListFavorites.Input.Headers) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/GET/responses/200/content/application\/json`.
+                    case json([Components.Schemas.Favorite])
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: [Components.Schemas.Favorite] {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListFavorites.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListFavorites.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// この端末のお気に入り(更新の新しい順)。無ければ空配列
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListFavorites.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListFavorites.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/GET/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/GET/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListFavorites.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListFavorites.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+            /// (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+            ///
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.ListFavorites.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.ListFavorites.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// 個体を1つお気に入りにする(ピン留め)
+    ///
+    /// ピン留めした時点の個体を**スナップショットとして**保存する(計算イベントを参照しない。ADR-0209 §3 #3)。
+    /// `id` と `createdAt` / `updatedAt` はサーバーが決める(要求に含めたら 400 `unknown_field`)。
+    ///
+    /// - **冪等**: この端末に同じ内容(`label` と、既定値を補った `individual`)のお気に入りがすでにあれば、
+    ///   新しく作らずにそれを **200** で返す(`updatedAt` だけ現在時刻に進むので一覧の先頭に来る)。
+    ///   新しく作ったときは **201**。二重送信で同じピンが2つにならない(ADR-0227 §2)。
+    /// - 1端末が持てるお気に入りは **100件**まで。上限に達している端末からの(重複でない)作成は 400 `invalid_input`。
+    /// - `individual.speciesKey` などの ID はマスタと照合しない(record-svc は pokedex-svc に依存しない。
+    ///   存在しない ID でも保存できる。ADR-0227 §2・ADR-0213 §3 と同じ理由)。形式と範囲(SP・ランク・ラベルの長さ)は検証する。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)`.
+    public enum CreateFavorite {
+        public static let id: Swift.String = "createFavorite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/record/favorites/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateFavorite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateFavorite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CreateFavorite.Input.Headers
+            /// - Remark: Generated from `#/paths/api/record/favorites/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.FavoriteInput)
+            }
+            public var body: Operations.CreateFavorite.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.CreateFavorite.Input.Headers,
+                body: Operations.CreateFavorite.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/200/content/application\/json`.
+                    case json(Components.Schemas.Favorite)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Favorite {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateFavorite.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateFavorite.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// 同じ内容のお気に入りがすでにあった(新しく作らず、`updatedAt` を進めた既存のものを返す)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.CreateFavorite.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.CreateFavorite.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.Favorite)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.Favorite {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateFavorite.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateFavorite.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// 作ったお気に入り(サーバーが決めた `id` と時刻を含む)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateFavorite.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.CreateFavorite.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/500`.
+            ///
+            /// HTTP response code: `500 internalServerError`.
+            case internalServerError(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.internalServerError`.
+            ///
+            /// - Throws: An error if `self` is not `.internalServerError`.
+            /// - SeeAlso: `.internalServerError`.
+            public var internalServerError: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .internalServerError(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "internalServerError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/POST/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateFavorite.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateFavorite.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.CreateFavorite.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.CreateFavorite.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// お気に入りを1つ削除する(ピン留めを外す)
+    ///
+    /// 成功は 204(本文なし)。先に端末 ID で絞ってから `favoriteId` を照合する(ADR-0209 §6-2)。
+    /// この端末が持っていない `favoriteId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+    /// 同じお気に入りをもう一度削除しても 404(1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2 と同じ)。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/record/favorites/{favoriteId}`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)`.
+    public enum DeleteFavorite {
+        public static let id: Swift.String = "deleteFavorite"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/path`.
+            public struct Path: Sendable, Hashable {
+                /// お気に入りの ID(作成時にサーバーが発行する。ADR-0227 §2)。端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+                /// この端末が持っていない ID は、他端末のもの・実在しないもの・形式が違うものを区別せず 404 `not_found`(§6-2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/path/favoriteId`.
+                public var favoriteId: Components.Parameters.FavoriteId
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - favoriteId: お気に入りの ID(作成時にサーバーが発行する。ADR-0227 §2)。端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+                public init(favoriteId: Components.Parameters.FavoriteId) {
+                    self.favoriteId = favoriteId
+                }
+            }
+            public var path: Operations.DeleteFavorite.Input.Path
+            /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                /// クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                /// gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+                /// 下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+                ///
+                /// 保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+                /// (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+                /// 公開範囲・保持期間・端末単位の全削除は ADR-0209。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/header/X-Device-Id`.
+                public var xDeviceId: Components.Parameters.DeviceId
+                /// セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///
+                /// 保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+                /// (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+                ///
+                ///
+                /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/header/X-Session-Id`.
+                public var xSessionId: Components.Parameters.SessionId
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteFavorite.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - xDeviceId: クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+                ///   - xSessionId: セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+                ///   - accept:
+                public init(
+                    xDeviceId: Components.Parameters.DeviceId,
+                    xSessionId: Components.Parameters.SessionId,
+                    accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteFavorite.AcceptableContentType>] = .defaultValues()
+                ) {
+                    self.xDeviceId = xDeviceId
+                    self.xSessionId = xSessionId
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteFavorite.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.DeleteFavorite.Input.Path,
+                headers: Operations.DeleteFavorite.Input.Headers
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct NoContent: Sendable, Hashable {
+                /// Creates a new `NoContent`.
+                public init() {}
+            }
+            /// 削除した(本文なし)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/204`.
+            ///
+            /// HTTP response code: `204 noContent`.
+            case noContent(Operations.DeleteFavorite.Output.NoContent)
+            /// 削除した(本文なし)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/204`.
+            ///
+            /// HTTP response code: `204 noContent`.
+            public static var noContent: Self {
+                .noContent(.init())
+            }
+            /// The associated value of the enum case if `self` is `.noContent`.
+            ///
+            /// - Throws: An error if `self` is not `.noContent`.
+            /// - SeeAlso: `.noContent`.
+            public var noContent: Operations.DeleteFavorite.Output.NoContent {
+                get throws {
+                    switch self {
+                    case let .noContent(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "noContent",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/400`.
+            ///
+            /// HTTP response code: `400 badRequest`.
+            case badRequest(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.badRequest`.
+            ///
+            /// - Throws: An error if `self` is not `.badRequest`.
+            /// - SeeAlso: `.badRequest`.
+            public var badRequest: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .badRequest(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "badRequest",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/404`.
+            ///
+            /// HTTP response code: `404 notFound`.
+            case notFound(Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.notFound`.
+            ///
+            /// - Throws: An error if `self` is not `.notFound`.
+            /// - SeeAlso: `.notFound`.
+            public var notFound: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .notFound(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "notFound",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ServiceUnavailable: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/responses/503/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/record/favorites/{favoriteId}/DELETE/responses/503/content/application\/json`.
+                    case json(Components.Schemas._Error)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas._Error {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteFavorite.Output.ServiceUnavailable.Body
+                /// Creates a new `ServiceUnavailable`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteFavorite.Output.ServiceUnavailable.Body) {
+                    self.body = body
+                }
+            }
+            /// record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`)
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/503`.
+            ///
+            /// HTTP response code: `503 serviceUnavailable`.
+            case serviceUnavailable(Operations.DeleteFavorite.Output.ServiceUnavailable)
+            /// The associated value of the enum case if `self` is `.serviceUnavailable`.
+            ///
+            /// - Throws: An error if `self` is not `.serviceUnavailable`.
+            /// - SeeAlso: `.serviceUnavailable`.
+            public var serviceUnavailable: Operations.DeleteFavorite.Output.ServiceUnavailable {
+                get throws {
+                    switch self {
+                    case let .serviceUnavailable(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "serviceUnavailable",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// エラー
+            ///
+            /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)/responses/default`.
+            ///
+            /// HTTP response code: `default`.
+            case `default`(statusCode: Swift.Int, Components.Responses._Error)
+            /// The associated value of the enum case if `self` is `.`default``.
+            ///
+            /// - Throws: An error if `self` is not `.`default``.
+            /// - SeeAlso: `.`default``.
+            public var `default`: Components.Responses._Error {
+                get throws {
+                    switch self {
+                    case let .`default`(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "default",
+                            response: self
+                        )
+                    }
+                }
+            }
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// この端末の構築を一覧する
     ///
     /// `X-Device-Id` の端末の構築だけを、更新の新しい順(同時刻は `id` の昇順)で返す

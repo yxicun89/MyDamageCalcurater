@@ -1,5 +1,5 @@
 // Package httpapi は record-svc の HTTP 境界(ADR-0209 §5・§6)。生成物 api.ServerInterface を
-// 実装するが、実際にルートへ登録するのは record の2操作(GET listFrequentOpponents・
+// 実装するが、実際にルートへ登録するのは record の操作(GET listFrequentOpponents・お気に入りの3操作・
 // DELETE deleteRecordDeviceData)だけで、他サービスの操作(calc・pokedex・internal)は
 // api.ServerInterface を満たすためのスタブ(stubs.go)として 404 を返すだけ。
 //
@@ -61,6 +61,9 @@ func registerRecordRoutes(e *echo.Echo, srv *Server) {
 	wrapper := api.ServerInterfaceWrapper{Handler: srv}
 	e.GET("/api/record/frequent-opponents", wrapper.ListFrequentOpponents)
 	e.DELETE("/api/record/device-data", wrapper.DeleteRecordDeviceData)
+	e.GET("/api/record/favorites", wrapper.ListFavorites)
+	e.POST("/api/record/favorites", wrapper.CreateFavorite)
+	e.DELETE("/api/record/favorites/:favoriteId", wrapper.DeleteFavorite)
 }
 
 func healthzHandler(c *echo.Context) error {

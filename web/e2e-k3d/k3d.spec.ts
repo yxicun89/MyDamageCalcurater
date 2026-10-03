@@ -10,6 +10,7 @@ import {
   combobox,
   openApp,
 } from "../e2e/support/calcPage.ts";
+import { isCountedResponseFailure } from "../e2e/support/expectedFailures.ts";
 
 const HEADERS = {
   "X-Device-Id": "00000000-0000-4000-8000-00000000e2e1",
@@ -19,8 +20,10 @@ const HEADERS = {
 function trackFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("response", (response) => {
-    if (response.status() >= 400) {
-      failures.push(`${response.status()} ${new URL(response.url()).pathname}`);
+    const pathname = new URL(response.url()).pathname;
+    // /images/manifest.json の 404 だけは正常(画像なし = エンブレム。ADR-0807)。許容は expectedFailures.ts に狭く置く。
+    if (isCountedResponseFailure(response.status(), pathname)) {
+      failures.push(`${response.status()} ${pathname}`);
     }
   });
   page.on("pageerror", (error) => failures.push(`pageerror ${error.message}`));

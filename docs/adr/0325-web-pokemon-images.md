@@ -41,3 +41,8 @@
 - `<img>` の寸法は属性の既定値(thumb 32 / detail 128)に加え、各画面の CSS クラス(エンブレムと同じ寸法)が決める。
 - 起動時の `/images/manifest.json` の fetch が増えるため、「engine.wasm・API を読まない」ことを確かめる既存テスト(App.test.tsx 2件・App.routing.test.tsx 2件)は、`/images/` への fetch だけ数えないよう最小限直した(確かめる対象は変えていない)。
   e2e/images.spec.ts の HTML フォールバックのテストは、暖機の `/api/calc` の 404 コンソールログを数えないよう除外した。
+
+## 追記(2026-10-04): k3d の e2e は /images/manifest.json の 404 を失敗に数えない
+k3d(画像なしが既定)の gateway は `/images/manifest.json` に JSON の 404 を返す。ADR-0807 はこれを正常(エンブレムにフォールバック)としているので、
+`web/e2e-k3d/k3d.spec.ts` の失敗収集は、**404 かつパスが `/images/manifest.json` と完全一致**のものだけ許容する(`web/e2e/support/expectedFailures.ts`。
+単体テストで、ほかの 4xx/5xx・画像本体の 404・別パスは従来どおり失敗に数えることを固定)。k3d で空の manifest を配信する案は採らない(画像なしが既定)。
