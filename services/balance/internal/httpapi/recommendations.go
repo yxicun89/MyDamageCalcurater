@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"errors"
+	"example.com/pokecalc/services/balance/internal/httpguard"
 	"net/http"
 
 	"example.com/pokecalc/services/balance/internal/api"
@@ -99,6 +100,10 @@ func recommendations(c *echo.Context, deps Dependencies, slots chan struct{}) er
 	}
 	if err := resolveThreatsAbilities(deps, entries, members); err != nil {
 		return resolveError(c, err)
+	}
+
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
 	}
 
 	// ADR-0409: take a concurrency slot just before the catalog scan, without waiting.

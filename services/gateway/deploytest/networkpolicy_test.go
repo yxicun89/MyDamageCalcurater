@@ -488,7 +488,8 @@ func allowedFlows() []npFlow {
 	add("judge → pokedex", app("judge"), app("pokedex"), podPort)
 	add("judge → calc", app("judge"), app("calc"), podPort)
 	// DB
-	for _, n := range []string{"pokedex", "pokedex-migrate", "pokedex-import"} {
+	for _, n := range []string{"pokedex", "pokedex-migrate", "pokedex-import", "balance", "speed"} {
+		// balance・speed は initContainer readmodel-export(pokedex export)のため。ADR-0412 §4
 		add(n+" → mysql", app(n), app("mysql"), mysqlPort)
 	}
 	for _, n := range []string{"record-migrate", "team-migrate"} {
@@ -524,6 +525,9 @@ func deniedFlows() []npFlow {
 	add("pokedex-migrate → pokedex", app("pokedex-migrate"), app("pokedex"), podPort)
 	add("gateway → nats", app("gateway"), app("nats"), natsPort)
 	add("record-migrate → mysql", app("record-migrate"), app("mysql"), mysqlPort)
+	add("team-migrate → mysql", app("team-migrate"), app("mysql"), mysqlPort)
+	add("nats → mysql", app("nats"), app("mysql"), mysqlPort)
+	add("balance → mysql の 8080 番(許可は 3306 だけ)", app("balance"), app("mysql"), podPort)
 	add("pokedex → tidb", app("pokedex"), ext(tidbServerPod), tidbPort)
 	// 他 namespace・外部
 	add("default namespace の一時 Pod → pokedex(/internal)", ext(strayPod), app("pokedex"), podPort)

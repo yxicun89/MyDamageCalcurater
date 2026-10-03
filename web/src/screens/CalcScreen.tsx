@@ -830,6 +830,7 @@ function SpeciesCard({
           label={speciesSelectLabel}
           masterSearch={masterSearch}
           onResolved={onSpeciesResolved}
+          selectedNameJa={species?.nameJa ?? null}
         />
       )}
       {/* P4-16b(ADR-0304 A-10): 検索中(まだ種族が解決していない)は持ち物欄も出さない

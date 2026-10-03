@@ -133,7 +133,7 @@ func TestBuildTableAllPresets(t *testing.T) {
 	p9001, p9002, p9003 := roster.Pokemon[1], roster.Pokemon[2], roster.Pokemon[0]
 	all := []PresetID{"uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"}
 
-	got, err := BuildTable(roster, all)
+	got, err := BuildTable(roster, all, TableField{})
 	if err != nil {
 		t.Fatalf("BuildTable error = %v", err)
 	}
@@ -171,7 +171,7 @@ func TestBuildTableSameBaseSpeed(t *testing.T) {
 	earlier := Pokemon{PokemonID: "9002-000", NameJa: "テストニバンメ", Types: []string{"water"}, BaseSpeed: 81}
 	roster := Roster{RegulationID: "example", Pokemon: []Pokemon{later, earlier}}
 
-	got, err := BuildTable(roster, []PresetID{"max", "uninvested", "max-scarf", "max-plus1"})
+	got, err := BuildTable(roster, []PresetID{"max", "uninvested", "max-scarf", "max-plus1"}, TableField{})
 	if err != nil {
 		t.Fatalf("BuildTable error = %v", err)
 	}
@@ -243,7 +243,7 @@ func TestBuildTableSubset(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			got, err := BuildTable(tableRoster(), tt.presets)
+			got, err := BuildTable(tableRoster(), tt.presets, TableField{})
 			if err != nil {
 				t.Fatalf("BuildTable error = %v", err)
 			}
@@ -258,11 +258,11 @@ func TestBuildTableSubset(t *testing.T) {
 func TestBuildTableIgnoresPresetOrder(t *testing.T) {
 	t.Parallel()
 
-	forward, err := BuildTable(tableRoster(), []PresetID{"uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"})
+	forward, err := BuildTable(tableRoster(), []PresetID{"uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"}, TableField{})
 	if err != nil {
 		t.Fatalf("BuildTable(forward) error = %v", err)
 	}
-	shuffled, err := BuildTable(tableRoster(), []PresetID{"max-plus1", "uninvested", "max-plus2", "max", "max-scarf", "neutral-max"})
+	shuffled, err := BuildTable(tableRoster(), []PresetID{"max-plus1", "uninvested", "max-plus2", "max", "max-scarf", "neutral-max"}, TableField{})
 	if err != nil {
 		t.Fatalf("BuildTable(shuffled) error = %v", err)
 	}
@@ -275,7 +275,7 @@ func TestBuildTableIgnoresPresetOrder(t *testing.T) {
 func TestBuildTableTiersInvariant(t *testing.T) {
 	t.Parallel()
 
-	got, err := BuildTable(tableRoster(), []PresetID{"uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"})
+	got, err := BuildTable(tableRoster(), []PresetID{"uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"}, TableField{})
 	if err != nil {
 		t.Fatalf("BuildTable error = %v", err)
 	}
@@ -310,7 +310,7 @@ func TestBuildTableRejectsInvalidPresets(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			if _, err := BuildTable(tableRoster(), tt.presets); !errors.Is(err, tt.want) {
+			if _, err := BuildTable(tableRoster(), tt.presets, TableField{}); !errors.Is(err, tt.want) {
 				t.Errorf("BuildTable(%v) error = %v, want %v", tt.presets, err, tt.want)
 			}
 		})
@@ -325,7 +325,7 @@ func TestBuildTableWrapsSpeedError(t *testing.T) {
 	for _, baseSpeed := range []int{0, 256} {
 		roster := tableRoster()
 		roster.Pokemon = append(roster.Pokemon, Pokemon{PokemonID: "9009-000", NameJa: "テストフセイ", Types: []string{"normal"}, BaseSpeed: baseSpeed})
-		if _, err := BuildTable(roster, []PresetID{"max"}); !errors.Is(err, ErrInvalidBaseSpeed) {
+		if _, err := BuildTable(roster, []PresetID{"max"}, TableField{}); !errors.Is(err, ErrInvalidBaseSpeed) {
 			t.Errorf("BuildTable with base speed %d error = %v, want %v", baseSpeed, err, ErrInvalidBaseSpeed)
 		}
 	}

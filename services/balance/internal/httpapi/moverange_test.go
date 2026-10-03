@@ -91,8 +91,8 @@ func postMoveRange(t *testing.T, server http.Handler, body string) *httptest.Res
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, moveRangePath, strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("X-Device-Id", "test-device")
-	request.Header.Set("X-Session-Id", "test-session")
+	request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(recorder, request)
 	return recorder
 }
@@ -411,12 +411,15 @@ func TestMoveRangeRejectsOversizedBody(t *testing.T) {
 func TestMoveRangeRequiresRequestContext(t *testing.T) {
 	t.Parallel()
 
-	for _, tt := range []struct{ name, deviceID, sessionID string }{
-		{name: "missing both"},
-		{name: "missing device", sessionID: "test-session"},
-		{name: "missing session", deviceID: "test-device"},
-		{name: "blank device", deviceID: "   ", sessionID: "test-session"},
-		{name: "blank session", deviceID: "test-device", sessionID: "\t"},
+	for _, tt := range []struct {
+		name, deviceID, sessionID string
+		wantCode                  api.ErrorCode
+	}{
+		{name: "missing both", wantCode: api.MissingHeader},
+		{name: "missing device", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.MissingHeader},
+		{name: "missing session", deviceID: "11111111-1111-4111-8111-111111111111", wantCode: api.MissingHeader},
+		{name: "blank device", deviceID: "   ", sessionID: "22222222-2222-4222-a222-222222222222", wantCode: api.InvalidHeader},
+		{name: "blank session", deviceID: "11111111-1111-4111-8111-111111111111", sessionID: "\t", wantCode: api.InvalidHeader},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -433,8 +436,8 @@ func TestMoveRangeRequiresRequestContext(t *testing.T) {
 			if recorder.Code != http.StatusBadRequest {
 				t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
 			}
-			if got := decodeError(t, recorder.Body.Bytes()); got.Code != api.MissingRequestContext {
-				t.Errorf("code = %q, want missing_request_context", got.Code)
+			if got := decodeError(t, recorder.Body.Bytes()); got.Code != tt.wantCode {
+				t.Errorf("code = %q, want %q", got.Code, tt.wantCode)
 			}
 		})
 	}
@@ -465,7 +468,7 @@ func TestMoveRangeDecisionOrder(t *testing.T) {
 		wantCode    api.ErrorCode
 		wantMessage string
 	}{
-		{name: "headers before body and read models", deps: none, noHeaders: true, body: `{"moveIds":[]}`, wantStatus: http.StatusBadRequest, wantCode: api.MissingRequestContext},
+		{name: "headers before body and read models", deps: none, noHeaders: true, body: `{"moveIds":[]}`, wantStatus: http.StatusBadRequest, wantCode: api.MissingHeader},
 		{name: "invalid body before missing read models", deps: none, body: `{"moveIds":[]}`, wantStatus: http.StatusBadRequest, wantCode: api.InvalidRequest},
 		{name: "duplicate moveId before missing read models", deps: none, body: `{"moveIds":["move-9001","move-9001"]}`, wantStatus: http.StatusBadRequest, wantCode: api.InvalidRequest},
 		{name: "oversized body before missing read models", deps: none, body: oversized, wantStatus: http.StatusRequestEntityTooLarge, wantCode: api.RequestTooLarge},
@@ -487,8 +490,8 @@ func TestMoveRangeDecisionOrder(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, moveRangePath, strings.NewReader(tt.body))
 			request.Header.Set("Content-Type", "application/json")
 			if !tt.noHeaders {
-				request.Header.Set("X-Device-Id", "test-device")
-				request.Header.Set("X-Session-Id", "test-session")
+				request.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+				request.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 			}
 			New(tt.deps).ServeHTTP(recorder, request)
 			if recorder.Code != tt.wantStatus {
@@ -589,8 +592,8 @@ func TestMoveRangeDoesNotAffectOtherEndpoints(t *testing.T) {
 	analyze := httptest.NewRecorder()
 	analyzeRequest := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/analyze", strings.NewReader(`{"members":[{"pokemonId":"9001-000"}]}`))
 	analyzeRequest.Header.Set("Content-Type", "application/json")
-	analyzeRequest.Header.Set("X-Device-Id", "test-device")
-	analyzeRequest.Header.Set("X-Session-Id", "test-session")
+	analyzeRequest.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	analyzeRequest.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(analyze, analyzeRequest)
 	if analyze.Code != http.StatusOK {
 		t.Errorf("analyze: status = %d, want 200; body=%s", analyze.Code, analyze.Body.String())
@@ -599,8 +602,8 @@ func TestMoveRangeDoesNotAffectOtherEndpoints(t *testing.T) {
 	coverage := httptest.NewRecorder()
 	coverageRequest := httptest.NewRequest(http.MethodPost, "/api/balance/v1/team-balance/coverage", strings.NewReader(`{"members":[{"pokemonId":"9001-000","moveIds":["move-9001"]}]}`))
 	coverageRequest.Header.Set("Content-Type", "application/json")
-	coverageRequest.Header.Set("X-Device-Id", "test-device")
-	coverageRequest.Header.Set("X-Session-Id", "test-session")
+	coverageRequest.Header.Set("X-Device-Id", "11111111-1111-4111-8111-111111111111")
+	coverageRequest.Header.Set("X-Session-Id", "22222222-2222-4222-a222-222222222222")
 	server.ServeHTTP(coverage, coverageRequest)
 	if coverage.Code != http.StatusOK {
 		t.Errorf("coverage: status = %d, want 200; body=%s", coverage.Code, coverage.Body.String())
