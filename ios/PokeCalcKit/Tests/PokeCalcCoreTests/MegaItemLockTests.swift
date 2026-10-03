@@ -106,7 +106,7 @@ final class MegaItemLockTests: XCTestCase {
     // MARK: - 文言(Web と同じ語)
 
     func testStoneName() {
-        XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: "ルカリオ"), "ルカリオのメガストーン")
+        XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: "テストルカ"), "テストルカのメガストーン")
         XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: nil), "メガストーン", "null なら名前を推測せず「メガストーン」だけ")
     }
 
@@ -114,10 +114,10 @@ final class MegaItemLockTests: XCTestCase {
         XCTAssertEqual(MegaItemText.lockedReason, "メガシンカ: メガストーンを持ちます")
         XCTAssertEqual(MegaItemText.missingReason, "メガシンカ: メガストーンがマスタに見つかりません")
         XCTAssertEqual(MegaItemText.compareDisabledReason, "メガシンカ: 防御側の持ち物はメガストーンに固定されるため、候補は比較しません")
-        XCTAssertEqual(MegaItemText.fixedItemName("ルカリオのメガストーン"), "持ち物: ルカリオのメガストーン")
+        XCTAssertEqual(MegaItemText.fixedItemName("テストルカのメガストーン"), "持ち物: テストルカのメガストーン")
         XCTAssertEqual(
-            MegaItemText.correctedNotice("ルカリオのメガストーン"),
-            "メガシンカのため持ち物をルカリオのメガストーンに直しました。保存すると反映されます")
+            MegaItemText.correctedNotice("テストルカのメガストーン"),
+            "メガシンカのため持ち物をテストルカのメガストーンに直しました。保存すると反映されます")
         XCTAssertEqual(MegaItemText.clearedNotice, "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます")
     }
 

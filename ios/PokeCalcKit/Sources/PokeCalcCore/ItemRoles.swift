@@ -6,7 +6,9 @@ public enum ItemRoleRequirement: Equatable, Sendable {
     case attacker
     /// 防御側の欄(`roles` に defender を含む持ち物)。
     case defender
-    /// 攻守が決まらない欄(どちらかの役割を持つ持ち物。構築・判定・調整)。
+    /// 攻守の両方をする欄(どちらかの役割を持つ持ち物。判定・調整。Web の `either`)。
+    case either
+    /// 役割で絞らない欄(メガストーンだけ外す。構築。Web の `any`。ADR-0326 §2)。
     case any
 }
 
@@ -24,7 +26,8 @@ public enum ItemRoleFilter {
             switch requirement {
             case .attacker: return roles.contains(.attacker)
             case .defender: return roles.contains(.defender)
-            case .any: return !roles.isEmpty
+            case .either: return !roles.isEmpty
+            case .any: return true
             }
         }
     }

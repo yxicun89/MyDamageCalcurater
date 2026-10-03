@@ -200,7 +200,7 @@ struct CalcConditionsSection: View {
             .accessibilityValue(selectedName)
             .accessibilityIdentifier("calcDefenderAbilityPicker")
         }
-        .task(id: viewModel.defenderSpeciesKey) { await viewModel.loadDefenderAbilityOptions() }
+        // 防御側の詳細は `DefenderCardView` が種族の変更ごとに読む(ここで重ねて読まない。ADR-0509 §4)。
     }
 
     /// 天候(1つ選ぶピル。既定 なし)。

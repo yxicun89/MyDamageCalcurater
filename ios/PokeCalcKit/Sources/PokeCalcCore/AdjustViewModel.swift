@@ -707,9 +707,9 @@ private typealias MasterSpeciesSearchField = MasterSearchField<SpeciesSummary>
 // MARK: - 持ち物の役割・メガ固定(ADR-0509)
 
 extension AdjustViewModel {
-    /// 自分の持ち物の選択肢(`.any`。モードを後から変えられるため。いまの選択は残す)。
+    /// 自分の持ち物の選択肢(`.either`。モードを後から変えられるため。いまの選択は残す)。
     public var ownItemOptions: [Item] {
-        ItemRoleFilter.options(itemOptions, for: .any, keeping: ownItemId)
+        ItemRoleFilter.options(itemOptions, for: .either, keeping: ownItemId)
     }
 
     public var ownItemLock: MegaItemLock {

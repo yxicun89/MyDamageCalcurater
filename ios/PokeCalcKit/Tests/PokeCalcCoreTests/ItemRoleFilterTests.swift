@@ -4,7 +4,7 @@ import XCTest
 
 /// 持ち物を役割で絞る唯一の関数(ADR-0509 §2。ADR-0175 §4 の規約)。表駆動。
 ///
-/// - 選択肢 = `roles` にその側の役割を含む持ち物(`.any` はどちらかを含む)。並びはマスタの順のまま。
+/// - 選択肢 = `roles` にその側の役割を含む持ち物(`.either` はどちらかを含む)。並びはマスタの順のまま。
 /// - `roles == nil`(古いサーバー・古いモック)は絞らない。`roles` が空(効果なし・メガストーン)は出さない。
 /// - `isMegaStone == true` は `roles` に関係なく出さない。
 /// - `keeping`(いまの選択)は規則で外れても `items` にあればその1件だけ残す(§5)。
@@ -24,7 +24,9 @@ final class ItemRoleFilterTests: XCTestCase {
         let cases: [(name: String, requirement: ItemRoleRequirement, expected: [String])] = [
             ("攻撃側: attacker を含むものと不明", .attacker, [Self.attackOnly.id, Self.both.id, Self.unknown.id]),
             ("防御側: defender を含むものと不明", .defender, [Self.defenseOnly.id, Self.both.id, Self.unknown.id]),
-            ("両方: どちらかを含むものと不明", .any, [Self.attackOnly.id, Self.defenseOnly.id, Self.both.id, Self.unknown.id]),
+            ("either: どちらかを含むものと不明", .either, [Self.attackOnly.id, Self.defenseOnly.id, Self.both.id, Self.unknown.id]),
+            ("any: 役割を見ず、メガストーンだけ外す", .any,
+             [Self.attackOnly.id, Self.defenseOnly.id, Self.both.id, Self.noRole.id, Self.unknown.id]),
         ]
         for testCase in cases {
             XCTAssertEqual(
@@ -38,14 +40,14 @@ final class ItemRoleFilterTests: XCTestCase {
             Item(id: "test-legacy-a", nameJa: "テストむかしA"),
             Item(id: "test-legacy-b", nameJa: "テストむかしB"),
         ]
-        for requirement in [ItemRoleRequirement.attacker, .defender, .any] {
+        for requirement in [ItemRoleRequirement.attacker, .defender, .either, .any] {
             XCTAssertEqual(ItemRoleFilter.options(legacy, for: requirement), legacy, "\(requirement)")
         }
     }
 
     /// メガストーンはどの欄にも出さない(`roles` が nil の不整合データでも)。
     func testMegaStonesAreNeverOptions() {
-        for requirement in [ItemRoleRequirement.attacker, .defender, .any] {
+        for requirement in [ItemRoleRequirement.attacker, .defender, .either, .any] {
             let ids = ItemRoleFilter.options(Self.master, for: requirement).map(\.id)
             XCTAssertFalse(ids.contains(Self.stone.id), "\(requirement)")
             XCTAssertFalse(ids.contains(Self.unknownStone.id), "\(requirement)")
@@ -56,7 +58,7 @@ final class ItemRoleFilterTests: XCTestCase {
     func testOrderFollowsMaster() {
         let reversed = Array(Self.master.reversed())
         XCTAssertEqual(
-            ItemRoleFilter.options(reversed, for: .any).map(\.id),
+            ItemRoleFilter.options(reversed, for: .either).map(\.id),
             [Self.unknown.id, Self.both.id, Self.defenseOnly.id, Self.attackOnly.id])
     }
 

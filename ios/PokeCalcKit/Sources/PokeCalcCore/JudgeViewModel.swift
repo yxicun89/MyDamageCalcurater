@@ -628,14 +628,14 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
 // MARK: - 持ち物の役割・メガ固定(ADR-0509)
 
 extension JudgeViewModel {
-    /// 自分・候補の持ち物の選択肢(`.any`。判定は攻守の両方をするため)。
+    /// 自分・候補の持ち物の選択肢(`.either`。判定は攻守の両方をするため)。
     public var selectableItemOptions: [Item] {
-        ItemRoleFilter.options(itemOptions, for: .any)
+        ItemRoleFilter.options(itemOptions, for: .either)
     }
 
     /// `target` の選択肢(`selectableItemOptions` + そのいまの持ち物を残す)。
     public func selectableItemOptions(for target: JudgeTarget) -> [Item] {
-        ItemRoleFilter.options(itemOptions, for: .any, keeping: draft(for: target)?.itemId)
+        ItemRoleFilter.options(itemOptions, for: .either, keeping: draft(for: target)?.itemId)
     }
 
     public func itemLock(for target: JudgeTarget) -> MegaItemLock {

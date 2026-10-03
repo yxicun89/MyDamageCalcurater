@@ -463,7 +463,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
 // MARK: - 持ち物の役割・メガ固定(ADR-0509)
 
 extension TeamEditViewModel {
-    /// メンバーの持ち物の選択肢(`.any`。そのメンバーのいまの持ち物は `keeping` で残す)。
+    /// メンバーの持ち物の選択肢(`.any`。役割で絞らずメガストーンだけ外す。そのメンバーのいまの持ち物は `keeping` で残す)。
     public func itemOptions(forMember id: String) -> [Item] {
         let current = team.members.first(where: { $0.id == id })?.itemId
         return ItemRoleFilter.options(itemOptions, for: .any, keeping: current)

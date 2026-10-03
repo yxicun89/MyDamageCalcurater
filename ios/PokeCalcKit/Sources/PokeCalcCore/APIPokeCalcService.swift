@@ -317,7 +317,8 @@ public struct APIPokeCalcService: PokeCalcService {
     private static func domainItem(_ item: Components.Schemas.Item) -> Item {
         Item(
             id: item.id, nameJa: item.nameJa,
-            roles: item.roles.map { $0.map { ItemRole(rawValue: $0.rawValue) ?? .attacker } },
+            // 知らない役割は捨てる(効果から再導出しない。ADR-0175 §4)。
+            roles: item.roles.map { $0.compactMap { ItemRole(rawValue: $0.rawValue) } },
             isMegaStone: item.isMegaStone)
     }
 

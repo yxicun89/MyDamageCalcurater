@@ -23,13 +23,13 @@ final class TeamEditViewModelItemRolesTests: XCTestCase {
         try XCTUnwrap(viewModel.team.members.first(where: { $0.id == id }))
     }
 
-    func testOptionsIncludeEitherRoleAndKeepCurrentItem() async {
+    func testOptionsAreNotFilteredByRoleExceptMegaStones() async {
         let plain = TeamMember(id: "m-plain", speciesKey: StubMaster.alpha.key, natureId: "stub-nature-neutral")
         let (viewModel, _) = await loadedViewModel(member: plain)
 
         XCTAssertEqual(
-            viewModel.itemOptions(forMember: plain.id).map(\.id), [Mega.attackOnly.id, Mega.defenseOnly.id, Mega.both.id],
-            "役割なし・メガストーンは出さない")
+            viewModel.itemOptions(forMember: plain.id).map(\.id), [Mega.attackOnly.id, Mega.defenseOnly.id, Mega.both.id, Mega.noRole.id],
+            "構築は役割で絞らずメガストーンだけ外す(ADR-0326 §2。計算に効かない持ち物も記録できる)")
     }
 
     func testSavedItemWithoutRoleIsKeptAsOption() async {
