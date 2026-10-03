@@ -7,6 +7,7 @@ import calc from '@smogon/calc';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
+import { calcMoveEntry } from './calc-move.mjs';
 
 const EXPECTED_VERSION = '0.12.0';
 const { Generations, NATURES } = calc;
@@ -39,13 +40,7 @@ const species = [...gen.species].map((s) => ({
   },
 }));
 
-const moves = [...gen.moves].map((m) => ({
-  name: m.name,
-  type: m.type ?? '',
-  category: m.category ?? '',
-  basePower: m.basePower ?? 0,
-  priority: m.priority ?? 0,
-}));
+const moves = [...gen.moves].map(calcMoveEntry);
 
 const items = [...gen.items].map((i) => i.name);
 const abilities = [...gen.abilities].map((a) => a.name);

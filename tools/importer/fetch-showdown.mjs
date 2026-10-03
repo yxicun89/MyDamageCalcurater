@@ -13,7 +13,8 @@ import { fileURLToPath } from 'node:url';
 import { exitCodeFor, expectedShowdownTreeSha256 } from './integrity.mjs';
 import { ensureShowdownSource } from './showdown-cache.mjs';
 
-const root = fileURLToPath(new URL('../../', import.meta.url));
+// IMPORTER_ROOT: テスト用にリポジトリのルートを差し替える(fetch-pokeapi.mjs と同じ)。
+const root = process.env.IMPORTER_ROOT ? `${process.env.IMPORTER_ROOT.replace(/\/$/, '')}/` : fileURLToPath(new URL('../../', import.meta.url));
 const config = JSON.parse(readFileSync(`${root}data/importer/config.json`, 'utf8'));
 const commit = config.sources?.showdown;
 if (!commit || !/^[0-9a-f]{40}$/.test(commit)) {
@@ -127,6 +128,8 @@ const moves = [...dex.moves.all()].map((m) => ({
   accuracy: m.accuracy === true ? 0 : m.accuracy,
   pp: m.pp,
   priority: m.priority,
+  // 技の対象(単体・全体 等。ADR-0136)。Showdown の文字列のまま(全技が持つ)。
+  target: m.target,
   isNonstandard: toNonstandard(m),
   // 追加効果(命中時のランク変化。ADR-0107 決定6)。取得元の表現のまま出す
   // (ID化・正準化は Go 側の変換で行う)。
