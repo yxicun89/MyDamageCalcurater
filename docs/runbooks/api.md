@@ -97,5 +97,56 @@ kubectl -n pokecalc logs "job/$JOB"
 ```
 確認: ログに `"msg":"expire done"` があり、`remaining` が `false`(`true` なら続きは次回。もう一度流す)。
 
-承認後に定期実行を有効にする: `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` を消し、`overlays/local/kustomization.yaml` の `patches` の参照を外して `make up`(または overlay を apply)。
+承認後に定期実行を有効にする: `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` と `overlays/local-m2/cronjob-expire-suspend-patch.yaml`(複製)を消し、それぞれの `kustomization.yaml` の `patches` の参照を外して `make up`(または overlay を apply)。
 
+## 9. M2(NATS・TiDB・record・team)を k3d に入れる・入れ直す
+
+`make deploy-latest` が最後に自動で行う(ADR-0226)。M2 だけを入れ直すときは単独で流せる(冪等。既存の Secret・DB のデータは変えない)。
+クラスタの削除・作り直し・PVC の削除はしない。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+./scripts/k3d-m2-deploy.sh
+kubectl -n pokecalc get pods
+```
+確認: 最後の行が `k3d-m2-deploy: NATS・TiDB・record・team を入れた`。`pokecalc-tidb-pd-0`・`-tikv-0`・`-tidb-0`・`record-*`・`team-*` が `Running`(`READY` が `1/1`、`tidb-0` は `2/2`)、
+`pokecalc-tidb-tidb-initializer-*`・`record-migrate-*`・`team-migrate-*` が `Completed`。失敗したときは `失敗 N 件` の下に理由が出る(calc・gateway・pokedex は影響を受けない)。
+
+TidbInitializer が `Failed` のとき(`kubectl -n pokecalc logs job/pokecalc-tidb-tidb-initializer -c mysql-client` にエラー)は、
+初期化 SQL が途中で止まり、root のパスワードだけ設定済みになっていることがある(再実行しても接続できない)。
+**k3d ローカル専用。cloud・本番では流さない**(root のパスワードを空に戻すため)。DB のデータは消さない。復旧する(上から下へ1回):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl config current-context
+kubectl apply -f - <<'EOF'
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tidb-root-reset-once
+  namespace: pokecalc
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: pokecalc-tidb-initializer
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql
+          image: mysql:9.7.2@sha256:29abb0a179982e4a8928138bfc7f918af9eda64e7eeb1b1d084c1720a20159e6
+          env:
+            - name: MYSQL_PWD
+              valueFrom: { secretKeyRef: { name: tidb-root-auth, key: root } }
+          command: ["sh", "-c", "mysql -h pokecalc-tidb-tidb -P 4000 -uroot -e \"ALTER USER 'root'@'%' IDENTIFIED BY ''\""]
+EOF
+kubectl -n pokecalc wait --for=condition=complete job/tidb-root-reset-once --timeout=120s
+kubectl -n pokecalc delete tidbinitializer pokecalc
+kubectl -n pokecalc delete job pokecalc-tidb-tidb-initializer --ignore-not-found
+./scripts/k3d-m2-deploy.sh
+kubectl -n pokecalc get tidbinitializer pokecalc -o jsonpath='{.status.phase}{"\n"}'
+```
+確認: `context` が `k3d-pokecalc`、`job/tidb-root-reset-once condition met`、最後の出力が `Completed`、
+`k3d-m2-deploy: NATS・TiDB・record・team を入れた`。原因・背景は docs/adr/0226-api-m2-k3d-deploy.md。

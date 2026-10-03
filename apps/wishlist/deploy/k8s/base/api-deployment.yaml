@@ -1,0 +1,106 @@
+# API(Go + Echo)。画像の PVC は RWO なので、更新時に新旧 Pod で取り合わないよう Recreate にする。
+# Secret wishlist-api は Git に置かない(scripts/bootstrap.sh が無いときだけ作る)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wishlist-api
+  labels:
+    app.kubernetes.io/name: wishlist-api
+    app.kubernetes.io/part-of: wishlist
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: wishlist-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: wishlist-api
+        app.kubernetes.io/part-of: wishlist
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: wishlist/api:0.1.0
+          imagePullPolicy: IfNotPresent
+          args: ["serve"]
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: WISHLIST_IMAGE_DIR
+              value: /data/images
+            - name: WISHLIST_DATABASE_DSN
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-api
+                  key: database-dsn
+            - name: WISHLIST_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-api
+                  key: api-token
+            # Yahoo!ショッピング API の appid(任意。無ければ api 型のサイトは取得しない)
+            - name: WISHLIST_YAHOO_APPID
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-api
+                  key: yahoo-appid
+                  optional: true
+            - name: GOMEMLIMIT
+              value: 100MiB
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 1
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+          volumeMounts:
+            - name: images
+              mountPath: /data/images
+            # readOnlyRootFilesystem のため、multipart の一時ファイル(フェーズ3は chromedp も)用に書ける /tmp を置く
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: images
+          persistentVolumeClaim:
+            claimName: wishlist-images
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

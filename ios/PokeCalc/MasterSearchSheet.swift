@@ -185,7 +185,7 @@ private enum MasterSearchRow {
 
     static func species(_ option: SpeciesSummary) -> some View {
         HStack(spacing: SpacingToken.x2) {
-            SpeciesEmblemView(name: option.nameJa, types: option.types)
+            SpeciesImageView(speciesKey: option.key, name: option.nameJa, types: option.types)
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 Text(option.nameJa)
                     .font(TextStyleToken.body.font)

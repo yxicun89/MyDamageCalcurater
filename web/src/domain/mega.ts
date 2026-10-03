@@ -21,11 +21,6 @@ export function megaStoneItemIds(speciesList: readonly MasterSpecies[]): Readonl
   return ids;
 }
 
-/** メガストーンを外した、単独で選べる持ち物(順序・実体は保つ)。 */
-export function selectableItems(items: readonly Item[], stoneIds: ReadonlySet<string>): readonly Item[] {
-  return stoneIds.size === 0 ? items : items.filter((item) => !stoneIds.has(item.id));
-}
-
 /** 種族の持ち物の固定。none = メガでない、locked = メガストーンに固定、missing = メガだがストーンを引けない。 */
 export type MegaItemLock =
   { readonly kind: "none" } | { readonly kind: "locked"; readonly item: Item } | { readonly kind: "missing" };

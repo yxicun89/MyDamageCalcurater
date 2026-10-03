@@ -132,6 +132,14 @@
   border-radius: 50%;
 }
 
+/* ポケモン画像(ADR-0325)。エンブレムと同じ寸法の枠に収め、読み込み失敗・有無でレイアウトを動かさない。 */
+.calc-card__image {
+  display: inline-block;
+  width: var(--space-5);
+  height: var(--space-5);
+  object-fit: contain;
+}
+
 .calc-card__name {
   margin: 0;
   font-size: var(--font-size-heading);

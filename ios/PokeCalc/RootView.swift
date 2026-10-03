@@ -109,7 +109,9 @@ struct RootView: View {
             switch environment {
             case .ready(let core, let services):
                 feature.destination(
-                    in: FeatureContext(core: core, services: services, teamStore: teamStore, path: $path))
+                    in: FeatureContext(core: core, services: services, teamStore: teamStore, path: $path)
+                )
+                .environment(\.imageCatalog, core.images)
             case .configurationError:
                 if feature.availableWithoutServices {
                     feature.destinationWithoutServices()

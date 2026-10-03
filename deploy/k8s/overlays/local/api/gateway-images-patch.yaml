@@ -1,0 +1,25 @@
+# local overlay だけ、k3d のノード(コンテナ)上の画像ディレクトリを gateway へ読み取り専用で見せる(ADR-0807 追記。P8-1)。
+# 中身は `make images-k3d`(scripts/images-k3d.sh)が `docker cp` でノードの /var/lib/pokecalc-images へ置く。
+# DirectoryOrCreate なので、置いていなくても(空でも)gateway は起動し、/images/* が 404 になる(画像なし = エンブレム)。
+# base と cloud overlay には足さない(クラウドへ hostPath を持ち込まない)。securityContext は変えない(書き込み先は無い)。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+spec:
+  template:
+    spec:
+      containers:
+        - name: gateway
+          env:
+            - name: GATEWAY_IMAGES_DIR
+              value: /data/images
+          volumeMounts:
+            - name: images
+              mountPath: /data/images
+              readOnly: true
+      volumes:
+        - name: images
+          hostPath:
+            path: /var/lib/pokecalc-images
+            type: DirectoryOrCreate

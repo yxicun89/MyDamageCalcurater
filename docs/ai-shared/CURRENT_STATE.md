@@ -18,3 +18,4 @@
 | Judge | [state/judge.md](state/judge.md) | 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めても |
 | Ops | [state/ops.md](state/ops.md) | 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の |
 | Shared Interfaces | [state/shared-interfaces.md](state/shared-interfaces.md) |  |
+| Wishlist | [state/wishlist.md](state/wishlist.md) | 欲しいものリスト(別アプリ。`apps/wishlist/` だけを変更する。仕様は `apps/wishlist/CLAUDE.md`。どの AI が進めてもよい) |

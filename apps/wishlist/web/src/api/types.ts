@@ -1,0 +1,17 @@
+import type { components } from "./schema";
+
+type S = components["schemas"];
+export type Item = S["Item"];
+export type ItemFields = S["ItemFields"];
+export type ItemUpdate = S["ItemUpdate"];
+export type ItemDraft = S["ItemDraft"];
+export type Genre = S["Genre"];
+export type GenreCreate = S["GenreCreate"];
+export type GenreUpdate = S["GenreUpdate"];
+export type Site = S["Site"];
+export type SiteCreate = S["SiteCreate"];
+export type SiteUpdate = S["SiteUpdate"];
+export type SiteOverride = S["SiteOverride"];
+export type FetchType = S["FetchType"];
+export type ItemEstimates = S["ItemEstimates"];
+export type ApiErrorBody = S["Error"];

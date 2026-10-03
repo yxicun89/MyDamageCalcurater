@@ -17,6 +17,7 @@ import { useEffect, useId, useState, type ReactNode } from "react";
 import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
+import { PokemonImage } from "../images/PokemonImage";
 import "./SpeedScreen.css";
 import type { components } from "./speed.gen";
 import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
@@ -719,10 +720,17 @@ function TierRow({ tier, selfTie }: TierRowProps) {
             className="speed-entry"
             data-testid="speed-entry"
           >
-            <span
-              className="speed-entry__emblem"
-              data-testid="type-emblem"
-              style={{ backgroundColor: `var(--type-${entry.types[0] ?? ""})` }}
+            <PokemonImage
+              speciesKey={entry.pokemonId}
+              size="thumb"
+              className="speed-entry__image"
+              fallback={
+                <span
+                  className="speed-entry__emblem"
+                  data-testid="type-emblem"
+                  style={{ backgroundColor: `var(--type-${entry.types[0] ?? ""})` }}
+                />
+              }
             />
             <span>{entry.nameJa}</span>
             <span className="speed-entry__preset">
