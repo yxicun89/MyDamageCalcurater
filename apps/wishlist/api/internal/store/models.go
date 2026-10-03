@@ -108,6 +108,7 @@ type Estimate struct {
 	SuspiciousCount int32
 	Status          EstimatesStatus
 	FetchedAt       time.Time
+	InStockCount    int32
 }
 
 type Genre struct {

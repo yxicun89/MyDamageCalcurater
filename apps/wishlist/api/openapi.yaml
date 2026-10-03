@@ -198,8 +198,10 @@ paths:
       operationId: getItemEstimates
       tags: [estimates]
       description: |
-        キャッシュを即返す。24時間より古ければ裏で更新を起動し `refreshing: true` を付ける。
-        フェーズ1では取得を実装していないため、常に空の `sites` と `refreshing: false` を返す。
+        キャッシュ(保存済みの目安)を即返す。取得できる対象サイトの目安が無い・失敗している・24時間より古いときは
+        裏で更新を起動し `refreshing: true` を付ける(更新が実行中のときも true)。
+        `sites` はジャンルの表示順で、取得できる対象サイトのうち目安を保存済みのものだけ(docs/phase3-api-spec.md)。
+        取得できる対象サイトが 1 つも無ければ、空の `sites` と `refreshing: false`。
       responses:
         '200':
           description: 目安価格
@@ -217,10 +219,10 @@ paths:
     post:
       operationId: refreshItemEstimates
       tags: [estimates]
-      description: 手動で更新を起動する。フェーズ1では 501。
+      description: 手動で更新を起動する(全対象サイトを取り直す)。すでに実行中なら新たに起動せず 202。
       responses:
         '202':
-          description: 更新を起動した
+          description: 更新を起動した(または実行中)。本文は現時点のキャッシュで `refreshing` は取得できる対象サイトがあれば true
           content:
             application/json:
               schema:
@@ -228,7 +230,6 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
-        '501': { $ref: '#/components/responses/NotImplemented' }
 
   /api/items/{id}/listings:
     parameters:
@@ -244,7 +245,7 @@ paths:
             $ref: '#/components/schemas/ID'
       responses:
         '200':
-          description: 出品一覧(参考外も含む)
+          description: 出品一覧(参考外も含む。price 昇順・同額は id 昇順)
           content:
             application/json:
               schema:
@@ -474,11 +475,6 @@ components:
           schema: { $ref: '#/components/schemas/Error' }
     BadGateway:
       description: 外部 URL の取得に失敗した
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    NotImplemented:
-      description: まだ実装していない(フェーズ3の機能)
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -796,8 +792,9 @@ components:
     SiteEstimate:
       type: object
       description: |
-        サイトごとの目安。仕様 §3 の「状態(在庫あり等)」をどの項目で表すかはフェーズ3で決める(docs/design.md §7 の未決事項)。
-      required: [site_id, count, suspicious_count, status, fetched_at]
+        サイトごとの目安。仕様 §3 の「状態(在庫あり等)」は `in_stock_count` で表す(docs/phase3-api-spec.md)。
+        `status` が failed のとき、low・mid・count・suspicious_count・in_stock_count・fetched_at は前回の値。
+      required: [site_id, count, suspicious_count, in_stock_count, status, fetched_at]
       properties:
         site_id: { $ref: '#/components/schemas/ID' }
         low:
@@ -810,8 +807,13 @@ components:
           description: 中央値(件数3未満なら null)
         count:
           type: integer
+          description: 参考外を除いた件数
         suspicious_count:
           type: integer
+          description: 参考外の件数
+        in_stock_count:
+          type: integer
+          description: 参考外を除き、在庫ありの件数
         status: { $ref: '#/components/schemas/EstimateStatus' }
         fetched_at:
           type: string
@@ -825,13 +827,16 @@ components:
         summary_low:
           type: integer
           nullable: true
+          description: '`sites` の low の最小(low を持つサイトが無ければ null)'
         summary_mid:
           type: integer
           nullable: true
+          description: summary_low を出したサイトの mid(その mid が null なら summary_low)
         summary_fetched_at:
           type: string
           format: date-time
           nullable: true
+          description: low を持つサイトの fetched_at のうち最も古いもの
         sites:
           type: array
           items: { $ref: '#/components/schemas/SiteEstimate' }

@@ -45,6 +45,13 @@ spec:
                 secretKeyRef:
                   name: wishlist-api
                   key: api-token
+            # Yahoo!ショッピング API の appid(任意。無ければ api 型のサイトは取得しない)
+            - name: WISHLIST_YAHOO_APPID
+              valueFrom:
+                secretKeyRef:
+                  name: wishlist-api
+                  key: yahoo-appid
+                  optional: true
             - name: GOMEMLIMIT
               value: 100MiB
           lifecycle:

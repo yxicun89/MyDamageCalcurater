@@ -1,0 +1,78 @@
+# 全商品の目安価格を毎日 03:00 JST に更新する(apps/wishlist/CLAUDE.md §6・§11)。
+# イメージは api(wishlist/api)の別バイナリ /wishlist-refresher を command で起動する。
+# headless の取得(chromedp)は未実装のため、Chromium 入りの専用イメージは作っていない(後で作る)。
+# Secret wishlist-api の yahoo-appid は任意(無ければ api 型のサイトは取得しない)。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: wishlist-refresher
+  labels:
+    app.kubernetes.io/name: wishlist-refresher
+    app.kubernetes.io/part-of: wishlist
+spec:
+  schedule: "0 3 * * *"
+  timeZone: Asia/Tokyo
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 600
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      activeDeadlineSeconds: 7200
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: wishlist-refresher
+            app.kubernetes.io/part-of: wishlist
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          containers:
+            - name: refresher
+              image: wishlist/api:0.1.0
+              imagePullPolicy: IfNotPresent
+              command: ["/wishlist-refresher"]
+              env:
+                - name: WISHLIST_DATABASE_DSN
+                  valueFrom:
+                    secretKeyRef:
+                      name: wishlist-api
+                      key: database-dsn
+                - name: WISHLIST_YAHOO_APPID
+                  valueFrom:
+                    secretKeyRef:
+                      name: wishlist-api
+                      key: yahoo-appid
+                      optional: true
+                - name: GOMEMLIMIT
+                  value: 100MiB
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
+                runAsNonRoot: true
+              volumeMounts:
+                # readOnlyRootFilesystem のため、書ける /tmp を置く(将来の headless 取得用)
+                - name: tmp
+                  mountPath: /tmp
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+            seccompProfile:
+              type: RuntimeDefault
+          volumes:
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

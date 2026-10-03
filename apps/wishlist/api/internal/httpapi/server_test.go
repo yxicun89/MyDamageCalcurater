@@ -14,11 +14,14 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
+	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/httpapi"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
+	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 	"example.com/pokecalc/apps/wishlist/api/internal/testimg"
 )
@@ -63,6 +66,10 @@ type env struct {
 	genre  item.Genre
 	site1  item.Site
 	site2  item.Site
+	// フェーズ3(目安価格)。fetch は api 型のサイトの取得の代わり、now は refresh の時計。
+	est   *refresh.Service
+	fetch *fakeFetcher
+	now   *fakeNow
 }
 
 func newEnv(t *testing.T) *env {
@@ -72,7 +79,8 @@ func newEnv(t *testing.T) *env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc := item.NewService(item.NewMemoryRepository(), images)
+	repo := item.NewMemoryRepository()
+	svc := item.NewService(repo, images)
 	ctx := context.Background()
 	s1, err := svc.CreateSite(ctx, item.NewSite{Name: "サイト1", SearchURLTemplate: "https://one.example.com/s?q={q}"})
 	if err != nil {
@@ -87,8 +95,15 @@ func newEnv(t *testing.T) *env {
 		t.Fatal(err)
 	}
 	remote := &fakeRemote{}
-	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Token: token})
-	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2}
+	fetch := &fakeFetcher{}
+	now := &fakeNow{t: phase3T0}
+	est := refresh.New(refresh.Deps{
+		Items: repo, Prices: repo, Now: now.Now, BaseContext: context.Background(),
+		Fetchers: fetcher.NewRegistryWith(map[item.FetchType]fetcher.Fetcher{item.FetchAPI: fetch}),
+	})
+	t.Cleanup(est.Wait)
+	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: token})
+	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2, est: est, fetch: fetch, now: now}
 }
 
 type req struct {
@@ -641,13 +656,78 @@ func TestReplaceImageAndDelete(t *testing.T) {
 	}
 }
 
-// ---- フェーズ3の契約(W-06) ----
+// ---- フェーズ3(目安価格。docs/phase3-api-spec.md) ----
+// フェーズ1の TestEstimatesPhase1(AC-H14: 空の結果・refresh は 501)は、フェーズ3の振る舞いを確かめる
+// TestEstimates_NoTargets・TestEstimates_Flow・TestRefreshEstimates・TestListings に置き換えた。
 
-// AC-H14: estimates は空の sites と refreshing:false、refresh は 501、listings は空配列。
-func TestEstimatesPhase1(t *testing.T) {
+var phase3T0 = time.Date(2026, 10, 3, 3, 0, 0, 0, time.UTC)
+
+// fakeFetcher は api 型のサイトの取得の代わり。呼ばれた回数を数える。
+type fakeFetcher struct {
+	mu       sync.Mutex
+	listings []fetcher.Listing
+	calls    int
+}
+
+func (f *fakeFetcher) Fetch(ctx context.Context, site fetcher.Site, q string) ([]fetcher.Listing, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls++
+	return append([]fetcher.Listing(nil), f.listings...), nil
+}
+
+func (f *fakeFetcher) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.calls
+}
+
+type fakeNow struct {
+	mu sync.Mutex
+	t  time.Time
+}
+
+func (n *fakeNow) Now() time.Time {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.t
+}
+
+func (n *fakeNow) Set(t time.Time) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	n.t = t
+}
+
+// priceItem は api 型(基準に使う)のサイトだけを持つジャンルに商品を作り、(商品 id, サイト) を返す。
+func (e *env) priceItem(t *testing.T) (int64, item.Site) {
+	t.Helper()
+	ctx := context.Background()
+	s, err := e.svc.CreateSite(ctx, item.NewSite{Name: "API サイト", SearchURLTemplate: "https://api.example.com/s?q={q}", FetchType: item.FetchAPI, IsReference: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := e.svc.CreateGenre(ctx, item.NewGenre{Name: "デュエマ", QueryTemplate: "{name} {option}", SiteIDs: []int64{e.site1.ID, s.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	it := e.createItem(t, map[string]string{"genre_id": fmt.Sprint(g.ID), "name": "ボルシャック"})
+	e.fetch.mu.Lock()
+	e.fetch.listings = []fetcher.Listing{
+		{Title: "ボルシャック 銀トレジャー", Price: 5000, URL: "https://api.example.com/i/1", ImageURL: "https://img.example.com/1.jpg", InStock: true},
+		{Title: "ボルシャック", Price: 5200, URL: "https://api.example.com/i/2", InStock: false},
+		{Title: "ボルシャック", Price: 5400, URL: "https://api.example.com/i/3", InStock: true},
+		{Title: "まとめ売り", Price: 300, URL: "https://api.example.com/i/4", InStock: true},
+	}
+	e.fetch.mu.Unlock()
+	return idOf(it), s
+}
+
+// AC-H14: 取得できる対象サイトが無い商品は、estimates が空の sites・refreshing:false、refresh も 202 で refreshing:false、
+// listings は空配列。
+func TestEstimates_NoTargets(t *testing.T) {
 	e := newEnv(t)
-	it := e.createItem(t, nil)
-	id := idOf(it)
+	id := idOf(e.createItem(t, nil))
 	w := e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/estimates", id)})
 	if w.Code != http.StatusOK {
 		t.Fatalf("status = %d %s", w.Code, w.Body.String())
@@ -659,10 +739,177 @@ func TestEstimatesPhase1(t *testing.T) {
 	if s, ok := m["sites"].([]any); !ok || len(s) != 0 {
 		t.Errorf("sites = %#v, want []", m["sites"])
 	}
-	expectError(t, e.do(t, req{method: http.MethodPost, path: fmt.Sprintf("/api/items/%d/estimates/refresh", id)}), http.StatusNotImplemented, "not_implemented")
+	for _, k := range []string{"summary_low", "summary_mid", "summary_fetched_at"} {
+		if v, ok := m[k]; ok && v != nil {
+			t.Errorf("%s = %v, want null か省略", k, v)
+		}
+	}
+	w = e.do(t, req{method: http.MethodPost, path: fmt.Sprintf("/api/items/%d/estimates/refresh", id)})
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("refresh = %d %s, want 202", w.Code, w.Body.String())
+	}
+	if m := decode[map[string]any](t, w); m["refreshing"] != false || m["item_id"] != float64(id) {
+		t.Errorf("refresh = %v", m)
+	}
 	w = e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings?site_id=%d", id, e.site1.ID)})
 	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"listings":[]}` {
 		t.Errorf("listings = %d %s", w.Code, w.Body.String())
+	}
+	e.est.Wait()
+	if n := e.fetch.callCount(); n != 0 {
+		t.Errorf("取得した(%d)", n)
+	}
+}
+
+// AC-H18: GET estimates はキャッシュを即返す。無ければ裏で更新して refreshing:true、取れた後は sites とサマリを返す。
+// SiteEstimate は site_id・low・mid・count・suspicious_count・in_stock_count・status・fetched_at(UTC の RFC 3339)。
+func TestEstimates_Flow(t *testing.T) {
+	e := newEnv(t)
+	id, site := e.priceItem(t)
+	path := fmt.Sprintf("/api/items/%d/estimates", id)
+
+	w := e.do(t, req{method: http.MethodGet, path: path})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", w.Code, w.Body.String())
+	}
+	m := decode[map[string]any](t, w)
+	if m["refreshing"] != true {
+		t.Errorf("初回の refreshing = %v, want true", m["refreshing"])
+	}
+	e.est.Wait()
+	if n := e.fetch.callCount(); n != 1 {
+		t.Fatalf("裏の更新の取得 = %d, want 1", n)
+	}
+
+	e.now.Set(phase3T0.Add(time.Hour))
+	w = e.do(t, req{method: http.MethodGet, path: path})
+	m = decode[map[string]any](t, w)
+	if m["refreshing"] != false {
+		t.Errorf("新しいのに refreshing = %v", m["refreshing"])
+	}
+	sites, _ := m["sites"].([]any)
+	if len(sites) != 1 {
+		t.Fatalf("sites = %v", m["sites"])
+	}
+	// 基準 5200(5000・5200・5400・300 のうち title_mismatch の 300 を除いた中央値)。300 は参考外。
+	want := map[string]any{
+		"site_id": float64(site.ID), "low": float64(5000), "mid": float64(5200), "count": float64(3),
+		"suspicious_count": float64(1), "in_stock_count": float64(2), "status": "ok", "fetched_at": "2026-10-03T03:00:00Z",
+	}
+	got := sites[0].(map[string]any)
+	if len(got) != len(want) {
+		t.Errorf("SiteEstimate の項目 = %v, want %v", got, want)
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("sites[0].%s = %v, want %v", k, got[k], v)
+		}
+	}
+	if m["summary_low"] != float64(5000) || m["summary_mid"] != float64(5200) || m["summary_fetched_at"] != "2026-10-03T03:00:00Z" {
+		t.Errorf("summary = %v/%v/%v", m["summary_low"], m["summary_mid"], m["summary_fetched_at"])
+	}
+
+	e.now.Set(phase3T0.Add(25 * time.Hour))
+	m = decode[map[string]any](t, e.do(t, req{method: http.MethodGet, path: path}))
+	if m["refreshing"] != true || len(m["sites"].([]any)) != 1 {
+		t.Errorf("古いキャッシュ = %v, want 前回値と refreshing:true", m)
+	}
+	e.est.Wait()
+	if n := e.fetch.callCount(); n != 2 {
+		t.Errorf("取得 = %d, want 2", n)
+	}
+}
+
+// AC-H19: POST refresh は 202 で、新しくても裏で取り直す。本文は現時点のキャッシュと refreshing:true。
+func TestRefreshEstimates(t *testing.T) {
+	e := newEnv(t)
+	id, _ := e.priceItem(t)
+	path := fmt.Sprintf("/api/items/%d/estimates/refresh", id)
+	w := e.do(t, req{method: http.MethodPost, path: path})
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("status = %d %s, want 202", w.Code, w.Body.String())
+	}
+	m := decode[map[string]any](t, w)
+	if m["refreshing"] != true || m["item_id"] != float64(id) {
+		t.Errorf("本文 = %v", m)
+	}
+	if _, ok := m["sites"].([]any); !ok {
+		t.Errorf("sites が配列でない: %v", m["sites"])
+	}
+	e.est.Wait()
+	e.now.Set(phase3T0.Add(time.Minute))
+	if w := e.do(t, req{method: http.MethodPost, path: path}); w.Code != http.StatusAccepted {
+		t.Errorf("2 回目 = %d", w.Code)
+	}
+	e.est.Wait()
+	if n := e.fetch.callCount(); n != 2 {
+		t.Errorf("取得 = %d, want 2(新しくても取り直す)", n)
+	}
+	for _, p := range []string{"/api/items/0/estimates/refresh", "/api/items/abc/estimates/refresh"} {
+		expectError(t, e.do(t, req{method: http.MethodPost, path: p}), http.StatusBadRequest, "bad_request")
+	}
+}
+
+// AC-H20: listings は保存した出品を参考外も含めて返す(price 昇順)。suspicious_reasons は理由が無ければ []、
+// image_url は無ければ null。site_id で絞り込み、存在しない site_id は空、0 以下・数でないのは 400。
+func TestListings(t *testing.T) {
+	e := newEnv(t)
+	id, site := e.priceItem(t)
+	if w := e.do(t, req{method: http.MethodPost, path: fmt.Sprintf("/api/items/%d/estimates/refresh", id)}); w.Code != http.StatusAccepted {
+		t.Fatalf("refresh = %d %s", w.Code, w.Body.String())
+	}
+	e.est.Wait()
+
+	w := e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings", id)})
+	if w.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", w.Code, w.Body.String())
+	}
+	ls := decode[map[string][]map[string]any](t, w)["listings"]
+	if len(ls) != 4 {
+		t.Fatalf("listings = %v", ls)
+	}
+	var prices []float64
+	for _, x := range ls {
+		prices = append(prices, x["price"].(float64))
+	}
+	if fmt.Sprint(prices) != "[300 5000 5200 5400]" {
+		t.Errorf("price の並び = %v", prices)
+	}
+	cheap := ls[0]
+	if fmt.Sprint(cheap["suspicious_reasons"]) != "[title_mismatch too_cheap]" || cheap["image_url"] != nil || cheap["site_id"] != float64(site.ID) {
+		t.Errorf("参考外の出品 = %v", cheap)
+	}
+	first := ls[1]
+	want := map[string]any{
+		"site_id": float64(site.ID), "title": "ボルシャック 銀トレジャー", "price": float64(5000), "url": "https://api.example.com/i/1",
+		"image_url": "https://img.example.com/1.jpg", "in_stock": true, "fetched_at": "2026-10-03T03:00:00Z",
+	}
+	for k, v := range want {
+		if first[k] != v {
+			t.Errorf("listings[1].%s = %v, want %v", k, first[k], v)
+		}
+	}
+	if r, ok := first["suspicious_reasons"].([]any); !ok || len(r) != 0 {
+		t.Errorf("suspicious_reasons = %#v, want []", first["suspicious_reasons"])
+	}
+	if id, _ := first["id"].(float64); id < 1 {
+		t.Errorf("id = %v", first["id"])
+	}
+
+	w = e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings?site_id=%d", id, site.ID)})
+	if n := len(decode[map[string][]map[string]any](t, w)["listings"]); n != 4 {
+		t.Errorf("site_id で絞り込み = %d 件", n)
+	}
+	w = e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings?site_id=%d", id, e.site1.ID)})
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"listings":[]}` {
+		t.Errorf("出品の無いサイト = %d %s", w.Code, w.Body.String())
+	}
+	w = e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings?site_id=99999999", id)})
+	if w.Code != http.StatusOK || strings.TrimSpace(w.Body.String()) != `{"listings":[]}` {
+		t.Errorf("存在しない site_id = %d %s", w.Code, w.Body.String())
+	}
+	for _, q := range []string{"0", "abc"} {
+		expectError(t, e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/listings?site_id=%s", id, q)}), http.StatusBadRequest, "bad_request")
 	}
 }
 

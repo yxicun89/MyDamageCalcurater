@@ -11,6 +11,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
+	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 )
 
@@ -25,11 +26,26 @@ type Remote interface {
 	Image(ctx context.Context, rawURL string, max int64) ([]byte, error)
 }
 
+// Estimator は目安価格の読み出しと更新の起動(本番は *refresh.Service。docs/phase3-api-spec.md AC-H14・AC-H18〜H20)。
+// 商品が無ければ item.ErrNotFound を返すこと。
+type Estimator interface {
+	// Estimates は GET /api/items/{id}/estimates(古ければ裏で更新を起動する)。
+	Estimates(ctx context.Context, itemID int64) (refresh.View, error)
+	// Refresh は POST /api/items/{id}/estimates/refresh(裏で全対象を取り直す。実行中なら起動しない)。
+	Refresh(ctx context.Context, itemID int64) (refresh.View, error)
+	// Listings は GET /api/items/{id}/listings。
+	Listings(ctx context.Context, itemID int64, siteID *int64) ([]item.Listing, error)
+}
+
+var _ Estimator = (*refresh.Service)(nil)
+
 // Deps は NewServer の依存。
 type Deps struct {
 	Items  *item.Service
 	Images storage.Storage
 	Remote Remote
+	// Estimates は目安価格(必須。nil なら NewServer が panic する)。
+	Estimates Estimator
 	// Token は /api/* に要求する Bearer トークン(空は不可。比較は定数時間)。
 	Token  string
 	Logger *slog.Logger // nil なら slog.Default()
@@ -44,11 +60,14 @@ func NewServer(d Deps) *echo.Echo {
 	if d.Token == "" {
 		panic("httpapi: Token is empty")
 	}
+	if d.Estimates == nil {
+		panic("httpapi: Estimates is nil")
+	}
 	log := d.Logger
 	if log == nil {
 		log = slog.Default()
 	}
-	s := &server{items: d.Items, images: d.Images, remote: d.Remote, log: log}
+	s := &server{items: d.Items, images: d.Images, remote: d.Remote, estimates: d.Estimates, log: log}
 
 	e := echo.New()
 	e.HTTPErrorHandler = s.handleError
