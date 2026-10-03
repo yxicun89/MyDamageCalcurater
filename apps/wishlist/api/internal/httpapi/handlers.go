@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/oapi-codegen/nullable"
+	openapi_types "github.com/oapi-codegen/runtime/types"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
@@ -362,9 +363,32 @@ func (s *server) ListItemListings(ctx context.Context, req api.ListItemListingsR
 
 // GetItemPriceHistory は GET /api/items/{id}/price-history(フェーズ4-2。docs/phase4-spec.md AC-H11〜H13)。
 func (s *server) GetItemPriceHistory(ctx context.Context, req api.GetItemPriceHistoryRequestObject) (api.GetItemPriceHistoryResponseObject, error) {
-	_ = ctx
-	_ = req
-	return nil, errors.New("price history is not implemented") // TODO(implementer)
+	if err := checkID(req.Id, "id"); err != nil {
+		return nil, err
+	}
+	days := refresh.DefaultHistoryDays
+	if req.Params.Days != nil {
+		days = *req.Params.Days
+		if days < 1 || days > refresh.MaxHistoryDays {
+			return nil, badRequest("days must be between 1 and 180")
+		}
+	}
+	h, err := s.estimates.PriceHistory(ctx, req.Id, days)
+	if err != nil {
+		return nil, err
+	}
+	out := api.PriceHistory{ItemId: req.Id, Days: h.Days, Sites: make([]api.SitePriceHistory, 0, len(h.Sites)), Overall: make([]api.DayLow, 0, len(h.Overall))}
+	for _, st := range h.Sites {
+		pts := make([]api.PricePoint, 0, len(st.Points))
+		for _, p := range st.Points {
+			pts = append(pts, api.PricePoint{Day: openapi_types.Date{Time: p.Day}, Low: p.Low, Mid: nullableOf(p.Mid)})
+		}
+		out.Sites = append(out.Sites, api.SitePriceHistory{SiteId: st.SiteID, Points: pts})
+	}
+	for _, d := range h.Overall {
+		out.Overall = append(out.Overall, api.DayLow{Day: openapi_types.Date{Time: d.Day}, Low: d.Low})
+	}
+	return api.GetItemPriceHistory200JSONResponse(out), nil
 }
 
 // ---- ジャンル・サイト ----

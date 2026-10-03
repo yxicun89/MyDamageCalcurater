@@ -75,34 +75,73 @@ public enum PriceHistoryState: Equatable, Sendable {
 }
 
 public enum PriceHistoryFormat {
+    private static let jst: Calendar = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 9 * 60 * 60) ?? .gmt
+        return calendar
+    }()
+
+    private static func parts(_ day: String) -> (year: Int, month: Int, day: Int)? {
+        let fields = day.split(separator: "-", omittingEmptySubsequences: false)
+        guard fields.count == 3, fields[0].count == 4, fields[1].count == 2, fields[2].count == 2,
+            fields.allSatisfy({ $0.allSatisfy(\.isASCII) && $0.allSatisfy(\.isNumber) }),
+            let y = Int(fields[0]), let m = Int(fields[1]), let d = Int(fields[2])
+        else { return nil }
+        return (y, m, d)
+    }
+
     /// `2026-10-03` → JST 2026-10-03 0:00(= 2026-10-02T15:00:00Z)。形が違う・存在しない日付は nil
     public static func date(fromDay day: String) -> Date? {
-        _ = day
-        return nil  // TODO(implementer)
+        guard let p = parts(day),
+            let date = jst.date(from: DateComponents(year: p.year, month: p.month, day: p.day)),
+            jst.dateComponents([.year, .month, .day], from: date) == DateComponents(year: p.year, month: p.month, day: p.day)
+        else { return nil }
+        return date
     }
 
     /// `2026-10-03` → `10/3`(ゼロ詰めしない)。形が違えば空文字
     public static func dayLabel(_ day: String) -> String {
-        _ = day
-        return ""  // TODO(implementer)
+        guard let p = parts(day) else { return "" }
+        return "\(p.month)/\(p.day)"
     }
 
     /// 点を day 昇順に並べ、`date(fromDay:)` が nil の点は捨て(値を作らない)、1 日より空いたところで `segment` を進める。
     public static func points(_ values: [(day: String, value: Int)]) -> [HistoryChartPoint] {
-        _ = values
-        return []  // TODO(implementer)
+        let valid = values.compactMap { v in date(fromDay: v.day).map { (day: v.day, date: $0, value: v.value) } }
+            .sorted { $0.date < $1.date }
+        var out: [HistoryChartPoint] = []
+        var segment = 0
+        for (index, v) in valid.enumerated() {
+            if index > 0, jst.dateComponents([.day], from: valid[index - 1].date, to: v.date).day != 1 { segment += 1 }
+            out.append(HistoryChartPoint(day: v.day, date: v.date, value: v.value, segment: segment))
+        }
+        return out
     }
 
     /// `価格の推移 7/6〜10/3 最安 ¥2,000 最高 ¥3,200`(1 日だけなら期間は `10/3`、空なら `価格の推移はまだありません`)
     public static func accessibilityLabel(overall: [DayLow]) -> String {
-        _ = overall
-        return ""  // TODO(implementer)
+        let valid = overall.filter { date(fromDay: $0.day) != nil }
+        let days = valid.map(\.day).sorted()
+        guard let first = days.first, let last = days.last else { return "価格の推移はまだありません" }
+        let lows = valid.map(\.low)
+        let range = first == last ? dayLabel(first) : "\(dayLabel(first))〜\(dayLabel(last))"
+        return "\(WishlistText.priceHistoryTitle) \(range) 最安 \(PriceFormat.yen(lows.min() ?? 0)) 最高 \(PriceFormat.yen(lows.max() ?? 0))"
     }
 
     /// API の推移からグラフを作る。全体の最安の(有効な)点が 2 未満なら nil。
     /// サイト名は `sites` から引き、無いサイトは `サイト<ID>`。サイトの線は low の値で描く。
     public static func chart(_ history: PriceHistory, sites: [Site]) -> PriceHistoryChart? {
-        _ = (history, sites)
-        return nil  // TODO(implementer)
+        let overall = points(history.overall.map { ($0.day, $0.low) })
+        guard overall.count >= 2 else { return nil }
+        let valid = history.overall.filter { date(fromDay: $0.day) != nil }
+        let siteSeries = history.sites.compactMap { site -> HistorySeries? in
+            let pts = points(site.points.map { ($0.day, $0.low) })
+            guard !pts.isEmpty else { return nil }
+            let name = sites.first { $0.id == site.siteID }?.name ?? "サイト\(site.siteID)"
+            return HistorySeries(id: "site-\(site.siteID)", name: name, points: pts)
+        }
+        return PriceHistoryChart(
+            overall: HistorySeries(id: "overall", name: WishlistText.priceHistoryOverall, points: overall),
+            sites: siteSeries, accessibilityLabel: accessibilityLabel(overall: valid))
     }
 }

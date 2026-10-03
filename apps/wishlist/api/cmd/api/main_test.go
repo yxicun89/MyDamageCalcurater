@@ -183,3 +183,17 @@ func TestLoadServeConfig_YahooAppID(t *testing.T) {
 		})
 	}
 }
+
+// DSN に loc=Asia/Tokyo が付いていても、serve・migrate とも UTC で扱う(価格の推移の日付の前提)。
+func TestDSN_ForcesUTC(t *testing.T) {
+	for name, f := range map[string]func(string) (string, error){"serve": serveDSN, "migrate": migrateDSN} {
+		s, err := f("u:p@tcp(h:3306)/wishlist?loc=Asia%2FTokyo")
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, _ := mysql.ParseDSN(s)
+		if cfg == nil || cfg.Loc.String() != "UTC" {
+			t.Errorf("%s: loc = %v, want UTC (%q)", name, cfg, s)
+		}
+	}
+}

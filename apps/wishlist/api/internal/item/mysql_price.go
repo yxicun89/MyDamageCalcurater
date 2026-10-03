@@ -49,10 +49,13 @@ func (r *MySQLRepository) SaveSiteResult(ctx context.Context, e Estimate, ls []L
 				return err
 			}
 		}
-		return q.UpsertEstimate(ctx, store.UpsertEstimateParams{
+		if err := q.UpsertEstimate(ctx, store.UpsertEstimateParams{
 			ItemID: e.ItemID, SiteID: e.SiteID, Low: low, Mid: mid, Count: int32(e.Count), SuspiciousCount: int32(e.SuspiciousCount),
 			InStockCount: int32(e.InStockCount), Status: store.EstimatesStatus(e.Status), FetchedAt: at,
-		})
+		}); err != nil {
+			return err
+		}
+		return recordHistoryTx(ctx, q, e, at)
 	})
 }
 

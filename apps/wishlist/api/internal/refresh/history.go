@@ -2,6 +2,7 @@ package refresh
 
 import (
 	"context"
+	"slices"
 	"time"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
@@ -44,16 +45,95 @@ type History struct {
 	Overall []DayLow
 }
 
+// historyToday は今日(JST、Deps.Now)の日付(item.HistoryDay の形)。
+func (s *Service) historyToday() time.Time {
+	now := time.Now
+	if s.d.Now != nil {
+		now = s.d.Now
+	}
+	return item.HistoryDay(now())
+}
+
+// pruneHistory は保持期間(今日を含む PriceHistoryRetentionDays 日)より前の行を消す。失敗はログに出すだけ。
+func (s *Service) pruneHistory(ctx context.Context) {
+	before := s.historyToday().AddDate(0, 0, -(item.PriceHistoryRetentionDays - 1))
+	if _, err := s.d.Prices.PrunePriceHistory(ctx, before); err != nil {
+		s.d.Logger.Error("prune price history failed", "error", err)
+	}
+}
+
 // PriceHistory は商品の直近 days 日(今日〈JST、Deps.Now〉を含む。since = 今日 − (days−1) 日)の推移を返す。
 // 商品が無ければ item.ErrNotFound、days が 1〜MaxHistoryDays の外なら item.ErrInvalid。
 func (s *Service) PriceHistory(ctx context.Context, itemID int64, days int) (History, error) {
-	_, _, _ = ctx, itemID, days
-	return History{}, nil // TODO(implementer): docs/phase4-spec.md AC-H8〜H10
+	it, err := s.d.Items.GetItem(ctx, itemID)
+	if err != nil {
+		return History{}, err
+	}
+	if days < 1 || days > MaxHistoryDays {
+		return History{}, item.ErrInvalid
+	}
+	genres, err := s.d.Items.ListGenres(ctx)
+	if err != nil {
+		return History{}, err
+	}
+	var order []int64
+	for _, g := range genres {
+		if g.ID == it.GenreID {
+			order = g.SiteIDs
+		}
+	}
+	since := s.historyToday().AddDate(0, 0, -(days - 1))
+	points, err := s.d.Prices.ListPriceHistory(ctx, itemID, since)
+	if err != nil {
+		return History{}, err
+	}
+	h := BuildHistory(points, order)
+	h.Days = days
+	return h, nil
 }
 
 // BuildHistory は保存済みの行(ListPriceHistory の並び)から History の Sites・Overall を作る純関数。
 // siteOrder はジャンルの site_ids(表示順)。Days は設定しない。
 func BuildHistory(points []item.PricePoint, siteOrder []int64) History {
-	_, _ = points, siteOrder
-	return History{} // TODO(implementer): docs/phase4-spec.md AC-H9
+	bySite := map[int64][]HistoryPoint{}
+	for _, p := range points {
+		bySite[p.SiteID] = append(bySite[p.SiteID], HistoryPoint{Day: p.Day, Low: p.Low, Mid: p.Mid})
+	}
+	for _, pts := range bySite {
+		slices.SortFunc(pts, func(a, b HistoryPoint) int { return a.Day.Compare(b.Day) })
+	}
+	ids := make([]int64, 0, len(bySite))
+	seen := map[int64]bool{}
+	for _, id := range siteOrder {
+		if _, ok := bySite[id]; ok && !seen[id] {
+			ids = append(ids, id)
+			seen[id] = true
+		}
+	}
+	var rest []int64
+	for id := range bySite {
+		if !seen[id] {
+			rest = append(rest, id)
+		}
+	}
+	slices.Sort(rest)
+	ids = append(ids, rest...)
+
+	h := History{Sites: []SiteHistory{}, Overall: []DayLow{}}
+	min := map[int64]DayLow{} // Day の Unix 秒 → その日の最小
+	for _, id := range ids {
+		pts := bySite[id]
+		h.Sites = append(h.Sites, SiteHistory{SiteID: id, Points: pts})
+		for _, p := range pts {
+			k := p.Day.Unix()
+			if cur, ok := min[k]; !ok || p.Low < cur.Low {
+				min[k] = DayLow{Day: p.Day, Low: p.Low}
+			}
+		}
+	}
+	for _, d := range min {
+		h.Overall = append(h.Overall, d)
+	}
+	slices.SortFunc(h.Overall, func(a, b DayLow) int { return a.Day.Compare(b.Day) })
+	return h
 }

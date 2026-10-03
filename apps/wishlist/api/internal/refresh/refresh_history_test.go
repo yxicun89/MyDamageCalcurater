@@ -252,3 +252,27 @@ func TestBuildHistory(t *testing.T) {
 		})
 	}
 }
+
+type failingPrune struct{ *item.MemoryRepository }
+
+func (failingPrune) PrunePriceHistory(context.Context, time.Time) (int64, error) {
+	return 0, errors.New("prune failed")
+}
+
+// 古い行の削除に失敗しても、RefreshAll は更新を続ける(ログに出すだけ)。
+func TestRefreshAll_ContinuesWhenPruneFails(t *testing.T) {
+	e := newEnv(t)
+	e.f.set(e.shop.ID, []fetcher.Listing{l("ボルシャック", 4800)}, nil)
+	svc := refresh.New(refresh.Deps{Items: e.repo, Prices: failingPrune{e.repo}, Fetchers: e.reg, Now: e.now.Now, BaseContext: context.Background()})
+	t.Cleanup(svc.Wait)
+	r, err := svc.RefreshAll(context.Background())
+	if err != nil {
+		t.Fatalf("RefreshAll = %v", err)
+	}
+	if r.Items != 1 {
+		t.Errorf("Items = %d, want 1(削除が失敗しても更新する)", r.Items)
+	}
+	if got := e.history(t, e.it.ID); len(got) == 0 {
+		t.Error("更新が行われていない(推移が空)")
+	}
+}

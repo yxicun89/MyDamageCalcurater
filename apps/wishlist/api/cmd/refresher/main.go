@@ -99,6 +99,7 @@ func loadConfig(getenv func(string) string) (config, error) {
 		return config{}, errors.New("WISHLIST_DATABASE_DSN is not a valid MySQL DSN")
 	}
 	parsed.ParseTime = true
+	parsed.Loc = time.UTC // loc=Asia/Tokyo 等が付いていても UTC で扱う(推移の日付は 00:00 UTC の前提)
 	parsed.MultiStatements = false
 	return config{
 		DSN:          parsed.FormatDSN(),

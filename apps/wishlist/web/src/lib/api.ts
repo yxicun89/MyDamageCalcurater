@@ -175,8 +175,8 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
           site_id: siteId,
         })
       ).listings,
-    // TODO(implementer): docs/phase4-spec.md AC-HIS-API-01
-    getPriceHistory: () => Promise.reject(new Error("getPriceHistory is not implemented")),
+    getPriceHistory: (id, days) =>
+      request("GET", `api/items/${String(id)}/price-history`, undefined, { days }),
     listGenres: async () => (await request<{ genres: Genre[] }>("GET", "api/genres")).genres,
     createGenre: (body) => request("POST", "api/genres", { json: body }),
     updateGenre: (id, patch) => request("PATCH", `api/genres/${String(id)}`, { json: patch }),

@@ -6,6 +6,7 @@ package store
 
 import (
 	"context"
+	"time"
 )
 
 type Querier interface {
@@ -41,13 +42,17 @@ type Querier interface {
 	ListItemsByGenre(ctx context.Context, genreID int64) ([]Item, error)
 	ListListingsByItem(ctx context.Context, itemID int64) ([]Listing, error)
 	ListListingsByItemSite(ctx context.Context, arg ListListingsByItemSiteParams) ([]Listing, error)
+	ListPriceHistory(ctx context.Context, arg ListPriceHistoryParams) ([]PriceHistory, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	MarkEstimateFailed(ctx context.Context, arg MarkEstimateFailedParams) error
+	PrunePriceHistory(ctx context.Context, day time.Time) (int64, error)
 	TouchItem(ctx context.Context, id int64) error
 	UpdateGenre(ctx context.Context, arg UpdateGenreParams) (int64, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) (int64, error)
 	UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) error
+	// 価格の推移(フェーズ4-2)。day は JST の日付。
+	UpsertPriceHistory(ctx context.Context, arg UpsertPriceHistoryParams) error
 }
 
 var _ Querier = (*Queries)(nil)

@@ -166,6 +166,16 @@ type Listing struct {
 	FetchedAt         time.Time
 }
 
+type PriceHistory struct {
+	ItemID     int64
+	SiteID     int64
+	Day        time.Time
+	Low        int32
+	Mid        sql.NullInt32
+	Count      int32
+	RecordedAt time.Time
+}
+
 type Site struct {
 	ID                int64
 	Name              string

@@ -126,3 +126,16 @@ DELETE FROM genre_aliases WHERE genre_id = ?;
 
 -- name: InsertGenreAlias :exec
 INSERT INTO genre_aliases (genre_id, group_no, alias, normalized) VALUES (?, ?, ?, ?);
+
+-- 価格の推移(フェーズ4-2)。day は JST の日付。
+-- name: UpsertPriceHistory :exec
+INSERT INTO price_history (item_id, site_id, day, low, mid, `count`, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE low = VALUES(low), mid = VALUES(mid), `count` = VALUES(`count`), recorded_at = VALUES(recorded_at);
+
+-- name: ListPriceHistory :many
+SELECT item_id, site_id, day, low, mid, `count`, recorded_at
+FROM price_history WHERE item_id = ? AND day >= ? ORDER BY site_id, day;
+
+-- name: PrunePriceHistory :execrows
+DELETE FROM price_history WHERE day < ?;

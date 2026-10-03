@@ -112,3 +112,4 @@ iPhone(PWA / 将来 iOS アプリ)
 
 - サイト行の「状態(在庫あり等)」(仕様 §3)は `SiteEstimate.in_stock_count`(参考外を除いた在庫ありの件数)で表す。
   フェーズ3の決めたことは [phase3-api-spec.md](phase3-api-spec.md)
+- **DSN の loc は UTC に固定**(フェーズ4-2):serve・migrate・refresher とも DSN に `loc=` が付いていても `time.UTC` で上書きする。価格の推移の日付(`HistoryDay`)が 00:00 UTC の前提のため。

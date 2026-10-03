@@ -94,3 +94,11 @@ final class PriceHistoryFormatTests: XCTestCase {
         XCTAssertNil(PriceHistoryFormat.chart(invalid, sites: T.sites), "読めない日付は点に数えない")
     }
 }
+
+final class PriceHistoryLabelInvalidDayTests: XCTestCase {
+    /// 読めない日付の点は最安・最高の計算に入れない。
+    func testInvalidDayIsExcludedFromLows() {
+        let overall = [DayLow(day: "2026-10-01", low: 3000), DayLow(day: "bad", low: 1), DayLow(day: "2026-10-03", low: 3200)]
+        XCTAssertEqual(PriceHistoryFormat.accessibilityLabel(overall: overall), "価格の推移 10/1〜10/3 最安 ¥3,000 最高 ¥3,200")
+    }
+}

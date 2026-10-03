@@ -168,6 +168,8 @@ func parseDSN(dsn string) (*mysql.Config, error) {
 	if err != nil {
 		return nil, errors.New("WISHLIST_DATABASE_DSN is not a valid MySQL DSN")
 	}
+	// 日時は UTC で読み書きする(DSN に loc=Asia/Tokyo 等が付いていても上書き。推移の日付 HistoryDay は 00:00 UTC の前提)。
+	cfg.Loc = time.UTC
 	return cfg, nil
 }
 
