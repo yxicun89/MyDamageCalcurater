@@ -66,6 +66,8 @@ issue #239/#273 が列挙した回避形の網羅的な追加パターンを `pe
 - 強制系の push: `--force`・`-f`(gitのオプションとして)・`+`(refspecの強制記法)・`--mirror`・`--all`
 - `gh pr merge`(main への GitOps 反映を伴うため)、`gh api` での `/merge`・`/merges` パス直叩き・GraphQL の
   `mergePullRequest`
+  (**2026-10-03 更新: `gh pr merge` は ADR-0803 により、対象 PR の CI が全件成功のときだけ通す条件付き許可に変更。
+  `--admin`・`gh api` 直叩きは引き続きブロック。§5・影響の節の「常に人間確認」もこの範囲で読み替える**)
 
 該当しなければ何も出力せず exit 0(通常の許可フローに委ねる)。**exit 2 を使うのは、JSON の `permissionDecision`
 だけでは `permissions.allow` に上書きされる余地が残るため**(公式ドキュメントが明言)。

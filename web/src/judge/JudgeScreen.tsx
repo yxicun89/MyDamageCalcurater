@@ -4,18 +4,36 @@
 // 判定(素早さ・行動順・双方向の確定数)は judge-svc が決める。Web は engine(WASM)で計算し直さず、
 // 「勝ち / 負け」にも丸めない(ADR-0700 §6-1・ADR-0704 §3 の立場を画面でも保つ)。
 // master / masterSearch は**入力補助にだけ**使う(種族・性格・特性・持ち物の選択肢。ADR-0705 §5)。
-// 技は ID の自由入力(ADR-0304 §3: ID から技を引く公開 API がまだ無い)。
+// 技は選んだポケモンの覚える技(learnset)から選び、調整はプリセットで入れる。SP6欄・ランク5欄は「詳細」に畳む(issue 309・ADR-0711)。
 
-import { useRef, useState } from "react";
-import type { Ranks, StatKey, Stats } from "../engine/types";
-import { MAX_SP_PER_STAT, MAX_SP_TOTAL } from "../domain/requests";
-import { judgeErrorText, judgeScreenText } from "../i18n/ja";
+import { useEffect, useId, useRef, useState } from "react";
+import type { Move, Ranks } from "../engine/types";
+import { formatMoveCategory } from "../domain/format";
+import { MAX_SP_PER_STAT } from "../domain/requests";
+import { calcScreenText, judgeErrorText, judgeScreenText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import "./JudgeScreen.css";
+import {
+  applyPreset,
+  chooseMove,
+  chooseSpecies,
+  editNature,
+  editSp,
+  emptyIndividual,
+  type IndividualFormState,
+  JUDGE_PRESET_KEYS,
+  judgePresetLabel,
+  moveCategoryOf,
+  parseRank,
+  RANK_STATS,
+  type RankKey,
+  SP_STATS,
+} from "./individualForm";
 import type { components } from "./judge.gen";
 import type { JudgeClient } from "./judgeClient";
+import { type BodyErrors, hasDetailsError, validateBodies } from "./judgeValidation";
 
 type Schemas = components["schemas"];
 
@@ -34,71 +52,26 @@ export interface JudgeScreenProps {
 /** 相手候補の上限(契約の defenders は 1〜6 件。ADR-0703 §1)。 */
 export const MAX_DEFENDERS = 6;
 
-/** SP の6欄(表示順)。 */
-const SP_STATS: readonly StatKey[] = ["hp", "atk", "def", "spa", "spd", "spe"];
-
-/** ランクのキー(HP を持たない。RankBlock と同じ順)。 */
-type RankKey = keyof Ranks;
-
-/** ランクの5欄(HP を持たない。RankBlock と同じ順)。 */
-const RANK_STATS: readonly RankKey[] = ["atk", "def", "spa", "spd", "spe"];
-
-/** ランクの範囲(CLAUDE.md ドメイン規約 / 契約の RankBlock と同じ -6..+6)。 */
-const MIN_RANK = -6;
-const MAX_RANK = 6;
-
-/** 1体分の入力の状態(自分・候補で共通の形。ADR-0705 §4)。moveId は自分は request 直下、候補は候補の欄に使う。 */
-interface IndividualFormState {
-  readonly speciesKey: string;
-  /** 選んだ種族の表示名(結果の行に出す。オンライン検索では master.species が空なのでここに持つ)。 */
-  readonly speciesName: string;
-  readonly natureId: string;
-  readonly sp: Stats;
-  /**
-   * ランク(-6..+6)は文字列で持つ(type="text" の生の入力そのまま)。type="number" だと、負数を
-   * 1文字ずつ打つ途中の "-" 単独をブラウザ(jsdom)が無効値として即座に "" へ戻してしまい、
-   * user-event でのキー入力を模したテストで負数を入力できない。数への変換は parseRank で行う。
-   */
-  readonly ranks: Record<RankKey, string>;
-  readonly abilityId: string;
-  readonly itemId: string;
-  readonly moveId: string;
-}
-
-/** 未入力の1体(既定値はすべて空・SP とランクは0。ADR-0705 §6)。 */
-function emptyIndividual(): IndividualFormState {
-  return {
-    speciesKey: "",
-    speciesName: "",
-    natureId: "",
-    sp: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
-    ranks: { atk: "0", def: "0", spa: "0", spd: "0", spe: "0" },
-    abilityId: "",
-    itemId: "",
-    moveId: "",
-  };
-}
-
 /** 相手候補1件(React の key 用の id を持つ。BalanceScreen.tsx の MemberState と同じ考え方)。 */
 interface CandidateState extends IndividualFormState {
   readonly id: number;
 }
 
-/** ランクの1欄を数へ変換する(空白のみ・数でなければ NaN)。 */
-function parseRank(raw: string): number {
-  const trimmed = raw.trim();
-  if (trimmed === "") {
-    return Number.NaN;
-  }
-  return Number.parseInt(trimmed, 10);
+/** 検証エラーの置き場の識別子(自分 / 候補の id)。 */
+const ATTACKER_KEY = "attacker";
+function candidateKey(id: number): string {
+  return `candidate-${String(id)}`;
 }
 
-/** validationMessage を通った(= 全欄が -6..+6 の整数の)ランクだけを渡す前提。 */
+/** 検証エラー無し(欄ごとの誤りの置き場。体の識別子 → 誤り)。 */
+const NO_FIELD_ERRORS: ReadonlyMap<string, BodyErrors> = new Map();
+
+/** 検査を通った(= 全欄が -6..+6 の整数の)ランクだけを渡す前提。 */
 function isZeroRanks(ranks: Record<RankKey, string>): boolean {
   return RANK_STATS.every((stat) => parseRank(ranks[stat]) === 0);
 }
 
-/** 検査を通ったランクを数の RankBlock にする(validationMessage が範囲・整数であることを保証済み)。 */
+/** 検査を通ったランクを数の RankBlock にする(検査が範囲・整数であることを保証済み)。 */
 function toRankBlock(ranks: Record<RankKey, string>): Ranks {
   return {
     atk: parseRank(ranks.atk),
@@ -110,15 +83,12 @@ function toRankBlock(ranks: Record<RankKey, string>): Ranks {
 }
 
 /**
- * 数値入力の onChange から整数を読む。空・数でなければ null にし、呼び出し側は state を更新しない
- * (SP は 0 以上なので "-" 単独の問題が無く、type="number" のまま使える)。
+ * SP の入力欄の onChange から整数を読む。空・数でなければ 0 にする(欄を空にしたら 0 に戻る。
+ * SP は 0 以上なので "-" 単独の問題が無く、type="number" のまま使える)。
  */
-function parseIntFieldChange(raw: string): number | null {
-  if (raw.trim() === "") {
-    return null;
-  }
+function parseSpFieldChange(raw: string): number {
   const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) ? null : parsed;
+  return Number.isNaN(parsed) ? 0 : parsed;
 }
 
 /** Individual(自分)を、省略可の欄は選んだときだけ持つ形で組み立てる(ADR-0705 §6: 最小の request)。 */
@@ -142,7 +112,7 @@ function buildIndividual(state: IndividualFormState): Schemas["Individual"] {
 
 /** DefenderCandidate(候補)。Individual と同じ欄 + その候補が使う技(前後の空白を落とす)。 */
 function buildDefender(state: IndividualFormState): Schemas["DefenderCandidate"] {
-  return { ...buildIndividual(state), moveId: state.moveId.trim() };
+  return { ...buildIndividual(state), moveId: state.moveId };
 }
 
 interface BuildRequestInput {
@@ -158,53 +128,12 @@ function buildRequest(input: BuildRequestInput): Schemas["OutspeedAndKoRequest"]
     format: input.format,
     attacker: buildIndividual(input.attacker),
     defenders: input.defenders.map(buildDefender),
-    moveId: input.attacker.moveId.trim(),
+    moveId: input.attacker.moveId,
   };
   if (input.speedField !== undefined) {
     request.speedField = input.speedField;
   }
   return request;
-}
-
-/**
- * 送信前の検査(ADR-0705 §7・受け入れ条件7)。契約の範囲と同じ検査を、呼ぶ前にクライアント側で行う。
- * 違反していれば理由を返す(null は「送ってよい」)。
- */
-function validationMessage(
-  attacker: IndividualFormState,
-  defenders: readonly IndividualFormState[],
-): string | null {
-  const all = [attacker, ...defenders];
-  for (const individual of all) {
-    if (
-      individual.speciesKey.trim() === "" ||
-      individual.natureId.trim() === "" ||
-      individual.moveId.trim() === ""
-    ) {
-      return judgeScreenText.requiredMessage;
-    }
-  }
-  for (const individual of all) {
-    for (const stat of SP_STATS) {
-      const value = individual.sp[stat];
-      if (value < 0 || value > MAX_SP_PER_STAT) {
-        return judgeScreenText.spRangeMessage(MAX_SP_PER_STAT);
-      }
-    }
-    const total = SP_STATS.reduce((sum, stat) => sum + individual.sp[stat], 0);
-    if (total > MAX_SP_TOTAL) {
-      return judgeScreenText.spTotalMessage(MAX_SP_TOTAL);
-    }
-  }
-  for (const individual of all) {
-    for (const stat of RANK_STATS) {
-      const value = parseRank(individual.ranks[stat]);
-      if (Number.isNaN(value) || value < MIN_RANK || value > MAX_RANK) {
-        return judgeScreenText.rankRangeMessage;
-      }
-    }
-  }
-  return null;
 }
 
 /** 送信1回の状態(判別 union)。idle は「判定する」をまだ押していない。 */
@@ -281,18 +210,22 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
   const [attackerTailwind, setAttackerTailwind] = useState(false);
   const [defenderTailwind, setDefenderTailwind] = useState(false);
   const [submitState, setSubmitState] = useState<SubmitState>({ status: "idle" });
+  // 送信時の検証エラー(欄ごと)。送信のたびに作り直す。
+  const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<string, BodyErrors>>(NO_FIELD_ERRORS);
 
   // 送信ごとの連番(古い応答を無視する。ADR-0705 §7・受け入れ条件8)。
   const submitSeqRef = useRef(0);
   // 候補の React key 発行用(削除で index がずれても入力を取り違えない。BalanceScreen.tsx と同じ作法)。
   const nextCandidateIdRef = useRef(1);
 
-  function updateAttacker(patch: Partial<IndividualFormState>): void {
-    setAttacker((current) => ({ ...current, ...patch }));
+  function updateAttacker(update: IndividualUpdate): void {
+    setAttacker(update);
   }
 
-  function updateCandidate(index: number, patch: Partial<IndividualFormState>): void {
-    setCandidates((current) => current.map((entry, i) => (i === index ? { ...entry, ...patch } : entry)));
+  function updateCandidate(index: number, update: IndividualUpdate): void {
+    setCandidates((current) =>
+      current.map((entry, i) => (i === index ? { ...update(entry), id: entry.id } : entry)),
+    );
   }
 
   function addCandidate(): void {
@@ -308,12 +241,22 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
 
   function removeCandidate(index: number): void {
     setCandidates((current) => (current.length <= 1 ? current : current.filter((_, i) => i !== index)));
+    // 誤りの文言の「相手候補n」が番号のずれで古くなるので、いったん消す(次の送信で作り直す)。
+    setFieldErrors(NO_FIELD_ERRORS);
   }
 
   async function handleSubmit(): Promise<void> {
-    const message = validationMessage(attacker, candidates);
-    if (message !== null) {
-      setSubmitState({ status: "validationError", message });
+    const validation = validateBodies([
+      { key: ATTACKER_KEY, who: judgeScreenText.attackerWhoLabel, state: attacker },
+      ...candidates.map((candidate, index) => ({
+        key: candidateKey(candidate.id),
+        who: judgeScreenText.candidateGroupLabel(index + 1),
+        state: candidate,
+      })),
+    ]);
+    setFieldErrors(validation.errors);
+    if (validation.firstMessage !== null) {
+      setSubmitState({ status: "validationError", message: validation.firstMessage });
       return;
     }
     const speedFieldActive = trickRoom || attackerTailwind || defenderTailwind;
@@ -363,6 +306,7 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
         <IndividualFields
           value={attacker}
           onChange={updateAttacker}
+          errors={fieldErrors.get(ATTACKER_KEY)}
           master={master}
           speciesListAvailable={capabilities.speciesList}
           masterSearch={masterSearch}
@@ -410,9 +354,10 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
             <legend>{judgeScreenText.candidateGroupLabel(index + 1)}</legend>
             <IndividualFields
               value={candidate}
-              onChange={(patch) => {
-                updateCandidate(index, patch);
+              onChange={(update) => {
+                updateCandidate(index, update);
               }}
+              errors={fieldErrors.get(candidateKey(candidate.id))}
               master={master}
               speciesListAvailable={capabilities.speciesList}
               masterSearch={masterSearch}
@@ -468,26 +413,75 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
   );
 }
 
+/** 1体分の入力を、いまの値から次の値へ更新する関数(非同期の解決結果が古い値を上書きしないよう、値ではなく関数で渡す)。 */
+type IndividualUpdate = (current: IndividualFormState) => IndividualFormState;
+
 interface IndividualFieldsProps {
   readonly value: IndividualFormState;
-  readonly onChange: (patch: Partial<IndividualFormState>) => void;
+  readonly onChange: (update: IndividualUpdate) => void;
+  /** 送信時の検証エラー(この体の欄ごと)。無ければ undefined。 */
+  readonly errors: BodyErrors | undefined;
   readonly master: MasterData;
   /** capabilities.speciesList(ADR-0304 §1)。false ならドロップダウンの代わりに検索欄を出す。 */
   readonly speciesListAvailable: boolean;
   readonly masterSearch?: MasterSpeciesSearch;
 }
 
+/** 技セレクタの option の表示(「技名・分類・威力n」。変化技は威力を出さない。計算画面と同じ書式)。 */
+function moveOptionText(move: Move): string {
+  const separator = calcScreenText.moveOptionSeparator;
+  const power =
+    move.category === "status" ? "" : `${separator}${calcScreenText.movePowerLabel}${String(move.power)}`;
+  return `${move.nameJa}${separator}${formatMoveCategory(move.category)}${power}`;
+}
+
+/** 誤りの文言の段落(欄の aria-describedby が指す先)。 */
+function ErrorText({ id, message }: { readonly id: string; readonly message: string | null }) {
+  if (message === null) {
+    return null;
+  }
+  return (
+    <p id={id} className="judge-individual__error">
+      {message}
+    </p>
+  );
+}
+
 /**
- * 1体分の入力(種族・性格・SP・ランク・特性・持ち物・技 ID)。自分側・候補側の両方で使う共通部品
- * (ADR-0705 §9: CalcScreen の個体編集フォームは使い回さず、判定に要る欄だけをここに作る)。
+ * 1体分の入力(種族・性格・特性・持ち物・技・調整プリセット。SP6欄・ランク5欄は「詳細」)。自分側・候補側の
+ * 両方で使う共通部品(ADR-0705 §9: CalcScreen の個体編集フォームは使い回さず、判定に要る欄だけをここに作る)。
  */
 function IndividualFields({
   value,
   onChange,
+  errors,
   master,
   speciesListAvailable,
   masterSearch,
 }: IndividualFieldsProps) {
+  const uid = useId();
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  const natures = master.natures;
+  const category = moveCategoryOf(value);
+  const speciesErrorId = `${uid}-species-error`;
+  const natureErrorId = `${uid}-nature-error`;
+  const moveErrorId = `${uid}-move-error`;
+  const spRangeErrorId = `${uid}-sp-range-error`;
+  const spTotalErrorId = `${uid}-sp-total-error`;
+  const rankErrorId = `${uid}-rank-error`;
+
+  // 誤りが「詳細」の中の欄なら、送信のたびに開いて見えるようにする(開閉は体ごとに独立)。
+  useEffect(() => {
+    if (errors !== undefined && hasDetailsError(errors) && detailsRef.current !== null) {
+      detailsRef.current.open = true;
+    }
+  }, [errors]);
+
+  function describedBy(...ids: (string | false)[]): string | undefined {
+    const present = ids.filter((id): id is string => id !== false);
+    return present.length > 0 ? present.join(" ") : undefined;
+  }
+
   return (
     <div className="judge-individual">
       {speciesListAvailable ? (
@@ -495,11 +489,14 @@ function IndividualFields({
           <span>{judgeScreenText.speciesLabel}</span>
           <select
             aria-label={judgeScreenText.speciesLabel}
+            aria-invalid={errors?.species != null}
+            aria-describedby={describedBy(errors?.species != null && speciesErrorId)}
             value={value.speciesKey}
             onChange={(event) => {
-              const speciesKey = event.target.value;
-              const species = master.species.find((candidate) => candidate.key === speciesKey);
-              onChange({ speciesKey, speciesName: species?.nameJa ?? "" });
+              const species = master.species.find((candidate) => candidate.key === event.target.value);
+              if (species !== undefined) {
+                onChange((current) => chooseSpecies(current, species, master.moves, natures));
+              }
             }}
           >
             <option value="" hidden />
@@ -515,18 +512,25 @@ function IndividualFields({
           label={judgeScreenText.speciesLabel}
           masterSearch={masterSearch}
           onResolved={(resolution) => {
-            onChange({ speciesKey: resolution.species.key, speciesName: resolution.species.nameJa });
+            // 検索で解決した種族の技(resolveSpecies が返す learnset の実体)から選ぶ。
+            onChange((current) =>
+              chooseSpecies(current, resolution.species, [...master.moves, ...resolution.moves], natures),
+            );
           }}
         />
       )}
+      <ErrorText id={speciesErrorId} message={errors?.species ?? null} />
 
       <label className="judge-individual__field">
         <span>{judgeScreenText.natureLabel}</span>
         <select
           aria-label={judgeScreenText.natureLabel}
+          aria-invalid={errors?.nature != null}
+          aria-describedby={describedBy(errors?.nature != null && natureErrorId)}
           value={value.natureId}
           onChange={(event) => {
-            onChange({ natureId: event.target.value });
+            const natureId = event.target.value;
+            onChange((current) => editNature(current, natureId, natures));
           }}
         >
           <option value="" hidden />
@@ -537,6 +541,7 @@ function IndividualFields({
           ))}
         </select>
       </label>
+      <ErrorText id={natureErrorId} message={errors?.nature ?? null} />
 
       <label className="judge-individual__field">
         <span>{judgeScreenText.abilityLabel}</span>
@@ -544,7 +549,8 @@ function IndividualFields({
           aria-label={judgeScreenText.abilityLabel}
           value={value.abilityId}
           onChange={(event) => {
-            onChange({ abilityId: event.target.value });
+            const abilityId = event.target.value;
+            onChange((current) => ({ ...current, abilityId }));
           }}
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
@@ -562,7 +568,8 @@ function IndividualFields({
           aria-label={judgeScreenText.itemLabel}
           value={value.itemId}
           onChange={(event) => {
-            onChange({ itemId: event.target.value });
+            const itemId = event.target.value;
+            onChange((current) => ({ ...current, itemId }));
           }}
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
@@ -574,59 +581,114 @@ function IndividualFields({
         </select>
       </label>
 
-      {SP_STATS.map((stat) => (
-        <label key={stat} className="judge-individual__field">
-          <span>{judgeScreenText.spLabel(stat)}</span>
-          <input
-            type="number"
-            aria-label={judgeScreenText.spLabel(stat)}
-            min={0}
-            max={MAX_SP_PER_STAT}
-            value={value.sp[stat]}
-            onChange={(event) => {
-              const parsed = parseIntFieldChange(event.target.value);
-              if (parsed !== null) {
-                onChange({ sp: { ...value.sp, [stat]: parsed } });
-              }
-            }}
-          />
-        </label>
-      ))}
-
-      {RANK_STATS.map((stat) => (
-        <label key={stat} className="judge-individual__field">
-          <span>{judgeScreenText.rankLabel(stat)}</span>
-          {/*
-           * type="number" だと jsdom は "-" 単独(負数を打っている途中)を無効値として即座に ""
-           * へ戻してしまい、キー入力を1文字ずつ追う実際の操作で負数を打てない。ランクは -6..+6 を
-           * 送るため text + inputMode="numeric" にし、入力の生の文字列をそのまま state に持つ
-           * (数への変換・範囲検査は validationMessage / parseRank で行う)。
-           */}
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="-?[0-9]*"
-            aria-label={judgeScreenText.rankLabel(stat)}
-            value={value.ranks[stat]}
-            onChange={(event) => {
-              onChange({ ranks: { ...value.ranks, [stat]: event.target.value } });
-            }}
-          />
-        </label>
-      ))}
-
       <label className="judge-individual__field">
-        <span>{judgeScreenText.moveIdLabel}</span>
-        <input
-          type="text"
-          aria-label={judgeScreenText.moveIdLabel}
+        <span>{judgeScreenText.moveLabel}</span>
+        <select
+          aria-label={judgeScreenText.moveLabel}
+          aria-invalid={errors?.move != null}
+          aria-describedby={describedBy(errors?.move != null && moveErrorId)}
+          disabled={value.moves.length === 0}
           value={value.moveId}
           onChange={(event) => {
-            onChange({ moveId: event.target.value });
+            const moveId = event.target.value;
+            onChange((current) => chooseMove(current, moveId, natures));
           }}
-        />
+        >
+          {value.moves.map((move) => (
+            <option key={move.id} value={move.id}>
+              {moveOptionText(move)}
+            </option>
+          ))}
+        </select>
       </label>
-      <p className="judge-individual__hint">{judgeScreenText.moveIdHint}</p>
+      {value.speciesKey !== "" && value.moves.length === 0 && (
+        <p className="judge-individual__hint">{judgeScreenText.moveUnavailableNotice}</p>
+      )}
+      <ErrorText id={moveErrorId} message={errors?.move ?? null} />
+
+      <div
+        role="radiogroup"
+        aria-label={judgeScreenText.presetGroupLabel}
+        className="judge-individual__presets"
+      >
+        {JUDGE_PRESET_KEYS.map((key) => (
+          <label key={key} className="judge-individual__field">
+            <input
+              type="radio"
+              name={`${uid}-preset`}
+              checked={value.presetKey === key}
+              onChange={() => {
+                onChange((current) => applyPreset(current, key, natures));
+              }}
+            />
+            {judgePresetLabel(key, category)}
+          </label>
+        ))}
+      </div>
+
+      {/* SP6欄とランク5欄だけを畳む。閉じても値は state に残り、送信に使う。 */}
+      {/* details の暗黙の group ロールは外す(相手候補の fieldset の group と数えが混ざらないように) */}
+      <details ref={detailsRef} role="none" className="judge-individual__details">
+        <summary>{judgeScreenText.detailsSummaryLabel}</summary>
+        <div className="judge-individual">
+          {SP_STATS.map((stat) => {
+            const rangeInvalid = errors?.spRangeStats.has(stat) === true;
+            const totalInvalid = errors?.spTotal != null;
+            return (
+              <label key={stat} className="judge-individual__field">
+                <span>{judgeScreenText.spLabel(stat)}</span>
+                <input
+                  type="number"
+                  aria-label={judgeScreenText.spLabel(stat)}
+                  aria-invalid={rangeInvalid || totalInvalid}
+                  aria-describedby={describedBy(
+                    rangeInvalid && spRangeErrorId,
+                    totalInvalid && spTotalErrorId,
+                  )}
+                  min={0}
+                  max={MAX_SP_PER_STAT}
+                  value={value.sp[stat]}
+                  onChange={(event) => {
+                    const parsed = parseSpFieldChange(event.target.value);
+                    onChange((current) => editSp(current, { ...current.sp, [stat]: parsed }, natures));
+                  }}
+                />
+              </label>
+            );
+          })}
+          <ErrorText id={spRangeErrorId} message={errors?.spRange ?? null} />
+          <ErrorText id={spTotalErrorId} message={errors?.spTotal ?? null} />
+
+          {RANK_STATS.map((stat) => {
+            const invalid = errors?.rankStats.has(stat) === true;
+            return (
+              <label key={stat} className="judge-individual__field">
+                <span>{judgeScreenText.rankLabel(stat)}</span>
+                {/*
+                 * type="number" だと jsdom は "-" 単独(負数を打っている途中)を無効値として即座に ""
+                 * へ戻してしまい、キー入力を1文字ずつ追う実際の操作で負数を打てない。ランクは -6..+6 を
+                 * 送るため text + inputMode="numeric" にし、入力の生の文字列をそのまま state に持つ
+                 * (数への変換・範囲検査は parseRank / judgeValidation.ts で行う)。
+                 */}
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  pattern="-?[0-9]*"
+                  aria-label={judgeScreenText.rankLabel(stat)}
+                  aria-invalid={invalid}
+                  aria-describedby={describedBy(invalid && rankErrorId)}
+                  value={value.ranks[stat]}
+                  onChange={(event) => {
+                    const raw = event.target.value;
+                    onChange((current) => ({ ...current, ranks: { ...current.ranks, [stat]: raw } }));
+                  }}
+                />
+              </label>
+            );
+          })}
+          <ErrorText id={rankErrorId} message={errors?.rankRange ?? null} />
+        </div>
+      </details>
     </div>
   );
 }

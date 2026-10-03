@@ -189,6 +189,8 @@ export const appText = {
    */
   masterLoadErrorDetailLabel: "原因",
   masterLoadRetryLabel: "再試行",
+  /** ADR-0313: オフラインでキャッシュが空(初回・未取得・破棄後)のときの案内。 */
+  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてマスタを取得してください",
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
@@ -260,7 +262,8 @@ export const balanceClientText = {
  * 内部メッセージ)を出さず、コードからここを引く。Web 側の balance_unavailable も同じ表で引く。
  */
 export const balanceErrorText = {
-  missing_request_context: "端末の情報を送れませんでした。ページを開き直してください",
+  missing_header: "端末の情報を送れませんでした。ページを開き直してください",
+  invalid_header: "端末の情報が正しくありません。ページを開き直してください",
   invalid_request: "リクエストが正しくありません。入力を見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
   unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
@@ -502,10 +505,20 @@ export const judgeScreenText = {
   natureLabel: "性格",
   abilityLabel: "特性",
   itemLabel: "持ち物",
-  moveIdLabel: "技の ID",
-  /** 技を一覧から選べない理由(ADR-0304 §3 の既知の欠落。ADR-0705 §5)。 */
-  moveIdHint: "技は ID で入力します(ID から技を引く API がまだありません)",
   unselectedOption: "未選択",
+  // ---- issue 309: 技はポケモンの覚える技から選ぶ。調整はプリセット。数値欄は「詳細」に畳む ----
+  /** 技の select の名前(自分側・候補で共通。計算画面の calcScreenText.moveLabel と同じ語)。 */
+  moveLabel: "技",
+  /** 覚える技を1件も引けないとき(learnset が空・技の実体を解決できない)。技の select は disabled のまま。 */
+  moveUnavailableNotice: "この種族の技を読み込めません",
+  /** 数値の直接入力(SP6欄・ランク5欄)を畳む <details> の summary。 */
+  detailsSummaryLabel: "詳細",
+  /** 調整プリセットの radiogroup の名前(自分側・候補で共通。候補の group で絞り込む)。 */
+  presetGroupLabel: "調整",
+  /** 最速プリセット(S 全振り + 素早さ上昇の性格)の表示名。無振り・A特化は attackerPresetText、HB/HD特化は defenderPresetText から。 */
+  fastestPresetLabel: "最速",
+  /** 検証エラーの「どの体か」(自分側。候補は candidateGroupLabel(n) を使う)。 */
+  attackerWhoLabel: "自分",
   spLabel: (stat: StatKey): string => `${statLetterJa[stat]} のポイント`,
   rankLabel: (stat: StatKey): string => `${statLetterJa[stat]} のランク`,
   formatLabel: "対戦形式",
@@ -530,7 +543,7 @@ export const judgeScreenText = {
   spRangeMessage: (max: number): string => `能力ポイントは0〜${max}の整数で入力してください`,
   spTotalMessage: (max: number): string => `能力ポイントの合計は${max}までです`,
   rankRangeMessage: "ランクは-6〜+6の整数で入力してください",
-  requiredMessage: "ポケモン・性格・技の ID をすべて入力してください",
+  requiredMessage: "ポケモン・性格・技をすべて選んでください",
   // ---- 結果(ADR-0705 §8)。judge の値をそのまま出す ----
   speedLabel: (attacker: number, defender: number): string => `素早さ ${attacker} 対 ${defender}`,
   priorityLabel: (attacker: number, defender: number): string => `優先度 ${attacker} 対 ${defender}`,
@@ -824,4 +837,27 @@ export const resultText = {
   effectivenessNeutral: "等倍",
   effectivenessSuper: (multiplier: number): string => `ばつぐん(×${multiplier})`,
   moveCategory: { physical: "物理", special: "特殊", status: "変化" },
+} as const;
+
+/**
+ * 「このアプリについて」(issue 328 / P6-18、ADR-0314)の文言。非公式の注記・データの出典4件は iOS の
+ * PokeCalcCore.AboutText と一字一句同じ(正は docs/ai-shared/DECISIONS.md 2026-09-26「P6-18」と ADR-0002「責務の分離」表)。
+ * 出典を増減するときは ADR-0002・ADR-0501「P6-18」・iOS と同時に直す。
+ */
+export const aboutText = {
+  footerLinkLabel: "このアプリについて",
+  pageHeading: "このアプリについて",
+  unofficialHeading: "非公式表示",
+  unofficialNotice:
+    "このアプリは個人が私的に使うための非公式ツールです。" +
+    "任天堂・クリーチャーズ・ゲームフリーク・株式会社ポケモンとは関係ありません。" +
+    "ポケモン・Pokémon および関連する名称は各社の商標です。",
+  dataSourcesHeading: "データの出典",
+  dataSources: [
+    { title: "ダメージ計算の検証", detail: "@smogon/calc(MIT License)" },
+    { title: "ポケモン・技・習得技の照合", detail: "Pokémon Showdown(MIT License)" },
+    { title: "日本語名・図鑑番号", detail: "PokeAPI" },
+    { title: "使用可能なポケモン等の基準", detail: "Pokémon HOME・Pokémon Champions の公式情報" },
+  ],
+  backLabel: "計算に戻る",
 } as const;

@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.7.0
+  version: 0.8.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
@@ -10,6 +10,8 @@ info:
     TB4 は仮想敵(最大 6 体)ごとに、各メンバーが受ける最大倍率と与える最大倍率、安全に受けられる人数を返す。
     TB5 はチームの防御の穴・攻撃範囲の穴をふさげるタイプの候補と、そのタイプを持つポケモン、特性で穴をふさげるポケモンを返す。
     TB6 は技構成(技 ID 1〜4 件)そのものの攻撃範囲と、その技構成を半減以下で受けられる実在ポケモン(タイプだけ・特性ありの別枠)を返す。
+    0.8.0: X-Device-Id / X-Session-Id を gateway と同じ正準形 UUID で検証し、ヘッダー起因の 400 の code を
+    missing_header / invalid_header に分けた(missing_request_context は廃止。破壊的変更。ADR-0413)。
     契約の正は docs/adr/0014-balance-tb1-defense-analysis.md、docs/adr/0016-balance-tb2-offense-coverage.md、
     docs/adr/0017-balance-tb3-ability-effects.md、docs/adr/0400-balance-tb4-threat-check.md、
     docs/adr/0401-balance-tb5-recommend-types.md、docs/adr/0404-balance-tb6-move-range-checker.md。
@@ -66,7 +68,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/AnalyzeResponse'
         '400':
-          description: Invalid request or missing request context
+          description: Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
           content:
             application/json:
               schema:
@@ -128,7 +130,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/CoverageResponse'
         '400':
-          description: Invalid request or missing request context
+          description: Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
           content:
             application/json:
               schema:
@@ -187,7 +189,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ThreatsResponse'
         '400':
-          description: Invalid request or missing request context
+          description: Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
           content:
             application/json:
               schema:
@@ -258,7 +260,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/RecommendationsResponse'
         '400':
-          description: Invalid request or missing request context
+          description: Invalid request (invalid_request), or a missing / invalid X-Device-Id / X-Session-Id (missing_header / invalid_header)
           content:
             application/json:
               schema:
@@ -336,7 +338,7 @@ paths:
                 $ref: '#/components/schemas/MoveRangeResponse'
         '400':
           description: |
-            Invalid request or missing request context (invalid_request / missing_request_context):
+            Invalid request, or a missing / invalid request context header (invalid_request / missing_header / invalid_header):
             moveIds absent, empty, more than four, malformed, duplicated, or resolving to status moves only.
           content:
             application/json:
@@ -377,6 +379,10 @@ components:
       name: X-Device-Id
       in: header
       required: true
+      description: |
+        Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        the header more than once is invalid_header (ADR-0413, same rule as the gateway).
       schema:
         type: string
         minLength: 1
@@ -384,6 +390,10 @@ components:
       name: X-Session-Id
       in: header
       required: true
+      description: |
+        Canonical 8-4-4-4-12 hex UUID (case-insensitive, any version). Braces, a urn:uuid: prefix, or the
+        32-digit form without hyphens are invalid_header; a missing or empty value is missing_header; sending
+        the header more than once is invalid_header (ADR-0413, same rule as the gateway).
       schema:
         type: string
         minLength: 1
@@ -442,7 +452,8 @@ components:
     ErrorCode:
       type: string
       enum:
-        - missing_request_context
+        - missing_header
+        - invalid_header
         - invalid_request
         - request_too_large
         - unknown_pokemon

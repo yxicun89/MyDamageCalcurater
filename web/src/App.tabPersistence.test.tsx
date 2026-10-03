@@ -319,6 +319,8 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
   }
 
   test("計算モードを切り替えてマスタが入れ替わると、マスタに無い種族が選ばれたまま残らない", async () => {
+    // 既定がオンラインになったため、オフライン保存済みから始める(ADR-0313。spec-writer の更新漏れを実装側で補った)。
+    window.localStorage.setItem("pokecalc.calcMode", "offline");
     const { offline, online } = await swappedMasters();
     const offlineSource: MasterSource = { load: () => Promise.resolve(offline) };
     const onlineSource: MasterSource = { load: () => Promise.resolve(online) };
@@ -362,6 +364,8 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
   });
 
   test("オフラインに戻しても、前のマスタの入力を復活させない", async () => {
+    // 既定がオンラインになったため、オフライン保存済みから始める(ADR-0313)。
+    window.localStorage.setItem("pokecalc.calcMode", "offline");
     const { offline, online } = await swappedMasters();
     const [attacker] = offline.species;
     if (attacker === undefined) {

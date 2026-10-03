@@ -182,6 +182,9 @@ func TestServeClosesConnectionMissingHeaders(t *testing.T) {
 	go func() { done <- serve(ctx, addr, http.NotFoundHandler()) }()
 	waitForListen(t, addr)
 
+	// サーバーの ReadHeaderTimeout は接続の受理から数え始めるので、計測は接続の前から始める
+	// (write の後だと、サーバーの方が先に数え始めて elapsed が閾値を僅かに下回ることがある)。
+	start := time.Now()
 	conn, err := net.Dial("tcp", addr)
 	if err != nil {
 		t.Fatalf("接続できない: %v", err)
@@ -192,7 +195,6 @@ func TestServeClosesConnectionMissingHeaders(t *testing.T) {
 		t.Fatalf("write: %v", err)
 	}
 	_ = conn.SetReadDeadline(time.Now().Add(readHeaderTimeout + 5*time.Second))
-	start := time.Now()
 	buf := make([]byte, 1)
 	if _, err := conn.Read(buf); err == nil {
 		t.Fatal("readHeaderTimeout を過ぎても接続が切れない(応答が読めてしまった)")
