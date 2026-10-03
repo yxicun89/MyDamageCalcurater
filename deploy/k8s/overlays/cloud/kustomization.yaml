@@ -6,5 +6,7 @@ resources:
   - ../../base
 patches:
   - path: cronjob-import-suspend-patch.yaml
+  # TiDB・Secret が無い(ADR-0220 §1)。
+  - path: cronjob-expire-suspend-patch.yaml
   # public な入口を作らない(ADR-0210 §2)。base の gateway Ingress は local(k3d/Traefik)専用。
   - path: gateway-ingress-delete-patch.yaml

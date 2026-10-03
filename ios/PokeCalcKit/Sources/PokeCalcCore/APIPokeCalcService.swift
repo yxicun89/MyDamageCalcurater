@@ -9,8 +9,8 @@ import PokeCalcAPI
 /// 閉じる。契約(`api/openapi.yaml`)が変わったら、直すのはここだけでよい。
 /// 全操作に `X-Device-Id` / `X-Session-Id`(必須ヘッダー)を付ける。
 public struct APIPokeCalcService: PokeCalcService {
-    private let client: Client
-    private let identity: ClientIdentity
+    let client: Client
+    let identity: ClientIdentity
 
     public init(client: Client, identity: ClientIdentity) {
         self.client = client
@@ -239,7 +239,7 @@ public struct APIPokeCalcService: PokeCalcService {
     /// 応答をデコードできない(`decode`)を区別する。キャンセルは包まずに投げ直す。
     /// 応答があってエラー body を持つケース(400/404/default)はここでは捕まえない
     /// (呼び出し側が `switch output` で明示的に写す)。
-    private func send<T>(_ operation: () async throws -> T) async throws -> T {
+    func send<T>(_ operation: () async throws -> T) async throws -> T {
         do {
             return try await operation()
         } catch is CancellationError {
@@ -274,20 +274,20 @@ public struct APIPokeCalcService: PokeCalcService {
         return clientError.underlyingError is DecodingError
     }
 
-    private static func domainError(_ response: Components.Responses._Error) throws -> PokeCalcError {
+    static func domainError(_ response: Components.Responses._Error) throws -> PokeCalcError {
         try Self.domainErrorFromSchema(response.body.json)
     }
 
     /// 503 は5つの pokedex 操作では `Components.Responses._Error` ではなく、そのパスだけの
     /// inline body(`Output.ServiceUnavailable.Body.json: Components.Schemas._Error`)で届く
     /// (openapi の `#/responses/Error` を再利用していないため)。同じ形なので写像は共通にする。
-    private static func domainErrorFromSchema(_ error: Components.Schemas._Error) -> PokeCalcError {
+    static func domainErrorFromSchema(_ error: Components.Schemas._Error) -> PokeCalcError {
         PokeCalcError(code: error.code.rawValue, message: error.message)
     }
 
     // MARK: - 応答 → ドメイン
 
-    private static func domainSpeciesSummary(_ summary: Components.Schemas.SpeciesSummary) -> SpeciesSummary {
+    static func domainSpeciesSummary(_ summary: Components.Schemas.SpeciesSummary) -> SpeciesSummary {
         SpeciesSummary(
             key: summary.key, dexNo: summary.dexNo, form: summary.form, nameJa: summary.nameJa,
             types: summary.types.map(domainPokeType)
@@ -319,7 +319,7 @@ public struct APIPokeCalcService: PokeCalcService {
         )
     }
 
-    private static func domainStatBlock(_ block: Components.Schemas.StatBlock) -> StatBlock {
+    static func domainStatBlock(_ block: Components.Schemas.StatBlock) -> StatBlock {
         StatBlock(hp: block.hp, atk: block.atk, def: block.def, spa: block.spa, spd: block.spd, spe: block.spe)
     }
 
@@ -342,7 +342,7 @@ public struct APIPokeCalcService: PokeCalcService {
 
     /// 未対応の印(ADR-0123・ADR-0501「P6-17」1章)。契約は target/reason を enum にしない(ADR-0215)ので、
     /// 知らない値は `.unknown` に写す(応答全体をデコード失敗にしない)。
-    private static func domainUnsupportedMark(_ mark: Components.Schemas.UnsupportedMark) -> UnsupportedMark {
+    static func domainUnsupportedMark(_ mark: Components.Schemas.UnsupportedMark) -> UnsupportedMark {
         UnsupportedMark(target: UnsupportedTarget(contractValue: mark.target),
                         reason: UnsupportedReason(contractValue: mark.reason), id: mark.id)
     }
@@ -421,7 +421,7 @@ public struct APIPokeCalcService: PokeCalcService {
 
     // MARK: - ドメイン → 要求
 
-    private static func generatedIndividual(_ individual: Individual) -> Components.Schemas.Individual {
+    static func generatedIndividual(_ individual: Individual) -> Components.Schemas.Individual {
         .init(
             speciesKey: individual.speciesKey,
             level: individual.level,
@@ -436,7 +436,7 @@ public struct APIPokeCalcService: PokeCalcService {
         )
     }
 
-    private static func generatedStatBlock(_ block: StatBlock) -> Components.Schemas.StatBlock {
+    static func generatedStatBlock(_ block: StatBlock) -> Components.Schemas.StatBlock {
         .init(hp: block.hp, atk: block.atk, def: block.def, spa: block.spa, spd: block.spd, spe: block.spe)
     }
 
@@ -589,7 +589,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
-    private static func domainStatKey(_ key: Components.Schemas.StatKey) -> StatKey {
+    static func domainStatKey(_ key: Components.Schemas.StatKey) -> StatKey {
         switch key {
         case .hp: return .hp
         case .atk: return .atk
@@ -600,7 +600,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
-    private static func domainMoveCategory(_ category: Components.Schemas.MoveCategory) -> MoveCategory {
+    static func domainMoveCategory(_ category: Components.Schemas.MoveCategory) -> MoveCategory {
         switch category {
         case .physical: return .physical
         case .special: return .special
@@ -620,7 +620,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
-    private static func generatedFormat(_ format: Format) -> Components.Schemas.Format {
+    static func generatedFormat(_ format: Format) -> Components.Schemas.Format {
         switch format {
         case .single: return .single
         case .double: return .double
