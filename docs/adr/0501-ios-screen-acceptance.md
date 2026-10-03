@@ -4294,3 +4294,78 @@ XCUITest の追加 5 件はコンパイルのみ確認(構文解析)。画像あ
   `SpeciesEmblemView` の3か所を置き換え(`SpeciesHeaderMenuLabel` 経由で逆算・調整・構築編集のヘッダーも画像対応)、`CoreServices.images`(既定 `NoImageCatalog`)、`RootView` で Environment 注入。
 - 判断: `accessibilityHidden` は使わず、成功した画像に `.accessibilityElement(children: .ignore)` + identifier を付けて公開したところ XCUITest から見えた(ADR-0508 §6 のリスクは発生せず)。
   URL 検証は `%` と `:` も拒否(相対パスに現れない文字。エンコード回避・scheme 偽装の防止)。
+
+## お気に入り・計算履歴の受け入れ条件(2026-10-04。設計は ADR-0509、契約は ADR-0227。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+### 受け入れ条件(検証可能な形)
+
+- **AC-X(最優先)**: 既存の `swift test`・全 XCUITest が無変更で通る。モックの既定(`POKECALC_MOCK_FAVORITES` 未設定)は空のストアで、既存画面は何も変わらない。
+  既存テスト・identifier は変えない。`api/openapi.yaml` は触らない。
+- **AC-1 API 写像**(`APIFavoritesServiceTests`): 一覧は `GET /api/record/favorites`(クエリ無し)、作成は `POST`(本文は `label?` と `individual` だけ。
+  `id`・時刻を送らない・`moveId` を送らない)、削除は `DELETE /api/record/favorites/{id}`(本文なし)。すべて `X-Device-Id`・`X-Session-Id` を付ける。
+  一覧はサーバーの順を保ち、`label` null は nil。作成は 201→`created`・200→`alreadyPinned`。204 は成功。400・404・500・503(`store_unavailable`/`upstream_unavailable`)・
+  通信失敗は `PokeCalcError` に code のまま写す(上限到達の 400 `invalid_input` を握りつぶさない)。
+- **AC-2 ラベル**(`FavoriteLabel.normalize`): 前後空白除去・空は未設定・30コードポイントに切り詰め(絵文字も1と数える)。送る前に必ず通す。
+- **AC-3 一覧 ViewModel**(`FavoritesViewModel`): 名前をサーバーの順のまま解決し、引けない種族・マスタの失敗でも行を残す(題名は label → 種族名 → 「不明なポケモン」)。
+  空は `.loaded`(失敗と区別)。失敗は `.failed(種類)`、再試行で回復、再読み込みの失敗は表示中の一覧を消さない。新しい読み込みが古い応答(成功も失敗も)を捨てる。
+  キャンセルは一覧も状態も変えず失敗にしない。サービス nil は何もしない。100件で `isAtLimit`。
+- **AC-4 外す**: 成功・404 は一覧から除く(404 は失敗を見せない)。それ以外の失敗は一覧を保ち `actionError`(読み込み状態は壊さない)。成功で前の `actionError` を消す。
+  外している最中の同じ ID の再タップは要求を増やさない。外した項目は、削除前に始まった読み込みの古い応答で復活しない。
+- **AC-5 追加 ViewModel**(`FavoritePinViewModel`): ラベル無しで個体をそのまま1回送る。`pinned`/`alreadyPinned`/`failed(種類)`。保存中の再呼び出しは無視。
+  キャンセルは `.idle`(失敗にしない)。`reset()` は保存中以外で `.idle`。サービス nil は `isAvailable == false` で何もしない。
+- **AC-6 計算履歴**(`OpponentHistoryViewModel`。データ源は既存の `FrequentOpponentsService`): `limit` は 50。サーバーの順・件数・最終計算時刻を保つ。
+  名前を引けない相手は行を残す(ピッカーと違う)。同じ key は先頭だけ。空は `.loaded`。失敗の扱い・古い応答の破棄・キャンセルは AC-3 と同じ。
+  「3回」「最後: 今日/昨日/N日前」は暦日(Calendar)の差で、未来は今日。生の履歴一覧は契約待ちと画面に注記する。
+- **AC-7 エラー文言**(`RecordScreenError`): code→種類(transport・decode/unexpectedStatus→unexpectedResponse・503 2種→storeUnavailable・not_found・invalid_input・その他)。
+  文言は `FavoritesLabels` に集約した日本語で、サーバーの英語 `message` と `code` を含まない。503 は「計算はそのまま使えます」を含む。上限の文言は `RequestLimits.maxFavorites` から作る。
+- **AC-8 契約同期**: `RequestLimits.maxFavorites`(=listFavorites の maxItems)・`maxFavoriteLabelLength`(=FavoriteInput.label.maxLength)が
+  `ios/scripts/check-request-limits.sh` で契約と一致する。
+- **AC-9 モック**(`MockFavoritesService`): 既定は空のストアで、追加(新しい順・同じ内容は `alreadyPinned` で先頭へ)・削除(2回目 404)が動く。
+  `list`(102「HB特化」9002-000・101 9003-000)/`fail`(transport)/`unavailable`(503)/`full`(100件・新規は 400 `invalid_input`)。架空の 9xxx だけ。
+- **AC-10 画面(XCUITest・モック)**: ルートのピル `openFavoritesScreen` → `favoritesScreen`。`favoritesSection`(`favoritesEmpty`/`favoriteRow-<id>`/`favoriteDeleteButton-<id>`/
+  `favoritesError`+`favoritesRetryButton`/`favoritesActionError`)・`opponentHistorySection`(`opponentHistoryRow-<key>`/`opponentHistoryEmpty`/`opponentHistoryError`+`opponentHistoryRetryButton`/
+  `opponentHistoryPendingNote`)。計算画面に `pinAttackerFavoriteButton`・`pinDefenderFavoriteButton`・`favoritePinStatus`。
+  通信失敗・503・空・上限でも画面を壊さず、計算は成功する(絶対ルール5)。外すボタン 36pt 以上。AX5 で横にはみ出さず外すボタンを押せる。
+
+### 追加したテスト
+
+- `PokeCalcKit/Tests/PokeCalcCoreTests/APIFavoritesServiceTests.swift`(14 件)
+- `FavoritesViewModelTests.swift`(18 件)・`FavoritePinViewModelTests.swift`(9 件)・`OpponentHistoryViewModelTests.swift`(14 件)
+- `RecordScreenErrorTests.swift`(6 件。ラベル正規化を含む)・`MockFavoritesServiceTests.swift`(8 件)
+- 支援: `Support/StubFavoritesService.swift`
+- `ios/PokeCalcUITests/FavoritesScreenUITests.swift`(13 件)
+- 契約同期: `ios/scripts/check-request-limits.sh` に maxFavorites・maxFavoriteLabelLength を追加(`ios-check-request-limits` が通る)
+- 足場(`TODO(implementer P5-3c iOS` で検索): `Favorites.swift`・`OpponentHistory.swift`・`MockFavoritesService.swift`・`APIPokeCalcService+Favorites.swift`、
+  `RequestLimits` の2定数。文言 `FavoritesLabels` は確定値
+
+### spec 時点の結果(2026-10-04)
+
+追加した単体テスト 69 件〈上の内訳の合計〉のうち 66 件が失敗する想定どおり(足場が空・throw のため)。`swift test` 全体は 1237 件・既存 1158 件は全件成功。
+`make ios-gen-check` 成功・`ios/scripts/check-request-limits.sh` 成功。XCUITest 13 件は `xcodebuild build-for-testing` でコンパイルのみ確認(identifier が無いので実行すると失敗する想定)。
+
+### 実装者への注意
+
+- 足場の `TODO(implementer P5-3c iOS` を実装する。API 写像は `FrequentOpponentsService` の extension(`APIPokeCalcService.swift` 末尾)を見本に、
+  `client.listFavorites` / `createFavorite`(201/200 を `Output` で区別)/ `deleteFavorite`(204)を呼ぶ。`generatedIndividual` を再利用し、生成型 → ドメインの
+  `Individual` 逆写像(SpeciesKey・StatBlock・teraType の `value1` 包み)を足す。`moveId` は契約に無いので送らない・読まない。
+- 画面: `ios/PokeCalc/Features/FavoritesFeature.swift`(`AppFeature`。`registerServices` で `FavoritesService` をモック/API で登録、`requiredServices` に入れる)と
+  `FeatureRegistry` の1行だけ。`RootView`・`AppEnvironment` の `.ready` は編集しない。履歴は `context.core.frequentOpponents`・名前の解決は `context.core.pokeCalc`。
+  計算画面の追加ボタンは `context.services.resolve((any FavoritesService).self)` を `CalcScreenView` に任意で渡す(`frequentOpponentsService` と同じ流儀)。
+- **見た目の規約**: design.md のトークンのみ・`lineLimit` を付けない・常時アニメ無し・タップ範囲 36pt 以上。Menu の中の identifier は外から見えにくいので、
+  外すボタンは Menu に入れず直接のボタンにする。**子が1つだけの `.accessibilityElement(children: .contain)` は中の識別子を畳む**ので、
+  セクションは見出し+中身で子を2つ以上にする(空のときも見出し+案内文)。行の `favoriteRow-<id>`・`opponentHistoryRow-<key>` は label に題名・件数を含める。
+  AX5 では横並びを縦積みに切り替える(`dynamicTypeSize >= .accessibility1`。他画面と同じ)。
+- 文言は `FavoritesLabels` に集約済み。画面に直書きしない。件数の数字も `RequestLimits` から。
+- `README.md`(ios)に `POKECALC_MOCK_FAVORITES`・`POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH` を追記。ルートのピルが1つ増えるので、既存 UI テストのスクロール位置を壊さないか全 XCUITest で確認する。
+- 実在ポケモンの実データをフィクスチャにしない(9001〜9004 だけ)。`docs/plan.md` の更新は依頼元(本タスクでは触っていない)。
+
+
+### 実装結果(2026-10-04)
+
+- `swift test` 1237 件・失敗 0(spec 時点の失敗 66 件が全件成功。既存 1158 件は無変更で成功)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。
+  `xcodebuild build-for-testing`(generic/platform=iOS Simulator)成功。
+- `FavoritesScreenUITests` 13 件を iPhone 18 Pro シミュレータで実行し 13 件成功(テストは無変更。全体の XCUITest は別途)。
+- 判断: 計算画面の追加ボタンは、既存テストの位置を動かさないよう結果セクションの**下**に置いた(`FavoritePinSection`)。防御側の個体は計算が種族だけで防御側を指定するため、
+  無補正の性格・SP 0・画面で選んだ特性の個体として追加する(`CalcViewModel.defenderIndividualForFavorite()`。攻撃側は計算に使う個体そのまま)。
+  名前の解決は `SpeciesNameResolver`(お気に入り・履歴で共通)。外した ID は、その時点で進行中の読み込みの応答からも除く(復活防止)。
+- テストと実装の矛盾は無かった。
