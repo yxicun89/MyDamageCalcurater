@@ -4441,3 +4441,5 @@ XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので
 - 逸脱 3(テストの操作のみ): `CalcViewModelDefenderRanksTests.testStaleResponseDoesNotOverwriteLatestRows` は cancel 済みの古い要求に `resolveBulkWithEcho` を呼んでいた(スタブは cancel で保留を外すため失敗)。
   その呼び出しを `waitForBulkCancellation(at:)` に置き換えた。検証(最新の結果だけが残る・エラー無し・isLoading false)は変えていない。
 - ステッパーのボタンは最小 37pt(36 ちょうどは丸め誤差で 35.99 になり不合格)。攻撃側と共有。
+
+- **既存テストの操作の追従(2026-10-04。防御側のランク)**: 防御側のランクの行を「詳細」の末尾に足したことで、画面の小さい機種(iPhone 17e)では既存の `CalcConditionsUITests.scrollUntilHittable` が上へスクロールし過ぎて上にある攻撃側のランクを通り越した(iPhone 18 Pro では通っていた)。上へのスクロールで届かないときだけ下へ戻る `swipeDown` を足した。最後の `XCTAssertTrue(target.isHittable)` は変えていない(検証は弱めていない)。両機種で `CalcConditionsUITests`・`CalcDefenderRanksUITests` が全件成功。
