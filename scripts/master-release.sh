@@ -52,14 +52,15 @@ esac
 
 echo "== 2. read model を export して検証"
 pf_pid=""
-cleanup() { if [ -n "$pf_pid" ]; then kill "$pf_pid" 2>/dev/null || true; fi; }
+cleanup() { if [ -n "$pf_pid" ]; then kill "$pf_pid" 2>/dev/null || true; wait "$pf_pid" 2>/dev/null || true; fi; }
 trap cleanup EXIT
 if [ -z "${POKEDEX_DATABASE_DSN:-}" ]; then
   command -v nc >/dev/null 2>&1 || fail "nc が無い(port-forward の疎通確認に使う)"
   if nc -z 127.0.0.1 "$local_port" 2>/dev/null; then
     fail "127.0.0.1:$local_port は使用中。MIGRATE_LOCAL_PORT=<空きポート> を付けて再実行する"
   fi
-  kc port-forward svc/mysql "$local_port:3306" >/dev/null 2>&1 &
+  # 関数 kc を背景で呼ぶとサブシェルの PID になり、kill しても kubectl が残る。kubectl を直接背景で起動する。
+  kubectl --context "$context" -n "$namespace" port-forward svc/mysql "$local_port:3306" >/dev/null 2>&1 &
   pf_pid=$!
   ready=0
   for _ in $(seq 1 20); do
