@@ -316,7 +316,8 @@ func (s *TiDBStore) ListFavorites(ctx context.Context, deviceID string) ([]Favor
 // CreateFavorite は同じ Snapshot があれば updated_at を進めて返し、無ければ上限を確かめて挿入する。
 // 端末ごとの直列化は devices 行のロックで行う(ADR-0227 §3)。
 func (s *TiDBStore) CreateFavorite(ctx context.Context, deviceID string, fav Favorite, now time.Time) (Favorite, FavoriteOutcome, error) {
-	now = now.UTC()
+	// DATETIME(6) の精度に丸める(応答の時刻と DB・一覧の値を一致させる)。
+	now = now.UTC().Truncate(time.Microsecond)
 	hash := snapshotHash(fav.Snapshot)
 
 	got, outcome, err := s.createFavoriteTx(ctx, deviceID, fav, hash, now)

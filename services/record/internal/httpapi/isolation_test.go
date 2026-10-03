@@ -85,12 +85,12 @@ func TestDeviceIDInQueryOrBodyIsRejected(t *testing.T) {
 
 // AC-D2 の対応: record-svc の契約でリソース ID をパスに受けてよいのは、AC-D2 の実テストを
 // 持つ操作だけ。P5-3 の時点では1つも無く(集計と全削除だけ)、「パスパラメータが無い」ことを
-// 固定していた。P5-3c(ADR-0227)でお気に入りの削除 `DELETE /api/record/favorites/{favoriteId}` が
+// 固定していた。この関数名は旧名 TestRecordOperationsHaveNoPathParameters(許可リスト方式に変えたので改名)。P5-3c(ADR-0227)でお気に入りの削除 `DELETE /api/record/favorites/{favoriteId}` が
 // 入り、その AC-D2 の実テストは favorites_test.go の TestOtherDevicesFavoriteIsNotFound が持つ。
 // 許可するのは下の表に載せた (パス, パラメータ名) だけで、**それ以外のパスパラメータが増えたら
 // このテストが落ちる**(増やすときは AC-D2 の実テストを足してから表に加えること)。
 // あわせて、許可した操作が実際に端末 ID をパスで受けていないこと(パラメータ名が端末 ID でない)も見る。
-func TestRecordOperationsHaveNoPathParameters(t *testing.T) {
+func TestRecordPathParametersAreAllowlisted(t *testing.T) {
 	// AC-D2 の実テストを持つパスパラメータ(パス → パラメータ名 → そのテスト名)。
 	allowed := map[string]map[string]string{
 		"/api/record/favorites/{favoriteId}": {"favoriteId": "TestOtherDevicesFavoriteIsNotFound"},

@@ -308,7 +308,7 @@ func (s *Server) CreateFavorite(ctx *echo.Context, params api.CreateFavoritePara
 	status := http.StatusCreated
 	err = touchAndRun(ctx.Request().Context(), s.store, params.XDeviceId, func() error {
 		saved, outcome, err := s.store.CreateFavorite(ctx.Request().Context(), params.XDeviceId,
-			store.Favorite{SpeciesKey: snap.Individual.SpeciesKey, Snapshot: raw}, time.Now().UTC())
+			store.Favorite{SpeciesKey: snap.Individual.SpeciesKey, Snapshot: raw}, time.Now().UTC().Truncate(time.Microsecond))
 		if err != nil {
 			if errors.Is(err, store.ErrFavoriteLimitReached) {
 				return newError(api.InvalidInput, "1端末が持てるお気に入りの上限(%d件)に達している", store.MaxFavoritesPerDevice)

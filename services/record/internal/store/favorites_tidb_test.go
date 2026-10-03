@@ -366,3 +366,36 @@ func TestTiDBFavoritesUnavailable(t *testing.T) {
 		t.Errorf("DeleteFavorite = %v, want ErrUnavailable", err)
 	}
 }
+
+// 時刻の精度: 丸めていない now(ナノ秒つき)を渡しても、作成の応答・DB・一覧・再ピン留めの応答が
+// 同じ値(DATETIME(6) のマイクロ秒)になる(応答だけがナノ秒を持って DB とずれない)。
+func TestTiDBCreateFavoriteTruncatesTimeToMicroseconds(t *testing.T) {
+	db := testDB(t)
+	st := newStore(db, hugeHalfLife, 1000)
+	deviceID := newDeviceID(t)
+	now := time.Now().UTC().Truncate(time.Second).Add(123456789 * time.Nanosecond)
+	want := now.Truncate(time.Microsecond)
+
+	fav, _, err := st.CreateFavorite(ctx(), deviceID, newFavorite("ns"), now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !fav.CreatedAt.Equal(want) || !fav.UpdatedAt.Equal(want) {
+		t.Errorf("作成の応答 = %v/%v, want %v", fav.CreatedAt, fav.UpdatedAt, want)
+	}
+	list, err := st.ListFavorites(ctx(), deviceID)
+	if err != nil || len(list) != 1 {
+		t.Fatalf("一覧 = %v, %v", list, err)
+	}
+	if !list[0].CreatedAt.Equal(fav.CreatedAt) || !list[0].UpdatedAt.Equal(fav.UpdatedAt) {
+		t.Errorf("一覧の時刻 = %v/%v, want 作成の応答と同じ %v/%v", list[0].CreatedAt, list[0].UpdatedAt, fav.CreatedAt, fav.UpdatedAt)
+	}
+	later := now.Add(time.Hour + 987*time.Nanosecond)
+	again, _, err := st.CreateFavorite(ctx(), deviceID, newFavorite("ns"), later)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !again.UpdatedAt.Equal(later.Truncate(time.Microsecond)) || !favoriteUpdatedAt(t, db, fav.ID).Equal(again.UpdatedAt) {
+		t.Errorf("再ピン留めの updatedAt = %v は DB の値 %v と同じで、マイクロ秒に丸まる", again.UpdatedAt, favoriteUpdatedAt(t, db, fav.ID))
+	}
+}

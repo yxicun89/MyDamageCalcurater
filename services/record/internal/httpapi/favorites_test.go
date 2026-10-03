@@ -2,7 +2,7 @@ package httpapi
 
 // お気に入り(手動ピン留め)の受け入れテスト(ADR-0227。P5-3c)。AC-F1〜AC-F10。
 // 端末分離(AC-D1・AC-D2・AC-D3)の実操作での検証も、record ではここで初めて持つ(ADR-0209 §6・
-// isolation_test.go の TestRecordOperationsHaveNoPathParameters の申し送り)。
+// isolation_test.go の TestRecordPathParametersAreAllowlisted の申し送り)。
 //
 // **test-first(ADR-0003)**: 実装前に書いた。実装者が追加するもの(このテストが前提にする形):
 //

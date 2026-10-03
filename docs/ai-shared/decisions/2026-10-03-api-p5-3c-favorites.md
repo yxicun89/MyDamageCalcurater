@@ -1,5 +1,5 @@
 ## 2026-10-03: お気に入り(手動ピン留め)の API 契約を追加(API レーンから Web・iOS レーンへ。P5-3c・ADR-0227)
-Decision: `api/openapi.yaml` に record-svc のお気に入り API を追加した(契約先行。record-svc の実装も同じブランチで済み。critic 待ち)。
+Decision: `api/openapi.yaml` に record-svc のお気に入り API を追加した(契約先行。record-svc の実装も同じブランチで済み。critic PASS・ADR-0227 採用)。
 - `GET /api/record/favorites`(`listFavorites`): この端末のピンを `updatedAt` 降順(同時刻は `id` 降順)で全件。最大100件・ページングなし。無ければ空配列。
 - `POST /api/record/favorites`(`createFavorite`): 本文 `FavoriteInput = { label?: string|null(30文字まで), individual: Individual }`。新規は 201、**同じ内容(label + 既定値を補った individual)がすでにあれば 200 で既存を返す**(`updatedAt` が進み一覧の先頭へ)。上限100件を超える作成は 400 `invalid_input`。
 - `DELETE /api/record/favorites/{favoriteId}`(`deleteFavorite`): 204。持っていない・他端末・形式違いの ID は 404 `not_found`。
