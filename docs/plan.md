@@ -116,6 +116,7 @@
 - [x] issue #305
 - [x] issue #248
 - [x] issue #218
+- [x] 画面レジストリ化(ユーザー決定 2026-10-03。ADR-0323): 画面・タブを足すとき `App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` を編集しない構造にした(登録ファイル `*.screen.tsx`・クライアントは `createClient`・文言は `i18n/<レーン>.ts`)。既存の挙動・テストの期待値は不変
 - [x] issue #271 / issue #270
 - [ ] 判定画面(JD5 `JudgeScreen`)の「未対応」の印への追従(issue #271 / #270 の判定レーン分。**上の
   Web レーンの PR の対象外**)。judge の契約は計算・逆算と別の形(`attackerKoUnsupported` /

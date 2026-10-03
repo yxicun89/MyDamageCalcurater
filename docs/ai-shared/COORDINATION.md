@@ -158,6 +158,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 |---|---|
 | `docs/ai-shared/state/<レーン>.md` | 自分が進めているレーンのファイルだけ編集する(`CURRENT_STATE.md` は索引) |
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
+| Web の画面・タブ(`web/src/App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts`) | 画面の追加では編集しない。自分のディレクトリに登録ファイル `<id>.screen.tsx` を置き、文言は `web/src/i18n/<レーン>.ts` に足す(ADR-0323) |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
 | ルートの `Makefile` | 自分のレーンのサービスの `include <path>/Makefile` の1行を追記してよい(タイプバランスは `include services/balance/Makefile`。ターゲット名は `balance-` 接頭辞) |
 | `AGENTS.md` / `CLAUDE.md` / 本ファイル | 運用ルールの変更は、ユーザーの決定があったときだけ。変更したら `DECISIONS.md` に記録する |
