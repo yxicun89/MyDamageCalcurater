@@ -311,7 +311,7 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
   - [x] P8-1a 範囲確定・AC・失敗するテスト(2026-10-03。ADR-0807。MinIO は入れず、手元画像を `make assets` で WebP 128/512+manifest に変換し、gateway が `GATEWAY_IMAGES_DIR` から `/images/*` を配信。`/assets/*` は不変。テスト: `tools/assets/convert.test.mjs`・gateway `images_test.go`・`images_env_test.go`。いずれも実装前なので失敗する)
   - [x] P8-1b 実装(2026-10-03): `tools/assets/convert.mjs`(+package.json・README)・`make assets`・gateway `/images/*`・`make dev` の配線。k3d への配線(volume mount)は `make up` を壊すため未対応(k3d では現状画像を出せない旨を docs/runbooks/images.md に記載。ADR-0807 追記)
-  - [ ] P8-1c 表示側「画像があれば表示・無ければエンブレム」(Web レーン・iOS レーンへ依頼。決定は decisions/2026-10-03-tb-p8-1-images-scope.md)
+  - [x] P8-1c ポケモン画像の表示(Web 分。ADR-0325。担当: Web。manifest(`/images/manifest.json`、契約は ADR-0807)を起動時に1回取り、あれば `<img loading="lazy" alt="">`、無い・未取得・失敗・読み込み失敗はタイプ色エンブレム。`web/src/images/`〈`pokemonImages.ts`・`PokemonImagesContext.tsx`・`PokemonImage.tsx`〉、App の `imageFetch`、計算画面の攻撃側・防御側カードと素早さ画面の各行に適用、`vite.config.ts` の `IMAGES_PROXY_TARGET`。画像なしの現状で既存テスト・e2e が全て通る。判定画面・iOS は対象外)
 - 公開時の名称・画像の差し替え構造(requirements.md「知財」): **後回し**。公開のタイミング(R-2-9・LICENSE・issue #328。ブロッカー節)と同時に決める。画像は P8-1 でキー(`{図鑑番号4桁}-{フォルム3桁}`)による差し替え構造になる
 
 ## ブロッカー
