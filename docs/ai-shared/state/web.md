@@ -179,6 +179,7 @@ create/update/removeのレースコンディションで作成直後の構築が
 **critic 2回目PASS**。`npx vitest run`1745/1745・`make web-e2e`37/37・typecheck/lint無回帰。
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
+Next(P5-3c お気に入り Web 分): 実装済み・コミット前(ADR-0327 採用)。残りは PR 化のみ。タブが1つ増えた(8タブ。order 650、構築と調整の間)ので、タブ数・並びを固定した既存テストと e2e/a11y.spec.ts を更新済み。「お気に入りを計算に入れる」は P5-3d 候補。iOS 分は未着手。
 Next(P8-1c 画像表示 Web 分): 実装済み・コミット前(ADR-0325 採用)。残りは PR 化のみ。判定画面の画像は判定レーンが `PokemonImage` を使えば足せる(`web/src/judge/` は未編集)。
 Next: **P5-5(構築ビルダー・Showdown 形式の入出力を含む)は全子項目が完了**(P5-5e = ADR-0321。履歴一覧は record-svc に API が無く対象外)。
 **Web レーンの実装は完了**(2026-10-03。#451・#459・#462・#481・#486・#489・#525 を ADR-0803 の手順〈CI 全件成功+`--match-head-commit`〉でマージ済み)。

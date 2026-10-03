@@ -232,11 +232,17 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
     const judgeTab = screen.getByRole("tab", { name: "判定" });
     const teamTab = screen.getByRole("tab", { name: "構築" });
+    // P5-3c(ADR-0327): お気に入りは構築と調整の間(order 650)。
+    const favoritesTab = screen.getByRole("tab", { name: "お気に入り" });
     const adjustTab = screen.getByRole("tab", { name: "調整" });
     calcTab.focus();
     await user.keyboard("{End}");
     expect(adjustTab).toHaveAttribute("aria-selected", "true");
     expect(adjustTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
+    expect(favoritesTab).toHaveAttribute("aria-selected", "true");
+    expect(favoritesTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
     expect(teamTab).toHaveAttribute("aria-selected", "true");

@@ -84,8 +84,11 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { AddFavoriteButton } from "../favorites/AddFavoriteButton";
 import type { RecordClient } from "../record/recordClient";
 import { useFrequentOpponents } from "../record/useFrequentOpponents";
+import { resolveNatureId } from "../api/apiEngine";
+import { favoriteInputOf } from "../favorites/favoriteInput";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
@@ -246,6 +249,8 @@ export interface CalcScreenProps {
    * 省略は「出さない」(失敗・0件・オフラインと同じく黙って非表示。計算には影響しない)。
    */
   readonly recordClient?: RecordClient;
+  /** P5-3c(ADR-0327): 攻撃側をお気に入りに追加できたとき(App がお気に入りタブの一覧を取り直させる)。 */
+  readonly onFavoriteAdded?: () => void;
 }
 
 /** 計算の状態(判別 union)。idle は入力が揃っていない、status-move は変化技を選んでいる。 */
@@ -291,7 +296,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
 }
 
 /** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
-export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcScreenProps) {
+export function CalcScreen({ engine, master, masterSearch, recordClient, onFavoriteAdded }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
   // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
@@ -445,6 +450,25 @@ export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcS
           ),
     [defenderSpecies, defenderAbilityOptions, defenderAbilityId],
   );
+
+  // P5-3c(ADR-0327 §2): お気に入りに入れる攻撃側(種族・性格・SP・持ち物)。技の分類が決まるまでは物理扱いのプリセット。
+  const favoriteInput = useMemo(() => {
+    if (attackerSpecies === null) {
+      return null;
+    }
+    const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move?.category ?? DEFAULT_MOVE_CATEGORY);
+    const natureId = resolveNatureId(master.natures, nature);
+    if (natureId === undefined) {
+      return null;
+    }
+    return favoriteInputOf({
+      label: attackerSpecies.nameJa,
+      speciesKey: attackerSpecies.key,
+      natureId,
+      sp,
+      itemId: attackerItem?.id ?? null,
+    });
+  }, [attackerSpecies, attackerPresetKey, move, master.natures, attackerItem]);
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);
@@ -779,6 +803,9 @@ export function CalcScreen({ engine, master, masterSearch, recordClient }: CalcS
               value={attackerPresetKey}
               onChange={setAttackerPresetKey}
             />
+          )}
+          {recordClient !== undefined && (
+            <AddFavoriteButton recordClient={recordClient} input={favoriteInput} onAdded={onFavoriteAdded} />
           )}
         </SpeciesCard>
         <button type="button" className="calc-screen__swap" onClick={swap}>
