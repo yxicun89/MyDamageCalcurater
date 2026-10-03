@@ -448,7 +448,8 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #232(データ/APIレーン)テラス・ダブルを指定した計算に「未対応」の印を付ける(ADR-0160)。Web・iOS の表示文言(ラベル・型)は別 issue。#510(ADR-0222)の後に取り込み、ADR-0222 §5 で format=double の印を外した(未知の形式とテラスの印は残す)
 - [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
 
-- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
+- [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業)
+- [x] issue #505(データレーン)wasmapi(オフライン計算)にメガ種族の持ち物検証を入れ calc-svc と揃える(ADR-0321。parity テスト・Go/WASM 一致ベクタ。Web が isMega・requiredItemId を境界へ渡す変更は Web レーンの次の作業)
 - [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)
 - [x] issue #515 の Web 分 PR-A(ADR-0320): メガ種族の持ち物をメガストーンに固定する共通ドメイン(`web/src/domain/mega.ts`。PR-B〈構築の編集・判定〉が再利用)と、計算画面・逆算画面(持ち物欄 disabled+理由+aria-describedby、メガストーンは単独の選択肢・候補比較・逆算の持ち物候補に出さない、防御側/相手がメガのときは探索しない)。マスタ写像(`isMega`・`requiredItemId`)・キャッシュのスキーマ版 1→2・E2E フィクスチャ(`withMegaFixture`)まで。構築の編集・判定と古い保存データの補正は PR-B
 - [x] issue #515 の Web 分 PR-B(ADR-0320): 構築のメンバー編集(`changeSpecies` の持ち物整合・`correctMegaItem`・持ち物欄の固定+理由+ストーン名表示。古い保存データは開いたとき〈一覧の無いマスタは種族の解決後〉に1回だけストーンへ直し、メンバーの枠に `role="status"` で通知。未保存の変更として持ち、自動保存しない)と、判定画面の自分・相手の候補の個体入力(同じ固定。要求の `itemId` にストーン)。これで issue #515 の Web 分は完了

@@ -119,8 +119,8 @@ engine は性格を構造値 `{Plus, Minus}` で持ち、ID を持たない。ca
   1件でも別の持ち物があれば要求全体を拒否し、黙って除外はしない)。検証は持ち物・種族の ID 解決と SP 検査の後(特性・状態の解決より前。`unknown_item` と
   SP 超過が先)。サーバーが持ち物候補を展開する経路は無い(省略時は「持ち物なし」の1通り。ADR-0208 の行数・件数上限と
   既定の応答形は変わらない)ので、不可能な組合せを作る経路も無い。通常種族の応答は変わらない。実装は `master.Store.MegaRequiredItem`
-  (マスタの `isMega`・`requiredItemId` を保持)。WASM 側(`engine/wasmapi`)の種族 DTO は `isMega`・`requiredItemId` を持たないため
-  同じ規則は未実装(オフライン計算ではメガ種族に別の持ち物を持たせても計算される)。issue #505 で追跡。
+  (マスタの `isMega`・`requiredItemId` を保持)。WASM 側(`engine/wasmapi`)にも同じ規則・同じ文言を入れた(issue #505・ADR-0321。種族 DTO の
+  `isMega`・`requiredItemId`。parity は `mega_parity_test.go`)。Web が両フィールドを渡すまでオフライン計算では効かない(ADR-0321)。
 
 ## 受け入れ条件と担当テスト
 

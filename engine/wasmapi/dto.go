@@ -219,6 +219,10 @@ type speciesDTO struct {
 	Types     []string `json:"types"`
 	BaseStats statsDTO `json:"baseStats"`
 	Abilities []string `json:"abilities"`
+	// IsMega・RequiredItemID はメガシンカ後の種族の印と必須の持ち物(issue #505。ADR-0321)。
+	// engine.Species には渡さず、境界の持ち物検証(mega.go)だけが使う。省略は通常の種族。
+	IsMega         bool   `json:"isMega"`
+	RequiredItemID string `json:"requiredItemId"`
 }
 
 func (s speciesDTO) toEngine(path string) (engine.Species, error) {
