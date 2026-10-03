@@ -447,6 +447,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #276
 - [x] issue #232(データ/APIレーン)テラス・ダブルを指定した計算に「未対応」の印を付ける(ADR-0160)。Web・iOS の表示文言(ラベル・型)は別 issue。#510(ADR-0222)の後に取り込み、ADR-0222 §5 で format=double の印を外した(未知の形式とテラスの印は残す)
 - [x] issue #232 のダブル分(ADR-0222)ダブルの壁(2732/4096)と全体技(×3072/4096)を engine・wasmapi に反映。`Move.Target`(single/spread)・ダブルで技の対象が不明な攻撃技は move_target_unknown の印。テラスはゲームに無いので実装しない。ゴールデン doubles 全件一致・既存9ファイル不変。#497 マージ後の format 印の整理は ADR-0222 §5
+- [x] issue #232 のテラス分(ADR-0224)テラスタルをオプションの機能として engine・wasmapi に反映(ユーザー決定 2026-10-03「機能だけ追加し、オプションで選択できる」)。teraType を指定したときだけ、攻撃側のタイプ一致補正(元タイプ一致・テラス一致・てきおうりょく)と「タイプを持つか」の判定(接地・サイコフィールドの先制技・すなあらし/ゆき)に反映。省略時は従来と完全に同じ。攻撃側の attacker_tera_type の印は外し、防御側の defender_tera_type の印は残す(防御側テラスは oracle に合わせて相性に反映しない)。ゴールデン tera・tera-random 全件一致、既存9ファイルは不変、known_diffs への追加なし。**人間の確認待ち(既定案付き)**: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=人間の承認が必要。ADR-0224 Q1)
 
 - [x] issue #315 のメガ部分(API レーン)メガシンカ後の種族に requiredItemId 以外の持ち物を持たせた計算を 400 invalid_input で拒否(ADR-0200 §4 追記。テラスタイプは別作業、WASM 側の規則は未実装で issue #505 で追跡)
 - [x] issue #515 の API 分(Web レーンが越境): `GET /api/pokedex/species/{key}` の `SpeciesDetail` に `isMega`(常に)・`requiredItemId`(メガでなければ null。キーは常に出す)を追加。`SpeciesSummary` には足さない(docs/mega-evolution-spec.md §2 の「公開 API に既にある」を訂正)

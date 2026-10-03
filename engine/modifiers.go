@@ -58,7 +58,7 @@ type AbilityEffect struct {
 // hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る
 // (@smogon/calc の Pokemon.hasType。ADR-0224)。テラス無しは元のタイプ。
 func hasType(in Individual, t Type) bool {
-	if in.TeraType != "" {
+	if in.TeraType != TypeNone {
 		return in.TeraType == t
 	}
 	return hasOriginalType(in, t)

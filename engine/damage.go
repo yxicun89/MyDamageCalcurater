@@ -158,6 +158,10 @@ func (r DamageResult) MaxDamage() int { return r.Rolls[15] }
 
 // stabModifier はタイプ一致補正値を返す(通常 ModifierStab、てきおうりょく等 AbilityEffect.StabMod
 // (ModifierAdaptability)、不一致 Modifier4096)。
+// 4096 を基準に、元のタイプ一致で +2048、テラスタイプ一致(teraType 指定時。ADR-0224)で +2048 を足す
+// (テラス = 元のタイプ = 技で ×2.0、テラスが別タイプでも元タイプの技は ×1.5 のまま、テラスだけ一致で ×1.5)。
+// 特性の強化分(StabMod − ModifierStab)は「そのタイプを持つ」技のときだけ足し、テラスが元のタイプのときは
+// その半分にする(@smogon/calc の getStabMod と同じ)。
 func stabModifier(in DamageInput, moveType Type) (int, bool) {
 	if moveType == TypeNone {
 		return Modifier4096, false
@@ -167,7 +171,7 @@ func stabModifier(in DamageInput, moveType Type) (int, bool) {
 	if hasOriginalType(in.Attacker, moveType) {
 		mod += stabBonus
 	}
-	teraMatch := in.Attacker.TeraType != "" && in.Attacker.TeraType == moveType
+	teraMatch := in.Attacker.TeraType != TypeNone && in.Attacker.TeraType == moveType
 	if teraMatch {
 		mod += stabBonus
 	}
