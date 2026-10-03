@@ -399,6 +399,7 @@ func fullItemEffect() engine.ItemEffect {
 		BoostType:          "fire",
 		BoostTypeMod:       4915,
 		ResistBerryType:    "water",
+		SpeedMods:          []engine.SpeedMod{{Condition: engine.SpeedConditionAlways, Modifier: 2048}},
 		// 未対応の印(ADR-0123)。本番のデータでは補正と混ぜないが(生成器が確かめる)、形としては往復できる。
 		UnsupportedAttacker: true,
 		UnsupportedDefender: true,
@@ -407,17 +408,19 @@ func fullItemEffect() engine.ItemEffect {
 
 func fullAbilityEffect() engine.AbilityEffect {
 	return engine.AbilityEffect{
-		StabMod:              8192,
-		OffBoostType:         "grass",
-		OffBoostTypeMod:      6144,
-		DefResistType:        map[engine.Type]int{"fire": 2048, "normal": 2048},
-		DefImmuneTypes:       []engine.Type{"grass"},
-		DefAbsorbTypes:       map[engine.Type]engine.AbsorbEffect{"water": {HealNumerator: 1, HealDenominator: 4}},
-		ReduceSuperEffective: 3072,
-		IgnoresBurn:          true,
-		Airborne:             true,
-		UnsupportedAttacker:  true,
-		UnsupportedDefender:  true,
+		StabMod:                   8192,
+		OffBoostType:              "grass",
+		OffBoostTypeMod:           6144,
+		DefResistType:             map[engine.Type]int{"fire": 2048, "normal": 2048},
+		DefImmuneTypes:            []engine.Type{"grass"},
+		DefAbsorbTypes:            map[engine.Type]engine.AbsorbEffect{"water": {HealNumerator: 1, HealDenominator: 4}},
+		ReduceSuperEffective:      3072,
+		IgnoresBurn:               true,
+		Airborne:                  true,
+		SpeedMods:                 []engine.SpeedMod{{Condition: engine.SpeedConditionWeatherRain, Modifier: 8192}},
+		IgnoresParalysisSpeedDrop: true,
+		UnsupportedAttacker:       true,
+		UnsupportedDefender:       true,
 	}
 }
 

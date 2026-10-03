@@ -143,6 +143,17 @@ func DecodeNameOverrides(raw []byte) (NameOverrides, error) {
 // master.DecodeItemEffect/DecodeAbilityEffect で行う)。
 func DecodeEffectsFile(raw []byte) (EffectsFile, error) {
 	var f EffectsFile
+	// encoding/json は節の名前の大文字小文字を無視して一致させるので、先に厳密に確かめる。
+	var sections map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &sections); err == nil {
+		for k := range sections {
+			switch k {
+			case "schemaVersion", "items", "abilities", "speedItems", "speedAbilities":
+			default:
+				return EffectsFile{}, fmt.Errorf("%w: effects.json の未知の節 %q", ErrInvalidInput, k)
+			}
+		}
+	}
 	if err := strictDecode(raw, &f); err != nil {
 		return EffectsFile{}, err
 	}
