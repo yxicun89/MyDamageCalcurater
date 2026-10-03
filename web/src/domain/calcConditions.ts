@@ -1,4 +1,4 @@
-// issue 274(ADR-0312): 計算画面の「詳細」の条件(急所・やけど・天候・フィールド・防御側の壁・攻撃側のランク)と、
+// issue 274(ADR-0312): 計算画面の「詳細」の条件(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク)と、
 // それを要求の部品に直す純粋関数。要求の形はここ1か所で決める。
 // 既定のままなら何も足さない(要求は従来とバイト単位で同じ。false・none・全 0 も送らない)。
 
@@ -19,6 +19,9 @@ export const MAX_RANK = 6;
 /** 画面で編集するランクのステータス(物理・変化 = atk、特殊 = spa)。 */
 export type EditableRankStat = "atk" | "spa";
 
+/** 画面で編集する防御側のランクのステータス(物理・変化 = def〈B〉、特殊 = spd〈D〉)。 */
+export type EditableDefenderRankStat = "def" | "spd";
+
 export interface CalcConditions {
   readonly critical: boolean;
   readonly burned: boolean;
@@ -26,6 +29,8 @@ export interface CalcConditions {
   readonly terrain: TerrainId;
   readonly defenderScreens: Screens;
   readonly ranks: Readonly<Record<EditableRankStat, number>>;
+  /** 防御側のランク。def / spd は別々に保持する(技の分類を往復しても消さない。ADR-0315)。 */
+  readonly defenderRanks: Readonly<Record<EditableDefenderRankStat, number>>;
 }
 
 export const DEFAULT_CALC_CONDITIONS: CalcConditions = {
@@ -35,6 +40,7 @@ export const DEFAULT_CALC_CONDITIONS: CalcConditions = {
   terrain: "none",
   defenderScreens: { reflect: false, lightScreen: false, auroraVeil: false },
   ranks: { atk: 0, spa: 0 },
+  defenderRanks: { def: 0, spd: 0 },
 };
 
 /** 要求に足す部品。触っていない条件はキーごと無い。 */
@@ -43,6 +49,7 @@ export interface ConditionRequestParts {
   readonly status?: "burn";
   readonly field?: Field;
   readonly ranks?: Ranks;
+  readonly defenderOverride?: { readonly ranks: Ranks };
 }
 
 /** ランクを -6..+6 の整数に収める(小数は丸め、NaN は 0)。 */
@@ -58,17 +65,27 @@ export function rankStatFor(category: MoveCategory | null): EditableRankStat {
   return category === "special" ? "spa" : "atk";
 }
 
-const RANK_STAT_LETTER: Record<EditableRankStat, string> = { atk: "A", spa: "C" };
+/** 技の分類から、編集する防御側のランクのステータスを決める(変化技・技なしは def)。 */
+export function defenderRankStatFor(category: MoveCategory | null): EditableDefenderRankStat {
+  return category === "special" ? "spd" : "def";
+}
+
+const RANK_STAT_LETTER: Record<EditableRankStat | EditableDefenderRankStat, string> = {
+  atk: "A",
+  spa: "C",
+  def: "B",
+  spd: "D",
+};
 
 /** 表示用の文字列(「A +1」「C -2」「A ±0」)。 */
-export function formatRank(stat: EditableRankStat, value: number): string {
+export function formatRank(stat: EditableRankStat | EditableDefenderRankStat, value: number): string {
   const signed = value > 0 ? `+${String(value)}` : value < 0 ? String(value) : "±0";
   return `${RANK_STAT_LETTER[stat]} ${signed}`;
 }
 
 /** 条件を要求の部品にする。既定なら空のオブジェクト。 */
 export function conditionRequestParts(conditions: CalcConditions): ConditionRequestParts {
-  const { critical, burned, weather, terrain, defenderScreens, ranks } = conditions;
+  const { critical, burned, weather, terrain, defenderScreens, ranks, defenderRanks } = conditions;
   const anyScreen = defenderScreens.reflect || defenderScreens.lightScreen || defenderScreens.auroraVeil;
   const field: Field = {
     ...(weather === "none" ? {} : { weather }),
@@ -82,5 +99,12 @@ export function conditionRequestParts(conditions: CalcConditions): ConditionRequ
     ...(ranks.atk === 0 && ranks.spa === 0
       ? {}
       : { ranks: { atk: ranks.atk, def: 0, spa: ranks.spa, spd: 0, spe: 0 } }),
+    ...(defenderRanks.def === 0 && defenderRanks.spd === 0
+      ? {}
+      : {
+          defenderOverride: {
+            ranks: { atk: 0, def: defenderRanks.def, spa: 0, spd: defenderRanks.spd, spe: 0 },
+          },
+        }),
   };
 }

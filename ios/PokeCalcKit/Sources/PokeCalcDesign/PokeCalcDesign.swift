@@ -137,6 +137,38 @@ public enum TypeColorToken {
     public static func color(forTypeID id: String) -> Color? {
         colorsByTypeID[id]?.color
     }
+
+    // MARK: - 文字色(design.md「タイプバッジ」。P6-21)
+
+    /// 背景色 `background`(不透明)の上に載せる文字色。黒 #000000 か白 #FFFFFF のうち、WCAG 2.2 の
+    /// コントラスト比が高い方(同値なら黒)。
+    public static func preferredInk(over background: RGBA) -> RGBA {
+        let black = RGBA(red: 0, green: 0, blue: 0, alpha: 1.0)
+        let white = RGBA(red: 255, green: 255, blue: 255, alpha: 1.0)
+        let backgroundLuminance = relativeLuminance(background)
+        let blackContrast = (backgroundLuminance + 0.05) / (relativeLuminance(black) + 0.05)
+        let whiteContrast = (relativeLuminance(white) + 0.05) / (backgroundLuminance + 0.05)
+        return whiteContrast > blackContrast ? white : black
+    }
+
+    /// WCAG 2.2 の相対輝度(0〜1)。sRGB の1チャンネル(0〜255)を線形値にして重み付けする。
+    private static func relativeLuminance(_ color: RGBA) -> Double {
+        func linear(_ channel255: Int) -> Double {
+            let channel = Double(channel255) / 255
+            return channel <= 0.03928 ? channel / 12.92 : pow((channel + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * linear(color.red) + 0.7152 * linear(color.green) + 0.0722 * linear(color.blue)
+    }
+
+    /// タイプ ID のバッジ・エンブレム文字色(黒/白)。未知の ID は nil。
+    /// `rgba(forTypeID:)` から `preferredInk(over:)` で導く(文字色の表を二重に持たない)。
+    public static func ink(forTypeID id: String) -> RGBA? {
+        rgba(forTypeID: id).map(preferredInk(over:))
+    }
+
+    public static func inkColor(forTypeID id: String) -> Color? {
+        ink(forTypeID: id)?.color
+    }
 }
 
 /// design.md「文字」。iOS は SF Pro Rounded(`.rounded` デザインの system font で得られる)。

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"example.com/pokecalc/services/judge/internal/api"
@@ -78,8 +77,8 @@ func (handler) PublicHealth(c *echo.Context) error {
 }
 
 // OutspeedAndKo implements POST /api/judge/v1/outspeed-and-ko (ADR-0701 §1・§5). Header
-// presence/blankness is already checked by the requireRequestContext middleware registered in
-// New, ahead of the generated parameter binding.
+// validity (missing/empty, non-canonical UUID, duplicated; ADR-0219) is already checked by the
+// requireRequestContext middleware registered in New, ahead of the generated parameter binding.
 func (h handler) OutspeedAndKo(c *echo.Context, params api.OutspeedAndKoParams) error {
 	return outspeedAndKo(c, h.deps, params)
 }
@@ -90,26 +89,22 @@ func health(c *echo.Context) error {
 	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
 }
 
-// requireRequestContext rejects a missing/blank X-Device-Id or X-Session-Id before the
-// generated parameter binding runs (ADR-0701 §5: header check is first, ahead of the body).
-// It runs ahead of ServerInterfaceWrapper.OutspeedAndKo (echo runs per-route middleware before
-// the wrapped handler), so a blank header (present but "") never reaches the wrapper's own
-// presence-only check.
+// requireRequestContext rejects a missing/empty (400 missing_header) or non-canonical-UUID /
+// duplicated (400 invalid_header) X-Device-Id or X-Session-Id before the generated parameter
+// binding runs (ADR-0701 §5: header check is first, ahead of the body; ADR-0219). It runs ahead
+// of ServerInterfaceWrapper.OutspeedAndKo (echo runs per-route middleware before the wrapped
+// handler), so the wrapper's own presence-only check never sees a bad header.
 func requireRequestContext(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		if strings.TrimSpace(c.Request().Header.Get(deviceIDHeader)) == "" ||
-			strings.TrimSpace(c.Request().Header.Get(sessionIDHeader)) == "" {
-			return c.JSON(http.StatusBadRequest, api.Error{
-				Code:    api.InvalidRequest,
-				Message: "X-Device-Id and X-Session-Id are required",
-			})
+		if apiErr := checkAPIHeaders(c.Request().Header); apiErr != nil {
+			return c.JSON(http.StatusBadRequest, *apiErr)
 		}
 		return next(c)
 	}
 }
 
-// writeHTTPError normalizes any error the generated parameter binding raises directly (e.g. a
-// duplicate header) to the same Error{code: invalid_request} shape as the rest of the API
+// writeHTTPError normalizes any error the generated parameter binding raises directly (header
+// problems are already handled by requireRequestContext) to the same Error{code: invalid_request} shape as the rest of the API
 // (same pattern as services/speed and services/balance).
 func writeHTTPError(c *echo.Context, err error) {
 	if response, _ := echo.UnwrapResponse(c.Response()); response != nil && response.Committed {

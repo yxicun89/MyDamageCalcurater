@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// ShowdownTransfer: 構築のテキスト書き出し・取り込みの通信を伴う部分(P6-20。ADR-0502・ADR-0501「P6-20」)。
+// ShowdownTransfer: 構築のテキスト書き出し・取り込みの通信を伴う部分(P6-20。ADR-0506・ADR-0501「P6-20」)。
 // 計算は `PokeCalcService` のマスタ参照だけを使い、
 // 失敗しても画面・保存済みの構築を壊さない(絶対ルール5)。
 

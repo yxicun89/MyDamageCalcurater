@@ -25,6 +25,13 @@ public enum RequestLimits {
     /// `components.schemas` のプロパティではなく `paths./api/pokedex/moves/batch.get` のクエリパラメータ
     /// なので、`check-request-limits.sh` の照合はスキーマの `maxItems` とは別の経路で行う。
     public static let maxMoveBatchIds = 64
+
+    /// `listMoveLearners`(`GET /api/pokedex/moves/{key}/learners`)の `limit` の `default`。調整画面の
+    /// 「この技を覚えるポケモン」の1ページの件数(Web の `LEARNERS_PAGE_SIZE` と同じ。ADR-0502 §7)。
+    /// 返った件数がこれちょうどなら「続きを読み込む」を出す(総数は返らない。ADR-0251 §1)。
+    public static let moveLearnersPageSize = 50
+    /// `AdjustHits` の `maximum`(engine の `MaxAdjustHits`)。調整画面の発数の選択肢の上限(ADR-0502 §2)。
+    public static let maxAdjustHits = 10
 }
 
 /// 件数の上限に達したことを画面に出す文言(`MasterSearchLabels` と同じ理由でコードに1か所持つ)。

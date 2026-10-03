@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-// P6-20: 名前の戦略(英語名への拡張点。ADR-0502 §4)。既定は日本語名。
+// P6-20: 名前の戦略(英語名への拡張点。ADR-0506 §4)。既定は日本語名。
 final class ShowdownNamingTests: XCTestCase {
     func testJapaneseNamingUsesNameJaAndTypeLabels() {
         let naming = JapaneseShowdownNaming()
