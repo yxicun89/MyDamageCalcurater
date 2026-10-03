@@ -11,18 +11,29 @@
 3. **止まる前に安全な場所へ**: 未コミットの作業を残さない。区切りごとに commit・push し、`Next` を具体的に書く。
 4. **main は常に緑。main へは PR でしか入れない**: 直接 push・直接 merge をしない(main を常に緑に保つため。CI・レビューの記録を残す。GitOps は balance だけが main を見ており、damage calc 系は `make deploy-latest`。ユーザー決定 2026-09-25)。
    PR は、テスト・lint・公開前検査が通った作業だけ。WIP は PR にしない。
-5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan.md` のブロッカーに書く。**判断待ちは `docs/ai-shared/PENDING.md` に 1 行足す**(回答済みは消す)。
+5. **相談は「既定値付きの提案」**: 判断が要るときは既定案を添えて `DECISIONS.md` に書き、既定案で先へ進む。人間の確認が本当に必要なものだけ `docs/plan/blockers/<レーン>.md` に書く。**判断待ちは `docs/ai-shared/PENDING.md` に 1 行足す**(回答済みは消す)。
 
 ## 共有状態ファイルの分割(2026-10-03。競合の根本対策)
 
-全レーンが `CURRENT_STATE.md`・`DECISIONS.md` を書き換えて、PR のたびに競合していた。次のとおり**書き込み先をレーン・1件ごとに分けた**。
+全レーンが `CURRENT_STATE.md`・`DECISIONS.md`・`docs/plan.md` を書き換えて、PR のたびに競合していた。次のとおり**書き込み先をレーン・1件ごとに分けた**。
 
 - **レーンの状態**: `docs/ai-shared/state/<レーン>.md`(data・api・web・ios・type-balance・speed・judge・ops・shared-interfaces)。
   自分のレーンのファイルだけを書き換える。`CURRENT_STATE.md` は索引なので編集しない(レーンを足すときだけ 1 行足す)。
 - **決定・提案**: `docs/ai-shared/decisions/<YYYY-MM-DD>-<レーン>-<短い題>.md` を**新規ファイルとして足す**(1 件 1 ファイル。既存ファイルは編集しない)。
   `DECISIONS.md` は過去分の索引なので編集しない。本文は従来どおり `## <日付>: <題>` の見出しと `Decision:` / `Reason:` / `Impact:`。
 - 古い記述の「`CURRENT_STATE.md` のレーン欄」は `state/<レーン>.md`、「`DECISIONS.md` に追記」は `decisions/` に新規ファイルを足す、と読み替える。
-- `docs/plan.md` は共有のまま。**自分のレーンの節のチェック・行だけを編集する**(他レーンの行を整形・並べ替えしない)。
+- **plan**(ADR-0172): `docs/plan.md` は索引(区画の表・マイルストーン表)。タスクの行は区画ごとのファイル `docs/plan/<区画>.md` にある。
+  - **自分のレーンが担当する区画のファイルの、自分のレーンの行だけを編集する**(他レーンの行を整形・並べ替えしない)。新しいタスクは区画の末尾にまとめて足さず、自分のレーンの行の近くに足す。
+  - 改善要望・ブロッカーの**新しい項目**は `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。既存の `docs/plan/improvements.md`・`docs/plan/blockers.md` は状態の更新と解決済みの削除だけ(新しい項目を足さない)。
+  - 他レーンの区画・行を編集してよいのは、(1) 自分の作業で他レーンのタスクが完了・不要になったときの**状態の印(`[ ]`/`[~]`/`[x]`/`[!]`)だけ**の更新、(2) そのレーンから依頼されたとき。どちらも本文は変えず、PR 本文に「他レーンの行の状態を変えた」と書く。それ以外は `decisions/` に既定案付きの提案として書き、そのレーンに任せる。
+  - 区画を足すときは `docs/plan.md` の索引の表に 1 行足す。整合(索引のリンク先・索引外のファイル・重複行・重複 ID)は `make lint`(`scripts/check-plan.sh`)が検査する。
+  - 古い記述の「`docs/plan.md` の M1/「SP: 素早さ比較」/AJ4」等は、索引の表で区画のファイルに読み替える。
+- **分割前のブランチの移行**(plan の分割が main に入ったあと、`docs/plan.md` を編集していた PR は 1 回だけ競合する):
+  1. `git merge origin/main`(`docs/plan.md` が競合する)。
+  2. `git checkout origin/main -- docs/plan.md`(索引は main の版にする)。
+  3. 自分のブランチで plan.md に加えた変更を `git diff $(git merge-base HEAD origin/main) HEAD -- docs/plan.md` で確かめ、
+     索引で該当する `docs/plan/<区画>.md` に同じ行のまま移す(改善要望・ブロッカーの新しい項目は `docs/plan/<区画>/<レーン>.md`)。
+  4. `scripts/check-plan.sh` が通ることを確かめて merge commit を作る。
 - コンフリクトマーカー(`<<<<<<<`・`>>>>>>>`)が残ったまま commit しないよう、`make lint` が検査する(`scripts/check-conflict-markers.sh`)。
 
 ## レーン・ディレクトリ・ブランチ
@@ -49,7 +60,7 @@
     Xcode が無い間は Swift Package(生成クライアント・モデル・デザイントークン)と `swift test` の範囲で進め、Xcode プロジェクトとシミュレータのテスト(`make ios-test`)は Xcode の導入後に行う。デザイントークンの値は Web と同じ(docs/design.md)
   - データレーン: `api/openapi.yaml` を変えない。pokedex の API が要るときは DECISIONS.md で API レーンに提案する。
 - **両方が触る共有ファイル**:
-  - `docs/plan.md`: 自分のレーンのタスクの行(とブロッカー節の自分の項目)だけを更新する。
+  - `docs/plan/<区画>.md`: 自分のレーンのタスクの行だけを更新する。ブロッカー・改善要望の新しい項目は `docs/plan/blockers/<レーン>.md`・`docs/plan/improvements/<レーン>.md`(上の「plan」)。
   - ルートの `Makefile`・`go.work`: 自分のレーンのターゲット・`use` 行の追加だけ。統合時の競合は両方を残して解決する。
   - `docs/ai-shared/state/<自分のレーン>.md`: 自分のレーンのファイルだけ。決定・提案は `docs/ai-shared/decisions/` に新規ファイルを足す。
 - 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
@@ -69,7 +80,7 @@
 - ユーザーの指摘は、**範囲に合うレーンが対応する**(判断はどの AI でもよい。範囲が曖昧なら `DECISIONS.md` に既定案付きで書く)。
 
 ### コンテキストを膨らませない(全レーン共通)
-- 起動時に `DECISIONS.md`(約 190KB)・`plan.md`(約 70KB)を**全文読まない**。`CURRENT_STATE.md` の自レーン欄と `Next`、`DECISIONS.md` は `grep -n '^## '` で見出しを見て自レーンと直近の数件だけ読む。
+- 起動時に `DECISIONS.md`(約 190KB)・`docs/plan/` を**全文読まない**(plan は `docs/plan.md` の索引から自レーンの区画のファイルだけ読む)。`CURRENT_STATE.md` の自レーン欄と `Next`、`DECISIONS.md` は `grep -n '^## '` で見出しを見て自レーンと直近の数件だけ読む。
 - コードを読み直す前に、実装の場所は [docs/impl/](../impl/)(構成・フロー・API・環境変数・コマンド・k8s・DB・GitOps・動作確認の対応表。目次は [docs/README.md](../README.md))で引く。
 - 大量のファイルを読む調査・ドキュメント作成は、サブエージェント(fork)に任せ、生の出力を主セッションに残さない。
 - 1 セッション = 1 タスク(1 PR)。区切りで commit・push し、`Status`・`Next` を具体的に書いて止め、新しいセッションで続ける(長いセッションを引き延ばさない)。
@@ -147,7 +158,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
   `scripts/ai-guard/`・`deploy/k8s/overlays/cloud/` 等)を変更する PR は、人間のマージ待ちとして次の作業へ進む(止まらない)。
 - 止めるのは「クラウドへのデプロイなど費用が発生すること」と「機密情報を Git で公開すること」だけ。
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
-- **競合の解決**: 共有状態は分割済み(上の節)なので、`state/`・`decisions/` では通常競合しない。`docs/plan.md` は自分のレーンの行を残し、他レーンの行は main 側を採用する。
+- **競合の解決**: 共有状態は分割済み(上の節)なので、`state/`・`decisions/` では通常競合しない。`docs/plan/<区画>.md` で競合したら自分のレーンの行を残し、他レーンの行は main 側を採用する。
   それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
 - マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
 - Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
@@ -157,6 +168,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 | ファイル | 規約 |
 |---|---|
 | `docs/ai-shared/state/<レーン>.md` | 自分が進めているレーンのファイルだけ編集する(`CURRENT_STATE.md` は索引) |
+| `docs/plan/<区画>.md` | 自分のレーンの行だけ編集する。改善要望・ブロッカーの新しい項目は `docs/plan/<区画>/<レーン>.md`。`docs/plan.md` は索引(区画を足すときだけ 1 行足す。ADR-0172) |
 | `docs/ai-shared/DECISIONS.md` | 追記のみ。既存エントリは編集しない |
 | Web の画面・タブ(`web/src/App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts`) | 画面の追加では編集しない。自分のディレクトリに登録ファイル `<id>.screen.tsx` を置き、文言は `web/src/i18n/<レーン>.ts` に足す(ADR-0323) |
 | `go.work` | 自分のレーンのモジュールの `use` 行を追記してよい(タイプバランスは `./services/balance`) |
@@ -181,7 +193,7 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
 | 時間帯(日本時間) | やること |
 |---|---|
 | **日中 8:00〜23:00** | 質問する(Claude Code は `AskUserQuestion`)。質問はタスクの区切りでまとめて出し、各問に**既定案(推奨)**を付ける。返事を待つ間も、その判断に依存しない作業を進める |
-| **深夜 23:00〜8:00** | **質問しない**。判断待ちの内容と既定案を `docs/plan.md` のブロッカー節の「【人間の確認待ち】」に書き、判断に依存しない作業を続ける。取り消しやすい判断(文書・設計の既定値など)は既定案で進めてよい。取り消しにくいもの(データ削除・公開・`known_diffs.yaml` への追加・force push など)は深夜に実行しない |
+| **深夜 23:00〜8:00** | **質問しない**。判断待ちの内容と既定案を `docs/plan/blockers/<レーン>.md` に「【人間の確認待ち】」を付けて書き、判断に依存しない作業を続ける。取り消しやすい判断(文書・設計の既定値など)は既定案で進めてよい。取り消しにくいもの(データ削除・公開・`known_diffs.yaml` への追加・force push など)は深夜に実行しない |
 
 - 朝(8:00 以降)に最初に区切りが来たら、夜の間にたまった判断待ちを1回の質問にまとめて出す。
 - 質問・既定案で進めた判断は `DECISIONS.md` に記録する(既定案で進めたものは「既定案で進行・ユーザー未確認」と明記)。

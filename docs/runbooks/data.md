@@ -340,7 +340,7 @@ pokedex のマスタは上のとおり再生成できるのでバックアップ
 `scripts/db-backup.sh` と `scripts/db-restore.sh` を使う(`make db-backup`・`make db-restore` は薄い入口)。保存先は
 `data/generated/backups/`(Git の無視対象。無視されない場所は拒否される。ディレクトリ 0700・ファイル 0600)。
 ダンプには端末 ID・計算イベント・構築名が入るので機密として扱い、ログ・PR・Issue に中身を貼らない。暗号化はしない(ローカル限定。クラウド等へ出すなら別 ADR で暗号化を必須にする)。
-**実クラスタ(k3d)上の実バックアップ・復元は未実施**(TiDB・record/team の Deployment が未配備。配備後に1回通して結果を plan.md に書く)。
+**実クラスタ(k3d)上の実バックアップ・復元は未実施**(TiDB・record/team の Deployment が未配備。配備後に1回通して結果を docs/plan/m4.md に書く)。
 
 接続は環境変数で渡す(パスワードは `MYSQL_PWD`。コマンドライン引数に出さない)。クラスタの DB へは `kubectl port-forward` で手元から届かせる。
 

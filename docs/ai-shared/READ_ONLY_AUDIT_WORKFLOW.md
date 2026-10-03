@@ -82,6 +82,6 @@ Issue には第三者データ、個人情報、秘密情報、ローカルの�
 - そのまま実装可能: `ready-for-implementation`
 - 人間の選択が必要: `needs-decision`（`ready-for-implementation` と同時に付けない）
 
-`ready-for-implementation` は「追加の仕様確認が不要」という意味だけで、着手順を変更しない。実装担当は `docs/plan.md` と `CURRENT_STATE.md` の `Next`、レーンの占有・ブランチ規約、`docs/development-workflow.md` の通常手順に従う。進行中のM1タスクへ監査Issueを割り込ませない。
+`ready-for-implementation` は「追加の仕様確認が不要」という意味だけで、着手順を変更しない。実装担当は `docs/plan/`(索引は `docs/plan.md`)と `CURRENT_STATE.md` の `Next`、レーンの占有・ブランチ規約、`docs/development-workflow.md` の通常手順に従う。進行中のM1タスクへ監査Issueを割り込ませない。
 
 実装レーンは、PR をマージするときに対応する issue を閉じる(PR 本文に `Closes #番号` を書く)。閉じ忘れた issue は、次の監査で「未対応」と誤認されるため。
