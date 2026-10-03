@@ -581,6 +581,11 @@ func TestOutspeedAndKo(t *testing.T) {
 		// nil スライスと []api.UnsupportedMark{} は DeepEqual では別物。
 		AttackerKoUnsupported: []api.UnsupportedMark{},
 		DefenderKoUnsupported: []api.UnsupportedMark{},
+		// 補正も無視した入力も無いときは空配列(ADR-0710)。attacker は既定でランク 0・追い風なし・スカーフなし。
+		AttackerSpeedApplied: []api.SpeedFactor{},
+		DefenderSpeedApplied: []api.SpeedFactor{},
+		AttackerSpeedIgnored: []api.SpeedIgnoredInput{},
+		DefenderSpeedIgnored: []api.SpeedIgnoredInput{},
 	}
 	// api.Matchup は印の配列を持つので == では比べられない(ADR-0708 §1)。
 	if !reflect.DeepEqual(got, want) {
@@ -1976,6 +1981,8 @@ func TestOutspeedAndKoSpeedFieldOmittedMatchesJD1(t *testing.T) {
 		// 印が無い正常系はどちらも空配列(null にはしない。ADR-0708 §3)。
 		AttackerKoUnsupported: []api.UnsupportedMark{},
 		DefenderKoUnsupported: []api.UnsupportedMark{},
+		AttackerSpeedApplied:  []api.SpeedFactor{}, DefenderSpeedApplied: []api.SpeedFactor{},
+		AttackerSpeedIgnored: []api.SpeedIgnoredInput{}, DefenderSpeedIgnored: []api.SpeedIgnoredInput{},
 	}
 
 	tests := []struct {
@@ -2092,6 +2099,7 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 	// 印が無い正常系は各行とも空配列(null にはしない。ADR-0708 §3。nil スライスと
 	// []api.UnsupportedMark{} は DeepEqual では別物)。
 	noMarks := []api.UnsupportedMark{}
+	noFactors, noIgnored := []api.SpeedFactor{}, []api.SpeedIgnoredInput{}
 	want := []api.Matchup{
 		{
 			DefenderIndex: 0, Outspeeds: true, SpeedTie: false,
@@ -2100,6 +2108,8 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 			AttackerKo:            api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
 			DefenderKo:            api.KOChance{Hits: 3, Guaranteed: true, DisplayChancePercent: 100},
 			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+			AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+			AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored,
 		},
 		{
 			DefenderIndex: 1, Outspeeds: false, SpeedTie: true,
@@ -2108,6 +2118,8 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 			AttackerKo:            api.KOChance{Hits: 2, Guaranteed: false, DisplayChancePercent: 50},
 			DefenderKo:            api.KOChance{Hits: 4, Guaranteed: false, DisplayChancePercent: 25},
 			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+			AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+			AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored,
 		},
 		{
 			DefenderIndex: 2, Outspeeds: false, SpeedTie: false,
@@ -2116,6 +2128,8 @@ func TestOutspeedAndKoMultipleDefenders(t *testing.T) {
 			AttackerKo:            api.KOChance{Hits: 0, Guaranteed: false, DisplayChancePercent: 0},
 			DefenderKo:            api.KOChance{Hits: 1, Guaranteed: true, DisplayChancePercent: 100},
 			AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+			AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+			AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored,
 		},
 	}
 	got := decodeResponse(t, recorder).Matchups
@@ -2553,16 +2567,23 @@ func TestOutspeedAndKoSpeedFieldAppliesToEveryCandidate(t *testing.T) {
 		defaultKO := api.KOChance{Hits: 2, Guaranteed: true, DisplayChancePercent: 100}
 		// 印が無い正常系は各行とも空配列(null にはしない。ADR-0708 §3)。
 		noMarks := []api.UnsupportedMark{}
+		noFactors, noIgnored := []api.SpeedFactor{api.Tailwind}, []api.SpeedIgnoredInput{}
 		want := []api.Matchup{
 			{DefenderIndex: 0, Outspeeds: true, AttackerSpeed: 240, DefenderSpeed: 220,
 				AttackerMovesFirst: true, AttackerKo: defaultKO, DefenderKo: defaultKO,
-				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+				AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+				AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored},
 			{DefenderIndex: 1, SpeedTie: true, AttackerSpeed: 240, DefenderSpeed: 240,
 				TurnOrderTie: true, AttackerKo: defaultKO, DefenderKo: defaultKO,
-				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+				AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+				AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored},
 			{DefenderIndex: 2, AttackerSpeed: 240, DefenderSpeed: 300,
 				AttackerKo: defaultKO, DefenderKo: defaultKO,
-				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks},
+				AttackerKoUnsupported: noMarks, DefenderKoUnsupported: noMarks,
+				AttackerSpeedApplied: noFactors, DefenderSpeedApplied: noFactors,
+				AttackerSpeedIgnored: noIgnored, DefenderSpeedIgnored: noIgnored},
 		}
 		if got := decodeResponse(t, recorder).Matchups; !reflect.DeepEqual(got, want) {
 			t.Errorf("matchups = %+v, want %+v", got, want)
@@ -3512,4 +3533,109 @@ func TestOutspeedAndKoAcceptsValidIDFormat(t *testing.T) {
 		assertStatusAndCode(t, recorder, http.StatusUnprocessableEntity, api.UnknownMove)
 		assertBlamesAttacker(t, recorder)
 	})
+}
+
+// TestOutspeedAndKoSpeedAppliedAndIgnored: 素早さに反映した補正(*SpeedApplied)と、指定されたのに
+// 反映していない入力(*SpeedIgnored)を各行に返す(issue #235。ADR-0710)。
+// 特性・持ち物(スカーフ以外)・天候は素早さに反映しないので、実数値は変わらず印だけが付く。
+func TestOutspeedAndKoSpeedAppliedAndIgnored(t *testing.T) {
+	t.Parallel()
+
+	factors := func(names ...api.SpeedFactor) []api.SpeedFactor {
+		return append([]api.SpeedFactor{}, names...)
+	}
+	ignored := func(names ...api.SpeedIgnoredInput) []api.SpeedIgnoredInput {
+		return append([]api.SpeedIgnoredInput{}, names...)
+	}
+
+	tests := []struct {
+		name   string
+		mutate func(body map[string]any)
+		wantAA []api.SpeedFactor
+		wantDA []api.SpeedFactor
+		wantAI []api.SpeedIgnoredInput
+		wantDI []api.SpeedIgnoredInput
+	}{
+		{"何も指定しない", func(map[string]any) {}, factors(), factors(), ignored(), ignored()},
+		{
+			"ランク・追い風・スカーフは順序固定で反映済みに入る",
+			func(b map[string]any) {
+				attackerOf(b)["ranks"] = map[string]any{"spe": 1}
+				attackerOf(b)["itemId"] = "choicescarf"
+				b["speedField"] = map[string]any{"attackerTailwind": true}
+			},
+			factors(api.Rank, api.Tailwind, api.ChoiceScarf), factors(), ignored(), ignored(),
+		},
+		{
+			"特性だけ指定: abilityId を無視した印",
+			func(b map[string]any) { attackerOf(b)["abilityId"] = "test-ability" },
+			factors(), factors(), ignored(api.AbilityId), ignored(),
+		},
+		{
+			"スカーフ以外の持ち物は itemId を無視した印(スカーフは入らない)",
+			func(b map[string]any) {
+				attackerOf(b)["itemId"] = "choicescarf"
+				defenderAt(b, 0)["itemId"] = "test-item-other"
+			},
+			factors(api.ChoiceScarf), factors(), ignored(), ignored(api.ItemId),
+		},
+		{
+			"天候だけ(特性なし)は無視した印にならない",
+			func(b map[string]any) { b["field"] = map[string]any{"weather": "rain"} },
+			factors(), factors(), ignored(), ignored(),
+		},
+		{
+			"天候 none は天候なしと同じ",
+			func(b map[string]any) {
+				attackerOf(b)["abilityId"] = "test-ability"
+				b["field"] = map[string]any{"weather": "none"}
+			},
+			factors(), factors(), ignored(api.AbilityId), ignored(),
+		},
+		{
+			"特性 + 天候: 特性のある側にだけ fieldWeather も入る(順序は abilityId → itemId → fieldWeather)",
+			func(b map[string]any) {
+				defenderAt(b, 0)["abilityId"] = "test-ability"
+				defenderAt(b, 0)["itemId"] = "test-item-other"
+				b["field"] = map[string]any{"weather": "sun"}
+			},
+			factors(), factors(), ignored(), ignored(api.AbilityId, api.ItemId, api.FieldWeather),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			body := neutralBody()
+			tt.mutate(body)
+			recorder := postOutspeed(newUpstreams(t, &upstreams{}), body, nil)
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status = %d, want 200; body=%s", recorder.Code, recorder.Body.String())
+			}
+			got := onlyMatchup(t, recorder)
+			if !reflect.DeepEqual(got.AttackerSpeedApplied, tt.wantAA) || !reflect.DeepEqual(got.DefenderSpeedApplied, tt.wantDA) {
+				t.Errorf("speedApplied = %v / %v, want %v / %v", got.AttackerSpeedApplied, got.DefenderSpeedApplied, tt.wantAA, tt.wantDA)
+			}
+			if !reflect.DeepEqual(got.AttackerSpeedIgnored, tt.wantAI) || !reflect.DeepEqual(got.DefenderSpeedIgnored, tt.wantDI) {
+				t.Errorf("speedIgnored = %v / %v, want %v / %v", got.AttackerSpeedIgnored, got.DefenderSpeedIgnored, tt.wantAI, tt.wantDI)
+			}
+			// 反映しない入力は素早さの値を変えない(特性・天候・スカーフ以外の持ち物)。
+			if len(tt.wantDI) > 0 && got.DefenderSpeed != 120 {
+				t.Errorf("defenderSpeed = %d, want 120(無視した入力で変わってはいけない)", got.DefenderSpeed)
+			}
+		})
+	}
+}
+
+// TestOutspeedAndKoSpeedNotesJSONNeverNull: 4 欄とも必須の配列で、空でも null にならない(ADR-0710)。
+func TestOutspeedAndKoSpeedNotesJSONNeverNull(t *testing.T) {
+	t.Parallel()
+
+	recorder := postOutspeed(newUpstreams(t, &upstreams{}), validBody(), nil)
+	body := recorder.Body.String()
+	for _, key := range []string{"attackerSpeedApplied", "defenderSpeedApplied", "attackerSpeedIgnored", "defenderSpeedIgnored"} {
+		if !strings.Contains(body, `"`+key+`":[]`) {
+			t.Errorf("応答に %q:[] が無い(null や欠落にしない): %s", key, body)
+		}
+	}
 }

@@ -78,3 +78,21 @@ cd "$(git rev-parse --show-toplevel)"
 k3d cluster stop pokecalc
 ```
 確認: 出力に `Stopped cluster 'pokecalc'` が含まれる(削除ではない。クラスタ削除の `make down` は人間の確認が要る)。
+
+## 8. 失効ジョブ(record-expire・team-expire)の手動実行と有効化
+
+承認(ADR-0209 の「人間の確認」。ADR-0220 未決事項 0)が済むまで、local・cloud とも CronJob は `suspend: true` で、定期実行されない。
+手動実行も実データの削除なので、承認の後か、人間が自分で実行する(承認前に Claude が流さない)。
+手動で1回流す(TiDB と Secret がある k3d で。件数はログの `expire done` の1行。team は `record` を `team` に読み替える):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+JOB=record-expire-manual-$(date +%s)
+kubectl -n pokecalc create job --from=cronjob/record-expire "$JOB"
+kubectl -n pokecalc wait --for=condition=complete "job/$JOB" --timeout=10m
+kubectl -n pokecalc logs "job/$JOB"
+```
+確認: ログに `"msg":"expire done"` があり、`remaining` が `false`(`true` なら続きは次回。もう一度流す)。
+
+承認後に定期実行を有効にする: `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` を消し、`overlays/local/kustomization.yaml` の `patches` の参照を外して `make up`(または overlay を apply)。
+

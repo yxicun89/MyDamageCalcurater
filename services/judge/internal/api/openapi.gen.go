@@ -86,6 +86,48 @@ func (e HealthStatus) Valid() bool {
 	}
 }
 
+// Defines values for SpeedFactor.
+const (
+	ChoiceScarf SpeedFactor = "choiceScarf"
+	Rank        SpeedFactor = "rank"
+	Tailwind    SpeedFactor = "tailwind"
+)
+
+// Valid indicates whether the value is a known member of the SpeedFactor enum.
+func (e SpeedFactor) Valid() bool {
+	switch e {
+	case ChoiceScarf:
+		return true
+	case Rank:
+		return true
+	case Tailwind:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for SpeedIgnoredInput.
+const (
+	AbilityId    SpeedIgnoredInput = "abilityId"
+	FieldWeather SpeedIgnoredInput = "fieldWeather"
+	ItemId       SpeedIgnoredInput = "itemId"
+)
+
+// Valid indicates whether the value is a known member of the SpeedIgnoredInput enum.
+func (e SpeedIgnoredInput) Valid() bool {
+	switch e {
+	case AbilityId:
+		return true
+	case FieldWeather:
+		return true
+	case ItemId:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for Terrain.
 const (
 	TerrainElectric Terrain = "electric"
@@ -322,6 +364,22 @@ type Matchup struct {
 	// 攻撃側は 1 つに固定なので、すべての matchups で同じ値になる。
 	AttackerSpeed int `json:"attackerSpeed"`
 
+	// AttackerSpeedApplied attackerSpeed の計算に**実際に効かせた**素早さの補正(ADR-0710)。値は rank(素早さのランクが 0 でない)・
+	// tailwind(追い風)・choiceScarf(こだわりスカーフ)。効かせた補正が無ければ空配列
+	// (null にも欄の欠落にもしない)。順序は rank → tailwind → choiceScarf で固定。
+	AttackerSpeedApplied []SpeedFactor `json:"attackerSpeedApplied"`
+
+	// AttackerSpeedIgnored 自分の入力のうち、素早さに影響しうるのに **attackerSpeed へ反映していない**もの(ADR-0710)。
+	// 値は abilityId(abilityId が指定されている。特性の素早さ補正は引けない)・
+	// itemId(こだわりスカーフ以外の itemId が指定されている)・
+	// fieldWeather(field.weather が none 以外で、かつ abilityId も指定されている。天候依存の素早さ特性があり得るため)。
+	// **「影響する」とは限らない**: 素早さに効かない特性・持ち物でも、指定されていればここに入る
+	// (judge は特性・持ち物の素早さ補正のデータを持たないため。第2段でデータ駆動にするまでの印)。
+	// 状態異常(麻痺など)は入力に無いので、この欄にも現れない。画面は空でないとき
+	// 「素早さは特性・持ち物・天候を反映していない」旨を添える(文言は画面の持ち物)。
+	// 空配列が「素早さに影響する要素が無い」ことの保証になる。順序は abilityId → itemId → fieldWeather で固定。
+	AttackerSpeedIgnored []SpeedIgnoredInput `json:"attackerSpeedIgnored"`
+
 	// DefenderIndex この行が対応する request の defenders の位置(0 始まり)。matchups は defenders と
 	// 同じ順序で返るので i 番目は必ず i になるが、行を並べ替えて表示する画面が
 	// 対応を取り違えないように明示する。
@@ -346,6 +404,12 @@ type Matchup struct {
 
 	// DefenderSpeed この候補の戦闘中の素早さ(ランク・追い風・こだわりスカーフ適用後)。
 	DefenderSpeed int `json:"defenderSpeed"`
+
+	// DefenderSpeedApplied defenderSpeed について、attackerSpeedApplied と同じ意味(この候補側)。
+	DefenderSpeedApplied []SpeedFactor `json:"defenderSpeedApplied"`
+
+	// DefenderSpeedIgnored defenderSpeed について、attackerSpeedIgnored と同じ意味(この候補側。天候は共通の field.weather)。
+	DefenderSpeedIgnored []SpeedIgnoredInput `json:"defenderSpeedIgnored"`
 
 	// Outspeeds **素早さの比較で**自分が先に動く側か(ADR-0700 §6-1・ADR-0702 §3。値の意味は
 	// JD1〜JD3 から変わらない)。トリックルームが無ければ attackerSpeed > defenderSpeed、
@@ -450,6 +514,9 @@ type Screens struct {
 // Example: 0445-000
 type SpeciesKey = string
 
+// SpeedFactor 素早さの計算に効かせた補正(ADR-0710)。
+type SpeedFactor string
+
 // SpeedField 素早さの判定にだけ効く場の効果(ADR-0702 §1)。judge が自分で解釈し、calc-svc には送らない。
 // トリックルーム・追い風はダメージに関与せず、calc-svc は場の効果として weather / terrain /
 // screens しか理解しないため、calc-svc へ転送する field とは別の欄にする。
@@ -472,6 +539,9 @@ type SpeedField struct {
 	// なる(ADR-0702 §3)。speedTie(同速)は反転しない。
 	TrickRoom *bool `json:"trickRoom,omitempty"`
 }
+
+// SpeedIgnoredInput 素早さに影響しうるが反映していない入力(ADR-0710)。
+type SpeedIgnoredInput string
 
 // StatBlock 6 ステータスの値。judge では Individual.sp(能力ポイント。各 0..32・合計 <= 66)に使う。
 // 意味の正はルートの api/openapi.yaml の StatBlock。

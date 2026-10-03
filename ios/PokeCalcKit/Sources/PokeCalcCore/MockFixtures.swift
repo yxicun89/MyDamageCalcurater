@@ -94,7 +94,7 @@ struct MockFixtures {
     let calcResultsByKey: [String: CalcResultEntry]
 
     /// `Resources/` 直下の JSON ファイル名(拡張子なし)。`fixtureURLs()` と `load()` の両方が使う。
-    static let resourceNames = ["species", "moves", "items", "natures", "calc-results"]
+    static let resourceNames = ["species", "moves", "items", "natures", "calc-results", "adjust-results"]
 
     static func fixtureURLs() throws -> [URL] {
         try resourceNames.map { name in

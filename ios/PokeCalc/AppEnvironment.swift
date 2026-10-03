@@ -6,7 +6,7 @@ import PokeCalcCore
 /// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらの `PokeCalcService` を使うかを
 /// 決める。設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
-    case ready(service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String)
+    case ready(service: any PokeCalcService, deviceData: any DeviceDataService, backendDescription: String, adjust: any AdjustService)
     case configurationError(String)
 
     /// 設定エラー時に画面へ出す文言の接頭辞。
@@ -22,11 +22,14 @@ enum AppEnvironment {
             case .mock:
                 let service = try MockPokeCalcService()
                 let deviceData = MockDeviceDataService(environment: environment)
-                return .ready(service: service, deviceData: deviceData, backendDescription: "モックデータで動作中")
+                let adjust = try MockAdjustService()
+                return .ready(service: service, deviceData: deviceData, backendDescription: "モックデータで動作中", adjust: adjust)
             case .api(let url):
                 let identity = ClientIdentity(defaults: .standard)
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
-                return .ready(service: service, deviceData: service, backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))")
+                return .ready(
+                    service: service, deviceData: service,
+                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))", adjust: service)
             }
         } catch {
             return .configurationError("\(configurationErrorPrefix)\(error)")
