@@ -3,10 +3,11 @@
 package httpapi
 
 import (
-	"context"
-	"log/slog"
-
 	"github.com/labstack/echo/v5"
+
+	"context"
+	"example.com/pokecalc/apps/wishlist/api/internal/api"
+	"log/slog"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
@@ -40,5 +41,18 @@ type Deps struct {
 //     (存在しないパス → 404 not_found、形式不正 → 400 bad_request、規則違反 → 422 unprocessable、
 //     外部取得の失敗 → 502 bad_gateway、内部エラー → 500 internal。500 の message に内部の詳細を出さない)
 func NewServer(d Deps) *echo.Echo {
-	panic("TODO: httpapi.NewServer")
+	if d.Token == "" {
+		panic("httpapi: Token is empty")
+	}
+	log := d.Logger
+	if log == nil {
+		log = slog.Default()
+	}
+	s := &server{items: d.Items, images: d.Images, remote: d.Remote, log: log}
+
+	e := echo.New()
+	e.HTTPErrorHandler = s.handleError
+	e.Use(s.recoverPanic, securityHeaders, limitBody, bearerAuth(d.Token))
+	api.RegisterHandlers(e, api.NewStrictHandler(s, nil))
+	return e
 }

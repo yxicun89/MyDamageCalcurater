@@ -13,7 +13,7 @@ func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
-const secretToken = "s3cr3t-T0KEN-value"
+const testToken = "unit-test-placeholder"
 
 const goodDSN = "wishlist:pw@tcp(mysql.pokecalc.svc.cluster.local:3306)/wishlist?parseTime=true&loc=UTC"
 
@@ -21,7 +21,7 @@ func fullEnv() map[string]string {
 	return map[string]string{
 		"PORT":                  "9090",
 		"WISHLIST_DATABASE_DSN": goodDSN,
-		"WISHLIST_API_TOKEN":    secretToken,
+		"WISHLIST_API_TOKEN":    testToken,
 		"WISHLIST_IMAGE_DIR":    "/data/images",
 	}
 }
@@ -32,7 +32,7 @@ func TestLoadServeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != "9090" || c.Token != secretToken || c.ImageDir != "/data/images" {
+	if c.Port != "9090" || c.Token != testToken || c.ImageDir != "/data/images" {
 		t.Errorf("config = %+v", c)
 	}
 	cfg, err := mysql.ParseDSN(c.DSN)
@@ -154,7 +154,7 @@ func TestRun_Usage(t *testing.T) {
 			if errb.Len() == 0 {
 				t.Error("stderr に理由が出ていない")
 			}
-			if strings.Contains(errb.String(), secretToken) {
+			if strings.Contains(errb.String(), testToken) {
 				t.Error("トークンを出力した")
 			}
 		})

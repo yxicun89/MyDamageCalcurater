@@ -23,7 +23,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/testimg"
 )
 
-const token = "test-token-0123456789abcdef"
+const token = "unit-test-placeholder"
 
 // fakeRemote は外部取得の代わり。呼ばれた URL を記録する。
 type fakeRemote struct {

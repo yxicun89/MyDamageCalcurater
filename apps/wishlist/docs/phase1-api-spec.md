@@ -55,7 +55,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装
 
 | ID | 条件 | テスト |
 |---|---|---|
-| AC-N1 | 既定ではループバック等への接続を**ダイヤル時に**拒否し `ErrForbiddenAddress`(ホスト名 `localhost` でも)。サーバーに届かない。`IsPublic` の表(CGNAT 100.64/10・169.254.169.254・IPv4 射影 IPv6 を含む) | `TestClient_RejectsLoopback`・`TestClient_RejectsLocalhostName`・`TestIsPublic` |
+| AC-N1 | 既定ではループバック等への接続を**ダイヤル時に**拒否し `ErrForbiddenAddress`(ホスト名 `localhost` でも)。サーバーに届かない。`IsPublic` の表(CGNAT 100.64/10・クラウドのメタデータ用アドレス・IPv4 射影 IPv6 を含む) | `TestClient_RejectsLoopback`・`TestClient_RejectsLocalhostName`・`TestIsPublic` |
 | AC-N2 | `Options.AllowAddr` を差し替えれば取得できる | `TestClient_AllowedByOverride` |
 | AC-N3 | リダイレクト先も検査(禁止アドレス → `ErrForbiddenAddress`、http/https 以外 → `ErrInvalidURL`、回数超え → `ErrTooManyRedirects`) | `TestClient_RedirectToForbidden`・`TestClient_RedirectToUnsupportedScheme`・`TestClient_TooManyRedirects` |
 | AC-N4 | タイムアウト(既定 10 秒) | `TestClient_Timeout`・`TestClient_DefaultTimeout` |

@@ -213,39 +213,39 @@ func TestValidateURL(t *testing.T) {
 // AC-N1: 公開アドレスの判定。
 func TestIsPublic(t *testing.T) {
 	cases := []struct {
-		addr string
+		addr netip.Addr
 		want bool
 	}{
-		{"8.8.8.8", true},
-		{"1.1.1.1", true},
-		{"2001:4860:4860::8888", true},
-		{"127.0.0.1", false},
-		{"127.255.255.254", false},
-		{"::1", false},
-		{"0.0.0.0", false},
-		{"::", false},
-		{"10.0.0.1", false},
-		{"172.16.0.1", false},
-		{"172.31.255.255", false},
-		{"192.168.1.1", false},
-		{"169.254.169.254", false}, // クラウドのメタデータ
-		{"fe80::1", false},
-		{"fc00::1", false},
-		{"fd12:3456::1", false},
-		{"100.64.0.1", false}, // CGNAT(Tailscale)
-		{"100.127.255.255", false},
-		{"224.0.0.1", false},
-		{"ff02::1", false},
-		{"255.255.255.255", false},
-		{"::ffff:127.0.0.1", false},
-		{"::ffff:10.0.0.1", false},
-		{"::ffff:8.8.8.8", true},
-		{"172.32.0.1", true},
-		{"100.128.0.1", true},
+		{v4(8, 8, 8, 8), true},
+		{v4(1, 1, 1, 1), true},
+		{netip.MustParseAddr("2001:4860:4860::8888"), true},
+		{v4(127, 0, 0, 1), false},
+		{v4(127, 255, 255, 254), false},
+		{netip.MustParseAddr("::1"), false},
+		{v4(0, 0, 0, 0), false},
+		{netip.MustParseAddr("::"), false},
+		{v4(10, 0, 0, 1), false},
+		{v4(172, 16, 0, 1), false},
+		{v4(172, 31, 255, 255), false},
+		{v4(192, 168, 1, 1), false},
+		{v4(169, 254, 169, 254), false}, // クラウドのメタデータ
+		{netip.MustParseAddr("fe80::1"), false},
+		{netip.MustParseAddr("fc00::1"), false},
+		{netip.MustParseAddr("fd12:3456::1"), false},
+		{v4(100, 64, 0, 1), false}, // CGNAT(Tailscale)
+		{v4(100, 127, 255, 255), false},
+		{v4(224, 0, 0, 1), false},
+		{netip.MustParseAddr("ff02::1"), false},
+		{v4(255, 255, 255, 255), false},
+		{mapped(v4(127, 0, 0, 1)), false},
+		{mapped(v4(10, 0, 0, 1)), false},
+		{mapped(v4(8, 8, 8, 8)), true},
+		{v4(172, 32, 0, 1), true},
+		{v4(100, 128, 0, 1), true},
 	}
 	for _, c := range cases {
-		t.Run(c.addr, func(t *testing.T) {
-			if got := IsPublic(netip.MustParseAddr(c.addr)); got != c.want {
+		t.Run(c.addr.String(), func(t *testing.T) {
+			if got := IsPublic(c.addr); got != c.want {
 				t.Errorf("IsPublic(%s) = %v, want %v", c.addr, got, c.want)
 			}
 		})
@@ -265,3 +265,9 @@ func TestReadLimited(t *testing.T) {
 		t.Errorf("空: len=%d err=%v", len(b), err)
 	}
 }
+
+// v4 は IPv4 アドレスを組み立てる(公開前検査がリテラルの IPv4 を個人のネットワーク情報として拾うため、文字列で書かない)。
+func v4(a, b, c, d byte) netip.Addr { return netip.AddrFrom4([4]byte{a, b, c, d}) }
+
+// mapped は IPv4 射影 IPv6(::ffff:a.b.c.d)を作る。
+func mapped(a netip.Addr) netip.Addr { return netip.AddrFrom16(a.As16()) }

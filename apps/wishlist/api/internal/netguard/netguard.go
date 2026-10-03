@@ -10,10 +10,13 @@ package netguard
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"syscall"
 	"time"
 )
 
@@ -48,12 +51,68 @@ type Options struct {
 // NewClient は SSRF 対策をした http.Client を返す。拒否したときのエラーは errors.Is で
 // ErrInvalidURL・ErrForbiddenAddress・ErrTooManyRedirects と判定できること。
 func NewClient(opts Options) *http.Client {
-	panic("TODO: netguard.NewClient")
+	timeout := opts.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	maxRedirects := opts.MaxRedirects
+	if maxRedirects <= 0 {
+		maxRedirects = DefaultMaxRedirects
+	}
+	allow := opts.AllowAddr
+	if allow == nil {
+		allow = IsPublic
+	}
+	dialer := &net.Dialer{
+		Timeout: timeout,
+		// 接続の直前(名前解決後のアドレス)ごとに呼ばれる。リダイレクト先・再接続でも必ず検査される。
+		Control: func(_, address string, _ syscall.RawConn) error {
+			ap, err := netip.ParseAddrPort(address)
+			if err != nil {
+				return fmt.Errorf("%w: %v", ErrForbiddenAddress, err)
+			}
+			if !allow(ap.Addr()) {
+				return fmt.Errorf("%w: %s", ErrForbiddenAddress, ap.Addr())
+			}
+			return nil
+		},
+	}
+	tr := &http.Transport{
+		Proxy:                 nil,
+		DialContext:           dialer.DialContext,
+		TLSHandshakeTimeout:   timeout,
+		ResponseHeaderTimeout: timeout,
+		MaxIdleConns:          4,
+		IdleConnTimeout:       30 * time.Second,
+	}
+	return &http.Client{
+		Transport: tr,
+		Timeout:   timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
+				return fmt.Errorf("%w: リダイレクト先 %q", ErrInvalidURL, req.URL.Scheme)
+			}
+			if len(via) > maxRedirects {
+				return ErrTooManyRedirects
+			}
+			return nil
+		},
+	}
 }
 
 // ValidateURL は raw が http/https の絶対 URL(ホストあり)かを検査して返す。違反は ErrInvalidURL を包む。
 func ValidateURL(raw string) (*url.URL, error) {
-	panic("TODO: netguard.ValidateURL")
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, fmt.Errorf("%w: スキームは http/https のみ", ErrInvalidURL)
+	}
+	if u.Hostname() == "" {
+		return nil, fmt.Errorf("%w: ホストが無い", ErrInvalidURL)
+	}
+	return u, nil
 }
 
 // IsPublic は addr がインターネット上の公開ユニキャストアドレスかを返す。
@@ -61,10 +120,39 @@ func ValidateURL(raw string) (*url.URL, error) {
 // リンクローカル(169.254/16・fe80::/10)・CGNAT(100.64/10。Tailscale もここ)・マルチキャスト・ブロードキャスト、
 // および IPv4 射影 IPv6(::ffff:a.b.c.d)は中の IPv4 で判定する。
 func IsPublic(addr netip.Addr) bool {
-	panic("TODO: netguard.IsPublic")
+	addr = addr.Unmap()
+	if !addr.IsGlobalUnicast() || addr.IsPrivate() {
+		return false
+	}
+	for _, p := range blockedPrefixes {
+		if p.Contains(addr) {
+			return false
+		}
+	}
+	return true
 }
 
 // ReadLimited は r から最大 max バイト読む。max を超えるデータがあれば ErrTooLarge。ちょうど max は可。
 func ReadLimited(r io.Reader, max int64) ([]byte, error) {
-	panic("TODO: netguard.ReadLimited")
+	b, err := io.ReadAll(io.LimitReader(r, max+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(b)) > max {
+		return nil, ErrTooLarge
+	}
+	return b, nil
+}
+
+// blockedPrefixes は IsGlobalUnicast・IsPrivate では弾けない、公開されていない範囲。
+var blockedPrefixes = []netip.Prefix{
+	v4Prefix(0, 0, 0, 0, 8),     // "このネットワーク"
+	v4Prefix(100, 64, 0, 0, 10), // CGNAT(Tailscale もここ)
+	v4Prefix(192, 0, 0, 0, 24),  // IETF プロトコル割り当て
+	v4Prefix(198, 18, 0, 0, 15), // ベンチマーク用
+	v4Prefix(240, 0, 0, 0, 4),   // 予約済み
+}
+
+func v4Prefix(a, b, c, d byte, bits int) netip.Prefix {
+	return netip.PrefixFrom(netip.AddrFrom4([4]byte{a, b, c, d}), bits)
 }
