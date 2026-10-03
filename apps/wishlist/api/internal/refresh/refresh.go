@@ -428,6 +428,7 @@ func sanitize(ls []fetcher.Listing) []fetcher.Listing {
 
 // RefreshAll は全商品を順番に ModeNightly で更新する。1 商品の失敗で止めない(ctx が終わったときだけ止める)。
 func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
+	s.pruneHistory(ctx)
 	items, err := s.d.Items.ListItems(ctx, nil)
 	if err != nil {
 		return AllReport{}, err

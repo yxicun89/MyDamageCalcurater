@@ -175,6 +175,34 @@ final class WishlistUITests: XCTestCase {
         XCTAssertFalse(element(app, "suspiciousDisclosure").exists, "参考外の合計が 0 なら出さない")
     }
 
+    // MARK: - フェーズ4-2(価格の推移。docs/phase4-spec.md の AC-IOS-HIS-UI-01)
+    // 追加の accessibilityIdentifier: `historyDisclosure`(ラベル「価格の推移」)/ `priceHistoryChart`(Swift Charts。ラベルは要約)/
+    // `historySite-<siteID>`(凡例のボタン。ラベルはサイト名、値は「表示中」/「非表示」)/ `historyEmpty`(ラベル「推移はまだありません」)。
+    // フィクスチャ: 商品 12 はメルカリの 3 日分(10/1 ¥3,200・10/2 ¥3,000・10/3 ¥3,000)、商品 11 は推移なし。
+
+    /// AC-IOS-HIS-UI-01: 折りたたみを開くと推移のグラフ(要約つき)と凡例が出る。凡例でサイトの線を切り替えられる。推移の無い商品は「推移はまだありません」。
+    func testPriceHistoryChartAndEmptyState() {
+        let app = launch(fake: "estimates")
+        requireExists(app, "item-12").tap()
+        let disclosure = requireExists(app, "historyDisclosure")
+        XCTAssertTrue(disclosure.label.contains("価格の推移"), disclosure.label)
+        XCTAssertFalse(element(app, "priceHistoryChart").exists, "開くまではグラフを出さない")
+        disclosure.tap()
+        XCTAssertEqual(requireExists(app, "priceHistoryChart").label, "価格の推移 10/1〜10/3 最安 ¥3,000 最高 ¥3,200")
+        let mercari = requireExists(app, "historySite-1")
+        XCTAssertEqual(mercari.label, "メルカリ")
+        XCTAssertEqual(mercari.value as? String, "非表示")
+        mercari.tap()
+        XCTAssertEqual(element(app, "historySite-1").value as? String, "表示中")
+        XCTAssertFalse(element(app, "historySite-2").exists, "推移の無いサイトは凡例に出さない")
+
+        requireExists(app, "closeSheet").tap()
+        requireExists(app, "item-11").tap()
+        requireExists(app, "historyDisclosure").tap()
+        XCTAssertEqual(requireExists(app, "historyEmpty").label, "推移はまだありません")
+        XCTAssertFalse(element(app, "priceHistoryChart").exists)
+    }
+
     private func waitForDisappearance(_ target: XCUIElement) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: target)
         return XCTWaiter().wait(for: [expectation], timeout: Self.timeout) == .completed

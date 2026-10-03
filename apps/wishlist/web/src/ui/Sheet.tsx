@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { Genre, Item, ItemEstimates, Listing, Site, SiteEstimate } from "../api/types";
+import type { Genre, Item, ItemEstimates, Listing, PriceHistory, Site, SiteEstimate } from "../api/types";
 import { ApiError, resolveImageUrl, type ApiClient } from "../lib/api";
+import { CHART_BOX, buildChart, historyLabel } from "../lib/history";
 import { itemQuery, resolveSiteLinks } from "../lib/links";
 import { formatAge, formatJstDate, formatRange, formatYen, isHttpUrl, reasonLabel } from "../lib/price";
 import { ErrorText, Modal, errorMessage } from "./Modal";
@@ -74,6 +75,9 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
   const [saving, setSaving] = useState(false);
   const [listingsOpen, setListingsOpen] = useState(false);
   const [listings, setListings] = useState<ListingsState>({ kind: "idle" });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [history, setHistory] = useState<HistoryState>({ kind: "idle" });
+  const historyRequested = useRef(false);
   const itemId = item.id;
   // 最後に始めた要求の世代。古い応答で新しい状態を上書きしない。
   const gen = useRef(0);
@@ -150,6 +154,20 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
       cancelled = true;
     };
   }, [client, itemId, listingsOpen]);
+
+  // 価格の推移は開いたときに 1 回だけ取る(シートを開いている間は取り直さない)。
+  useEffect(() => {
+    if (!historyOpen || historyRequested.current) return;
+    historyRequested.current = true;
+    client.getPriceHistory(itemId).then(
+      (h) => {
+        setHistory({ kind: "ok", history: h });
+      },
+      (e: unknown) => {
+        setHistory({ kind: e instanceof ApiError && e.code === "network" ? "offline" : "error" });
+      },
+    );
+  }, [client, itemId, historyOpen]);
 
   // 編集中はリンクも入力値で作り直す(一時的な値。保存するまで商品は変えない)。
   const linkItem = editing ? { ...item, query_override: draft } : item;
@@ -255,7 +273,97 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
           {listingsOpen ? <Suspicious state={listings} /> : null}
         </details>
       ) : null}
+
+      <details
+        className="history"
+        open={historyOpen}
+        onToggle={(e) => {
+          setHistoryOpen(e.currentTarget.open);
+        }}
+      >
+        <summary>価格の推移</summary>
+        {historyOpen ? <History state={history} sites={sites} /> : null}
+      </details>
     </Modal>
+  );
+}
+
+type HistoryState =
+  { kind: "idle" } | { kind: "ok"; history: PriceHistory } | { kind: "offline" } | { kind: "error" };
+
+function History({ state, sites }: { state: HistoryState; sites: Site[] }) {
+  const [shown, setShown] = useState<number[]>([]);
+  if (state.kind === "offline") return <p className="site-meta">オフライン</p>;
+  if (state.kind === "error") return <p className="site-meta">価格の推移を取得できませんでした</p>;
+  if (state.kind !== "ok") return <p className="site-meta">読み込み中…</p>;
+  const h = state.history;
+  if (h.overall.length < 2) return <p className="site-meta">推移はまだありません</p>;
+  const name = (id: number) => sites.find((s) => s.id === id)?.name ?? `サイト${String(id)}`;
+  const series = [
+    { key: "overall", points: h.overall.map((o) => ({ day: o.day, value: o.low })) },
+    ...h.sites.flatMap((s) =>
+      shown.includes(s.site_id)
+        ? [{ key: `site-${String(s.site_id)}`, points: s.points.map((p) => ({ day: p.day, value: p.low })) }]
+        : [],
+    ),
+  ];
+  const chart = buildChart(series, CHART_BOX);
+  if (!chart) return <p className="site-meta">推移はまだありません</p>;
+  const color = (key: string) => {
+    if (key === "overall") return "var(--chart-overall)";
+    const i = h.sites.findIndex((s) => `site-${String(s.site_id)}` === key);
+    return `var(--chart-site-${String((i % 4) + 1)})`;
+  };
+  return (
+    <>
+      <svg
+        className="history-chart"
+        role="img"
+        aria-label={historyLabel(h.overall)}
+        viewBox={`0 0 ${String(CHART_BOX.width)} ${String(CHART_BOX.height)}`}
+      >
+        {chart.xLabels.map((l, i) => (
+          <text key={`x${String(i)}`} x={l.x} y={CHART_BOX.height - 6} textAnchor="middle">
+            {l.text}
+          </text>
+        ))}
+        {chart.yLabels.map((l, i) => (
+          <text key={`y${String(i)}`} x={CHART_BOX.left - 6} y={l.y + 3} textAnchor="end">
+            {l.text}
+          </text>
+        ))}
+        {chart.paths.map((p) => (
+          <path key={p.key} data-series={p.key} d={p.d} stroke={color(p.key)} />
+        ))}
+        {chart.dots.map((d) => (
+          <circle
+            key={`${d.key}-${d.day}`}
+            data-series={d.key}
+            cx={d.x}
+            cy={d.y}
+            r={2.5}
+            fill={color(d.key)}
+          />
+        ))}
+      </svg>
+      <div className="history-legend" role="group" aria-label="凡例">
+        {h.sites.map((s) => {
+          const on = shown.includes(s.site_id);
+          return (
+            <button
+              key={s.site_id}
+              type="button"
+              aria-pressed={on}
+              onClick={() => {
+                setShown(on ? shown.filter((id) => id !== s.site_id) : [...shown, s.site_id]);
+              }}
+            >
+              {name(s.site_id)}
+            </button>
+          );
+        })}
+      </div>
+    </>
   );
 }
 

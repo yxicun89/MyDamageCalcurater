@@ -8,6 +8,12 @@
   --accent: #e11d48;
   --accent-fg: #ffffff;
   --danger: #dc2626;
+  --chart-overall: #1c1c1e;
+  --chart-site-1: #2563eb;
+  --chart-site-2: #d97706;
+  --chart-site-3: #059669;
+  --chart-site-4: #9333ea;
+  --chart-axis: #6b7280;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -19,6 +25,12 @@
     --accent: #fb7185;
     --accent-fg: #000000;
     --danger: #f87171;
+    --chart-overall: #f5f5f7;
+    --chart-site-1: #60a5fa;
+    --chart-site-2: #fbbf24;
+    --chart-site-3: #34d399;
+    --chart-site-4: #c084fc;
+    --chart-axis: #9ca3af;
   }
 }
 
@@ -334,4 +346,36 @@ input[type="checkbox"] {
 .suspicious-list .reason {
   color: var(--muted);
   font-size: 13px;
+}
+
+.history-chart {
+  width: 100%;
+  height: auto;
+}
+.history-chart path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.history-chart text {
+  fill: var(--chart-axis);
+  font-size: 10px;
+}
+.history-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.history-legend button {
+  border: 1px solid var(--line);
+  background: transparent;
+  border-radius: 999px;
+  padding: 4px 12px;
+  min-height: 32px;
+}
+.history-legend button[aria-pressed="true"] {
+  background: var(--surface);
+  border-color: var(--fg);
 }

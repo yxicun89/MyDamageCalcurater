@@ -23,6 +23,11 @@ func (m *MemoryRepository) deletePriceData(itemID int64) {
 		}
 	}
 	m.listings = slices.DeleteFunc(m.listings, func(l Listing) bool { return l.ItemID == itemID })
+	for k := range m.history {
+		if k.itemID == itemID {
+			delete(m.history, k)
+		}
+	}
 }
 
 func (m *MemoryRepository) checkItemSite(itemID, siteID int64) error {
@@ -54,6 +59,7 @@ func (m *MemoryRepository) SaveSiteResult(_ context.Context, e Estimate, ls []Li
 	}
 	e.Low, e.Mid, e.FetchedAt = cloneP(e.Low), cloneP(e.Mid), at
 	m.estimates[[2]int64{e.ItemID, e.SiteID}] = e
+	m.recordHistory(e)
 	return nil
 }
 

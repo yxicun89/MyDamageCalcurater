@@ -1,3 +1,4 @@
+import Charts
 import SwiftUI
 import WishlistCore
 
@@ -9,6 +10,7 @@ struct ItemDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     @FocusState private var queryFocused: Bool
     @State private var suspiciousExpanded = false
+    @State private var historyExpanded = false
 
     init(item: Item, genre: Genre?, sites: [Site], service: any WishlistService, onSaved: @escaping (Item) -> Void) {
         _viewModel = State(initialValue: ItemDetailViewModel(item: item, genre: genre, sites: sites, service: service))
@@ -43,6 +45,8 @@ struct ItemDetailSheet: View {
                 if let title = viewModel.suspiciousTitle {
                     suspiciousSection(title: title)
                 }
+
+                historySection
             }
             .padding(20)
         }
@@ -183,5 +187,116 @@ struct ItemDetailSheet: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(([row.title, row.priceText] + row.reasonTexts).joined(separator: " "))
         .accessibilityIdentifier("suspiciousListing-\(row.id)")
+    }
+
+    /// 価格の推移の折りたたみ(参考外と同じ自前の作り)。開いたときに推移を取る。常時動くアニメーション・スピナーは使わない。
+    private var historySection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                historyExpanded.toggle()
+                if historyExpanded { Task { await viewModel.loadPriceHistory() } }
+            } label: {
+                HStack {
+                    Text(WishlistText.priceHistoryTitle)
+                    Spacer()
+                    Image(systemName: historyExpanded ? "chevron.up" : "chevron.down")
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(WishlistText.priceHistoryTitle)
+            .accessibilityValue(historyExpanded ? "開いています" : "閉じています")
+            .accessibilityIdentifier("historyDisclosure")
+
+            if historyExpanded {
+                switch viewModel.priceHistory {
+                case .notLoaded, .loading:
+                    Text("読み込み中…").font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("historyMessage")
+                case .failed(let message):
+                    Text(message).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityIdentifier("historyMessage")
+                case .empty:
+                    Text(WishlistText.priceHistoryEmpty).font(.footnote).foregroundStyle(.secondary)
+                        .accessibilityLabel(WishlistText.priceHistoryEmpty)
+                        .accessibilityIdentifier("historyEmpty")
+                case .loaded(let chart):
+                    historyChart(chart)
+                    historyLegend
+                }
+            }
+        }
+    }
+
+    private func historyChart(_ chart: PriceHistoryChart) -> some View {
+        Chart {
+            ForEach(viewModel.visibleHistorySeries) { series in
+                ForEach(series.points) { point in
+                    LineMark(
+                        x: .value("日", point.date, unit: .day), y: .value("最安", point.value),
+                        series: .value("線", "\(series.id)-\(point.segment)")
+                    )
+                    .foregroundStyle(by: .value("サイト", series.name))
+                    PointMark(x: .value("日", point.date, unit: .day), y: .value("最安", point.value))
+                        .foregroundStyle(by: .value("サイト", series.name))
+                }
+            }
+        }
+        .chartLegend(.hidden)
+        .chartYScale(domain: .automatic(includesZero: false))
+        .frame(height: 180)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(chart.accessibilityLabel)
+        .accessibilityIdentifier("priceHistoryChart")
+    }
+
+    private var historyLegend: some View {
+        WrappingHStack(spacing: 8) {
+            ForEach(viewModel.historyLegend) { item in
+                Button(item.name) { viewModel.toggleHistorySite(item.siteID) }
+                    .buttonStyle(.bordered)
+                    .tint(item.isSelected ? .accentColor : .secondary)
+                    .accessibilityLabel(item.name)
+                    .accessibilityValue(item.isSelected ? "表示中" : "非表示")
+                    .accessibilityIdentifier("historySite-\(item.siteID)")
+            }
+        }
+    }
+}
+
+/// 子を横に並べ、幅に収まらなければ次の行へ折り返す(凡例用)。
+private struct WrappingHStack: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        arrange(width: proposal.width ?? .infinity, subviews: subviews).size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = arrange(width: bounds.width, subviews: subviews)
+        for (index, origin) in result.origins.enumerated() {
+            subviews[index].place(at: CGPoint(x: bounds.minX + origin.x, y: bounds.minY + origin.y), proposal: .unspecified)
+        }
+    }
+
+    private func arrange(width: CGFloat, subviews: Subviews) -> (origins: [CGPoint], size: CGSize) {
+        var origins: [CGPoint] = []
+        var x: CGFloat = 0
+        var y: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            origins.append(CGPoint(x: x, y: y))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            maxX = max(maxX, x - spacing)
+        }
+        return (origins, CGSize(width: maxX, height: y + rowHeight))
     }
 }

@@ -996,5 +996,131 @@ extension Components {
                 case fetchedAt = "fetched_at"
             }
         }
+        /// 1 サイトの 1 日(JST)の目安。その日の最後に取得した値
+        ///
+        /// - Remark: Generated from `#/components/schemas/PricePoint`.
+        public struct PricePoint: Codable, Hashable, Sendable {
+            /// JST の日付(YYYY-MM-DD)
+            ///
+            /// - Remark: Generated from `#/components/schemas/PricePoint/day`.
+            public var day: Swift.String
+            /// - Remark: Generated from `#/components/schemas/PricePoint/low`.
+            public var low: Swift.Int
+            /// 件数 3 未満の日は null
+            ///
+            /// - Remark: Generated from `#/components/schemas/PricePoint/mid`.
+            public var mid: Swift.Int?
+            /// Creates a new `PricePoint`.
+            ///
+            /// - Parameters:
+            ///   - day: JST の日付(YYYY-MM-DD)
+            ///   - low:
+            ///   - mid: 件数 3 未満の日は null
+            public init(
+                day: Swift.String,
+                low: Swift.Int,
+                mid: Swift.Int? = nil
+            ) {
+                self.day = day
+                self.low = low
+                self.mid = mid
+            }
+            public enum CodingKeys: String, CodingKey {
+                case day
+                case low
+                case mid
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/SitePriceHistory`.
+        public struct SitePriceHistory: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/SitePriceHistory/site_id`.
+            public var siteId: Components.Schemas.Id
+            /// day 昇順。点のある日だけ
+            ///
+            /// - Remark: Generated from `#/components/schemas/SitePriceHistory/points`.
+            public var points: [Components.Schemas.PricePoint]
+            /// Creates a new `SitePriceHistory`.
+            ///
+            /// - Parameters:
+            ///   - siteId:
+            ///   - points: day 昇順。点のある日だけ
+            public init(
+                siteId: Components.Schemas.Id,
+                points: [Components.Schemas.PricePoint]
+            ) {
+                self.siteId = siteId
+                self.points = points
+            }
+            public enum CodingKeys: String, CodingKey {
+                case siteId = "site_id"
+                case points
+            }
+        }
+        /// その日の全サイトの low の最小
+        ///
+        /// - Remark: Generated from `#/components/schemas/DayLow`.
+        public struct DayLow: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/DayLow/day`.
+            public var day: Swift.String
+            /// - Remark: Generated from `#/components/schemas/DayLow/low`.
+            public var low: Swift.Int
+            /// Creates a new `DayLow`.
+            ///
+            /// - Parameters:
+            ///   - day:
+            ///   - low:
+            public init(
+                day: Swift.String,
+                low: Swift.Int
+            ) {
+                self.day = day
+                self.low = low
+            }
+            public enum CodingKeys: String, CodingKey {
+                case day
+                case low
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/PriceHistory`.
+        public struct PriceHistory: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/PriceHistory/item_id`.
+            public var itemId: Components.Schemas.Id
+            /// 返した期間(日数。省略時は 90)
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceHistory/days`.
+            public var days: Swift.Int
+            /// 点のあるサイトだけ。ジャンルの表示順、ジャンルに無いサイトはその後に site_id 昇順
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceHistory/sites`.
+            public var sites: [Components.Schemas.SitePriceHistory]
+            /// day 昇順。点のある日だけ
+            ///
+            /// - Remark: Generated from `#/components/schemas/PriceHistory/overall`.
+            public var overall: [Components.Schemas.DayLow]
+            /// Creates a new `PriceHistory`.
+            ///
+            /// - Parameters:
+            ///   - itemId:
+            ///   - days: 返した期間(日数。省略時は 90)
+            ///   - sites: 点のあるサイトだけ。ジャンルの表示順、ジャンルに無いサイトはその後に site_id 昇順
+            ///   - overall: day 昇順。点のある日だけ
+            public init(
+                itemId: Components.Schemas.Id,
+                days: Swift.Int,
+                sites: [Components.Schemas.SitePriceHistory],
+                overall: [Components.Schemas.DayLow]
+            ) {
+                self.itemId = itemId
+                self.days = days
+                self.sites = sites
+                self.overall = overall
+            }
+            public enum CodingKeys: String, CodingKey {
+                case itemId = "item_id"
+                case days
+                case sites
+                case overall
+            }
+        }
     }
 }

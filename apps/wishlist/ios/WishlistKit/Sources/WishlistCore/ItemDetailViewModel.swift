@@ -226,6 +226,62 @@ public final class ItemDetailViewModel {
         isRefreshing = false
     }
 
+    // MARK: - フェーズ4-2: 価格の推移(docs/phase4-spec.md 4-2)
+
+    /// 「価格の推移」の折りたたみの状態。開いたときに `loadPriceHistory()` で取る
+    public private(set) var priceHistory: PriceHistoryState = .notLoaded
+    /// 凡例で表示を選んだサイト(既定は空 = 全体の最安だけ)
+    public private(set) var selectedHistorySiteIDs: Set<Int> = []
+
+    /// `GET price-history`(days は付けない)。取得中・取得済み(`.loaded`・`.empty`)なら何もしない。失敗(`.failed`)のあとは取り直す。
+    /// 全体の最安の点が 2 未満なら `.empty`。通信できなければ `.failed(WishlistText.offline)`、それ以外は `.failed(WishlistText.priceHistoryFailed)`。
+    /// 目安価格(`summary`・`estimates`)は変えない。
+    public func loadPriceHistory() async {
+        switch priceHistory {
+        case .loading, .loaded, .empty: return
+        case .notLoaded, .failed: break
+        }
+        priceHistory = .loading
+        do {
+            let history = try await service.priceHistory(itemID: item.id, days: nil)
+            if let chart = PriceHistoryFormat.chart(history, sites: sites) {
+                priceHistory = .loaded(chart)
+            } else {
+                priceHistory = .empty
+            }
+        } catch {
+            let isNetwork = (error as? WishlistError)?.isNetwork == true
+            priceHistory = .failed(isNetwork ? WishlistText.offline : WishlistText.priceHistoryFailed)
+        }
+    }
+
+    /// 凡例のボタン: そのサイトの線の表示を切り替える(推移に無いサイトは無視)
+    public func toggleHistorySite(_ siteID: Int) {
+        guard case .loaded(let chart) = priceHistory, chart.sites.contains(where: { $0.id == "site-\(siteID)" }) else { return }
+        if selectedHistorySiteIDs.contains(siteID) {
+            selectedHistorySiteIDs.remove(siteID)
+        } else {
+            selectedHistorySiteIDs.insert(siteID)
+        }
+    }
+
+    /// 凡例(推移の `sites` の順。`.loaded` 以外は空)
+    public var historyLegend: [HistoryLegendItem] {
+        guard case .loaded(let chart) = priceHistory else { return [] }
+        return chart.sites.compactMap { series in
+            guard let siteID = Int(series.id.dropFirst("site-".count)) else { return nil }
+            return HistoryLegendItem(siteID: siteID, name: series.name, isSelected: selectedHistorySiteIDs.contains(siteID))
+        }
+    }
+
+    /// 描く線: 全体の最安 + 選んだサイト(凡例の順)。`.loaded` 以外は空
+    public var visibleHistorySeries: [HistorySeries] {
+        guard case .loaded(let chart) = priceHistory else { return [] }
+        return [chart.overall] + chart.sites.filter { series in
+            selectedHistorySiteIDs.contains { series.id == "site-\($0)" }
+        }
+    }
+
     /// 保存済みの検索ワード(サイト別の上書きを除く。検索ワード欄に出す値)
     public var displayQuery: String { SiteLinks.itemQuery(item: item, genre: genre) }
 

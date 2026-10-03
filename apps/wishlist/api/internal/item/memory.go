@@ -19,6 +19,7 @@ type MemoryRepository struct {
 	// 目安価格(フェーズ3。memory_price.go)。
 	estimates map[[2]int64]Estimate // (item_id, site_id)
 	listings  []Listing
+	history   map[historyKey]PricePoint // 価格の推移(フェーズ4-2。memory_history.go)
 	nowFunc   func() time.Time
 }
 
@@ -31,6 +32,7 @@ func NewMemoryRepository() *MemoryRepository {
 		sites:     map[int64]Site{},
 		items:     map[int64]Item{},
 		estimates: map[[2]int64]Estimate{},
+		history:   map[historyKey]PricePoint{},
 		nowFunc:   time.Now,
 	}
 }

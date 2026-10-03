@@ -150,6 +150,7 @@ export function App() {
 
       {sheetItem && (
         <Sheet
+          key={sheetItem.id}
           item={sheetItem}
           genre={w.genres.find((g) => g.id === sheetItem.genre_id)}
           sites={w.sites}

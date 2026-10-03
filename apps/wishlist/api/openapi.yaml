@@ -261,6 +261,37 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
+  /api/items/{id}/price-history:
+    parameters:
+      - $ref: '#/components/parameters/ItemID'
+    get:
+      operationId: getItemPriceHistory
+      tags: [estimates]
+      description: |
+        価格の推移(docs/phase4-spec.md 4-2)。取得に成功した日(status ok)のサイト別の目安を、1 商品×1 サイト×1 日(JST)1 点で返す。
+        出品が無い日・失敗した日は点を作らない。期間は今日(JST)を含む直近 `days` 日。
+      parameters:
+        - name: days
+          in: query
+          required: false
+          description: 直近何日分か(今日を含む)。省略は 90。1〜180 の外は 400
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 180
+            default: 90
+      responses:
+        '200':
+          description: 価格の推移
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceHistory'
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/Internal' }
+
   /api/genres:
     get:
       operationId: listGenres
@@ -889,3 +920,57 @@ components:
         fetched_at:
           type: string
           format: date-time
+
+    PricePoint:
+      type: object
+      description: 1 サイトの 1 日(JST)の目安。その日の最後に取得した値
+      required: [day, low]
+      properties:
+        day:
+          type: string
+          format: date
+          description: JST の日付(YYYY-MM-DD)
+        low:
+          type: integer
+        mid:
+          type: integer
+          nullable: true
+          description: 件数 3 未満の日は null
+
+    SitePriceHistory:
+      type: object
+      required: [site_id, points]
+      properties:
+        site_id: { $ref: '#/components/schemas/ID' }
+        points:
+          type: array
+          description: day 昇順。点のある日だけ
+          items: { $ref: '#/components/schemas/PricePoint' }
+
+    DayLow:
+      type: object
+      description: その日の全サイトの low の最小
+      required: [day, low]
+      properties:
+        day:
+          type: string
+          format: date
+        low:
+          type: integer
+
+    PriceHistory:
+      type: object
+      required: [item_id, days, sites, overall]
+      properties:
+        item_id: { $ref: '#/components/schemas/ID' }
+        days:
+          type: integer
+          description: 返した期間(日数。省略時は 90)
+        sites:
+          type: array
+          description: 点のあるサイトだけ。ジャンルの表示順、ジャンルに無いサイトはその後に site_id 昇順
+          items: { $ref: '#/components/schemas/SitePriceHistory' }
+        overall:
+          type: array
+          description: day 昇順。点のある日だけ
+          items: { $ref: '#/components/schemas/DayLow' }

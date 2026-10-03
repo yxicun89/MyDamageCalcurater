@@ -38,6 +38,12 @@ public enum WishlistText {
     public static let offlineKeepingPrevious = "オフライン(前回の値)"
     public static let updateFailed = "更新できませんでした"
     public static let suspiciousFetchFailed = "参考外の出品を取得できませんでした"
+    /// フェーズ4-2 価格の推移(折りたたみの見出し・点が 2 未満・取得の失敗。通信できないときは `offline`)
+    public static let priceHistoryTitle = "価格の推移"
+    public static let priceHistoryEmpty = "推移はまだありません"
+    public static let priceHistoryFailed = "価格の推移を取得できませんでした"
+    /// 凡例の「全体の最安」の線の名前
+    public static let priceHistoryOverall = "全体の最安"
 }
 
 /// 目安価格の再取得(ポーリング)の数値。PWA と同じ。

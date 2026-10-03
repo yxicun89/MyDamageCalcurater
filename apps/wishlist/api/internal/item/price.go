@@ -66,6 +66,8 @@ type PriceRepository interface {
 	// ListListings は商品の listings(price 昇順・同額は id 昇順)。siteID が nil でなければそのサイトだけ。
 	// SuspiciousReasons は理由が無ければ長さ 0(nil でもよい)。商品・サイトが無ければ空。
 	ListListings(ctx context.Context, itemID int64, siteID *int64) ([]Listing, error)
+	// 価格の推移(フェーズ4-2。SaveSiteResult が書く。history.go)。
+	PriceHistoryRepository
 }
 
 // validateSave は SaveSiteResult の入力が列幅・値の範囲に収まるかを検査する(違反は ErrInvalid)。

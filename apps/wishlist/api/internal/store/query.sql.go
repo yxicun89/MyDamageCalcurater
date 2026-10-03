@@ -760,6 +760,47 @@ func (q *Queries) ListListingsByItemSite(ctx context.Context, arg ListListingsBy
 	return items, nil
 }
 
+const listPriceHistory = `-- name: ListPriceHistory :many
+SELECT item_id, site_id, day, low, mid, ` + "`" + `count` + "`" + `, recorded_at
+FROM price_history WHERE item_id = ? AND day >= ? ORDER BY site_id, day
+`
+
+type ListPriceHistoryParams struct {
+	ItemID int64
+	Day    time.Time
+}
+
+func (q *Queries) ListPriceHistory(ctx context.Context, arg ListPriceHistoryParams) ([]PriceHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listPriceHistory, arg.ItemID, arg.Day)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []PriceHistory
+	for rows.Next() {
+		var i PriceHistory
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SiteID,
+			&i.Day,
+			&i.Low,
+			&i.Mid,
+			&i.Count,
+			&i.RecordedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSites = `-- name: ListSites :many
 SELECT id, name, search_url_template, fetch_type, is_reference FROM sites ORDER BY id
 `
@@ -808,6 +849,18 @@ type MarkEstimateFailedParams struct {
 func (q *Queries) MarkEstimateFailed(ctx context.Context, arg MarkEstimateFailedParams) error {
 	_, err := q.db.ExecContext(ctx, markEstimateFailed, arg.ItemID, arg.SiteID, arg.FetchedAt)
 	return err
+}
+
+const prunePriceHistory = `-- name: PrunePriceHistory :execrows
+DELETE FROM price_history WHERE day < ?
+`
+
+func (q *Queries) PrunePriceHistory(ctx context.Context, day time.Time) (int64, error) {
+	result, err := q.db.ExecContext(ctx, prunePriceHistory, day)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected()
 }
 
 const touchItem = `-- name: TouchItem :exec
@@ -932,6 +985,36 @@ func (q *Queries) UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) 
 		arg.InStockCount,
 		arg.Status,
 		arg.FetchedAt,
+	)
+	return err
+}
+
+const upsertPriceHistory = `-- name: UpsertPriceHistory :exec
+INSERT INTO price_history (item_id, site_id, day, low, mid, ` + "`" + `count` + "`" + `, recorded_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE low = VALUES(low), mid = VALUES(mid), ` + "`" + `count` + "`" + ` = VALUES(` + "`" + `count` + "`" + `), recorded_at = VALUES(recorded_at)
+`
+
+type UpsertPriceHistoryParams struct {
+	ItemID     int64
+	SiteID     int64
+	Day        time.Time
+	Low        int32
+	Mid        sql.NullInt32
+	Count      int32
+	RecordedAt time.Time
+}
+
+// 価格の推移(フェーズ4-2)。day は JST の日付。
+func (q *Queries) UpsertPriceHistory(ctx context.Context, arg UpsertPriceHistoryParams) error {
+	_, err := q.db.ExecContext(ctx, upsertPriceHistory,
+		arg.ItemID,
+		arg.SiteID,
+		arg.Day,
+		arg.Low,
+		arg.Mid,
+		arg.Count,
+		arg.RecordedAt,
 	)
 	return err
 }

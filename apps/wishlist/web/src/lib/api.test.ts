@@ -160,3 +160,28 @@ describe("createApiClient(フェーズ3)", () => {
     await expect(down.client.listListings(5)).rejects.toMatchObject({ code: "network", status: 0 });
   });
 });
+
+// AC-HIS-API-01: フェーズ4-2(価格の推移。docs/phase4-spec.md)
+describe("createApiClient(価格の推移)", () => {
+  const history = {
+    item_id: 5,
+    days: 90,
+    sites: [{ site_id: 1, points: [{ day: "2026-10-03", low: 3000, mid: null }] }],
+    overall: [{ day: "2026-10-03", low: 3000 }],
+  };
+  it("AC-HIS-API-01 getPriceHistory は GET .../price-history の本文をそのまま返す。days を省くとクエリを付けない", async () => {
+    const { client, last } = setup(json(history));
+    expect(await client.getPriceHistory(5)).toEqual(history);
+    expect(last().url).toBe("https://h.example/wishlist/api/items/5/price-history");
+    expect(last().init.method ?? "GET").toBe("GET");
+    expect(last().headers.get("Authorization")).toBe("Bearer tok");
+    await client.getPriceHistory(5, 180);
+    expect(last().url).toBe("https://h.example/wishlist/api/items/5/price-history?days=180");
+  });
+  it("AC-HIS-API-01 失敗は ApiError(通信失敗は network)", async () => {
+    const { client } = setup(json({ code: "not_found", message: "x" }, 404));
+    await expect(client.getPriceHistory(5)).rejects.toMatchObject({ code: "not_found", status: 404 });
+    const down = setup(() => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(down.client.getPriceHistory(5)).rejects.toMatchObject({ code: "network", status: 0 });
+  });
+});

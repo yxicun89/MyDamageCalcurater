@@ -9,6 +9,7 @@ import type {
   ItemFields,
   ItemUpdate,
   Listing,
+  PriceHistory,
   Site,
   SiteCreate,
   SiteUpdate,
@@ -52,6 +53,8 @@ export interface ApiClient {
   refreshEstimates(id: number): Promise<ItemEstimates>;
   /** GET .../listings。参考外を含む。siteId を渡すとそのサイトだけ */
   listListings(id: number, siteId?: number): Promise<Listing[]>;
+  /** GET .../price-history(フェーズ4-2)。days を省くとクエリを付けない(サーバーの既定 90 日) */
+  getPriceHistory(id: number, days?: number): Promise<PriceHistory>;
   listGenres(): Promise<Genre[]>;
   createGenre(body: GenreCreate): Promise<Genre>;
   updateGenre(id: number, patch: GenreUpdate): Promise<Genre>;
@@ -172,6 +175,8 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
           site_id: siteId,
         })
       ).listings,
+    getPriceHistory: (id, days) =>
+      request("GET", `api/items/${String(id)}/price-history`, undefined, { days }),
     listGenres: async () => (await request<{ genres: Genre[] }>("GET", "api/genres")).genres,
     createGenre: (body) => request("POST", "api/genres", { json: body }),
     updateGenre: (id, patch) => request("PATCH", `api/genres/${String(id)}`, { json: patch }),
