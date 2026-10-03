@@ -6,4 +6,4 @@ resources:
 images:
   - name: pokecalc/judge
     newName: localhost:5000/pokecalc/judge
-    digest: sha256:f5bb6001b8d5b78265a05ba6b7941b4d75b20d0015b2028f526ff03ec9b43f92
+    digest: sha256:6c6e82aaf9b00ed9560fb0bea1c9e98815e9068b2cc4487320f182d138813fcc
