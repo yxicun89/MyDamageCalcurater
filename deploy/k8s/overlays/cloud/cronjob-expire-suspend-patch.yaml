@@ -1,0 +1,15 @@
+# cloud には TiDB・Secret record-db-auth・team-db-auth が無いため、失効ジョブ record-expire・team-expire を
+# suspend する(毎日失敗し続けないように。pokedex-import と同じ。ADR-0104 §8・ADR-0220 §1)。cloud を使うときに外す。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: record-expire
+spec:
+  suspend: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-expire
+spec:
+  suspend: true

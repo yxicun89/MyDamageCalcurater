@@ -77,6 +77,8 @@ var engineSentinels = []struct {
 	// 写す(新しい code は足さない。ADR-0126 §5・ADR-0214)。マスタに無いIDはこれより前(resolveAbilityCandidates
 	// でのstore参照)でunknown_abilityにする。
 	{engine.ErrInvalidAbilityCandidates, api.InvalidInput},
+	// 調整の入力の不正(ADR-0250 §4。wasmapi と同じく invalid_input。新しい code は足さない)。
+	{engine.ErrInvalidAdjustInput, api.InvalidInput},
 }
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。

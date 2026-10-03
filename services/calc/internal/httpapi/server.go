@@ -64,7 +64,7 @@ func NewServer(store master.Store, publisher EventPublisher) *Server {
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
-// calc の3操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
+// calc の3操作と調整の4操作(生成ラッパ経由)、pokedex の7操作(直接 404。R1)、GET /healthz
 // (openapi に載せない運用エンドポイント)、panic の回復(500 internal)、echo の既定エラー
 // (ルート無し・メソッド違い)を Error 形式({"code","message"})に揃えるエラーハンドラを含む。
 func NewHandler(store master.Store, publisher EventPublisher, opts ...Option) http.Handler {
@@ -87,7 +87,7 @@ func readyzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// registerCalcRoutes は calc の3操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
+// registerCalcRoutes は calc の3操作と調整の4操作だけを、生成ラッパ(api.ServerInterfaceWrapper。
 // 必須ヘッダ X-Device-Id / X-Session-Id の有無を検証してから Server を呼ぶ)経由で登録する。
 // pokedex はここに含めない(registerPokedexNotFoundRoutes 参照。critic 指摘 R1)。
 func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
@@ -95,6 +95,11 @@ func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
 	e.POST("/api/calc", wrapper.CalcDamage, guard)
 	e.POST("/api/calc/bulk", wrapper.CalcBulk, guard)
 	e.POST("/api/calc/reverse", wrapper.CalcReverse, guard)
+	// 調整の4操作(ADR-0250 §8)。ほかの計算と同じ guard(締め切り・同時実行の上限)を通す。
+	e.POST("/api/calc/adjust/indices", wrapper.AdjustIndices, guard)
+	e.POST("/api/calc/adjust/min-sp-to-ko", wrapper.AdjustMinSpToKo, guard)
+	e.POST("/api/calc/adjust/min-sp-to-survive", wrapper.AdjustMinSpToSurvive, guard)
+	e.POST("/api/calc/adjust/allocation", wrapper.AdjustAllocation, guard)
 }
 
 // registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを
@@ -175,7 +180,7 @@ func errorBodyFor(err error) (int, api.Error) {
 			// ルートが無い・メソッドが違う(ADR-0200: メソッド違いに新しい code を足さず not_found にする)。
 			return http.StatusNotFound, api.Error{Code: api.NotFound, Message: "ルートが無い"}
 		case http.StatusBadRequest:
-			// calc の3操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
+			// calc の3操作と調整の4操作だけが生成ラッパを経由する(pokedex は直接 not_found。R1)。
 			// そのラッパが返す 400 はヘッダの検証由来。「欠落」「空」(bind 失敗も含む)は
 			// missing_header、それ以外(同名ヘッダの重複指定)は invalid_header にする
 			// (ADR-0202 §9: gateway と語彙を揃える。missing_header はヘッダ欠落・空に限定する)。
@@ -439,5 +444,10 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 
 // GetMovesByIds は pokedex の操作。calc-svc の担当外なので 404 not_found。
 func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams) error {
+	return notFoundForPokedex()
+}
+
+// ListMoveLearners は pokedex の操作(ADR-0251)。calc-svc の担当外なので 404 not_found。
+func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.ListMoveLearnersParams) error {
 	return notFoundForPokedex()
 }

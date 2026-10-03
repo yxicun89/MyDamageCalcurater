@@ -109,11 +109,11 @@ ADR-0304 の `MasterCapabilities` に素直に従う。
 | 種族 | `capabilities.speciesList` が true なら `master.species` の `<select>`、false なら `SpeciesSearchField` | ADR-0304 §1(オンラインは全件そろわない) |
 | 性格 | `master.natures` の `<select>` | 常に全件そろう |
 | 特性・持ち物 | `master.abilities` / `master.items` の `<select>`(**省略可**。未選択なら欄ごと送らない) | 常に全件そろう |
-| 技 | **自由入力のテキスト欄(技 ID を直接入力)** | ADR-0304 §3(ID から技を引く公開 API が無い) |
+| 技 | ~~自由入力のテキスト欄(技 ID を直接入力)~~ → **選んだポケモンの learnset から選ぶ `<select>`**(issue 309。**ADR-0711 で置き換え**) | ADR-0304 §3 は解消済み(getMove・resolveSpecies の技。ADR-0304 A-13) |
 
 - 種族は `SpeciesSearchField` の `onResolved` で `MasterSpeciesResolution` を受け、`species.key` を `speciesKey` に使う
   (種族値・learnset は judge が上流から引くので画面では使わない)。
-- **技をドロップダウンにしない**理由は §9(却下した案)に書く。ADR-0304 §3 が既に記録している欠落なので、
+- (置き換え済み。ADR-0711)旧記述: **技をドロップダウンにしない**理由は §9(却下した案)に書く。ADR-0304 §3 が既に記録している欠落なので、
   JD5 で新しい提案はしない(制約を踏襲するだけ)。
 - 特性・持ち物の**効果**(`capabilities.effects`)は使わない。judge は ID をそのまま calc-svc に渡す(ADR-0701 §3)ので、
   画面も ID を選ばせるだけでよい。
@@ -187,7 +187,7 @@ ADR-0702 §1・ADR-0703 §5 が「`speedField` は 1 リクエストに 1 つだ
    ある候補の入力が他の候補に影響しない。
 3. **request**: 送信ボタンでだけ `outspeedAndKo` を 1 回呼び、body は §6 のとおり。
    ランクが全 0 なら `ranks` を送らず、場の効果が全 false なら `speedField` を送らない。
-   未選択の特性・持ち物の欄は送らない。`field` は送らない。技 ID は前後の空白を落として送る。
+   未選択の特性・持ち物の欄は送らない。`field` は送らない。技 ID は前後の空白を落として送る。(置き換え: ADR-0711。技は select で選ぶので Move.id をそのまま送る。)
 4. **場の効果**: トリックルーム・自分側の追い風・相手側の追い風の 3 つのチェックボックスが
    `speedField.trickRoom` / `attackerTailwind` / `defenderTailwind` に 1 対 1 で対応する。
    **相手側の追い風は候補ごとではなく 1 つだけ**(すべての候補に同じように適用される旨の文言が出る)。
@@ -198,7 +198,7 @@ ADR-0702 §1・ADR-0703 §5 が「`speedField` は 1 リクエストに 1 つだ
    画面は「勝ち」「負け」に丸めた語を出さない。
 6. **エラー**: `ok: false` のとき `role="alert"` にコードごとの文言が出て、サーバーの `message` も併せて出る
    (どの候補で失敗したかが読める)。エラーの後も入力は残る。`judge_unavailable` でも画面が壊れない。
-7. **送信前の検査**: SP が範囲外・合計 66 超過、ランクが範囲外、種族・性格・技の ID が空のときは
+7. **送信前の検査**(追記: ADR-0711。誤りは該当欄に aria-invalid と文言で出す): SP が範囲外・合計 66 超過、ランクが範囲外、種族・性格・技の ID が空のときは
    **`outspeedAndKo` を呼ばず**に理由を出す。
 8. **古い応答**: 2 回続けて送ったとき、先に送った方の応答が後から届いても表示を上書きしない。
 9. **画面登録**: `SCREEN_ROUTES` に `judge`(`/judge`・タブ「判定」)があり、`/judge` を直接開くと判定タブが選ばれる。
@@ -244,3 +244,8 @@ ADR-0702 §1・ADR-0703 §5 が「`speedField` は 1 リクエストに 1 つだ
   ディレクトリによるレーン境界が崩れる。
 - **iOS 画面を同じタスクでやる**: Web を先に出して形を確かめる(DECISIONS.md 2026-09-24)。
   iOS は `swift-openapi-generator` の生成物を judge の契約から作る必要があり、作業の性質が違う。
+
+## 追記(ADR-0711)
+
+§5 の「技は ID の自由入力」と受け入れ条件 3(技 ID の空白除去)・9 周辺の「技 ID」入力は、issue 309 で
+**技の select**に置き換えた(ADR-0711)。ID の自由入力は残さない。

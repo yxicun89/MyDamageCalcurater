@@ -526,8 +526,12 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
         body.itemVariants = request.itemVariants.map((item) => item?.id ?? null);
       }
       const defenderAbilityId = singleAbilityId(request.defenderAbilities);
-      if (defenderAbilityId !== undefined) {
-        body.defenderOverride = { abilityId: defenderAbilityId };
+      const defenderRanks = request.defenderOverride?.ranks;
+      if (defenderAbilityId !== undefined || defenderRanks !== undefined) {
+        body.defenderOverride = {
+          ...(defenderAbilityId === undefined ? {} : { abilityId: defenderAbilityId }),
+          ...(defenderRanks === undefined ? {} : { ranks: defenderRanks satisfies Schemas["RankBlock"] }),
+        };
       }
       const response = await postJson(CALC_PATHS.bulk, body, isBulkCalcResult, signal);
       if (!response.ok) {

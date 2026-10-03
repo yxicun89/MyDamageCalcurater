@@ -285,10 +285,14 @@ func natureStat(s *api.StatKey) (engine.StatKey, error) {
 	return engine.StatKey(*s), nil
 }
 
-// maxMasterExportBytes はマスタ一式の本文の上限(バイト)。例のファイルは数 KB、実マスタ(全種族・技・
-// 持ち物・特性)でも数 MB を超えない見込みだが、上流の異常時に無制限に読み込んでメモリを使い切らないよう
-// 余裕を持った上限を設ける(critic 指摘)。
-const maxMasterExportBytes = 16 << 20 // 16MiB
+// MaxExportBytes はマスタ一式の本文の上限(バイト)。例のファイルは約 12KB。実マスタ(種族 349・技 515・持ち物・
+// 特性・効果・技の機構)は、例の1行あたりの大きさからの見積りで 0.5〜1MB(issue #322 は数百 KB〜数 MB)。
+// その数倍の 4MiB を上限にする。本文は io.ReadAll で全部読んでから複数回デコードするので、上限が大きいと
+// 異常な上流が Pod の memory limit(64Mi)を超える読み込みだけで OOMKill の再起動ループを起こす
+// (実測: 上限 16MiB で最大 RSS 72MB。4MiB なら 44MB)。上限と limits の関係は cmd/calc の
+// TestMasterBodyLimitFitsMemoryLimit が固定する(ADR-0204 追記 #322)。実マスタが 4MiB に近づいたら
+// limits を上げるかストリーミングデコードへ移る。
+const MaxExportBytes = 4 << 20 // 4MiB
 
 // errBodyTooLarge は readAllLimited が上限超過を伝えるための内部エラー(呼び出し側が包み直す)。
 var errBodyTooLarge = errors.New("本文が上限を超える")
@@ -308,13 +312,13 @@ func readAllLimited(r io.Reader, limit int64) ([]byte, error) {
 
 // DecodeExport はマスタ一式の JSON を厳格に読む(未知のフィールド・後続のデータ・必須のトップレベルの
 // 欠落/null を拒否する。効果定義の数値は字面のまま保つ: 5324.0 を 5324 に丸めて通さない)。
-// 本文が maxMasterExportBytes を超える場合も含め、不正は ErrInvalidMaster で包む。
+// 本文が MaxExportBytes を超える場合も含め、不正は ErrInvalidMaster で包む。
 // (HTTPSource.Fetch は本文を読む段階の失敗を別に扱うため、readAllLimited と decodeExportBytes を直接使う。)
 func DecodeExport(r io.Reader) (api.MasterExport, error) {
-	data, err := readAllLimited(r, maxMasterExportBytes)
+	data, err := readAllLimited(r, MaxExportBytes)
 	if err != nil {
 		if errors.Is(err, errBodyTooLarge) {
-			return api.MasterExport{}, fmt.Errorf("%w: 本文が上限 %d バイトを超える", ErrInvalidMaster, maxMasterExportBytes)
+			return api.MasterExport{}, fmt.Errorf("%w: 本文が上限 %d バイトを超える", ErrInvalidMaster, MaxExportBytes)
 		}
 		return api.MasterExport{}, fmt.Errorf("%w: %v", ErrInvalidMaster, err)
 	}
@@ -451,10 +455,10 @@ func (h *HTTPSource) Fetch(ctx context.Context) (api.MasterExport, error) {
 	// 本文を読む段階の失敗(接続が途中で切れる・タイムアウト)は、JSON として不正なのではなく取得できて
 	// いないだけなので ErrInvalidMaster にしない。ctx がすでに終わっていればそれを、そうでなければ
 	// ErrMasterUnavailable を返す(critic 指摘)。上限超過だけは内容の不正として ErrInvalidMaster にする。
-	data, err := readAllLimited(resp.Body, maxMasterExportBytes)
+	data, err := readAllLimited(resp.Body, MaxExportBytes)
 	if err != nil {
 		if errors.Is(err, errBodyTooLarge) {
-			return api.MasterExport{}, fmt.Errorf("%w: マスタ一式が上限 %d バイトを超える", ErrInvalidMaster, maxMasterExportBytes)
+			return api.MasterExport{}, fmt.Errorf("%w: マスタ一式が上限 %d バイトを超える", ErrInvalidMaster, MaxExportBytes)
 		}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return api.MasterExport{}, ctxErr
