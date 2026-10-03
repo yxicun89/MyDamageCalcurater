@@ -111,13 +111,38 @@ func TestRecordResponsesMatchContract(t *testing.T) {
 		{"削除 200 completed", func(f *fakeStore) { f.seed(deviceA, 2, 1, 1) }, http.MethodDelete, pathDeviceData, nil, true},
 		{"削除 200 partial", func(f *fakeStore) { f.purgeLimit = 1; f.seed(deviceA, 2, 1, 1) }, http.MethodDelete, pathDeviceData, nil, true},
 		{"削除 503", func(f *fakeStore) { f.unavailable = true }, http.MethodDelete, pathDeviceData, nil, true},
+
+		// お気に入り(ADR-0227。P5-3c)。
+		{"お気に入り一覧 200", func(f *fakeStore) { f.seed(deviceA, 0, 0, 2) }, http.MethodGet, pathFavorites, nil, true},
+		{"お気に入り一覧 200(空)", func(*fakeStore) {}, http.MethodGet, pathFavorites, nil, true},
+		{"お気に入り一覧 503", func(f *fakeStore) { f.unavailable = true }, http.MethodGet, pathFavorites, nil, true},
+		{"お気に入り作成 201", func(*fakeStore) {}, http.MethodPost, pathFavorites, []byte(contractFavoriteBody), true},
+		{"お気に入り作成 201(任意項目あり)", func(*fakeStore) {}, http.MethodPost, pathFavorites, []byte(contractFullFavoriteBody), true},
+		{"お気に入り作成 400(SP 範囲外)", func(*fakeStore) {}, http.MethodPost, pathFavorites, []byte(contractBadSPFavoriteBody), true},
+		{"お気に入り作成 400(上限)", func(f *fakeStore) { f.seed(deviceA, 0, 0, 100) }, http.MethodPost, pathFavorites, []byte(contractFavoriteBody), true},
+		{"お気に入り作成 503", func(f *fakeStore) { f.unavailable = true }, http.MethodPost, pathFavorites, []byte(contractFavoriteBody), true},
+		{"お気に入り削除 204", func(f *fakeStore) { f.seed(deviceA, 0, 0, 1) }, http.MethodDelete, favoritePath("1"), nil, true},
+		{"お気に入り削除 404", func(*fakeStore) {}, http.MethodDelete, favoritePath("424242"), nil, true},
+		{"お気に入り削除 404(形式違い)", func(*fakeStore) {}, http.MethodDelete, favoritePath("abc"), nil, false},
+		{"お気に入り削除 503", func(f *fakeStore) { f.unavailable = true }, http.MethodDelete, favoritePath("1"), nil, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			st := newFakeStore()
 			tt.setup(st)
-			rec := serve(t, NewHandler(st), tt.method, tt.path, headers(deviceA), tt.body)
-			assertMatchesContract(t, tt.method, tt.path, headers(deviceA), tt.body, rec, tt.checkRequest)
+			hdr := headers(deviceA)
+			if tt.body != nil {
+				// 契約のリクエスト検証は本文の Content-Type を見る(serve は自分で付けるが、
+				// assertMatchesContract が組み立て直す要求にも付ける)。
+				hdr.Set("Content-Type", "application/json")
+			}
+			rec := serve(t, NewHandler(st), tt.method, tt.path, hdr, tt.body)
+			// お気に入りの行は「契約にある応答のどれか」(default を含む)ではなく、期待のステータスそのものを
+			// 確かめる(未実装の 404 が default に当たって素通りしないように)。
+			if want, ok := favoriteContractStatus[tt.name]; ok && rec.Code != want {
+				t.Errorf("status = %d, want %d; body=%s", rec.Code, want, rec.Body.String())
+			}
+			assertMatchesContract(t, tt.method, tt.path, hdr, tt.body, rec, tt.checkRequest)
 		})
 	}
 }
@@ -158,6 +183,9 @@ func TestContractHasRecordOperations(t *testing.T) {
 	}{
 		{"/api/record/device-data", http.MethodDelete, "deleteRecordDeviceData", []string{"200", "400", "500", "503"}},
 		{"/api/record/frequent-opponents", http.MethodGet, "listFrequentOpponents", []string{"200", "400", "503"}},
+		{"/api/record/favorites", http.MethodGet, "listFavorites", []string{"200", "400", "503"}},
+		{"/api/record/favorites", http.MethodPost, "createFavorite", []string{"200", "201", "400", "500", "503"}},
+		{"/api/record/favorites/{favoriteId}", http.MethodDelete, "deleteFavorite", []string{"204", "400", "404", "503"}},
 	}
 	for _, o := range ops {
 		t.Run(o.operationID, func(t *testing.T) {
@@ -212,6 +240,52 @@ func TestContractHasRecordOperations(t *testing.T) {
 			}
 		})
 	}
+}
+
+// favoriteContractStatus は TestRecordResponsesMatchContract のお気に入りの行が返すべきステータス。
+var favoriteContractStatus = map[string]int{
+	"お気に入り一覧 200":         http.StatusOK,
+	"お気に入り一覧 200(空)":      http.StatusOK,
+	"お気に入り一覧 503":         http.StatusServiceUnavailable,
+	"お気に入り作成 201":         http.StatusCreated,
+	"お気に入り作成 201(任意項目あり)": http.StatusCreated,
+	"お気に入り作成 400(SP 範囲外)": http.StatusBadRequest,
+	"お気に入り作成 400(上限)":     http.StatusBadRequest,
+	"お気に入り作成 503":         http.StatusServiceUnavailable,
+	"お気に入り削除 204":         http.StatusNoContent,
+	"お気に入り削除 404":         http.StatusNotFound,
+	"お気に入り削除 404(形式違い)":   http.StatusNotFound,
+	"お気に入り削除 503":         http.StatusServiceUnavailable,
+}
+
+// 契約テストで送るお気に入りの本文(架空の種族・性格。マスタに依存しない)。
+const (
+	contractFavoriteBody = `{"individual":{"speciesKey":"9002-000","natureId":"fake-nature",` +
+		`"sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":2,"spe":0}}}`
+	contractFullFavoriteBody = `{"label":"HB特化","individual":{"speciesKey":"9002-000","level":50,"natureId":"fake-nature",` +
+		`"abilityId":"fake-ability","itemId":"fake-item","sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":2,"spe":0},` +
+		`"ranks":{"atk":1},"teraType":"steel","status":"burn"}}`
+	// SP の範囲外は契約の schema(StatBlock)では表せない(minimum/maximum を持たない)ので、
+	// リクエスト自体は契約に合い、サーバーが 400 invalid_input を返す。
+	contractBadSPFavoriteBody = `{"individual":{"speciesKey":"9002-000","natureId":"fake-nature",` +
+		`"sp":{"hp":33,"atk":0,"def":0,"spa":0,"spd":0,"spe":0}}}`
+)
+
+// createFavorite の 200(同じ内容の再ピン留め)も契約どおりであること。1往復目で作り、2往復目を照らす。
+func TestCreateFavoriteRepinMatchesContract(t *testing.T) {
+	st := newFakeStore()
+	h := NewHandler(st)
+	first := serve(t, h, http.MethodPost, pathFavorites, headers(deviceA), []byte(contractFavoriteBody))
+	if first.Code != http.StatusCreated {
+		t.Fatalf("1回目 status = %d, want 201; body=%s", first.Code, first.Body.String())
+	}
+	rec := serve(t, h, http.MethodPost, pathFavorites, headers(deviceA), []byte(contractFavoriteBody))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("2回目 status = %d, want 200; body=%s", rec.Code, rec.Body.String())
+	}
+	hdr := headers(deviceA)
+	hdr.Set("Content-Type", "application/json")
+	assertMatchesContract(t, http.MethodPost, pathFavorites, hdr, []byte(contractFavoriteBody), rec, true)
 }
 
 func isDeviceIDName(name string) bool {

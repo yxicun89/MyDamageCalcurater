@@ -83,12 +83,18 @@ func TestDeviceIDInQueryOrBodyIsRejected(t *testing.T) {
 	}
 }
 
-// AC-D2 の対応: record-svc の契約にはリソース ID をパスに受ける操作がまだ無い
-// (お気に入りの CRUD は P5-3 の API 範囲外。集計と全削除だけ)。よって「他端末のリソース ID を
-// 指すと 404 not_found」を直接試せる操作が無い。代わりに、**将来そういう操作が増えたときに
-// 気づける形**として「record の操作にパスパラメータが無い」ことを契約から固定する。
-// 追加するときはこのテストが落ちるので、そのとき AC-D2 の実テストを一緒に足すこと。
+// AC-D2 の対応: record-svc の契約でリソース ID をパスに受けてよいのは、AC-D2 の実テストを
+// 持つ操作だけ。P5-3 の時点では1つも無く(集計と全削除だけ)、「パスパラメータが無い」ことを
+// 固定していた。P5-3c(ADR-0227)でお気に入りの削除 `DELETE /api/record/favorites/{favoriteId}` が
+// 入り、その AC-D2 の実テストは favorites_test.go の TestOtherDevicesFavoriteIsNotFound が持つ。
+// 許可するのは下の表に載せた (パス, パラメータ名) だけで、**それ以外のパスパラメータが増えたら
+// このテストが落ちる**(増やすときは AC-D2 の実テストを足してから表に加えること)。
+// あわせて、許可した操作が実際に端末 ID をパスで受けていないこと(パラメータ名が端末 ID でない)も見る。
 func TestRecordOperationsHaveNoPathParameters(t *testing.T) {
+	// AC-D2 の実テストを持つパスパラメータ(パス → パラメータ名 → そのテスト名)。
+	allowed := map[string]map[string]string{
+		"/api/record/favorites/{favoriteId}": {"favoriteId": "TestOtherDevicesFavoriteIsNotFound"},
+	}
 	doc, err := api.GetSpec()
 	if err != nil {
 		t.Fatalf("契約を読めない: %v", err)
@@ -100,6 +106,9 @@ func TestRecordOperationsHaveNoPathParameters(t *testing.T) {
 		for method, op := range item.Operations() {
 			for _, p := range op.Parameters {
 				if p.Value != nil && p.Value.In == "path" {
+					if _, ok := allowed[path][p.Value.Name]; ok && !isDeviceIDName(p.Value.Name) {
+						continue
+					}
 					t.Errorf("%s %s にパスパラメータ %q がある。AC-D2(他端末のリソース ID は 404 not_found)の"+
 						"テストを追加してからこのテストを更新すること", method, path, p.Value.Name)
 				}

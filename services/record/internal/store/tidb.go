@@ -7,7 +7,9 @@ package store
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math"
@@ -277,4 +279,136 @@ func (s *TiDBStore) SaveCalcEvent(ctx context.Context, ev CalcEvent) (SaveOutcom
 		return 0, wrapUnavailable(err)
 	}
 	return Stored, nil
+}
+
+// --- お気に入り(ADR-0227。P5-3c)---------------------------------------------
+
+// snapshotHash は Snapshot のバイト列の SHA-256(16進小文字64文字)。重複判定の鍵(favorites.snapshot_hash)。
+func snapshotHash(snapshot []byte) string {
+	sum := sha256.Sum256(snapshot)
+	return hex.EncodeToString(sum[:])
+}
+
+// ListFavorites は端末のお気に入りを updated_at の降順(同時刻は id の降順)で返す。
+func (s *TiDBStore) ListFavorites(ctx context.Context, deviceID string) ([]Favorite, error) {
+	const q = `SELECT id, species_key, snapshot, created_at, updated_at FROM favorites
+		WHERE device_id = ? ORDER BY updated_at DESC, id DESC`
+	rows, err := s.db.QueryContext(ctx, q, deviceID)
+	if err != nil {
+		return nil, wrapUnavailable(err)
+	}
+	defer rows.Close()
+	out := make([]Favorite, 0)
+	for rows.Next() {
+		var f Favorite
+		if err := rows.Scan(&f.ID, &f.SpeciesKey, &f.Snapshot, &f.CreatedAt, &f.UpdatedAt); err != nil {
+			return nil, wrapUnavailable(err)
+		}
+		f.CreatedAt, f.UpdatedAt = f.CreatedAt.UTC(), f.UpdatedAt.UTC()
+		out = append(out, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapUnavailable(err)
+	}
+	return out, nil
+}
+
+// CreateFavorite は同じ Snapshot があれば updated_at を進めて返し、無ければ上限を確かめて挿入する。
+// 端末ごとの直列化は devices 行のロックで行う(ADR-0227 §3)。
+func (s *TiDBStore) CreateFavorite(ctx context.Context, deviceID string, fav Favorite, now time.Time) (Favorite, FavoriteOutcome, error) {
+	now = now.UTC()
+	hash := snapshotHash(fav.Snapshot)
+
+	got, outcome, err := s.createFavoriteTx(ctx, deviceID, fav, hash, now)
+	if err != nil && isDuplicateKeyError(err) {
+		// 一意制約に負けた(通常は devices 行のロックで起きない保険)。もう一度やり直して既存の行を返す。
+		got, outcome, err = s.createFavoriteTx(ctx, deviceID, fav, hash, now)
+	}
+	if err != nil {
+		if errors.Is(err, ErrFavoriteLimitReached) {
+			return Favorite{}, 0, err
+		}
+		return Favorite{}, 0, wrapUnavailable(err)
+	}
+	return got, outcome, nil
+}
+
+func (s *TiDBStore) createFavoriteTx(ctx context.Context, deviceID string, fav Favorite, hash string, now time.Time) (Favorite, FavoriteOutcome, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return Favorite{}, 0, err
+	}
+	defer tx.Rollback() //nolint:errcheck // Commit 後は no-op
+
+	// devices 行を必ず作ってからロックする(HTTP 経由では touchAndRun が先に作るが、store 単体でも安全にする)。
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO devices (device_id, last_seen_at) VALUES (?, ?)
+		ON DUPLICATE KEY UPDATE device_id = device_id
+	`, deviceID, now); err != nil {
+		return Favorite{}, 0, err
+	}
+	var locked string
+	if err := tx.QueryRowContext(ctx, `SELECT device_id FROM devices WHERE device_id = ? FOR UPDATE`, deviceID).Scan(&locked); err != nil {
+		return Favorite{}, 0, err
+	}
+
+	// 以降の読みは FOR UPDATE(最新の確定値を読む現在読み)にする。TiDB の通常の SELECT は
+	// トランザクション開始時点のスナップショットを読むので、ロックを待った後でも他の端末内の要求の
+	// 挿入が見えず、上限をすり抜けてしまう。
+	var existing Favorite
+	err = tx.QueryRowContext(ctx,
+		`SELECT id, species_key, snapshot, created_at FROM favorites WHERE device_id = ? AND snapshot_hash = ? FOR UPDATE`,
+		deviceID, hash).Scan(&existing.ID, &existing.SpeciesKey, &existing.Snapshot, &existing.CreatedAt)
+	switch {
+	case err == nil:
+		if _, err := tx.ExecContext(ctx, `UPDATE favorites SET updated_at = ? WHERE id = ? AND device_id = ?`, now, existing.ID, deviceID); err != nil {
+			return Favorite{}, 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			return Favorite{}, 0, err
+		}
+		existing.CreatedAt, existing.UpdatedAt = existing.CreatedAt.UTC(), now
+		return existing, FavoriteExisted, nil
+	case !errors.Is(err, sql.ErrNoRows):
+		return Favorite{}, 0, err
+	}
+
+	var count int
+	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM favorites WHERE device_id = ? FOR UPDATE`, deviceID).Scan(&count); err != nil {
+		return Favorite{}, 0, err
+	}
+	if count >= MaxFavoritesPerDevice {
+		return Favorite{}, 0, ErrFavoriteLimitReached
+	}
+	res, err := tx.ExecContext(ctx, `
+		INSERT INTO favorites (device_id, species_key, snapshot, snapshot_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)
+	`, deviceID, fav.SpeciesKey, fav.Snapshot, hash, now, now)
+	if err != nil {
+		return Favorite{}, 0, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Favorite{}, 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Favorite{}, 0, err
+	}
+	return Favorite{ID: id, SpeciesKey: fav.SpeciesKey, Snapshot: fav.Snapshot, CreatedAt: now, UpdatedAt: now}, FavoriteCreated, nil
+}
+
+// DeleteFavorite は端末の行を1件消す。0行なら ErrNotFound(他端末・実在しないを区別しない)。
+func (s *TiDBStore) DeleteFavorite(ctx context.Context, deviceID string, favoriteID int64) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM favorites WHERE id = ? AND device_id = ?`, favoriteID, deviceID)
+	if err != nil {
+		return wrapUnavailable(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return wrapUnavailable(err)
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
