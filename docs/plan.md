@@ -9,7 +9,7 @@
 タスクの行は区画ごとのファイルにある(ADR-0172。レーンの PR が同じファイルで衝突しないため)。このファイルにはタスクの行を置かない。
 
 - 自分のレーンが担当する区画のファイルの、自分のレーンの行だけを編集する(他レーンの行は整形・並べ替えしない)。新しいタスクは区画の末尾にまとめて足さず、自分のレーンの行の近くに足す。
-- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
+- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。`<レーン>` は `docs/ai-shared/state/` のファイル名と同じ(data〈ダメージ計算・データ〉・api・web・ios・type-balance・speed・judge・ops。無ければ同じ形で新規作成する)(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
 - 見出しは分割前の plan.md のまま。「docs/plan.md「SP: 素早さ比較」」「plan.md AJ4」のような既存の参照は、この表から区画のファイルを引く。
 - 「最初の未完了タスク」は、この表の上から順に区画のファイルを見て探す。整合は `scripts/check-plan.sh`(`make lint`)で検査する。
 

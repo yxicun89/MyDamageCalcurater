@@ -32,7 +32,11 @@ type AssertNever<T extends never> = T;
 // --- 期待するキーの一覧(生成型との突き合わせ) -------------------------------------------------
 
 const ITEM_KEYS = ["id", "nameJa"] as const satisfies readonly (keyof Schemas["Item"])[];
-export type ItemKeysAreComplete = AssertNever<Exclude<keyof Schemas["Item"], (typeof ITEM_KEYS)[number]>>;
+// 省略可のキー(issue #211・ADR-0218: 効果を持つ持ち物だけが effect を伴う)。
+const ITEM_OPTIONAL_KEYS = ["effect"] as const satisfies readonly (keyof Schemas["Item"])[];
+export type ItemKeysAreComplete = AssertNever<
+  Exclude<keyof Schemas["Item"], (typeof ITEM_KEYS)[number] | (typeof ITEM_OPTIONAL_KEYS)[number]>
+>;
 
 const NATURE_KEYS = ["id", "nameJa", "plus", "minus"] as const satisfies readonly (keyof Schemas["Nature"])[];
 export type NatureKeysAreComplete = AssertNever<
@@ -71,8 +75,10 @@ const MOVE_KEYS = [
 export type MoveKeysAreComplete = AssertNever<Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number]>>;
 
 const ABILITY_KEYS = ["id", "nameJa"] as const satisfies readonly (keyof Schemas["Ability"])[];
+// 省略可のキー(issue #211・ADR-0218: 効果を持つ特性だけが effect を伴う)。
+const ABILITY_OPTIONAL_KEYS = ["effect"] as const satisfies readonly (keyof Schemas["Ability"])[];
 export type AbilityKeysAreComplete = AssertNever<
-  Exclude<keyof Schemas["Ability"], (typeof ABILITY_KEYS)[number]>
+  Exclude<keyof Schemas["Ability"], (typeof ABILITY_KEYS)[number] | (typeof ABILITY_OPTIONAL_KEYS)[number]>
 >;
 
 const STAT_KEYS = ["hp", "atk", "def", "spa", "spd", "spe"] as const satisfies readonly StatKeyName[];
@@ -120,6 +126,23 @@ function hasExactKeys(value: unknown, keys: readonly string[]): boolean {
   return isRecord(value) && [...Object.keys(value)].sort().join() === [...keys].sort().join();
 }
 
+/** 必須のキーがすべてあり、それ以外は省略可のキーだけであること。 */
+function hasKeys(value: unknown, required: readonly string[], optional: readonly string[]): boolean {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const keys = Object.keys(value);
+  return (
+    required.every((key) => keys.includes(key)) &&
+    keys.every((key) => required.includes(key) || optional.includes(key))
+  );
+}
+
+/** effect は省略するか、オブジェクト(MasterEffect)。null は返さない(ADR-0218)。 */
+function isOptionalEffect(value: Record<string, unknown>): boolean {
+  return !("effect" in value) || isRecord(value.effect);
+}
+
 function isStatBlock(value: unknown): value is Schemas["StatBlock"] {
   return (
     isRecord(value) && STAT_KEYS.every((key) => isNumber(value[key])) && hasExactKeys(value, [...STAT_KEYS])
@@ -132,13 +155,21 @@ function isPokeType(value: unknown): value is Schemas["PokeType"] {
 
 function isItem(value: unknown): value is Schemas["Item"] {
   return (
-    hasExactKeys(value, [...ITEM_KEYS]) && isRecord(value) && isString(value.id) && isString(value.nameJa)
+    hasKeys(value, [...ITEM_KEYS], [...ITEM_OPTIONAL_KEYS]) &&
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.nameJa) &&
+    isOptionalEffect(value)
   );
 }
 
 function isAbility(value: unknown): value is Schemas["Ability"] {
   return (
-    hasExactKeys(value, [...ABILITY_KEYS]) && isRecord(value) && isString(value.id) && isString(value.nameJa)
+    hasKeys(value, [...ABILITY_KEYS], [...ABILITY_OPTIONAL_KEYS]) &&
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.nameJa) &&
+    isOptionalEffect(value)
   );
 }
 
@@ -265,6 +296,10 @@ describe("正常系の本文が公開 API のスキーマを過不足なく満�
     expect(body.length).toBe(master.items.length);
     for (const item of body) {
       expect(isItem(item), `Item の契約に合わない: ${JSON.stringify(item)}`).toBe(true);
+      // 契約上 effect は省略可(ADR-0218)だが、例データの effect は Web 内部の形(camelCase)で、
+      // 公開 API の形(item_effects の JSON そのまま)ではない。フィクスチャが effect を返すようにするのは
+      // Web レーンの #211 追従で(形の変換を含めて)行う。それまでは漏らさない。
+      expect(item, `例データの effect が漏れた: ${JSON.stringify(item)}`).not.toHaveProperty("effect");
     }
     expect(new Set(body.map((item) => (item as Schemas["Item"]).id))).toEqual(
       new Set(master.items.map((item) => item.id)),
@@ -302,6 +337,10 @@ describe("正常系の本文が公開 API のスキーマを過不足なく満�
     const source = master.species.find((candidate) => candidate.key === detail.key);
     expect(detail.learnset).toEqual(source?.learnset);
     expect(detail.abilities.map((ability) => ability.id)).toEqual(source?.abilities);
+    for (const ability of detail.abilities) {
+      // Item と同じ理由で、フィクスチャはまだ effect を返さない(Web レーンの #211 追従で変える)。
+      expect(ability, `例データの effect が漏れた: ${JSON.stringify(ability)}`).not.toHaveProperty("effect");
+    }
   });
 
   test("GET /api/pokedex/moves/batch は Move[](learnset の ID をそのまま解決できる)", () => {
