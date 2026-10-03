@@ -123,3 +123,11 @@
 .judge-individual [aria-invalid="true"] {
   border-color: var(--danger);
 }
+
+/* メガ種族の持ち物固定の理由(issue 515、ADR-0320)。持ち物欄の aria-describedby から結ぶ。 */
+.judge-individual__reason {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
