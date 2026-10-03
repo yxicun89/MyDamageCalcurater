@@ -333,24 +333,28 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 	}
 
 	matchups := make([]api.Matchup, len(req.defenders))
+	// 天候は共通の field.weather(none は天候なし)。素早さには反映しないので、指定の有無だけ見る(ADR-0710)。
+	hasWeather := req.field != nil && req.field.Weather != nil && *req.field.Weather != api.WeatherNone
 	for i, defender := range req.defenders {
+		attackerSpeedInput := judge.Individual{
+			BaseSpeed: attackerSpecies.BaseStats.Spe,
+			Nature:    attackerNature,
+			SP:        req.attacker.sp,
+			Ranks:     req.attacker.ranks,
+			Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
+			Tailwind:  req.speedField.attackerTailwind,
+		}
+		defenderSpeedInput := judge.Individual{
+			BaseSpeed: defenderSpecies[i].BaseStats.Spe,
+			Nature:    defenderNatures[i],
+			SP:        defender.sp,
+			Ranks:     defender.ranks,
+			Scarf:     judge.IsChoiceScarf(defender.itemID, deps.ChoiceScarfItemID),
+			Tailwind:  req.speedField.defenderTailwind,
+		}
 		comparison, err := judge.CompareSpeed(
-			judge.Individual{
-				BaseSpeed: attackerSpecies.BaseStats.Spe,
-				Nature:    attackerNature,
-				SP:        req.attacker.sp,
-				Ranks:     req.attacker.ranks,
-				Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
-				Tailwind:  req.speedField.attackerTailwind,
-			},
-			judge.Individual{
-				BaseSpeed: defenderSpecies[i].BaseStats.Spe,
-				Nature:    defenderNatures[i],
-				SP:        defender.sp,
-				Ranks:     defender.ranks,
-				Scarf:     judge.IsChoiceScarf(defender.itemID, deps.ChoiceScarfItemID),
-				Tailwind:  req.speedField.defenderTailwind,
-			},
+			attackerSpeedInput,
+			defenderSpeedInput,
 			judge.SpeedField{TrickRoom: req.speedField.trickRoom},
 		)
 		if err != nil {
@@ -408,6 +412,13 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			},
 			AttackerKoUnsupported: toAPIUnsupportedMarks(forward.Unsupported),
 			DefenderKoUnsupported: toAPIUnsupportedMarks(reverse.Unsupported),
+			// 素早さに反映した補正と、指定されたのに反映していない入力(ADR-0710)。
+			AttackerSpeedApplied: toSpeedFactors(judge.AppliedSpeedFactors(attackerSpeedInput)),
+			DefenderSpeedApplied: toSpeedFactors(judge.AppliedSpeedFactors(defenderSpeedInput)),
+			AttackerSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputs(
+				req.attacker.abilityID, req.attacker.itemID, attackerSpeedInput.Scarf, hasWeather)),
+			DefenderSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputs(
+				defender.abilityID, defender.itemID, defenderSpeedInput.Scarf, hasWeather)),
 		}
 	}
 
@@ -795,4 +806,22 @@ func writeUpstreamError(c *echo.Context, err error) error {
 		Code:    api.UpstreamUnavailable,
 		Message: "upstream is unavailable",
 	})
+}
+
+// toSpeedFactors は judge の補正名を契約の型へ写す(順序・空配列を保つ。ADR-0710)。
+func toSpeedFactors(names []string) []api.SpeedFactor {
+	out := make([]api.SpeedFactor, 0, len(names))
+	for _, name := range names {
+		out = append(out, api.SpeedFactor(name))
+	}
+	return out
+}
+
+// toSpeedIgnoredInputs は反映していない入力名を契約の型へ写す(順序・空配列を保つ。ADR-0710)。
+func toSpeedIgnoredInputs(names []string) []api.SpeedIgnoredInput {
+	out := make([]api.SpeedIgnoredInput, 0, len(names))
+	for _, name := range names {
+		out = append(out, api.SpeedIgnoredInput(name))
+	}
+	return out
 }

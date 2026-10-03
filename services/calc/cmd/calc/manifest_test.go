@@ -10,8 +10,11 @@ import (
 	"io/fs"
 	"net/url"
 	"os"
+	"strconv"
+	"strings"
 	"testing"
 
+	"example.com/pokecalc/services/calc/internal/master"
 	"example.com/pokecalc/services/gateway/deploytest"
 )
 
@@ -149,4 +152,32 @@ func TestManifestCalcLocalHasNoTypeChartCopy(t *testing.T) {
 // AC-S4: local overlay で使うイメージは api-docker-build が作る pokecalc/calc:local。
 func TestManifestCalcLocalImage(t *testing.T) {
 	deploytest.AssertLocalImage(t, calcService, calcImageRepo)
+}
+
+// issue #322: マスタ本文の上限(master.MaxExportBytes)は Pod の memory limit と両立する。
+// 本文は読み込み(バッファ)・json.Unmarshal(RawMessage 含む)・構造体デコードで同時に複数コピーが生きるため、
+// 上限ちょうどの本文でも OOMKill の再起動ループに入らないよう、「常駐の基礎 + 係数 × 上限」が limits の 8 割に収まること。
+// 係数と基礎は macOS ネイティブでの実測(上限 4MiB で最大 RSS 44MB、8MiB で 59MB ≒ 基礎 29MB + 約 3.75 × 上限)から、
+// 切り上げた値(基礎 32MiB、係数 4)。ADR-0204 追記 #322。
+func TestMasterBodyLimitFitsMemoryLimit(t *testing.T) {
+	const (
+		baselineMiB   = 32
+		bodyCopyRatio = 4
+	)
+	d := deploytest.BaseDeployment(t, calcService)
+	limit := d.Container(t, calcService).Resources.Limits["memory"]
+	limitMiB, ok := strings.CutSuffix(limit, "Mi")
+	if !ok {
+		t.Fatalf("limits.memory = %q, want Mi 単位", limit)
+	}
+	limitBytes, err := strconv.Atoi(limitMiB)
+	if err != nil {
+		t.Fatalf("limits.memory = %q を読めない: %v", limit, err)
+	}
+	limitBytes <<= 20
+	peak := baselineMiB<<20 + bodyCopyRatio*master.MaxExportBytes
+	if peak*10 > limitBytes*8 {
+		t.Errorf("基礎 %dMiB + %d × MaxExportBytes(%d バイト)= %d バイトが limits.memory(%s)の 8 割を超える",
+			baselineMiB, bodyCopyRatio, master.MaxExportBytes, peak, limit)
+	}
 }

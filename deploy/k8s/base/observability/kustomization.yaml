@@ -9,7 +9,9 @@ resources:
   - servicemonitors/gateway.yaml
   - servicemonitors/judge.yaml
   - servicemonitors/pokedex.yaml
+  - servicemonitors/record.yaml
   - servicemonitors/speed.yaml
   - prometheusrules/balance-slo.yaml
+  - servicemonitors/team.yaml
   - prometheusrules/calc-slo.yaml
   - dashboards/

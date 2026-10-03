@@ -94,3 +94,32 @@
 .judge-screen__matchup-species {
   font-size: var(--font-size-heading);
 }
+
+.judge-individual__presets {
+  display: flex;
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+
+.judge-individual__details {
+  flex-basis: 100%;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.judge-individual__details summary {
+  cursor: pointer;
+}
+
+.judge-individual__error {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--danger);
+}
+
+.judge-individual [aria-invalid="true"] {
+  border-color: var(--danger);
+}

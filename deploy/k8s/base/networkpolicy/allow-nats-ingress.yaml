@@ -1,4 +1,4 @@
-# calc から nats の 4222 へ(CALC_NATS_URL)。
+# calc(発行)と record・team(購読。ADR-0212・ADR-0213・ADR-0220 §2)から nats の 4222 へ。失効ジョブは NATS に触れない。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,8 +14,10 @@ spec:
   ingress:
     - from:
         - podSelector:
-            matchLabels:
-              app.kubernetes.io/name: calc
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values: [calc, record, team]
       ports:
         - protocol: TCP
           port: 4222
