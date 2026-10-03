@@ -276,13 +276,14 @@ func TestSpeciesRequiresTypeChart(t *testing.T) {
 func TestMoveMapsAllEngineFields(t *testing.T) {
 	c := testChart(t)
 	got, err := master.Move(master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 1,
-		Mechanisms: []string{"variable_power", "multi_hit"}}, c)
+		Mechanisms: []string{"variable_power", "multi_hit"}, Target: "allAdjacentFoes"}, c)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
-	// 機構は昇順に並べて engine.Move に載せる(ADR-0123)。
+	// 機構は昇順に並べて engine.Move に載せる(ADR-0123)。対象は全体技なので spread(ADR-0223)。
 	want := engine.Move{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: engine.CategorySpecial, Power: 90, Priority: 1,
-		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower}}
+		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower},
+		Target:     engine.MoveTargetSpread}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -696,16 +697,13 @@ func assertAllFieldsSet(t *testing.T, name string, v any) {
 	}
 }
 
-// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿、追加効果なしの技、マスタ化前の技の対象)。
+// zeroAllowed はゼロ値が正しい値であるフィールド(フォルム0 = 基本の姿、追加効果なしの技)。
+// 技の対象(engine.Move.Target)はマスタ化した(issue 288・ADR-0223)ので許可しない。
 func zeroAllowed(structName, field string) bool {
 	if structName == "engine.Species" && field == "Form" {
 		return true
 	}
 	if structName == "engine.Move" && field == "Effect" {
-		return true
-	}
-	// 技の対象はマスタが持つまで(issue #288・ADR-0222)常に不明("")。マスタ化したらこの許可を外す。
-	if structName == "engine.Move" && field == "Target" {
 		return true
 	}
 	return false

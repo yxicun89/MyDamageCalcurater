@@ -435,7 +435,7 @@ func (q *Querier) SearchMoves(_ context.Context, arg store.SearchMovesParams) ([
 	var out []store.SearchMovesRow
 	for _, m := range q.Moves {
 		if in[m.ID] && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchMovesRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority})
+			out = append(out, store.SearchMovesRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target})
 		}
 	}
 	return out, nil
@@ -479,7 +479,7 @@ func (q *Querier) GetMove(_ context.Context, id string) (store.GetMoveRow, error
 	}
 	for _, m := range q.Moves {
 		if m.ID == id {
-			return store.GetMoveRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority}, nil
+			return store.GetMoveRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target}, nil
 		}
 	}
 	return store.GetMoveRow{}, sql.ErrNoRows
@@ -493,7 +493,7 @@ func (q *Querier) GetMovesByIDs(_ context.Context, ids []string) ([]store.GetMov
 	var out []store.GetMovesByIDsRow
 	for _, m := range q.Moves {
 		if in[m.ID] {
-			out = append(out, store.GetMovesByIDsRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority})
+			out = append(out, store.GetMovesByIDsRow{ID: m.ID, NameJa: m.NameJa, Type: m.Type, Category: m.Category, Power: m.Power, Priority: m.Priority, Target: m.Target})
 		}
 	}
 	return out, nil
@@ -638,11 +638,13 @@ func New() *Querier {
 			{SpeciesKey: "9003-000", Slot: 1, AbilityID: "testunused"},
 		},
 		Moves: []store.Move{
-			{ID: "testflame", NameJa: "テストほのおわざ", NameJaSource: "pokeapi", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 15, Priority: 0},
-			{ID: "teststrike", NameJa: "テストうちこみ", NameJaSource: "override", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 30, Priority: 1},
-			{ID: "testglare", NameJa: "テストにらみ", NameJaSource: "pokeapi", NameEn: "Test Glare", Type: "normal", Category: "status", Power: 0, Pp: 30, Priority: 0},
+			{ID: "testflame", NameJa: "テストほのおわざ", NameJaSource: "pokeapi", NameEn: "Test Flame", Type: "fire", Category: "special", Power: 90, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 15, Priority: 0, Target: ns("allAdjacentFoes")},
+			{ID: "teststrike", NameJa: "テストうちこみ", NameJaSource: "override", NameEn: "Test Strike", Type: "normal", Category: "physical", Power: 40, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 30, Priority: 1, Target: ns("normal")},
+			{ID: "testglare", NameJa: "テストにらみ", NameJaSource: "pokeapi", NameEn: "Test Glare", Type: "normal", Category: "status", Power: 0, Pp: 30, Priority: 0, Target: ns("self")},
 			{ID: "testbanned", NameJa: "テストきんじて", NameJaSource: "pokeapi", NameEn: "Test Banned", Type: "water", Category: "special", Power: 80, Accuracy: sql.NullInt16{Int16: 100, Valid: true}, Pp: 10, Priority: 0},
 		},
+		// 技の対象(moves.target。ADR-0136・ADR-0223): testflame は全体技(公開 API では spread)、teststrike は単体技、
+		// testglare は自分(公開 API では single)、testbanned はまだ取り込んでいない(NULL。内部 API は null・公開 API はキーを省く)。
 		// testflame は複数の機構を持つ(わざと逆順に入れて、応答が昇順に並び替わることを確認する。ADR-0121)。
 		// teststrike 等は機構を持たない(通常の技。応答は空配列になる)。
 		MoveMechanisms: []store.MoveMechanism{

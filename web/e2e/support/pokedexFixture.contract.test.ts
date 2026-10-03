@@ -80,7 +80,11 @@ const MOVE_KEYS = [
   "power",
   "priority",
 ] as const satisfies readonly (keyof Schemas["Move"])[];
-export type MoveKeysAreComplete = AssertNever<Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number]>>;
+// 省略可のキー(issue 288・ADR-0223: 対象を取り込んだ技だけが target を伴う。値は single / spread)。
+const MOVE_OPTIONAL_KEYS = ["target"] as const satisfies readonly (keyof Schemas["Move"])[];
+export type MoveKeysAreComplete = AssertNever<
+  Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number] | (typeof MOVE_OPTIONAL_KEYS)[number]>
+>;
 
 const ABILITY_KEYS = ["id", "nameJa"] as const satisfies readonly (keyof Schemas["Ability"])[];
 // 省略可のキー(issue #211・ADR-0218: 効果を持つ特性だけが effect を伴う)。
@@ -228,7 +232,7 @@ function isSpeciesDetail(value: unknown): value is Schemas["SpeciesDetail"] {
 
 function isMove(value: unknown): value is Schemas["Move"] {
   return (
-    hasExactKeys(value, [...MOVE_KEYS]) &&
+    hasKeys(value, [...MOVE_KEYS], [...MOVE_OPTIONAL_KEYS]) &&
     isRecord(value) &&
     isString(value.id) &&
     isString(value.nameJa) &&
@@ -236,7 +240,8 @@ function isMove(value: unknown): value is Schemas["Move"] {
     isString(value.category) &&
     MOVE_CATEGORIES.includes(value.category as Schemas["MoveCategory"]) &&
     isNumber(value.power) &&
-    isNumber(value.priority)
+    isNumber(value.priority) &&
+    (value.target === undefined || value.target === "single" || value.target === "spread")
   );
 }
 

@@ -268,7 +268,9 @@ func TestGetMove(t *testing.T) {
 	}
 	var m api.Move
 	decodeStrict(t, rec.Body.Bytes(), &m)
-	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40}
+	// target: fixture の teststrike は単体技(Showdown の normal)なので single(issue 288・ADR-0223)。
+	single := api.MoveTargetSingle
+	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Target: &single}
 	priority := 1
 	want.Priority = &priority
 	if !reflect.DeepEqual(m, want) {
@@ -318,7 +320,8 @@ func TestGetMovesByIds(t *testing.T) {
 		t.Errorf("ids = %v, want %v(ids の順・未知は省く)", ids, want)
 	}
 	priority := 1
-	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority}
+	single := api.MoveTargetSingle // issue 288・ADR-0223(fixture の teststrike は単体技)
+	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority, Target: &single}
 	if !reflect.DeepEqual(moves[1], wantStrike) {
 		t.Errorf("moves[1] = %+v, want %+v", moves[1], wantStrike)
 	}

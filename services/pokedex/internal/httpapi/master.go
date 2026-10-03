@@ -173,7 +173,7 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		}
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
-			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms,
+			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms, Target: nullStringPtr(m.Target),
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))
