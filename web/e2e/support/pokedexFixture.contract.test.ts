@@ -327,7 +327,7 @@ describe("正常系の本文が公開 API のスキーマを過不足なく満�
     expect(new Set(body.map((item) => (item as Schemas["Item"]).id))).toEqual(
       new Set(master.items.map((item) => item.id)),
     );
-    // effects を有効にする(ADR-0321)ので、効果を持つ持ち物が1件以上ある。
+    // effects を有効にする(ADR-0322)ので、効果を持つ持ち物が1件以上ある。
     expect(body.some((item) => "effect" in (item as object))).toBe(true);
   });
 

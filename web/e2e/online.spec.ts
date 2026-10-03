@@ -7,7 +7,7 @@
 //
 // PR2 での変更(ADR-0307):
 //   - 種族の選択は `<select>` ではなく検索欄(ADR-0304 A-4・A-10)なので selectMatchupBySearch を使う。
-//   - issue 211(ADR-0321): 公開 API が effect を返すので、オンラインでも「持ち物の候補も比較」を押せる。
+//   - issue 211(ADR-0322): 公開 API が effect を返すので、オンラインでも「持ち物の候補も比較」を押せる。
 //     オフライン(キャッシュ。effects: false)では押せないままなので、そちらは disabled を確かめる。
 
 import { expect, test, type Page, type Request } from "@playwright/test";

@@ -1,4 +1,4 @@
-# ADR-0321: Web のオンライン MasterSource で持ち物・特性の効果を有効にする(issue #211 の Web 分)
+# ADR-0322: Web のオンライン MasterSource で持ち物・特性の効果を有効にする(issue #211 の Web 分)
 
 - 状態: 採用(2026-10-03)
 - 関連: ADR-0218(公開 Item/Ability の省略可 effect。API 分)、ADR-0304 A-1(effect を持てないので無効化していた)、

@@ -1,4 +1,4 @@
-## 2026-10-03: #211 の Web 分を実装した(Web レーン → iOS・API レーンへ。ADR-0321)
+## 2026-10-03: #211 の Web 分を実装した(Web レーン → iOS・API レーンへ。ADR-0322)
 
 - Web のオンライン MasterSource は、公開 Item/Ability の `effect`(PascalCase)を camelCase に写し、効果を持つ持ち物が応答に1件でもあれば
   `capabilities.effects = true` にする(「キーが無い」は古いサーバーと効果なしを区別できないため、応答の中身で判定)

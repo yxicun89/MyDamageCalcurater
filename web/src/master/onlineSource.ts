@@ -60,7 +60,7 @@ export const SPECIES_SEARCH_DEBOUNCE_MS = 250;
 /**
  * オンラインのマスタが使える機能の基準(ADR-0304 §4)。種族は検索、技は未対応。
  * effects は effect を返さない古いサーバーの値(false)。load() は、効果を持つ持ち物が応答に1件でもあれば
- * true にする(ADR-0321。「キーが無い」は古いサーバーと効果なしを区別できないので応答の中身で判定する)。
+ * true にする(ADR-0322。「キーが無い」は古いサーバーと効果なしを区別できないので応答の中身で判定する)。
  */
 export const ONLINE_MASTER_CAPABILITIES: MasterCapabilities = {
   speciesList: false,
@@ -128,12 +128,12 @@ function fromPublicEffect(effect: Schemas["MasterEffect"] | undefined): Record<s
   return out;
 }
 
-/** 持ち物(effect は省略可。省略は null。ADR-0218・ADR-0321)。 */
+/** 持ち物(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
 function mapItem(item: Schemas["Item"]): Item {
   return { id: item.id, nameJa: item.nameJa, effect: fromPublicEffect(item.effect) };
 }
 
-/** 特性(effect は省略可。省略は null。ADR-0218・ADR-0321)。 */
+/** 特性(effect は省略可。省略は null。ADR-0218・ADR-0322)。 */
 function mapAbility(ability: Schemas["Ability"]): Ability {
   return {
     id: ability.id,

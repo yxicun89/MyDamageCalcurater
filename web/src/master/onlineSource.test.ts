@@ -6,7 +6,7 @@
 //     種族・技は読まない(公開 API では一括取得できない。ADR-0304 §1)
 //   - 全リクエストに X-Device-Id・X-Session-Id を付ける(CLAUDE.md 技術規約)
 //   - 持ち物・特性の effect は、公開 API の省略可の effect(DB の形 = PascalCase。ADR-0218)を engine の形(camelCase)に
-//     写す。省略は null。効果を持つ持ち物が1件も無い応答(古いサーバー)は capabilities.effects を false にする(ADR-0321)
+//     写す。省略は null。効果を持つ持ち物が1件も無い応答(古いサーバー)は capabilities.effects を false にする(ADR-0322)
 //   - 持ち物が limit ちょうど返ってきたら、打ち切られた可能性を黙って無視せず失敗する
 //   - 種族は searchSpecies(前方一致・limit=50)で都度引き、空クエリでは fetch しない
 //   - resolveSpecies は getSpecies を引き、learnset の ID を順序どおり保つ
@@ -614,7 +614,7 @@ test("moves/batch にも端末 ID・セッション ID を付ける", async () =
   expect(headerOf(init, "X-Session-Id")).toBe(ids.sessionId);
 });
 
-// issue 211・ADR-0218・ADR-0321: 公開 Item/Ability の effect(PascalCase)を engine の形(camelCase)に写す。
+// issue 211・ADR-0218・ADR-0322: 公開 Item/Ability の effect(PascalCase)を engine の形(camelCase)に写す。
 const effectItemsResponse: Schemas["Item"][] = [
   { id: "example-item-def", nameJa: "テストぼうぎょだま", effect: { StatMods: { def: 6144 } } },
   { id: "example-item-plain", nameJa: "テストなにもなし" },
