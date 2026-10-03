@@ -82,7 +82,7 @@ services/balance/
 
 - request は **`pokemonId`(と技 ID・特性 ID)だけ**を送り、タイプは balance が read model から引く(クライアントごとのタイプの食い違いを防ぐ。ADR-0014 §1)。
 - 判定順: ヘッダ(400)→ 本文(400 / 413。本文は 16 KiB まで)→ read model 未設定(503)→ 未知の ID(422)→ 200。それ以外は 500。
-- エラー形式は `{code, message}`。code は `missing_request_context`・`invalid_request`・`request_too_large`・`unknown_pokemon`・
+- エラー形式は `{code, message}`。code は `missing_header`・`invalid_header`・`invalid_request`・`request_too_large`・`unknown_pokemon`・
   `unknown_move`・`unknown_ability`・`master_unavailable`・`overloaded`・`internal_error`。
 - 配列は map ではなく**安定した順序**(メンバーは request の順、タイプは正準順 normal … fairy)で返す。
 - 上限: メンバー 1〜6、メンバーの技 4、特性は abilityId 1 つ(`abilityIds` は read model 側で最大 4)、move-range の技 1〜4、recommendations の `limit` は既定 10・最大 20。
