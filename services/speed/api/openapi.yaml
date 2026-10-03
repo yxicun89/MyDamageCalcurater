@@ -64,7 +64,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: The pokemon read model is not configured (master_unavailable)
+          description: The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
           content:
             application/json:
               schema:
@@ -145,7 +145,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: The pokemon read model is not configured (master_unavailable)
+          description: The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
           content:
             application/json:
               schema:
@@ -222,7 +222,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Error'
         '503':
-          description: The pokemon read model is not configured (master_unavailable)
+          description: The pokemon read model is not configured (master_unavailable), or the service is overloaded or past its request deadline (overloaded, with Retry-After; ADR-0801)
           content:
             application/json:
               schema:
@@ -574,5 +574,6 @@ components:
         - unknown_pokemon
         - request_too_large
         - master_unavailable
+        - overloaded
         - internal_error
         - not_found
