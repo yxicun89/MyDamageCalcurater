@@ -21,6 +21,7 @@ Status(追記): 2026-10-01、D10(issue #220・ADR-0127)完了。内部 API(/inte
 Status(追記): 2026-10-01、D07(共通の scripts/require-k3d-context.sh・scripts/image-tag.sh とテスト、up.sh・deploy-latest・pokedex-registry-push・import-k8s の context 検査を共通化、Secret を kubectl create で作る。#327・#295-shared・#291-shared)。各レーンの *-k3d-deploy への組み込みは各レーン(DECISIONS.md 2026-10-01)。
 Status(追記): 2026-10-01、D23(`make test-db-docker`: Docker の使い捨て MySQL・TiDB で `make test-db` を流して消す。verify-m1 §2・test-strategy L8。#223)。
 Status(追記): issue #403 D20 のデータ部分(#281-data・#108-a・#259-a。ADR-0128)実装済み。dataVersion を source=version@checksum先頭8桁にし(内部 API と export が internal/dataversion を共有)、export に metadata.json・type-chart.json を追加(6ファイル)。#211-data は API レーンの契約待ちで残る。
+Status(追記): #281・#108 の残り(ADR-0135): calc の起動ログと /readyz に dataVersion、runbooks/data.md §5a(export → deploy-latest → check-master-version)、`make check-master-version`(calc は /readyz、balance・speed は配備時の Deployment 注釈)。残り: balance・speed の loader が版を保持・表示、import 待機から smoke までの単一ターゲット、版が同じなら再生成しない判定。
 Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PVC に容量の事前確認(`prune.mjs check`、不足は終了コード3)と、現在版+直前の成功版・report 52 件の保持 prune(`prune.mjs prune`、DB apply 成功後)を追加。手順は docs/runbooks/data.md。
 Status(追記): 2026-10-01、issue #437(取り込み中に MySQL が OOMKill)を修正。memory.cnf(performance_schema=OFF 等)と limit 768Mi。k3d に反映済み(待機 499Mi → 165Mi、全置換3回で restart 0)。
 Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分。ADR-0129)。`/readyz`(DB の最小条件に連動)・DB 呼び出しの締め切り5秒・preStop sleep 5秒。新規クラスタは初回 import 前に pokedex が Ready にならない(deploy-latest は失敗時に make import-k8s を案内)。
@@ -107,6 +108,7 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 同じく別タスクとして残す(コードのみ今回のスコープ)。critic 2ラウンド(1回目FAIL〈重要2件:
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
+Status(追記): 2026-10-02、issue #236 の judge 分を完了(ADR-0219。ブランチ fix/api-236-header-validation、PR 待ち。balance は PR #458)。端末ID・セッションIDを gateway・speed と同じ正準 UUID 検証に揃え、code は `missing_header`/`invalid_header`。judge は非 UUID を calc へ転送しない。judge の openapi・Web 生成型・ja.ts を更新。
 Next: キュー順に対応:
 (2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。

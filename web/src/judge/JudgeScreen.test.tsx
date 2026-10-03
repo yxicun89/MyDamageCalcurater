@@ -756,6 +756,8 @@ describe("A6 エラーの表示", () => {
   });
 
   test.each([
+    ["missing_header", judgeErrorText.missing_header],
+    ["invalid_header", judgeErrorText.invalid_header],
     ["invalid_request", judgeErrorText.invalid_request],
     ["unknown_species", judgeErrorText.unknown_species],
     ["unknown_nature", judgeErrorText.unknown_nature],

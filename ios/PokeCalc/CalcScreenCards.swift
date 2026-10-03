@@ -155,6 +155,11 @@ struct SpeciesEmblemView: View {
         return resolved.isEmpty ? [ColorToken.textSecondary.color] : resolved
     }
 
+    /// 頭文字の色。2タイプなら先頭タイプの ink(グラデーションの始点側に載るため)。タイプ無し・未知は従来の白。
+    private var inkColor: Color {
+        types.first.flatMap { TypeColorToken.inkColor(forTypeID: $0.rawValue) } ?? .white
+    }
+
     var body: some View {
         Circle()
             .fill(LinearGradient(colors: gradientColors, startPoint: .topLeading, endPoint: .bottomTrailing))
@@ -162,7 +167,7 @@ struct SpeciesEmblemView: View {
             .overlay(
                 Text(name.prefix(1))
                     .font(TextStyleToken.body.font)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(inkColor)
             )
             // 名前・タイプは隣のテキストが読み上げるので、エンブレムは装飾として隠す。
             .accessibilityHidden(true)
@@ -177,7 +182,7 @@ struct TypeBadgeView: View {
     var body: some View {
         Text(PokeTypeLabel.japaneseName(for: type))
             .font(TextStyleToken.caption.font)
-            .foregroundStyle(.white)
+            .foregroundStyle(TypeColorToken.inkColor(forTypeID: type.rawValue) ?? .white)
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, SpacingToken.x2)

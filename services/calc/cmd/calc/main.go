@@ -18,6 +18,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -140,7 +141,8 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, *events.Publishe
 		if err != nil {
 			return nil, publisher, fmt.Errorf("マスタファイル %s の検証に失敗: %w", cfg.MasterPath, err)
 		}
-		return httpapi.NewHandler(store, publisher), publisher, nil
+		logLoadedMaster(store)
+		return withReadyzDataVersion(httpapi.NewHandler(store, publisher), store.DataVersion), publisher, nil
 	}
 
 	src, err := master.NewHTTPSource(cfg.MasterURL, cfg.MasterFetchTimeout)
@@ -157,7 +159,12 @@ func newHandler(ctx context.Context, cfg config) (http.Handler, *events.Publishe
 		}
 		return s
 	}, publisher)
-	return handler, publisher, nil
+	return withReadyzDataVersion(handler, func() string {
+		if s := current.Load(); s != nil {
+			return s.DataVersion()
+		}
+		return ""
+	}), publisher, nil
 }
 
 // fetchMasterLoop はマスタ一式が取得・検証できるまで指数バックオフで再試行し、成功したら current に
@@ -170,6 +177,7 @@ func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, 
 			store, err = master.FromExport(export)
 			if err == nil {
 				current.Store(store)
+				logLoadedMaster(store)
 				return
 			}
 		}
@@ -185,6 +193,26 @@ func fetchMasterLoop(ctx context.Context, src master.Source, retry retryPolicy, 
 		case <-timer.C:
 		}
 	}
+}
+
+// logLoadedMaster は読み込んだマスタの版を起動ログに残す(動いている版の確認用。issue #281)。
+func logLoadedMaster(store *master.MemoryStore) {
+	slog.Info("calc-svc: マスタを読み込んだ", "dataVersion", store.DataVersion())
+}
+
+// withReadyzDataVersion は、マスタ読み込み済み(version が空でない)の GET /readyz の本文に dataVersion を足す
+// (公開データの版だけ。issue #281)。読み込み前の 503 などそれ以外は next に任せる。
+func withReadyzDataVersion(next http.Handler, version func() string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/readyz" {
+			if v := version(); v != "" {
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(map[string]string{"status": "ok", "dataVersion": v})
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // backoffDelay は attempt 回目(0 始まり)の失敗の後に待つ時間。Initial から倍々に伸ばし、Max で止める
