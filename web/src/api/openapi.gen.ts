@@ -440,7 +440,7 @@ export interface components {
      *     | not_found | ルートが無い / このサービスの担当外の操作 / この端末が持っていないリソース ID(他端末のものか実在しないかを区別しない。403 にしない。ADR-0209 §6-2) | 404 |
      *     | master_unavailable | マスタ(pokedex の MySQL)を参照できない | 503 |
      *     | store_unavailable | 保存データの DB(record / team の TiDB)を参照できない。`master_unavailable` と分けるのは原因も復旧手順も別で、「計算はできるが保存はできない」状態(CLAUDE.md 絶対ルール5)をクライアントが区別できる必要があるため(ADR-0209 §5.3) | 503 |
-     *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202) | 503 |
+     *     | upstream_unavailable | gateway から下流のサービスに届かない(接続できない・タイムアウト・上流が未設定。ADR-0202)。calc・pokedex は自サービスの過負荷・締め切り超過でも返す(ADR-0801) | 503 |
      * @enum {string}
      */
     ErrorCode:
@@ -1272,7 +1272,7 @@ export interface operations {
           "application/json": components["schemas"]["SpeciesSummary"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1332,7 +1332,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1385,7 +1385,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1445,7 +1445,7 @@ export interface operations {
           "application/json": components["schemas"]["Error"];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1502,7 +1502,7 @@ export interface operations {
           "application/json": components["schemas"]["Move"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1555,7 +1555,7 @@ export interface operations {
           "application/json": components["schemas"]["Item"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1603,7 +1603,7 @@ export interface operations {
           "application/json": components["schemas"]["Nature"][];
         };
       };
-      /** @description gateway から pokedex-svc に届かない、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
+      /** @description gateway から pokedex-svc に届かない、pokedex-svc 自身の過負荷・締め切り超過(`upstream_unavailable`)、または pokedex-svc 自身が DB 未投入・DB に届かない(`upstream_unavailable` / `master_unavailable`。ADR-0105・0202) */
       503: {
         headers: {
           [name: string]: unknown;
@@ -1659,7 +1659,7 @@ export interface operations {
       500: components["responses"]["Error"];
       /**
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
        */
       503: {
         headers: {
@@ -1716,7 +1716,7 @@ export interface operations {
       500: components["responses"]["Error"];
       /**
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
        */
       503: {
         headers: {
@@ -1773,7 +1773,7 @@ export interface operations {
       500: components["responses"]["Error"];
       /**
        * @description 下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
-       *     gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+       *     gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
        */
       503: {
         headers: {

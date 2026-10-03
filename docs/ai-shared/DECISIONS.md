@@ -2041,3 +2041,8 @@ Reason: 既定案 A は変更が小さく、版を上げる PR でハッシュ�
 Impact: 版を上げる PR は config.json の `integrity` も更新する(不一致のときは stderr の実際のハッシュを、内容を確かめたうえで反映)。
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
+
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
