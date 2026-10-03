@@ -58,6 +58,7 @@ type fakeStore struct {
 	abilities map[string]engine.Ability
 	natures   map[string]engine.Nature
 	chart     engine.TypeChart
+	megaItems map[string]string // メガ種族キー → requiredItemId(メガでない種族は無い)
 	panicOn   bool
 }
 
@@ -118,6 +119,12 @@ func (f *fakeStore) NatureID(n engine.Nature) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (f *fakeStore) MegaRequiredItem(speciesKey string) (string, bool) {
+	f.check()
+	id, ok := f.megaItems[speciesKey]
+	return id, ok
 }
 
 func (f *fakeStore) TypeChart() engine.TypeChart {
@@ -317,6 +324,8 @@ func wasmMove(m engine.Move) map[string]any {
 	return map[string]any{
 		"id": m.ID, "nameJa": m.NameJa, "type": string(m.Type), "category": string(m.Category),
 		"power": m.Power, "priority": m.Priority,
+		// 技の対象(ADR-0222)。"" は不明(マスタに未収録)。
+		"target": string(m.Target),
 	}
 }
 
