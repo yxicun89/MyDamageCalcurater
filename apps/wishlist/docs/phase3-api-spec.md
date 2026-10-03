@@ -249,11 +249,99 @@ fixture は `internal/fetcher/testdata/{cardrush,amiami,surugaya,yahoofurima}.ht
 
 | サイト | 状態 |
 |---|---|
-| ドラゴンスター | Cloudflare のチャレンジで取得不可。未確認のまま(登録しない) |
+| ドラゴンスター | Cloudflare のチャレンジで**取得不可(回避しない)**。登録しない(ユーザー決定 2026-10-04。sites.md) |
 | 駿河屋 | ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得(robots.txt の Crawl-delay 30)。初期データは scrape・基準サイト |
-| メルカリ | headless。chromedp の導入(イメージ・リソース。仕様 §11)と fixture が要る |
-| プレバン・魂ウェブ・ポケセン | 未確認の点があるので初期データに入れない(sites.md に候補) |
+| メルカリ | headless。次の節(AC-H*)。夜間のみ・refresher 専用イメージ(Chromium)だけ |
+| プレバン・魂ウェブ・ポケセン | リンク用として 000006 で入れる(次の節 AC-D5。プレバンの検索語の文字コードは未確認と sites.md に明記) |
 | Amazon | link_only(取得しない) |
+
+## メルカリの headless 取得・リンク用サイト・refresher イメージ
+
+確認結果の正は [sites-headless.md](sites-headless.md)(2026-10-04 の手動確認。書かれた事実だけを使い、推測で足さない)。fixture は `internal/fetcher/testdata/mercari.html`(架空データ)。
+実サイト・実際のブラウザはテストから起動しない(偽のレンダラ・文字列検査)。
+
+### 決めたこと
+
+- **2 つに分ける**:描画(`fetcher.Renderer` → `fetcher.Page`。本番は `internal/chromium` の chromedp)と、パース(`fetcher.ParseMercari`。純粋・goquery)。`fetcher` は chromedp を import しない
+- **Page の操作**:`Navigate` / `WaitVisible` / `CountVisible` / `ScrollToBottom` / `HTML` / `Close`。Renderer は `OpenPage(ctx)`。呼び出し側が必ず Close する
+- **待つ要素**:`fetcher.MercariReadySelector` = `li[data-testid="item-cell"] a[data-testid="thumbnail-link"]`。`item-cell` だけはスケルトンにも付くので使わない
+- **待つ手順**:Navigate → WaitVisible(期限 `MercariWaitTimeout` 10 秒)→ 数える → (20 未満なら)スクロール → `MercariScrollWait` 500ms 待つ(`Clock.Sleep`)→ 数え直す、を繰り返す。
+  やめる条件は、数えた値が 20 以上 / 増えないスクロールが `MercariNoGrowthRounds`(3)回続いた(増えたら 0 に戻す)/ 開始からの経過(Clock)が `MercariScrollBudget` 10 秒に達した。やめたら HTML を取り、ページを閉じる。
+  500ms ずつ待つので、予算で止まるのは 20 回のスクロールのとき
+- **失敗**:WaitVisible の失敗(期限切れ含む)は `ErrNotRendered`(0 件と区別する。前回値を残す)。それ以外の失敗は原因を包んだ error。どの経路でも Close する。ctx の取り消しは `errors.Is(context.Canceled)`(開く前に取り消し済みでも)。描画はされたが 0 件のページはエラーにしない
+- **パース**:`li[data-testid="item-cell"]` のうち `a[data-testid="thumbnail-link"]` を持つものだけ(持たないのはスケルトンとして捨てる)。URL = `href` を `MercariOrigin`(`https://jp.mercari.com`)基準で絶対化(`/item/m…`・`/shops/product/…`)。
+  タイトル = 同リンク内 `img` の `alt` の**末尾**の「のサムネイル」を除く(空になる・alt が無いものは捨てる)。価格 = `[data-testid="item-tile-price"]` の text を `ParseYen`(`¥`・カンマを除く。1〜`MaxPrice` の範囲外・読めないものは捨てる)。
+  画像 = `img` の `src`(絶対化。無ければ空)。在庫 = `InStock: true`(`status=on_sale` で絞っているため。売り切れ表示は未確認)。捨てたものは件数に数えず、HTML の順のまま先頭 20 件まで。class は使わない(ハッシュ化)。0 件でも nil でなく空のスライス
+- **登録表**:`Config.Renderer` を足す。nil なら headless は登録しない(Chromium が無い環境)。あれば `jp.mercari.com`(fetch_type=headless のサイトだけ。ホストは小文字・ポート無視・完全一致)を `ThrottleWith` で包んで登録する。`NightlyOnlyHosts` に `jp.mercari.com` を足す(Renderer の有無によらず印は付く)。`HostMinIntervals` には足さない(既定の 5 秒)。ドラゴンスターは登録しない
+- **refresher の設定**:`WISHLIST_CHROMIUM_PATH`(前後の空白を除く)。空なら Renderer を渡さず headless は取らない(エラーにしない)。あれば `chromium.New(path)` を渡す。`newRegistry(cfg)` が組み立てる。API 側(`cmd/api`)は Renderer を渡さない(Chromium は refresher 専用)
+- **chromium パッケージ**:`New(execPath)` は作るだけで起動しない。`OpenPage` で ExecAllocator(headless-shell を起動)する。起動できなければ `chromium.ErrLaunch` を包む。UA は既定のまま(偽装しない。sites-headless.md)。chromedp は最新の安定版で完全固定(go.mod・go.sum)
+- **既定案の補足(実装者が実イメージで確かめる)**:headless-shell の実行ファイルのパス(CronJob の `WISHLIST_CHROMIUM_PATH` に書く)、`--no-sandbox` の要否(非 root・seccomp RuntimeDefault・capabilities drop ALL で動くか)、user-data-dir を書ける場所(読み取り専用ルートなので `/tmp` の emptyDir。64Mi で足りるか)は sites-headless.md に書かれていない。docker 上で確かめて Dockerfile・CronJob に反映し、決めたことをこの節に追記する
+- **refresher イメージ**:`api/Dockerfile.refresher`(multi-stage)。実行段は `chromedp/headless-shell` の最新の安定版(sites-headless.md の確認は 151.0.7922.109。実装時の最新を確認して決める)を `タグ@sha256:` で固定。ビルド段の golang は api の Dockerfile と同じ固定。`/wishlist-refresher` だけを入れ、USER 65532。
+  api のイメージには Chromium を入れない。CronJob は `wishlist/refresher:0.1.0` を使い、`/dev/shm` に emptyDir(`medium: Memory`・sizeLimit あり)、メモリは requests 256Mi・limits 1Gi(既定案。共有メモリは limits に含まれる)。`docker build` が通ることは実装者が手元で確かめる
+- **実イメージでの確認結果(2026-10-04。実装者。実サイトには繋いでいない)**:`docker build -f api/Dockerfile.refresher` と api の `docker build` は通った。`chromedp/headless-shell:151.0.7922.109`(latest・stable と同じ。arm64 で確認)を、CronJob と同じ制限(非 root 65532・読み取り専用ルート・cap drop ALL・no-new-privileges・docker 既定の seccomp)で起動し about:blank と data: URL を開いた。
+  - 実行ファイル:`/headless-shell/headless-shell`(`WISHLIST_CHROMIUM_PATH`)。イメージの ENTRYPOINT は `/headless-shell/run.sh`(root 起動)なので使わず、refresher を ENTRYPOINT にした
+  - `--no-sandbox`:**要る**。付けないと "No usable sandbox!" で起動に失敗した。`chromium.Options{NoSandbox: true}`(refresher の `chromiumNoSandbox`)。コンテナが境界で、開くのは夜間のこの Pod だけ。NetworkPolicy は Ingress しか制限しておらず、**Egress は未制限**(事実)
+  - user-data-dir:`os.MkdirTemp`(`/tmp/wishlist-chromium-*`)。ページごとに作り、Close で消す。`/tmp` は emptyDir。8Mi の tmpfs でも about:blank は動いた。実ページ(キャッシュ)の使用量は未測定なので、64Mi から 128Mi に広げた(足りなければ上げる)
+  - `/dev/shm`:emptyDir(Memory・256Mi)。about:blank は 64Mi の tmpfs でも動いた。実ページでの必要量は未測定(Chromium の既定は 64Mi で足りなくなりやすいため 256Mi)
+  - GOMEMLIMIT:100MiB → 128MiB(Go のヒープだけの目安。Chromium は別プロセスで、コンテナ全体は limits 1Gi)
+  - 将来の提案(共通基盤の変更なので未実施):refresher の Egress を DB・外部 HTTPS・DNS に絞る NetworkPolicy
+  - CronJob のイメージは他と同じくタグ(`wishlist/refresher:0.1.0`)で固定。cloud の overlay で digest に固定するかは後で決める
+  - 設定なしで `docker run --rm wishlist/refresher:local` は WISHLIST_DATABASE_DSN の設定エラーで終了コード 1
+  - 注意:`chromedp.Run` の最初の ctx がブラウザの寿命になるため、起動の期限は子 ctx ではなくタイマーで取り消している(子 ctx にするとブラウザが即終了した)
+- **Makefile**:`WISHLIST_REFRESHER_IMAGE ?= wishlist/refresher:local`。`wishlist-docker-build` が `-f Dockerfile.refresher` で build、`wishlist-k3d-deploy` の `k3d image import` に含める。overlays/local の images に `wishlist/refresher`(newTag: local)
+- **000006_seed_link_sites**(000005 は別の作業が使う。000004 と同じ作り方:名前で冪等・id を書かない・既存の行を変えない・down は名前と URL の両方が一致する行だけ):
+
+  | サイト | fetch_type | is_reference | URL | 紐づけ(sort_order) |
+  |---|---|---|---|---|
+  | 魂ウェブ | link_only | false | `https://tamashiiweb.com/item/?wo={q}` | S.H.Figuarts 30 |
+  | ポケモンセンターオンライン | link_only | false | `https://www.pokemoncenter-online.com/search/?q={q}` | ポケモングッズ 25 |
+  | プレバン | link_only | false | `https://p-bandai.jp/search_bst/?q={q}` | S.H.Figuarts 25・ガンプラ 25 |
+
+  リンク用は各ジャンルの末尾(Amazon 20 の後)。プレバンの robots は機械取得の話で、人がブラウザで開くリンクとして出すのは問題ない。検索語の文字コードが未確認であることを sites.md に書く(書いた)。
+  `layout_test.go` の確認済み一覧(`confirmedURLs`)を 10 件に広げ、000006 も検査する(検査は弱めない)。ポケセンの旧 URL を確認済みに入れない検査は残し、プレバン・魂ウェブを「未確認だから入れない」一覧から外した(今回、リンク用として入れる決定のため)
+- **000005 との順序**:`TestLayout`(版番号が 1 から欠けない)は、000005 が無い間は 000006 を足すと失敗する。このブランチ単独では緑にならないので、000005 を持つブランチの後に取り込む(または rebase)。TestLayout は弱めない
+
+### 受け入れ条件とテスト
+
+`internal/fetcher/mercari_test.go`・`mercari_registry_test.go`
+
+| ID | 条件 | テスト |
+|---|---|---|
+| AC-H1 | fixture(個人出品・Shops・スケルトン)を Listing にする(タイトル・円・絶対 URL・画像・在庫あり) | `TestParseMercari_Fixture` |
+| AC-H2 | セルごとの読み方(スケルトン・末尾の「のサムネイル」・相対/絶対 URL・価格 0・上限・読めない・alt なし・item-cell でない li) | `TestParseMercari_Cells` |
+| AC-H3 | 先頭 20 件まで(捨てたセルは数えない。HTML の順) | `TestParseMercari_Limit` |
+| AC-H4 | 手順:開く → 移動(deeplink の URL)→ 待つ(期限 10 秒以内)→ 数える → HTML → 閉じる。20 ならスクロールしない。セレクタは MercariReadySelector | `TestMercari_Procedure` |
+| AC-H5 | 待つ条件:20 に届く / 増えず 3 回 / 増えたら数え直す / 予算 10 秒(20 回のスクロール)でやめる。1 回ずつ 500ms 待つ | `TestMercari_ScrollLoop` |
+| AC-H6 | 失敗の扱い(原因を包む・待っても出ない→ErrNotRendered・どの経路でも Close・取り消し→context.Canceled・0 件はエラーにしない) | `TestMercari_Errors` |
+| AC-H7 | 登録表:Renderer ありで headless かつ jp.mercari.com だけ取得できる。Renderer なし・別の型・別のホスト・読めないテンプレートは不可。`For(headless)` は不可のまま | `TestRegistry_MercariNeedsRenderer` |
+| AC-H8 | NightlyOnly(Renderer の有無によらず)。ホスト間隔は既定 5 秒で、本番の表は Throttle で包む | `TestRegistry_MercariNightlyOnlyAndThrottle` |
+| AC-H9 | refresh:メルカリは夜間(RefreshAll)だけでブラウザを開く。ModeAll・ModeStale・手動では開かない。Renderer が無ければ夜間でも取らず失敗にもしない | `internal/refresh/refresh_headless_test.go` の `TestRefresh_MercariNightlyOnly`・`TestRefresh_MercariWithoutRenderer` |
+| AC-H10 | refresher の設定:`WISHLIST_CHROMIUM_PATH` を読む(空白を除く・無ければ空)。あるときだけメルカリを取得でき夜間専用。作るだけでは起動しない | `cmd/refresher/headless_test.go` の `TestLoadConfig_ChromiumPath`・`TestNewRegistry_Headless` |
+| AC-H11 | chromium:New は起動しない。起動できなければ ErrLaunch を包む。取り消し済みなら context.Canceled | `internal/chromium/chromium_test.go` の `TestNew_DoesNotLaunch`・`TestOpenPage_MissingBinary`・`TestOpenPage_Canceled` |
+| AC-H12 | ドラゴンスターは取得しない(登録表に無い=AC-H7)。sites.md に「取得不可(回避しない)」、プレバンの文字コード未確認を書く | `TestRegistry_MercariNeedsRenderer`・`migrations/seed_link_sites_test.go` の `TestSitesDocNotes` |
+
+`cmd/refresher/deploy_headless_test.go`(既存 `deploy_test.go` の `TestRefresherCronJob` は image を `wishlist/refresher:` に変更した。ほかの検査は同じ)
+
+| ID | 条件 | テスト |
+|---|---|---|
+| AC-K4 | `Dockerfile.refresher`:headless-shell はタグ+ダイジェスト固定、golang もダイジェスト固定、refresher だけ、非 root | `TestDockerfileRefresherImage` |
+| AC-K5 | api の Dockerfile に Chromium を載せない(コメント行は除く) | `TestAPIDockerfileHasNoChromium` |
+| AC-K6 | CronJob:refresher イメージ・WISHLIST_CHROMIUM_PATH・/dev/shm の emptyDir(Memory・sizeLimit)・メモリ 256Mi/1Gi | `TestRefresherCronJobHeadless`・`TestRefresherCronJob` |
+| AC-K7 | overlays/local と Makefile が refresher イメージを扱う(WISHLIST_REFRESHER_IMAGE・`-f Dockerfile.refresher`・k3d image import) | `TestRefresherImageWiring` |
+
+`migrations/`(`seed_link_sites_test.go` は MySQL 不要。`seed_link_sites_mysql_test.go` は `-tags mysql`・`make wishlist-test-mysql`)
+
+| ID | 条件 | テスト |
+|---|---|---|
+| AC-D5 | 000006 の SQL の形(id 明示なし・名前で重複回避・up に UPDATE/DELETE なし・down は名前と URL で特定・3 サイトとも link_only・is_reference=false)、確認済み URL の検査に 000006 を含める | `TestSeedLinkSites000006Shape`・`TestSeedSitesAreConfirmedOnly`・`TestConfirmedURLsMatchSitesDoc` |
+| AC-D5 | 実 DB:空の DB で 3 サイトと紐づけが既定どおり、2 回適用しない、使われている DB(同名の魂ウェブ)を変えない、down はユーザーの同名行を消さない | `TestSeed000006_Fresh`・`TestSeed000006_NotAppliedTwice`・`TestSeed000006_ExistingDB`・`TestSeed000006_Down` |
+
+### 実装者への注意(この節の範囲)
+
+- スタブ:`internal/fetcher/mercari.go`(型・定数・`NewMercari`・`ParseMercari`)、`internal/chromium/chromium.go`、`cmd/refresher/main.go` の `config.ChromiumPath`・`newRegistry`、`Config.Renderer`。置き換える。
+- `NewMercari(r, clock)` の clock が nil なら `SystemClock`。待ちは必ず `clock.Sleep(ctx, …)`、経過は `clock.Now()`(テストは偽の時計)。
+- `Fetch` は最初に ctx を確かめる。ブラウザ・URL を error の文言に含めなくてよい。
+- 検索 URL は `deeplink.Build(site.SearchURLTemplate, query)`。
 
 ## 契約の変更(openapi.yaml)と DB
 

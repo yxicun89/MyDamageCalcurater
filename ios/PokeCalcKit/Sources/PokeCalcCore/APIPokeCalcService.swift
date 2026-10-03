@@ -560,7 +560,7 @@ public struct APIPokeCalcService: PokeCalcService {
 
     // MARK: - enum の写像(契約とドメインの enum は同じ値集合。DomainTypesTests が同期を固定する)
 
-    private static func domainPokeType(_ type: Components.Schemas.PokeType) -> PokeType {
+    static func domainPokeType(_ type: Components.Schemas.PokeType) -> PokeType {
         switch type {
         case .normal: return .normal
         case .fire: return .fire

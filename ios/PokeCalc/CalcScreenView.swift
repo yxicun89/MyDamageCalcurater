@@ -14,6 +14,7 @@ struct CalcScreenView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var frequentOpponents: FrequentOpponentsViewModel
+    @State private var favoritePin: FavoritePinViewModel
     private let backendDescription: String
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
@@ -24,11 +25,13 @@ struct CalcScreenView: View {
 
     init(
         service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
-        frequentOpponentsService: (any FrequentOpponentsService)? = nil
+        frequentOpponentsService: (any FrequentOpponentsService)? = nil,
+        favoritesService: (any FavoritesService)? = nil
     ) {
         _viewModel = State(initialValue: CalcViewModel(service: service, teamStore: teamStore))
         _frequentOpponents = State(
             initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
+        _favoritePin = State(initialValue: FavoritePinViewModel(service: favoritesService))
         self.backendDescription = backendDescription
     }
 
@@ -69,6 +72,9 @@ struct CalcScreenView: View {
                 CalcConditionsSection(viewModel: viewModel)
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
+                if favoritePin.isAvailable {
+                    FavoritePinSection(calc: viewModel, pin: favoritePin)
+                }
             }
             .padding(SpacingToken.x4)
         }

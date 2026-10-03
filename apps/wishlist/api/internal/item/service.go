@@ -7,11 +7,13 @@ import (
 	"math"
 	"net/url"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/oapi-codegen/nullable"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/deeplink"
+	"example.com/pokecalc/apps/wishlist/api/internal/query"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 )
 
@@ -26,6 +28,10 @@ const (
 	MaxQueryOverrideLen = 255
 	MaxSourceURLLen     = 1024
 	MaxSiteQueryLen     = 255
+	// MaxAliasLen は表記揺れの辞書の 1 語の上限(genre_aliases.alias。フェーズ4-1)。
+	MaxAliasLen = 64
+	// MinAliasNormalizedLen は 1 語の正規化後の最小文字数。短い語は部分一致でほとんどのタイトルに当たるため(HG・MG・RG の 2 文字は通す)。
+	MinAliasNormalizedLen = 2
 )
 
 // Service は入力の検査(ErrInvalid)、既定値の補完、画像の保存・削除を受け持ち、永続化は Repository に任せる。
@@ -127,6 +133,11 @@ func (s *Service) CreateGenre(ctx context.Context, in NewGenre) (Genre, error) {
 	if err := checkInt32("sort_order", in.SortOrder); err != nil {
 		return Genre{}, err
 	}
+	aliases, err := checkAliases(in.Aliases)
+	if err != nil {
+		return Genre{}, err
+	}
+	in.Aliases = aliases
 	return s.repo.CreateGenre(ctx, in)
 }
 
@@ -142,6 +153,13 @@ func (s *Service) UpdateGenre(ctx context.Context, id int64, p GenrePatch) (Genr
 		if err := checkInt32("sort_order", *p.SortOrder); err != nil {
 			return Genre{}, err
 		}
+	}
+	if p.Aliases != nil {
+		aliases, err := checkAliases(*p.Aliases)
+		if err != nil {
+			return Genre{}, err
+		}
+		p.Aliases = &aliases
 	}
 	return s.repo.UpdateGenre(ctx, id, p)
 }
@@ -193,6 +211,37 @@ func (s *Service) discard(name string) {
 
 func invalid(format string, args ...any) error {
 	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
+}
+
+// checkAliases は表記揺れの辞書を検査し、各語の前後の空白(全角空白・タブを含む)を除いたコピーを返す。
+func checkAliases(groups [][]string) ([][]string, error) {
+	out := make([][]string, len(groups))
+	for i, g := range groups {
+		if len(g) < 2 {
+			return nil, invalid("aliases[%d] must have at least 2 words", i)
+		}
+		out[i] = make([]string, len(g))
+		for j, w := range g {
+			w = strings.TrimFunc(w, unicode.IsSpace)
+			if w == "" {
+				return nil, invalid("aliases[%d][%d] must not be empty", i, j)
+			}
+			if utf8.RuneCountInString(w) > MaxAliasLen {
+				return nil, invalid("aliases[%d][%d] must be at most %d characters", i, j, MaxAliasLen)
+			}
+			if utf8.RuneCountInString(query.Normalize(w)) < MinAliasNormalizedLen {
+				return nil, invalid("aliases[%d][%d] must have at least %d characters after normalization", i, j, MinAliasNormalizedLen)
+			}
+			if strings.ContainsAny(w, ",，、") {
+				return nil, invalid("aliases[%d][%d] must not contain a comma", i, j)
+			}
+			out[i][j] = w
+		}
+	}
+	if err := checkAliasDuplicates(out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // checkText は文字数(rune)の上限と、required なら空・空白だけでないことを検査する。

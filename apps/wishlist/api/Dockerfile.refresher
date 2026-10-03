@@ -1,0 +1,18 @@
+# refresher(CronJob)専用イメージ。メルカリの headless 取得に Chromium(chromedp/headless-shell)が要るため、api のイメージとは分ける。
+# ビルドコンテキストは apps/wishlist/api(Dockerfile と同じ):
+#   docker build -f apps/wishlist/api/Dockerfile.refresher -t wishlist/refresher:local apps/wishlist/api
+# headless-shell の実行ファイルは /headless-shell/headless-shell(CronJob の WISHLIST_CHROMIUM_PATH)。
+FROM golang:1.27.1-alpine@sha256:8a5910f31396cd4d89662f56c68b3ae31d374308270a1c3bd96672ee5ed43414 AS build
+
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN GOWORK=off go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags="-s -w" -o /out/wishlist-refresher ./cmd/refresher
+
+FROM chromedp/headless-shell:151.0.7922.109@sha256:2d349b544a1ea6b5b5fd7c0fe99215ff662339c57407ee2e8c0a11af93516b04
+COPY --from=build /out/wishlist-refresher /wishlist-refresher
+USER 65532:65532
+# 既定の ENTRYPOINT(run.sh。ブラウザを起動する)は使わず、refresher を起動する(CronJob は command でも指定する)。
+ENTRYPOINT ["/wishlist-refresher"]

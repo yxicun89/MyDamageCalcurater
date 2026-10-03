@@ -13,6 +13,7 @@ enum FeatureRegistry {
         SpeedFeature(),
         JudgeFeature(),
         AboutFeature(),
+        FavoritesFeature(),
     ]
 
     /// `order` 順の画面(入口の並び。`order` の重複は起動時の設定エラー)。

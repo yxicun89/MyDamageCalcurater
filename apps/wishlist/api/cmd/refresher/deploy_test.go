@@ -45,7 +45,7 @@ func TestDockerfileBuildsRefresher(t *testing.T) {
 	}
 }
 
-// AC-K2: CronJob wishlist-refresher。毎日 03:00 JST、多重起動しない、api イメージの refresher を起動、
+// AC-K2: CronJob wishlist-refresher。毎日 03:00 JST、多重起動しない、refresher 専用イメージ(wishlist/refresher。AC-K4)の /wishlist-refresher を起動、
 // securityContext は Deployment と同じ、DSN と appid(optional)を Secret から渡す。base の kustomization に載る。
 func TestRefresherCronJob(t *testing.T) {
 	k := readFile(t, filepath.Join(baseDir, "kustomization.yaml"))
@@ -60,7 +60,7 @@ func TestRefresherCronJob(t *testing.T) {
 		"schedule":           `(?m)^\s+schedule: "?0 3 \* \* \*"?\s*$`,
 		"timeZone":           `(?m)^\s+timeZone: "?Asia/Tokyo"?\s*$`,
 		"concurrencyPolicy":  `(?m)^\s+concurrencyPolicy: Forbid\s*$`,
-		"image":              `(?m)^\s+image: wishlist/api:`,
+		"image":              `(?m)^\s+image: wishlist/refresher:`, // Chromium 入りの専用イメージ(AC-K4。api のイメージには Chromium を載せない)
 		"command":            `/wishlist-refresher`,
 		"automount":          `automountServiceAccountToken: false`,
 		"noPrivEsc":          `allowPrivilegeEscalation: false`,

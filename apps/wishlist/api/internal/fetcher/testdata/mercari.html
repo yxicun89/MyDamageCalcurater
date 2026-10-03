@@ -1,0 +1,17 @@
+<!-- 架空データ。描画後 DOM の構造のみを写した。class は難読化(ハッシュ)されているため使わない -->
+<div data-testid="search-item-grid">
+ <ul>
+  <li data-testid="item-cell"><div><div><div>
+   <a href="/item/m00000000001" data-testid="thumbnail-link"><span><picture>
+     <img alt="架空 商品A フィギュアのサムネイル" loading="lazy" src="https://example.invalid/img.jpg"></picture>
+     <div><span data-testid="item-tile-price"><span><span>¥</span><span>3,000</span></span></span></div>
+   </span></a></div></div></div></li>
+  <li data-testid="item-cell"><div><div><div>
+   <a href="/shops/product/ZZZZZZZZZZZZZZZZZZZZZZ" data-testid="thumbnail-link"><span><picture>
+     <img alt="架空 商品B(メルカリShops)のサムネイル" loading="lazy" src="https://example.invalid/img.jpg"></picture>
+     <div><span data-testid="item-tile-price"><span><span>¥</span><span>3,500</span></span></span></div>
+   </span></a></div></div></div></li>
+  <!-- 未描画のスケルトン(同じ data-testid="item-cell" だが a も価格も無い) -->
+  <li data-testid="item-cell"><div><span></span><div><div><span></span></div><div><span></span></div></div></div></li>
+ </ul>
+</div>

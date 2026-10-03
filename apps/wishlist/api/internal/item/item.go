@@ -38,12 +38,14 @@ const (
 )
 
 // Genre はジャンル。SiteIDs は表示するサイト(表示順。genre_sites.sort_order 昇順)。
+// Aliases は表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md AC-A*)。グループの順・グループ内の語の順は保存した順。無ければ長さ 0。
 type Genre struct {
 	ID            int64
 	Name          string
 	QueryTemplate string
 	SortOrder     int
 	SiteIDs       []int64
+	Aliases       [][]string
 }
 
 // NewGenre はジャンルの作成値。QueryTemplate が空なら Service が DefaultQueryTemplate にする。
@@ -52,14 +54,16 @@ type NewGenre struct {
 	QueryTemplate string
 	SortOrder     int
 	SiteIDs       []int64
+	Aliases       [][]string
 }
 
-// GenrePatch は部分更新。nil の項目は変えない。SiteIDs を渡すと全件置き換え(空スライスなら全部外す)。
+// GenrePatch は部分更新。nil の項目は変えない。SiteIDs・Aliases を渡すと全件置き換え(空スライスなら全部外す)。
 type GenrePatch struct {
 	Name          *string
 	QueryTemplate *string
 	SortOrder     *int
 	SiteIDs       *[]int64
+	Aliases       *[][]string
 }
 
 // Site はサイト。

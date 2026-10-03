@@ -15,7 +15,8 @@ RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags="-s -w" -o /out/wishlis
 FROM scratch
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 COPY --from=build /out/wishlist-api /wishlist-api
-# CronJob wishlist-refresher は同じイメージの別バイナリを command で起動する(headless 用の Chromium 入りイメージは後で別に作る)。
+# CronJob wishlist-refresher は Chromium 入りの別イメージ(Dockerfile.refresher)で動かす。api のイメージには Chromium を載せない。
+# /wishlist-refresher は api のイメージにも残す(Chromium なしで scrape・api 型だけ取るときの手動確認用)。
 COPY --from=build /out/wishlist-refresher /wishlist-refresher
 USER 65532:65532
 EXPOSE 8080

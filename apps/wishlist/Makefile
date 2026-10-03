@@ -14,6 +14,7 @@ WISHLIST_IOS_SIMULATOR ?= iPhone 18 Pro
 CLUSTER ?= pokecalc
 WISHLIST_API_IMAGE ?= wishlist/api:local
 WISHLIST_WEB_IMAGE ?= wishlist/web:local
+WISHLIST_REFRESHER_IMAGE ?= wishlist/refresher:local
 
 .PHONY: wishlist-web-deps wishlist-web-test wishlist-web-lint wishlist-web-build wishlist-web-gen wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql wishlist-docker-build wishlist-web-docker-build wishlist-k3d-deploy wishlist-ios-gen wishlist-ios-gen-check wishlist-ios-sync-testdata wishlist-ios-sync-check wishlist-ios-lint wishlist-ios-test wishlist-ios-xcode-test
 
@@ -68,8 +69,9 @@ wishlist-gen: wishlist-web-gen
 wishlist-test-mysql:
 	@$(WISHLIST_DIR)/scripts/test-mysql.sh
 
-wishlist-docker-build: ## api のイメージを作る(wishlist/api:local)
+wishlist-docker-build: ## api と refresher(Chromium 入り)のイメージを作る(wishlist/api:local・wishlist/refresher:local)
 	@docker build -t $(WISHLIST_API_IMAGE) $(WISHLIST_API_DIR)
+	@docker build -f $(WISHLIST_API_DIR)/Dockerfile.refresher -t $(WISHLIST_REFRESHER_IMAGE) $(WISHLIST_API_DIR)
 
 wishlist-web-docker-build: ## web のイメージを作る(wishlist/web:local)
 	@docker build -t $(WISHLIST_WEB_IMAGE) $(WISHLIST_WEB_DIR)
@@ -77,7 +79,7 @@ wishlist-web-docker-build: ## web のイメージを作る(wishlist/web:local)
 # k3d(make up 済み)へ api と web を入れて overlays/local を適用する。migrate の Job は spec が不変なので消してから作り直す。
 wishlist-k3d-deploy: wishlist-docker-build wishlist-web-docker-build
 	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh wishlist-k3d-deploy
-	@k3d image import $(WISHLIST_API_IMAGE) $(WISHLIST_WEB_IMAGE) -c $(CLUSTER)
+	@k3d image import $(WISHLIST_API_IMAGE) $(WISHLIST_REFRESHER_IMAGE) $(WISHLIST_WEB_IMAGE) -c $(CLUSTER)
 	@kubectl -n wishlist delete job wishlist-migrate --ignore-not-found
 	@kubectl apply -k $(WISHLIST_DIR)/deploy/k8s/overlays/local
 	@# イメージのタグは :local で変わらないため、取り込んだ新しいイメージで Pod を作り直す

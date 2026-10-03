@@ -1,6 +1,8 @@
 # 全商品の目安価格を毎日 03:00 JST に更新する(apps/wishlist/CLAUDE.md §6・§11)。
-# イメージは api(wishlist/api)の別バイナリ /wishlist-refresher を command で起動する。
-# headless の取得(chromedp)は未実装のため、Chromium 入りの専用イメージは作っていない(後で作る)。
+# イメージは Chromium 入りの refresher 専用(wishlist/refresher。api/Dockerfile.refresher)。メルカリの headless 取得に使う。
+# Chromium は /headless-shell/headless-shell(実イメージで確認)。非 root・capabilities drop ALL・seccomp RuntimeDefault では
+# ユーザー名前空間のサンドボックスが使えないため、refresher が --no-sandbox を付けて起動する(コンテナが分離の境界。実サイトは夜間にこの Pod だけが開く)。
+# NetworkPolicy が制限しているのは Ingress だけで、Egress は未制限(Egress の制限は共通基盤の変更になるため、docs/phase3-api-spec.md に将来の提案として記録)。
 # Secret wishlist-api の yahoo-appid は任意(無ければ api 型のサイトは取得しない)。
 apiVersion: batch/v1
 kind: CronJob
@@ -31,7 +33,7 @@ spec:
           automountServiceAccountToken: false
           containers:
             - name: refresher
-              image: wishlist/api:0.1.0
+              image: wishlist/refresher:0.1.0
               imagePullPolicy: IfNotPresent
               command: ["/wishlist-refresher"]
               env:
@@ -46,15 +48,19 @@ spec:
                       name: wishlist-api
                       key: yahoo-appid
                       optional: true
+                - name: WISHLIST_CHROMIUM_PATH
+                  value: /headless-shell/headless-shell
+                # Go のヒープだけの目安(Chromium は別プロセス。コンテナ全体の上限は limits の 1Gi)。
                 - name: GOMEMLIMIT
-                  value: 100MiB
+                  value: 128MiB
               resources:
                 requests:
                   cpu: 10m
-                  memory: 32Mi
+                  memory: 256Mi
                 limits:
                   cpu: 200m
-                  memory: 128Mi
+                  # Chromium を含む。/dev/shm(emptyDir Memory)もここに数えられる。
+                  memory: 1Gi
               securityContext:
                 allowPrivilegeEscalation: false
                 capabilities:
@@ -63,9 +69,11 @@ spec:
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
               volumeMounts:
-                # readOnlyRootFilesystem のため、書ける /tmp を置く(将来の headless 取得用)
+                # readOnlyRootFilesystem のため、書ける /tmp を置く(Chromium の user-data-dir は /tmp/wishlist-chromium-*。ページごとに作り、閉じるときに消す)
                 - name: tmp
                   mountPath: /tmp
+                - name: shm
+                  mountPath: /dev/shm
           securityContext:
             runAsNonRoot: true
             runAsUser: 65532
@@ -75,4 +83,9 @@ spec:
           volumes:
             - name: tmp
               emptyDir:
-                sizeLimit: 64Mi
+                sizeLimit: 128Mi
+            # Chromium の共有メモリ(既定の 64Mi は足りなくなりやすい)。
+            - name: shm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 256Mi
