@@ -1,0 +1,6 @@
+# Swift Package / Xcode のビルド成果物(ルートの .gitignore は ios/ 直下だけを見るため、ここで持つ)
+.build/
+.swiftpm/
+build/
+DerivedData/
+xcuserdata/

@@ -100,6 +100,31 @@ func limitedBody(body io.Reader) io.Reader {
 	return io.LimitReader(body, maxRequestBodyBytes+1)
 }
 
+// decodeStrict は JSON オブジェクトの本文を dst に厳密に読む(契約に無いキーは 400 unknown_field、
+// 空・壊れた JSON・オブジェクトでない本文は 400 invalid_json。team-svc の decodeStrict と同じ)。
+func decodeStrict(r io.Reader, dst any) error {
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return newError(api.InvalidJson, "リクエスト本文を読めない: %v", err)
+	}
+	if len(data) > maxRequestBodyBytes {
+		return newError(api.InvalidJson, "リクエスト本文が大きすぎる")
+	}
+	trimmed := bytes.TrimLeft(data, " \t\r\n")
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return newError(api.InvalidJson, "リクエストは JSON オブジェクトでなければならない")
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return decodeJSONError(err)
+	}
+	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
+		return newError(api.InvalidJson, "JSON の後ろに余計なデータがある")
+	}
+	return nil
+}
+
 // decodeNoBody は「本文を持たない」操作(DELETE /api/record/device-data)のボディを検証する。
 // 空・空白だけなら何もしない。JSON オブジェクトが送られてきたら、フィールドは1つも許されていない
 // (契約に requestBody が無い)ので、どのフィールドでも 400 unknown_field にする(ADR-0209 §6-4)。

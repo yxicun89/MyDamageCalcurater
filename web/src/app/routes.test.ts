@@ -4,6 +4,7 @@
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対。ここでは base を引数で渡して確かめる。
 
 import { describe, expect, test } from "vitest";
+import { favoritesScreenText } from "../i18n/favorites";
 import { appText } from "../i18n/ja";
 import { DEFAULT_SCREEN, SCREEN_ROUTES, documentTitle, pathForScreen, screenFromPath } from "./routes";
 
@@ -14,7 +15,7 @@ describe("ルート表", () => {
   // 共有ファイルへの追記はこの1件・screens.tsx の1件・ja.ts の文言・App.tsx の client の受け渡しに限る。
   // P5-5 PR-A1(ADR-0309 §1): 構築(/team)を判定の後ろ(末尾)に足す。持ち物は web/src/team/ の中だけ。
   // AJ6(ADR-0319 §1): 調整(/adjust)を構築の後ろ(末尾)に足す。持ち物は web/src/adjust/ の中だけ。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge、構築 → team、調整 → adjust の順に並び、表示名は appText の語", () => {
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge、構築 → team、お気に入り → favorites、調整 → adjust の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
@@ -22,6 +23,7 @@ describe("ルート表", () => {
       ["speed", "speed", appText.speedTabLabel],
       ["judge", "judge", appText.judgeTabLabel],
       ["team", "team", appText.teamTabLabel],
+      ["favorites", "favorites", favoritesScreenText.tabLabel],
       ["adjust", "adjust", appText.adjustTabLabel],
     ]);
     expect(appText.balanceTabLabel).toBe("タイプバランス");
@@ -34,8 +36,11 @@ describe("ルート表", () => {
   // P5-5 PR-A1(ADR-0309 §1): 構築は PR-A2 でメンバー編集(種族・技・持ち物・特性の名前解決)にマスタを使うので、
   // 最初から usesMaster: true にする(あとで false → true に変えると、マスタが読めないときに使えていたタブが
   // 使えなくなる退行に見えるため)。マスタを使わない画面は今のところ素早さだけ。
-  test("マスタを使わない画面は素早さだけ(構築は usesMaster: true)", () => {
-    expect(SCREEN_ROUTES.filter((route) => !route.usesMaster).map((route) => route.id)).toEqual(["speed"]);
+  test("マスタを使わない画面は素早さとお気に入りだけ(構築は usesMaster: true)", () => {
+    expect(SCREEN_ROUTES.filter((route) => !route.usesMaster).map((route) => route.id)).toEqual([
+      "speed",
+      "favorites",
+    ]);
   });
 
   test("既定の画面は計算", () => {

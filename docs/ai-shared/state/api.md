@@ -1,6 +1,6 @@
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし(2026-10-03 時点で、このレーンの実装・issue 対応は main 統合済み。次のセッションは下の Next から続ける)
+Active: なし(2026-10-04 時点で、このレーンの実装・issue 対応・M2 の k3d 実適用・P5-3c は main 統合済み。次のセッションは下の Next から続ける)
 Branch: なし(作業ディレクトリ ~/MyDamageCalcurater-api。直近の PR: #463・#468・#469・#483・#488・#490・#506・#510・#536・#539・#542 はすべて main 統合済み)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
@@ -77,13 +77,15 @@ Status(追記): 2026-10-03、ダブルの壁・全体技を engine・wasmapi に
 Status(追記): 2026-10-03 issue #315 のメガ部分実装済み(メガ種族+requiredItemId 以外の持ち物は 400 invalid_input。ADR-0200 §4 追記。テラスタイプは別作業)。
 
 Status(追記): 2026-10-02 issue #211 の API 分(ADR-0218)実装済み・critic PASS・コミット前。公開の `Item` / `Ability` に省略可の `effect` を足し、pokedex-svc が共通マスタで検証して返す(不正は 503)。Web・iOS への連絡は DECISIONS.md。
-Next(2026-10-03 更新):
-(1) 人間の判断待ち: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=承認が必要。ADR-0224 Q1)。teraType は PR #555 でオプション機能として反映済み(指定時のみ。省略時は従来どおり)。ダブルは現状のまま(なんでもよいとのユーザー回答)。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
-(2) 追跡中: #498(calc の打ち切り。engine は純粋なまま)、#505(wasmapi のメガ持ち物検証。データ・Web)、#211 の Web 追従(effect の写し)。
-(3) マージ後の実機確認: k3d で gateway の /metrics が公開側 404・専用ポート 9090 で取得、/healthz に version、/api/record・/api/team の疎通(#469・#490)。
+Next(2026-10-04 更新):
+(1) 人間の判断待ち: 防御側テラスで相性を変えるか(本編 SV は変える。既定案は oracle どおり反映しない。反映するなら known_diffs に ADR 付きで登録=承認が必要。ADR-0224 Q1)。失効ジョブ(record-expire・team-expire)を実データへ初めて向ける承認(ADR-0209。承認までは suspend: true。runbooks/api.md §8)。
+(2) 追跡中: #498(calc の打ち切り。engine は純粋なまま)、#505(wasmapi のメガ持ち物検証。データ・Web)、#211 の Web 追従(effect の写し)、お気に入り(ADR-0227)の Web・iOS の画面(decisions/2026-10-03-api-p5-3c-favorites.md に依頼)、計算履歴の取得 API(iOS の依頼のもう半分。別タスク)。
+(3) k3d の状態(2026-10-04): M2(TidbCluster・TidbInitializer・NATS・record・team)が稼働し、最新 main を `make deploy-latest` で反映済み(PR #583・#592)。クラスタ全体の操作は API レーンだけが行う取り決め。`make web-k3d-e2e` は画像の `/images/manifest.json` 404 で 2 件失敗(Web・ops の範囲。tb レーンへ連絡済み)。TiKV の常駐メモリが約 2.2GiB で Docker VM(約 7.75GiB)に余裕が小さい(ADR-0226)。
 Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic PASS・PR #490 で main 統合済み。失効 CronJob は承認まで suspend)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
 Status(追記): issue #288 の API 分(ADR-0223)実装済み(critic PASS・PR #536 で main 統合済み)。内部 API `MasterMove.target`(必須・nullable)・calc-svc→`engine.Move.Target`(`master.MoveTarget.Engine()`)・公開 `Move.target`(省略可 single/spread。NULL は省く・未知は 503)を配線。使い捨て mysql:9.7.2 で `go test -tags mysql -p 1 ./pokedex/...` 全緑。Web への連絡は decisions/2026-10-03-api-move-target-wiring.md
 Status(追記): 2026-10-03 issue 514 完了(PR #539 で main 統合済み。ADR-0802 追記)。gateway が `/api/*` の上流の非 JSON 5xx を 503 `upstream_unavailable` に正規化(上流の 500 も 503 になり `Retry-After` 等は落ちる)。閉じた下書き(fix/api-325-error-shape)の gateway 部分だけを現 main の proxy.go に手で再適用。critic PASS・PR #542 で main 統合済み。
 Status(追記): 2026-10-03 issue 538 完了(ブランチ fix/api-538-flaky-deadline-test。ADR-0801 追記)。`httpguard.Expired` が期限直後の context を取りこぼす競合を修正(4 複製)。critic PASS・PR #542 で main 統合済み。
 Status(追記): ADR-0224 テラスタルのオプション反映を engine に実装(feat/engine-tera-optional。攻撃側の印を外し防御側の印は残す。ゴールデン tera 全件一致・known_diffs 追加なし)。critic 待ち。
 Status(追記): 2026-10-03 M2 を k3d に実適用(P5-1 AC-T3・AC-T8 完了。ADR-0226。ブランチ feat/api-m2-k3d-deploy)。TiDB Operator(helm リポジトリ廃止のため Git タグのアーカイブ+sha256)・TidbCluster Ready・TidbInitializer Completed・NATS・record・team が k3d で Running。`make deploy-latest` と `make up` は `scripts/k3d-m2-deploy.sh` で M2 まで入れる(失敗は非致命で最後に非ゼロ)。NetworkPolicy に operator 向けの許可を追加。実測した問題: operator→PD の遮断・TiKV の OOM(limit 3Gi)・`initSql` の1行複数文(arm64 の `tnir/mysqlclient` は起動した)。`make web-k3d-e2e` 成功。他レーンへの連絡は decisions/2026-10-03-api-m2-k3d-deploy.md。
+Status(追記): 2026-10-03 P5-3c(お気に入りの API。ブランチ feat/api-p5-3c-favorites)の spec 完了(ADR-0227)。契約(`listFavorites`・`createFavorite`・`deleteFavorite`・`FavoriteInput`/`Favorite`/`FavoriteId`)を追加し make gen・gen-ts・ios-gen 済み(iOS は swift build --build-tests 成功)。record の失敗するテスト(httpapi の favorites_test.go・契約・分離・ログ、store の favorites_tidb_test.go〈-tags tidb〉、db の migration 静的テスト)を追加。次: implementer(record-svc の httpapi・store・migration 000006、calc/pokedex/team の 404 スタブ)→ critic。Web・iOS への依頼は decisions/2026-10-03-api-p5-3c-favorites.md。
+Status(追記): 2026-10-03 P5-3c を record-svc に実装(ブランチ feat/api-p5-3c-favorites。ADR-0227)。httpapi(`favorites.go`: 厳密な本文読み・正規化・キー順固定の snapshot)・store(`CreateFavorite` は devices 行のロック+現在読み〈FOR UPDATE〉で上限・重複を判定)・migration 000006(`snapshot_hash` 列)と 000007(`UNIQUE (device_id, snapshot_hash)`。TiDB は1文での列追加+索引追加を拒むため2つに分けた)・calc/pokedex/team の 404 スタブ・gateway の回帰テスト通過。実 TiDB の `make test-db-docker` 緑。TiDB の通常の SELECT はトランザクション開始時のスナップショットを読むので、ロック後の件数・重複の確認は FOR UPDATE にしている(通常の SELECT だと上限をすり抜けた)。critic PASS(2026-10-04)・ADR-0227 は採用。時刻をマイクロ秒に丸める追加修正済み。次: Web・iOS の画面(各レーン)。

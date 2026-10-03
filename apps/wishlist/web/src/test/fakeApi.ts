@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import type { Genre, Item, Site } from "../api/types";
+import type { Genre, Item, ItemEstimates, Listing, Site } from "../api/types";
 import { NOW, makeItem } from "./factories";
 import { urlOf } from "./net";
 
@@ -23,6 +23,19 @@ export interface FakeApi {
   offline: boolean;
   /** POST /api/items/from-url が返す下書き */
   draft: { name: string; image_url: string | null; source_url: string; genre_id: number | null };
+  /**
+   * GET /api/items/:id/estimates の本文。nth は、その商品の GET を受けた回数(0 始まり。今回の呼び出しは含まない)。
+   * 既定は「目安なし」(sites が空・refreshing:false)。
+   */
+  estimates: (itemId: number, nth: number) => ItemEstimates;
+  /** GET /api/items/:id/listings が返す出品(site_id クエリで絞る。商品では分けない) */
+  listings: Listing[];
+  /** true の間、GET estimates だけが通信失敗(TypeError)になる。ほかは通る */
+  failEstimates: boolean;
+  /** true の間、POST estimates/refresh だけが通信失敗(TypeError)になる */
+  failRefresh: boolean;
+  /** 返す Promise が解決するまで応答を遅らせる(本文は呼び出し時点で決まる)。undefined なら即返す */
+  delay?: (call: Call) => Promise<void> | undefined;
   /** path の接頭辞が合う呼び出しのうち method 一致のもの */
   callsTo(method: string, pathPrefix: string): Call[];
 }
@@ -48,6 +61,10 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
       source_url: "https://shop.example/p/1",
       genre_id: null,
     },
+    estimates: (itemId) => ({ item_id: itemId, sites: [], refreshing: false }),
+    listings: [],
+    failEstimates: false,
+    failRefresh: false,
     callsTo: (method, prefix) => api.calls.filter((c) => c.method === method && c.path.startsWith(prefix)),
   };
   let nextId = 1000;
@@ -62,6 +79,10 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     if (reqInit.body instanceof FormData) call.form = reqInit.body;
     api.calls.push(call);
 
+    if (api.failEstimates && method === "GET" && /^\/api\/items\/\d+\/estimates$/.test(path))
+      throw new TypeError("Failed to fetch");
+    if (api.failRefresh && method === "POST" && /\/estimates\/refresh$/.test(path))
+      throw new TypeError("Failed to fetch");
     if (headers.get("Authorization") !== "Bearer test-token") return errRes(401, "unauthorized");
     const body = call.json as Record<string, unknown> | undefined;
 
@@ -107,7 +128,27 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
       return jsonRes(next);
     }
     m = /^\/api\/items\/(\d+)\/estimates$/.exec(path);
-    if (m && method === "GET") return jsonRes({ item_id: Number(m[1]), sites: [], refreshing: false });
+    if (m && method === "GET") {
+      const id = Number(m[1]);
+      const nth = api.calls.filter((c) => c.method === "GET" && c.path === path).length - 1;
+      return jsonRes(api.estimates(id, nth));
+    }
+    m = /^\/api\/items\/(\d+)\/estimates\/refresh$/.exec(path);
+    if (m && method === "POST") {
+      // 実装と同じく 202。本文は現時点のキャッシュで refreshing:true。
+      const id = Number(m[1]);
+      const gets = api.calls.filter(
+        (c) => c.method === "GET" && c.path === `/api/items/${String(id)}/estimates`,
+      );
+      return jsonRes({ ...api.estimates(id, gets.length), refreshing: true }, 202);
+    }
+    m = /^\/api\/items\/(\d+)\/listings$/.exec(path);
+    if (m && method === "GET") {
+      const sid = url.searchParams.get("site_id");
+      return jsonRes({
+        listings: sid ? api.listings.filter((l) => l.site_id === Number(sid)) : api.listings,
+      });
+    }
     if (path === "/api/genres" && method === "GET") return jsonRes({ genres: api.genres });
     if (path === "/api/genres" && method === "POST") {
       const g = { sort_order: 0, site_ids: [], ...body, id: nextId++ } as unknown as Genre;
@@ -143,8 +184,16 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     return errRes(404, "not_found");
   };
 
-  const handler = (input: RequestInfo | URL, reqInit: RequestInit = {}): Promise<Response> =>
-    api.offline ? Promise.reject(new TypeError("Failed to fetch")) : Promise.resolve(route(input, reqInit));
+  const handler = (input: RequestInfo | URL, reqInit: RequestInit = {}): Promise<Response> => {
+    if (api.offline) return Promise.reject(new TypeError("Failed to fetch"));
+    try {
+      const res = route(input, reqInit);
+      const wait = api.delay?.(api.calls[api.calls.length - 1] as Call);
+      return wait ? wait.then(() => res) : Promise.resolve(res);
+    } catch (e) {
+      return Promise.reject(e instanceof Error ? e : new TypeError("Failed to fetch"));
+    }
+  };
   vi.stubGlobal("fetch", vi.fn(handler));
   return api;
 }

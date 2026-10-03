@@ -1,18 +1,21 @@
 # wishlist(apps/wishlist/CLAUDE.md)のターゲット。ルートの Makefile から include する(パスはリポジトリ直下基準)。
 #   make wishlist-test / wishlist-lint / wishlist-build / wishlist-kustomize / wishlist-gen / wishlist-test-mysql
 #   make wishlist-docker-build / wishlist-web-docker-build / wishlist-k3d-deploy
+#   make wishlist-ios-gen / wishlist-ios-gen-check / wishlist-ios-sync-testdata / wishlist-ios-test / wishlist-ios-xcode-test(iOS。CI の wishlist-test には含めない)
 # ルートの go.work には入れず GOWORK=off で単独モジュールとして扱う(docs/design.md W-01)。
 
 GO ?= go
 WISHLIST_DIR ?= apps/wishlist
 WISHLIST_API_DIR ?= $(WISHLIST_DIR)/api
 WISHLIST_WEB_DIR ?= $(WISHLIST_DIR)/web
+WISHLIST_IOS_DIR ?= $(WISHLIST_DIR)/ios
+WISHLIST_IOS_SIMULATOR ?= iPhone 18 Pro
 
 CLUSTER ?= pokecalc
 WISHLIST_API_IMAGE ?= wishlist/api:local
 WISHLIST_WEB_IMAGE ?= wishlist/web:local
 
-.PHONY: wishlist-web-deps wishlist-web-test wishlist-web-lint wishlist-web-build wishlist-web-gen wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql wishlist-docker-build wishlist-web-docker-build wishlist-k3d-deploy
+.PHONY: wishlist-web-deps wishlist-web-test wishlist-web-lint wishlist-web-build wishlist-web-gen wishlist-test wishlist-lint wishlist-build wishlist-kustomize wishlist-gen wishlist-test-mysql wishlist-docker-build wishlist-web-docker-build wishlist-k3d-deploy wishlist-ios-gen wishlist-ios-gen-check wishlist-ios-sync-testdata wishlist-ios-sync-check wishlist-ios-lint wishlist-ios-test wishlist-ios-xcode-test
 
 # ルートの make test / lint / build に wishlist を含める(CI で回すため。ユーザー決定 2026-10-03)。
 test: wishlist-test
@@ -46,6 +49,7 @@ wishlist-lint: wishlist-kustomize wishlist-web-lint
 	@cd $(WISHLIST_API_DIR) && GOWORK=off $(GO) vet ./...
 	@sc="$$(cd tools && $(GO) tool -n staticcheck)" && cd $(WISHLIST_API_DIR) && GOWORK=off "$$sc" ./...
 	@bash -n $(WISHLIST_DIR)/scripts/*.sh
+	@bash -n $(WISHLIST_IOS_DIR)/scripts/*.sh
 
 wishlist-build: wishlist-web-build
 	@cd $(WISHLIST_API_DIR) && GOWORK=off $(GO) build ./...
@@ -76,3 +80,35 @@ wishlist-k3d-deploy: wishlist-docker-build wishlist-web-docker-build
 	@k3d image import $(WISHLIST_API_IMAGE) $(WISHLIST_WEB_IMAGE) -c $(CLUSTER)
 	@kubectl -n wishlist delete job wishlist-migrate --ignore-not-found
 	@kubectl apply -k $(WISHLIST_DIR)/deploy/k8s/overlays/local
+	@# イメージのタグは :local で変わらないため、取り込んだ新しいイメージで Pod を作り直す
+	@kubectl -n wishlist rollout restart deploy/wishlist-api deploy/wishlist-web
+
+# ---- iOS(SwiftUI。apps/wishlist/ios。ダメ計の ios-* と同じ構成)----
+# CI は Linux なので wishlist-test / wishlist-lint(構文だけ)/ wishlist-build には iOS を含めない(ダメ計 iOS と同じ扱い)。
+# Xcode が無い環境は wishlist-ios-test(macOS の swift test)までは動く。xcodebuild が要るのは wishlist-ios-xcode-test だけ。
+
+# api/openapi.yaml から WishlistKit/Sources/WishlistAPI/Generated を生成する(生成物はコミットする)。
+wishlist-ios-gen:
+	@$(WISHLIST_IOS_DIR)/scripts/openapi-gen.sh
+
+# コミット済みの生成物が openapi.yaml と一致するか。
+wishlist-ios-gen-check:
+	@$(WISHLIST_IOS_DIR)/scripts/openapi-gen.sh --check
+
+# testdata/query-cases.json を Swift のテストリソースへコピーする(シンボリックリンクにしない)。
+wishlist-ios-sync-testdata:
+	@$(WISHLIST_IOS_DIR)/scripts/sync-testdata.sh
+
+wishlist-ios-sync-check:
+	@$(WISHLIST_IOS_DIR)/scripts/sync-testdata.sh --check
+
+wishlist-ios-lint:
+	@for script in $(WISHLIST_IOS_DIR)/scripts/*.sh; do bash -n "$$script" || exit; done
+
+# WishlistKit のテストを macOS で実行する(シミュレータ不要)。
+wishlist-ios-test: wishlist-ios-sync-check wishlist-ios-lint
+	@. $(WISHLIST_IOS_DIR)/scripts/xcode-env.sh && cd $(WISHLIST_IOS_DIR)/WishlistKit && swift test
+
+# xcodebuild(Kit のテスト + アプリの XCUITest)。Xcode が無ければ「Xcode が要る」と表示して終了コード 2(成功扱いにしない)。
+wishlist-ios-xcode-test:
+	@$(WISHLIST_IOS_DIR)/scripts/xcode-test.sh "$(WISHLIST_IOS_SIMULATOR)"

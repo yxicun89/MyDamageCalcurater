@@ -1,9 +1,9 @@
 ## Wishlist
 Lane: 欲しいものリスト(別アプリ。`apps/wishlist/` だけを変更する。仕様の正は `apps/wishlist/CLAUDE.md`、設計は `apps/wishlist/docs/design.md`)
-Active: Claude Code
+Active: なし(2026-10-04 フェーズ1〜3 の実装完了)
 Branch: lane/wishlist(作業ディレクトリ ~/MyDamageCalcurater-wishlist)。PR ごとに main へ統合し、次の区切りも同じブランチで続ける
-Status: PR #572・#581・#582(フェーズ1)、#587(共有 MySQL の NetworkPolicy)マージ済み。ローカル k3d にデプロイ済み(2026-10-03。DB・Secret 作成、登録→画像→削除まで確認)。
-フェーズ3 Go(目安価格の算出・参考外の判定・Yahoo!ショッピング API・5 秒間隔・更新 API・CronJob 03:00 JST・DB 接続の再試行)を実装、critic PASS。受け入れ条件 `apps/wishlist/docs/phase3-api-spec.md`。
-フェーズ2 iOS はブランチ feat/wishlist-ios(worktree ~/MyDamageCalcurater-wishlist-ios)で実装中。
-Next: PWA の目安価格表示(サマリ・サイト別・参考外)→ サイト別の取得処理(カードラッシュ・あみあみ・Yahoo!フリマ。確認結果は apps/wishlist/docs/sites.md に入れる)と確認済みサイトの seed →
-iOS(feat/wishlist-ios)の critic・PR。未着手で残すもの: メルカリ・ドラゴンスターの headless 取得と Chromium 入りイメージ(構造が未確認)、駿河屋(robots.txt の扱いが要判断)
+Status: フェーズ1(PR #572・#581・#582)・NetworkPolicy(#587)・フェーズ3(#588・#591)マージ済み。ローカル k3d にデプロイ済み(2026-10-04。migrate 000004、CronJob 03:00 JST。
+実サイト〈あみあみ・Yahoo!フリマ〉から目安価格が取れることを確認)。フェーズ2 iOS と iOS の目安価格表示を実装、critic PASS(このブランチ feat/wishlist-ios の PR)。
+Next: 人の確認(apps/wishlist/ios/README.md・docs/shortcut.md): iPhone で PWA と iOS アプリ(署名・実機インストール・共有シート・機内モード・Liquid Glass の見た目)。
+未着手で残すもの: メルカリ・ドラゴンスターの headless 取得と Chromium 入りイメージ(構造が未確認。ドラゴンスターは Cloudflare で 403)、Yahoo! の appid(未取得のため Yahoo!ショッピングの取得は無効)、
+プレバン・魂ウェブ・ポケセンのリンク(検索結果まで未確認。docs/sites.md の候補を人が確かめて設定画面から登録)

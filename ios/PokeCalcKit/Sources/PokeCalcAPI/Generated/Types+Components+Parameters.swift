@@ -38,5 +38,11 @@ extension Components {
         ///
         /// - Remark: Generated from `#/components/parameters/TeamId`.
         public typealias TeamId = Components.Schemas.TeamId
+        /// お気に入りの ID(作成時にサーバーが発行する。ADR-0227 §2)。端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+        /// この端末が持っていない ID は、他端末のもの・実在しないもの・形式が違うものを区別せず 404 `not_found`(§6-2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/parameters/FavoriteId`.
+        public typealias FavoriteId = Components.Schemas.FavoriteId
     }
 }

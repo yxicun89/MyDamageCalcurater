@@ -134,3 +134,29 @@ describe("画像・ベース URL の解決", () => {
     expect(defaultBaseUrl()).toBe(new URL("./", document.baseURI).href);
   });
 });
+
+// AC-API-08: フェーズ3(更新・出品一覧)
+describe("createApiClient(フェーズ3)", () => {
+  const estimates = { item_id: 5, sites: [], refreshing: true };
+  it("AC-API-08 refreshEstimates は POST .../estimates/refresh(202 でも本文を返す。Bearer 付き)", async () => {
+    const { client, last } = setup(json(estimates, 202));
+    expect(await client.refreshEstimates(5)).toEqual(estimates);
+    expect(last().url).toBe("https://h.example/wishlist/api/items/5/estimates/refresh");
+    expect(last().init.method).toBe("POST");
+    expect(last().headers.get("Authorization")).toBe("Bearer tok");
+  });
+  it("AC-API-08 listListings は GET .../listings の配列だけを返し、siteId があれば site_id を付ける", async () => {
+    const { client, last } = setup(json({ listings: [] }));
+    expect(await client.listListings(5)).toEqual([]);
+    expect(last().url).toBe("https://h.example/wishlist/api/items/5/listings");
+    expect(last().init.method ?? "GET").toBe("GET");
+    await client.listListings(5, 2);
+    expect(last().url).toBe("https://h.example/wishlist/api/items/5/listings?site_id=2");
+  });
+  it("AC-API-08 失敗は ApiError(通信失敗は network)", async () => {
+    const { client } = setup(json({ code: "not_found", message: "x" }, 404));
+    await expect(client.refreshEstimates(5)).rejects.toMatchObject({ code: "not_found", status: 404 });
+    const down = setup(() => Promise.reject(new TypeError("Failed to fetch")));
+    await expect(down.client.listListings(5)).rejects.toMatchObject({ code: "network", status: 0 });
+  });
+});
