@@ -33,6 +33,14 @@ Argo CD が同期する gitops overlay には read model が無く、balance は
    **balance も、pokedex の digest が全0の placeholder のままなので未配備扱い**とする(ready 検査は意図どおり失敗する)。
    **前提: NetworkPolicy(`allow-mysql-ingress.yaml`)の承認・適用と pokedex の実 digest の確定が済むまで、balance / speed とも sync しない。**
 
+## 追記(2026-10-02): NetworkPolicy の実装
+- `allow-mysql-ingress.yaml` の送信元に Pod ラベル `app.kubernetes.io/name` が `balance`・`speed` の Pod を追加した(他サービス・他 namespace は許可しない。
+  ポートは 3306 のみ)。ADR-0132 の許可表と `services/gateway/deploytest/networkpolicy_test.go` を同じ変更で更新(許可: balance・speed → mysql。
+  拒否: web・calc・gateway・judge・record-migrate・team-migrate・nats → mysql と balance → mysql:8080 を明示)。
+- 限界(§4 のとおり): Pod 単位なので本体コンテナも mysql:3306 に届く。DSN(`pokedex-reader-dsn`)は initContainer にだけ渡し、本体は DSN を持たないため、
+  届いても認証できない。
+- 共有クラスタへの apply は未実施(人間の承認後。ADR-0132 の確認手順に従う)。
+
 ## 段階
 - 今回(spec): 受け入れ条件・テスト(`scripts/gitops_test.sh`)・本 ADR。
 - 実装(balance と speed の overlay 構造・check-gitops・k3d-deploy-readmodel のガード・runbook): 実装者。

@@ -240,6 +240,7 @@ Decision: (1) P1-12 の Recall の新定義(返した SP 範囲が総当たり�
 Reason: ユーザーが確認の質問に回答した。
 Impact: 逆算の観測は整数%(`Percent`)が主の入力。丸め方が未確認なので、照合は切り捨て・四捨五入・切り上げのどれでも真値を落とさない区間のまま(ADR-0010 §R)。
 丸め方が確認できたら区間を狭める(1か所の差し替え)。plan.md のブロッカー「観測ダメージの入力と丸め」は「丸め方のみ未確認」に縮小。
+→ 2026-10-03 に確認済み(減少量そのものの切り捨て)。整数%の区間は [v, v+1) に狭めた(ADR-0134)。
 
 ## 2026-09-21: マスタのフォームの持ち方・更新運用・技の使用可否の裁定の進め方(ユーザー回答)
 Decision: (1) 見た目だけ違うフォーム(種族値・タイプ・特性が同じ)はマスタで1件にまとめる。性能が違うフォーム(メガ・リージョンフォーム等)は別ポケモンとして登録する(メガは既決のとおり `is_mega` / `base_species_key` / `required_item_id`)。
@@ -2021,8 +2022,19 @@ Impact: Web レーンは文言・再送の上限・再試行の扱いを揃え�
 - API レーンへ: TiDB(record/team)を k3d に上げる前に ADR-0132「確認の結果」の手順を行う(tidb-operator からの許可を足す)。
   M2 で record・team の本体を足すときも許可が要る。PR #416(#284)で gateway → balance/speed/judge は既に許可済み
 - 詰まったときの戻し方: `kubectl -n pokecalc delete networkpolicy default-deny-ingress`(許可だけが残る。データは消えない)
+## 2026-10-01: 既定の計算モードをオンラインに変更(ユーザー決定。Web レーン。issue #210 / ADR-0313)
+Decision: Web の既定の計算モードを「オンライン」にする(ADR-0301 §4 の「既定はオフライン」を変更)。オンラインで取得したマスタ(持ち物・性格・解決した種族/特性/技)を IndexedDB に保存し、オフライン(WASM)はそのキャッシュだけから読む。保存済みのモード(localStorage)は従来どおり尊重する。
+Reason: 既定のオフラインは架空の例データしか持たず、実データで計算するには毎回オンラインへ切り替えが要った。実データのビルド同梱は ADR-0002 に反する。
+Impact: Web のみ(`web/src/master/cache/`・`main.tsx`・`calcMode.ts`・E2E 設定)。API・engine・iOS は無変更。オフラインで引ける種族は一度オンラインで選んだものに限り、持ち物の候補比較はオフラインでも選べない(公開 API に効果データが無い)。
 
 
+## 2026-10-02: issue #236 の balance 側をクローズ(タイプバランスレーン → Web レーンへ。ADR-0413)
+Decision: balance の `X-Device-Id`/`X-Session-Id` を gateway と同じ正準 UUID 検証にした(素早さの ADR-0606 と同じ複製方式)。
+ErrorCode は `missing_header`(欠落・空)・`invalid_header`(UUID でない・重複)を追加し、`missing_request_context` を廃止した
+(`services/balance/api/openapi.yaml` 0.8.0。意図的な破壊的変更。判定順は不変)。
+Reason: Traefik 直結では gateway の検証が効かず、balance だけ緩い非空チェックだった。
+Impact: Web レーンへ: `web/src/api/balance.gen.ts` を再生成済み、`web/src/i18n/ja.ts` の `balanceErrorText` を `missing_header`/`invalid_header` に
+追従済み(`BalanceScreen.test.tsx` のコード一覧も)。`balanceClient.ts` は正準 UUID を送っており変更不要。他に balance の code 文字列に依存する箇所があれば確認してほしい。
 ## 2026-10-02: 一括計算の defenderOverride に ranks・status を足した(API レーン → Web・iOS レーンへ。issue #274/#272・ADR-0216)
 
 - `BulkCalcRequest.defenderOverride` は `{ abilityId?, ranks?: RankBlock, status?: StatusCondition }`。全行(全プリセット × 持ち物 × 特性)に一律で当たる。ランクは各 -6..+6(外は 400 `invalid_input`)、未知の status は 400 `invalid_enum`
@@ -2041,6 +2053,10 @@ Impact: 版を上げる PR は config.json の `integrity` も更新する(不�
 却下案 B(dist の vendoring)・C(現状維持)に変えるなら ADR-0101 追記と config.json の integrity を戻す。
 ユーザーの確認待ち: A でよいか(特に、期限切れの引き渡しを無視する TTL 7200 秒の扱い)。
 
+## 2026-10-03: PR のマージは対象 PR の CI が全件成功のときだけ AI が実行してよい(ADR-0803。ユーザー決定)
+Decision: bash-guard の PR マージを無条件ブロックから、`gh pr checks` が終了コード 0 のときだけ通す条件付きに変更。`--admin`・`gh api` 直叩き・main への直接 push は引き続き不可。
+Reason: ユーザー指示「全レーンでテストと CI が通っていれば AI が merge してよい。クラウドへの勝手なデプロイ(課金)と機密情報の公開以外は作業を止めたくない」。
+Impact: CLAUDE.md・AGENTS.md・COORDINATION.md・ADR-0800 を整合。.codex も同じ bash-guard を呼ぶため同じ規則が効く。
 ## 2026-10-03: 技の対象(単体/全体)をマスタに持たせてほしい(判定レーン → データレーン。issue #288・ユーザー決定)
 
 - ダブルの壁(×2732/4096)・全体技(×3072/4096。相手2体に当たる技)の補正は engine がまだ持たない(`engine/modifiers.go` の `screenDamageMod` は format を見ない。ADR-0005)。
