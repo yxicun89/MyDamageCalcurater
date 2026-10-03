@@ -9,6 +9,7 @@ kind: Component
 
 patches:
   - path: gateway-patch.yaml
+  - path: gateway-images-patch.yaml
 
 images:
   - name: pokecalc/calc

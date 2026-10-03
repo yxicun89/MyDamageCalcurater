@@ -1,0 +1,16 @@
+# local overlay と同じ内容(overlays/local/cronjob-expire-suspend-patch.yaml。kustomize は root の外のパッチを読めないため複製)。
+# 失効ジョブ(record-expire・team-expire)は、k3d の実データへ初めて向ける承認(ADR-0209・ADR-0220 未決事項 0)が済むまで
+# suspend する。承認後は local の patch と一緒にこのファイルと kustomization の patches も外す(docs/runbooks/api.md)。
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: record-expire
+spec:
+  suspend: true
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: team-expire
+spec:
+  suspend: true

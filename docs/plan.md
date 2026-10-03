@@ -45,7 +45,7 @@
 規約は [docs/coding-rules.md](coding-rules.md)(Claude Code と Codex 共通。公開できる状態を保つ・ハードコードしない・読みやすいコード)。Phase 1b より先に行う。
 - [x] R-0 規約の策定と Codex レビュー
 - [x] R-1 監査: 規約違反の洗い出し
-- [ ] R-2 是正(挙動を変えない。`make test` / `make test-golden` / `make test-wasm` を維持。塊ごとに1コミット。詳細は audit-r1.md):
+- [x] R-2 是正(R-2-9 は実施しないと決定。挙動を変えない。`make test` / `make test-golden` / `make test-wasm` を維持。塊ごとに1コミット。詳細は audit-r1.md):
   - [x] R-2-1 シェルを `set -euo pipefail` に統一
   - [x] R-2-2 fixture の公式日本語名を架空名に置換
   - [x] R-2-3 `tools/golden/package.json` を `0.10.0` に完全固定、`.gitignore` に `*.wasm`
@@ -53,7 +53,7 @@
   - [x] R-2-5 小さな可読性の是正
   - [x] R-2-7 ADR の追記・修正
   - [x] R-2-8 Go の module path を公開用プレースホルダ
-  - [ ] R-2-9 公開用クリーンコピーの作成(ユーザー決定: 履歴を書き換える。方式は**今のリポジトリと worktree には触れず、書き換えたコピーを別に作る**)。`scripts/make-public-copy.sh`(仮): 公開したいブランチをローカル clone → `git filter-repo` で作者名・メールを公開用 identity(`pokecalc-dev <noreply@example.com>`)に置換(`--mailmap` を既存の作者から動的に生成するので、実名をスクリプトに書かない)、履歴内の `github.com/<アカウント名>/pokecalc` を `example.com/pokecalc` に置換(正規表現)→ コピー側で `make check-publishable-full`(Git 作者の許可リストを作成)と履歴全体の検査(絶対パス・メール・秘密)。実行は**公開するとき**。前提ツール: `git-filter-repo`(`brew install git-filter-repo`。`make doctor` の任意ツールに追加)。元のリポジトリ(Codex の `pokecalc-codex-tb0`・`pokecalc-main` を含む)は変更しない
+  - [x] R-2-9 公開用クリーンコピーの作成(**実施しない**。ユーザー決定 2026-09-25〈issue #328〉: 非公開・私的利用のまま。以下は公開する場合の設計記録。ユーザー決定: 履歴を書き換える。方式は**今のリポジトリと worktree には触れず、書き換えたコピーを別に作る**)。`scripts/make-public-copy.sh`(仮): 公開したいブランチをローカル clone → `git filter-repo` で作者名・メールを公開用 identity(`pokecalc-dev <noreply@example.com>`)に置換(`--mailmap` を既存の作者から動的に生成するので、実名をスクリプトに書かない)、履歴内の `github.com/<アカウント名>/pokecalc` を `example.com/pokecalc` に置換(正規表現)→ コピー側で `make check-publishable-full`(Git 作者の許可リストを作成)と履歴全体の検査(絶対パス・メール・秘密)。実行は**公開するとき**。前提ツール: `git-filter-repo`(`brew install git-filter-repo`。`make doctor` の任意ツールに追加)。元のリポジトリ(Codex の `pokecalc-codex-tb0`・`pokecalc-main` を含む)は変更しない
 - [x] R-3 `make check-publishable`
 
 ### Phase 1b 決定の反映(2026-09-21 のユーザー決定。ADR-0002 の確定方針・DECISIONS.md 参照)
@@ -134,6 +134,7 @@
 削除の墓石(`devices.purged_at`)で JetStream の遅延イベントの復活を防ぐ。受け入れ条件は ADR-0209 の AC-D / AC-P / AC-R / AC-L。
 
 - [ ] P5-1 【担当: API レーン。M2 の必須の起点】 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
+  **k3d 実適用済み(2026-10-03。ADR-0226)**: TidbCluster Ready・TidbInitializer Completed(AC-T3・AC-T8)・record/team の migrate Job 完了・NATS/record/team Running。`tnir/mysqlclient` は arm64 でもエミュレーションで起動する(実際の失敗は `initSql` の1行複数文。1行1文に修正)。`make deploy-latest` が NATS・TiDB・record・team まで入れる(`scripts/k3d-m2-deploy.sh`)。`make web-k3d-e2e` 成功。残: purge journal の DB 外の保存先は P7-4(ADR-0225)が決めるまで未充足。TiKV の常駐 約 2.2GiB(limit 3Gi)の原因は未特定
 - [x] P5-2 NATS JetStream と calc-svc からのイベント発行
 - [x] P5-3 record-svc
 - [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
@@ -204,6 +205,7 @@
 - [ ] お気に入り・計算履歴の iOS 表示(API レーンの契約追加待ち。DECISIONS.md 2026-10-03 で依頼済み)
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
+- [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)
@@ -295,11 +297,12 @@
 - [x] P7-2 SLO(計算API p99 < 100ms、可用性)とダッシュボード
   - [x] balance 分(2026-10-02、ADR-0420。p99 < 500ms・可用性。記録ルール・ダッシュボード・静的検査。実クラスタ確認は未実施)
 - [~] P7-3 【担当: データレーン】 ArgoCD(GitOps): balance は Argo CD 管理。speed・judge の実クラスタ適用は人間確認待ち(CURRENT_STATE.md)。残りは issue #292・#263・#237(NetworkPolicy の balance・speed → mysql は base に反映済み=ADR-0412 追記。残りは共有クラスタへの apply の人間確認と pokedex の実 digest 確定)
-- [ ] P7-4 【担当: データレーン】 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
+- [x] P7-4 【担当: データレーン】 MySQL/TiDB バックアップと復元テスト(ADR-0209 §9 を要件に含める: バックアップに `devices`〈墓石〉を含める /
   purge journal(#5b。世代取得後の削除要求。保持90日)をバックアップ世代と別に保持し復元時に再適用 /
   Ready の前に墓石の再適用・purge journal の再適用・失効ジョブの強制実行 / JetStream は再生しない / 世代30日。
   受け入れ条件は AC-B1〜B3・AC-B2b)
   - [x] スクリプトとテスト(2026-10-03。ADR-0225。運用の空席をタイプバランスレーンが代行): `scripts/db-backup.sh`(full/journal)・`scripts/db-restore.sh`・`make db-backup`/`db-restore`・runbook(data.md d2)を実装。`make test-scripts` の偽物テスト2本と、Docker の使い捨て TiDB・MySQL での実往復 `make test-db-backup`(AC-B1〜B3・B2b)が通る。**未実施**: 実クラスタ(k3d)上の実バックアップ・復元(TiDB 未配備・record/team 未配備)、クラウド保存先・暗号化、PVC スナップショット、サービスが削除要求の受付時に DB 外へ同時追記する実装(同期間隔の穴が残る。ADR-0225 §7)、Argo CD/レジストリ image の復元(#297)
+  - [x] **k3d 実クラスタでの実バックアップ・復元訓練(2026-10-03。ADR-0227)**: `make db-backup-k3d`(record・team・pokedex)と `make db-restore-drill-k3d`(別名 DB `<db>_restore_drill` へ最新世代を復元→全表の行数・墓石・journal を元と照合→別名 DB を削除。稼働中の DB は上書きしない)を実 TiDB で通した(`restore-drill-ok record team`)。Secret・port-forward はスクリプト内部。mysqldump 9 の `column_masking_policy` 表示は無害。**未実施**: 実データの墓石・journal が 0 件だったため再適用の効果は Docker 往復テスト依存、API 越しの確認、クラウド保存先・暗号化、同時追記(ADR-0225 §7 の1・3・7)
 
 - [x] 確認手順書 M1〜M4(`docs/verify-all.md`。verify-m1 の read model 書き出しを `make pokedex-export-k3d` に集約、verify-m3・verify-m4 を新設。タイプバランスレーン・ドキュメントのみ)
 
@@ -308,10 +311,11 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 - [ ] P5-3c お気に入り(手動ピン留め)の作成・削除・一覧 API と画面(requirements.md §2「あれば便利」。担当: API レーン→ Web・iOS。`favorites` の表・保持期間・全削除の件数は ADR-0209 で実装済みで、API・画面が未着手。ADR-0209 の「record にお気に入りの CRUD を足すときに検証する」を併せて行う)
 - [x] P6-21 iOS のタイプバランス画面 第1段(チーム最大6体の防御相性表・チーム集計・日本語の倍率表示)+第2段(攻撃範囲 coverage)(ADR-0415。タイプバランスレーン〈iOS 実装〉。実施: `PokeCalcCore` に `BalanceDomainTypes`・`BalanceService`(+`UnavailableBalanceService`)・`APIBalanceService`・`BalanceLabels`・`BalanceViewModel`、`ios/PokeCalc` に `BalanceScreenView`・`BalanceMemberCard`・`BalanceResultViews`、`RootView` の入口・`AppEnvironment`〈`.api`→`APIBalanceService`、`.mock`→`UnavailableBalanceService`〉。gateway `/api/balance/*` 経由。マスタは既存の PokeCalcService を再利用しフォールバックしない。`swift test`〈macOS〉617件・アプリの simulator ビルド成功。**未実施・要人間確認**: シミュレータ/実機での見た目〈Dynamic Type 最大・ダークモード・色以外で弱点が分かること〉と XCTest/XCUITest のシミュレータ実行〈`make ios-test`〉、balance 0.8.0〈ADR-0413。PR #458〉が main に入った後の `make ios-gen` 再生成〈生成物は 0.7.0 のまま。エラー文言の写像は両コード対応済み〉、gateway 配線〈ADR-0414。PR #478〉後の実機 E2E)
 - [x] P6-22 iOS のタイプバランス画面 第3段(仮想敵 threats・おすすめタイプ recommendations・技範囲チェッカー move-range)(ADR-0415 §8。タイプバランスレーン〈iOS 実装〉。実施: `BalanceService` に `threats`・`recommendations`・`moveRange` を追加〈`UnavailableBalanceService`・`APIBalanceService`・テストの `StubBalanceService` も対応〉、`BalanceStage3Types`・`BalanceLabels`〈Web と同じ文言+技範囲の文言〉・`BalanceViewModel`〈機能ごとに独立した世代カウンタ・仮想敵最大6体はメンバーと同じカードを再利用・recommendations は専用の長い debounce+「再計算」ボタン・特性名は応答のポケモンから上限付きで引く〉、`ios/PokeCalc` に `BalanceThreatsView`・`BalanceRecommendationsView`・`BalanceMoveRangeView`。Web に画面が無い技範囲チェッカーは iOS で UI と文言を決めた。`swift test`〈macOS〉672件・アプリの simulator ビルド成功。**未実施・要人間確認**: P6-21 と同じ〈シミュレータ/実機での見た目:Dynamic Type 最大・ダークモード・色以外で分かること、`make ios-test` の XCTest/XCUITest 実行、balance 0.8.0 取り込み後の `make ios-gen`、gateway 配線後の実機 E2E〉。recommendations の overloaded 時の見た目と、技範囲の候補が先頭ページ+検索のみである点も人間確認)
-- [ ] P8-1 ポケモン画像の配信(任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
+- [x] P8-1 ポケモン画像の配信(完了 2026-10-03。a〜d はすべて完了。任意。M1 の後。requirements.md「ポケモン画像」: MinIO・gateway の画像パス・`manifest.json`・`make assets`・無ければタイプ色のエンブレム。担当: 運用(deploy・scripts)+ API + Web。gateway の予約パス `/assets/*` は未設定で常に 404 なので `/images/` に移す〈issue #286 所見1〉。`make assets` は実装まで終了コード 2 のスタブ)
   - [x] P8-1a 範囲確定・AC・失敗するテスト(2026-10-03。ADR-0807。MinIO は入れず、手元画像を `make assets` で WebP 128/512+manifest に変換し、gateway が `GATEWAY_IMAGES_DIR` から `/images/*` を配信。`/assets/*` は不変。テスト: `tools/assets/convert.test.mjs`・gateway `images_test.go`・`images_env_test.go`。いずれも実装前なので失敗する)
-  - [x] P8-1b 実装(2026-10-03): `tools/assets/convert.mjs`(+package.json・README)・`make assets`・gateway `/images/*`・`make dev` の配線。k3d への配線(volume mount)は `make up` を壊すため未対応(k3d では現状画像を出せない旨を docs/runbooks/images.md に記載。ADR-0807 追記)
+  - [x] P8-1b 実装(2026-10-03): `tools/assets/convert.mjs`(+package.json・README)・`make assets`・gateway `/images/*`・`make dev` の配線。k3d への配線は P8-1d で完了(下)
   - [x] P8-1c ポケモン画像の表示(Web 分。ADR-0325。担当: Web。manifest(`/images/manifest.json`、契約は ADR-0807)を起動時に1回取り、あれば `<img loading="lazy" alt="">`、無い・未取得・失敗・読み込み失敗はタイプ色エンブレム。`web/src/images/`〈`pokemonImages.ts`・`PokemonImagesContext.tsx`・`PokemonImage.tsx`〉、App の `imageFetch`、計算画面の攻撃側・防御側カードと素早さ画面の各行に適用、`vite.config.ts` の `IMAGES_PROXY_TARGET`。画像なしの現状で既存テスト・e2e が全て通る。判定画面・iOS は対象外)
+  - [x] P8-1d k3d への画像配線(2026-10-03。担当: 運用): `make images-k3d`(`scripts/images-k3d.sh`。dist をノードの `/var/lib/pokecalc-images` へ `docker cp`)と、local overlay(Component `local/api`)だけの gateway hostPath(読み取り専用・DirectoryOrCreate)+`GATEWAY_IMAGES_DIR`。base・cloud は不変。静的検査 `scripts/images-k3d_test.sh`。実機で 架空 PNG → make assets → make images-k3d → `/images/manifest.json` 200(JSON)を確認し、画像なしでも api-smoke・web-k3d-smoke が通る。deploy-latest は画像の配置に失敗しても止まらない。ADR-0807 追記。P8-1 は全体完了
 - 公開時の名称・画像の差し替え構造(requirements.md「知財」): **後回し**。公開のタイミング(R-2-9・LICENSE・issue #328。ブロッカー節)と同時に決める。画像は P8-1 でキー(`{図鑑番号4桁}-{フォルム3桁}`)による差し替え構造になる
 
 ## ブロッカー
@@ -501,3 +505,4 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
 - [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
 - [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。
 - [x] 持ち物の役割とメガストーン判定の API(データレーン。ADR-0175): searchItems に `roles`・`isMegaStone`、getSpecies に `baseSpeciesKey`・`baseSpeciesNameJa` を常に出す。Web・iOS の絞り込み・表示は各レーン
+- [x] 持ち物の役割とメガストーン表示の Web 分(ADR-0326。ユーザーの実使用の不具合報告: メガストーンの英語表記・意味のない持ち物): `web/src/domain/itemRoles.ts` の `itemsForRole` で計算(攻撃側 attacker・防御側と候補比較 defender)・逆算(自分は観測した側の反対・相手の候補は相手の側)・判定と調整(either)・構築の編集(any。メガストーンだけ外す)の持ち物欄を絞る。メガストーンは選択肢に出さず、固定中は「{基本種名}のメガストーン」(基本種名が無ければ「メガストーン」)。攻守入れ替え・逆算の与えた/受けたの切り替えで役割に合わなくなった持ち物は「持ち物なし」に戻して `role="status"` で通知。`roles`・`isMegaStone` は engine・calc-svc の要求に載せない(`toEngineItem`)。オンラインのマスタ写像とキャッシュ版 2→3。iOS は同じ語にそろえる(iOS レーンに残る)

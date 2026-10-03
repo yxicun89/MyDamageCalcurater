@@ -15,3 +15,6 @@ export type SiteOverride = S["SiteOverride"];
 export type FetchType = S["FetchType"];
 export type ItemEstimates = S["ItemEstimates"];
 export type ApiErrorBody = S["Error"];
+export type SiteEstimate = S["SiteEstimate"];
+export type Listing = S["Listing"];
+export type SuspiciousReason = S["SuspiciousReason"];

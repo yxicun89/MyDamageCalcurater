@@ -288,9 +288,13 @@ type VolumeMount struct {
 	ReadOnly  bool   `yaml:"readOnly"`
 }
 
-// Volume は Pod のボリューム(configMap だけを扱う)。
+// Volume は Pod のボリューム(configMap と、local overlay の画像用 hostPath だけを扱う。ADR-0807)。
 type Volume struct {
-	Name      string `yaml:"name"`
+	Name     string `yaml:"name"`
+	HostPath *struct {
+		Path string `yaml:"path"`
+		Type string `yaml:"type"`
+	} `yaml:"hostPath"`
 	ConfigMap *struct {
 		Name  string `yaml:"name"`
 		Items []struct {
@@ -452,7 +456,8 @@ var patchAllowedFields = map[string][]string{
 	"spec.template.spec.containers[]":       {"name", "env", "volumeMounts", "image"},
 	"spec.template.spec.containers[].env[]": {"name", "value", "valueFrom"},
 	"spec.template.spec.containers[].volumeMounts[]": {"name", "mountPath", "subPath", "readOnly"},
-	"spec.template.spec.volumes[]":                   {"name", "configMap"},
+	"spec.template.spec.volumes[]":                   {"name", "configMap", "hostPath"},
+	"spec.template.spec.volumes[].hostPath":          {"path", "type"},
 	"spec.template.spec.volumes[].configMap":         {"name", "items"},
 	"spec.template.spec.volumes[].configMap.items[]": {"key", "path"},
 }

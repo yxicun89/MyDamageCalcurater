@@ -34,7 +34,15 @@ spec:
   # supported" で失敗する(P5-3 実装時、ローカルの TiDB〈unistore 版〉で実際に踏んだ。詳細はADR-0211)。
   # 注意: このリソースは一度 Completed になると initSql を再実行しない。既存クラスタでは
   # `SET GLOBAL tidb_skip_isolation_level_check=1` を手動で流すか、作り直すこと(ADR-0211 追記)。
-  initSql: "CREATE DATABASE IF NOT EXISTS record; CREATE DATABASE IF NOT EXISTS team; SET GLOBAL tidb_skip_isolation_level_check=1;"
+  #
+  # 1行に1文だけ書く(ADR-0226)。TiDB Operator の初期化スクリプトは initSql を行ごとに MySQLdb の
+  # cursor.execute() へ渡すため、1行に複数の文を書くと "Commands out of sync" で失敗する
+  # (しかもその時点で root パスワードの設定が済んでおり、TidbInitializer は再実行できなくなる。
+  # k3d で実際に踏んだ。復旧手順は docs/adr/0226-api-m2-k3d-deploy.md)。
+  initSql: |-
+    CREATE DATABASE IF NOT EXISTS record;
+    CREATE DATABASE IF NOT EXISTS team;
+    SET GLOBAL tidb_skip_isolation_level_check=1;
   # Secret のキー名がそのままユーザー名として扱われる(TiDB Operator の仕様。
   # tidbInitStartScriptTpl が /etc/tidb/password 配下のファイル名をユーザー名とみなす)。
   # root のパスワードを設定するにはキー名を "root" にする必要がある(scripts/up.sh 参照)。

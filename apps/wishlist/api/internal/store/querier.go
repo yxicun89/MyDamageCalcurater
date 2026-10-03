@@ -15,6 +15,8 @@ type Querier interface {
 	DeleteGenreSites(ctx context.Context, genreID int64) error
 	DeleteItem(ctx context.Context, id int64) (int64, error)
 	DeleteItemSiteOverrides(ctx context.Context, itemID int64) error
+	// 目安価格(フェーズ3)。listings は商品×サイトごとに最新の取得分だけ残す(取得のたびに消して入れ直す)。
+	DeleteListingsBySite(ctx context.Context, arg DeleteListingsBySiteParams) error
 	GetGenre(ctx context.Context, id int64) (Genre, error)
 	GetGenreForUpdate(ctx context.Context, id int64) (Genre, error)
 	GetItem(ctx context.Context, id int64) (Item, error)
@@ -22,6 +24,8 @@ type Querier interface {
 	GetSite(ctx context.Context, id int64) (Site, error)
 	InsertGenreSite(ctx context.Context, arg InsertGenreSiteParams) error
 	InsertItemSiteOverride(ctx context.Context, arg InsertItemSiteOverrideParams) error
+	InsertListing(ctx context.Context, arg InsertListingParams) error
+	ListEstimatesByItem(ctx context.Context, itemID int64) ([]ListEstimatesByItemRow, error)
 	ListGenreSites(ctx context.Context) ([]GenreSite, error)
 	ListGenreSitesByGenre(ctx context.Context, genreID int64) ([]GenreSite, error)
 	// wishlist の DB アクセス(sqlc)。商品×ジャンル×サイトの CRUD(フェーズ1)。
@@ -31,11 +35,15 @@ type Querier interface {
 	ListItemSiteOverridesByItem(ctx context.Context, itemID int64) ([]ItemSiteOverride, error)
 	ListItems(ctx context.Context) ([]Item, error)
 	ListItemsByGenre(ctx context.Context, genreID int64) ([]Item, error)
+	ListListingsByItem(ctx context.Context, itemID int64) ([]Listing, error)
+	ListListingsByItemSite(ctx context.Context, arg ListListingsByItemSiteParams) ([]Listing, error)
 	ListSites(ctx context.Context) ([]Site, error)
+	MarkEstimateFailed(ctx context.Context, arg MarkEstimateFailedParams) error
 	TouchItem(ctx context.Context, id int64) error
 	UpdateGenre(ctx context.Context, arg UpdateGenreParams) (int64, error)
 	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) (int64, error)
+	UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) error
 }
 
 var _ Querier = (*Queries)(nil)

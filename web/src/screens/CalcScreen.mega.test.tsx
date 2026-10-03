@@ -25,6 +25,7 @@ import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import {
   MEGA_FIRE,
   MEGA_FIRE_STONE,
+  MEGA_FIRE_STONE_LABEL,
   MEGA_ORPHAN,
   MEGA_WATER,
   MEGA_WATER_STONE,
@@ -91,7 +92,7 @@ describe("メガ種族を選ぶと持ち物が固定される", () => {
     const select = attackerItemSelect();
     expect(select).toBeDisabled();
     expect(select).toHaveValue(MEGA_FIRE_STONE.id);
-    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
     expect(within(attackerCard()).getByText(megaItemText.lockedReason)).toBeVisible();
     expect(select).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
@@ -214,11 +215,11 @@ describe("メガストーンは単独の持ち物の選択肢に出ない", () =
     expect(optionNames(attackerItemSelect())).toEqual(expected);
   });
 
-  test("メガ種族を選んだ側の欄にはそのメガストーンの名前が出る(固定の表示)", async () => {
+  test("メガ種族を選んだ側の欄には「{基本種名}のメガストーン」が出る(固定の表示。ADR-0326 でストーンの nameJa から変更)", async () => {
     const { user } = renderScreen();
     await user.selectOptions(attackerSpeciesSelect(), MEGA_FIRE.key);
 
-    expect(optionNames(attackerItemSelect())).toContain(MEGA_FIRE_STONE.nameJa);
+    expect(optionNames(attackerItemSelect())).toContain(MEGA_FIRE_STONE_LABEL);
     // もう一方の欄(メガでない)には出ない。
     expect(optionNames(defenderItemSelect())).not.toContain(MEGA_FIRE_STONE.nameJa);
   });
@@ -385,7 +386,7 @@ describe("種族を検索で解決するマスタ(オンライン・キャッシ
 
     const select = await within(attackerCard()).findByRole("combobox", { name: "攻撃側の持ち物" });
     expect(select).toBeDisabled();
-    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
     expect(select).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
 
@@ -406,7 +407,7 @@ describe("種族を検索で解決するマスタ(オンライン・キャッシ
 
     const select = await within(attackerCard()).findByRole("combobox", { name: "攻撃側の持ち物" });
     expect(select).toBeDisabled();
-    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE.nameJa);
+    expect(select).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
   });
 
   test("「メガ」で検索すると、メガ種族だけが候補に出る", async () => {

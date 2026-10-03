@@ -160,3 +160,26 @@ func TestRun_Usage(t *testing.T) {
 		})
 	}
 }
+
+// AC-C5: WISHLIST_YAHOO_APPID は任意(無い・空白だけなら空。前後の空白を除く)。
+func TestLoadServeConfig_YahooAppID(t *testing.T) {
+	for _, c := range []struct{ name, v, want string }{
+		{"無い", "", ""},
+		{"空白だけ", "  ", ""},
+		{"あり", " unit-test-appid \n", "unit-test-appid"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			env := fullEnv()
+			if c.v != "" {
+				env["WISHLIST_YAHOO_APPID"] = c.v
+			}
+			cfg, err := loadServeConfig(envOf(env))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.YahooAppID != c.want {
+				t.Errorf("YahooAppID = %q, want %q", cfg.YahooAppID, c.want)
+			}
+		})
+	}
+}

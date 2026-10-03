@@ -8,6 +8,7 @@ import type {
   ItemEstimates,
   ItemFields,
   ItemUpdate,
+  Listing,
   Site,
   SiteCreate,
   SiteUpdate,
@@ -47,6 +48,10 @@ export interface ApiClient {
   deleteItem(id: number): Promise<void>;
   replaceItemImage(id: number, image: ImageFile): Promise<Item>;
   getEstimates(id: number): Promise<ItemEstimates>;
+  /** POST .../estimates/refresh(202)。本文は現時点のキャッシュ(GET と同じ形) */
+  refreshEstimates(id: number): Promise<ItemEstimates>;
+  /** GET .../listings。参考外を含む。siteId を渡すとそのサイトだけ */
+  listListings(id: number, siteId?: number): Promise<Listing[]>;
   listGenres(): Promise<Genre[]>;
   createGenre(body: GenreCreate): Promise<Genre>;
   updateGenre(id: number, patch: GenreUpdate): Promise<Genre>;
@@ -160,6 +165,13 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
       return request("PUT", `api/items/${String(id)}/image`, { form });
     },
     getEstimates: (id) => request("GET", `api/items/${String(id)}/estimates`),
+    refreshEstimates: (id) => request("POST", `api/items/${String(id)}/estimates/refresh`),
+    listListings: async (id, siteId) =>
+      (
+        await request<{ listings: Listing[] }>("GET", `api/items/${String(id)}/listings`, undefined, {
+          site_id: siteId,
+        })
+      ).listings,
     listGenres: async () => (await request<{ genres: Genre[] }>("GET", "api/genres")).genres,
     createGenre: (body) => request("POST", "api/genres", { json: body }),
     updateGenre: (id, patch) => request("PATCH", `api/genres/${String(id)}`, { json: patch }),
