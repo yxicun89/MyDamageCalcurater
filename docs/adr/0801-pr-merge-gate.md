@@ -52,3 +52,18 @@ COORDINATION.md の統合手順の最後を、素のマージコマンドから 
   CI の対象外と同じ理由)。それらを必要とする変更(iOS・e2e)は、PR 本文に実施した検証を書く。
 - 実行時間が長くなる(`make test` 一式)。`--check` で先に確かめ、ゲートの結果を再利用するキャッシュは持たない(単純さ優先)。
 - ゲートは「AI が誤って壊す」ことを防ぐもので、悪意ある AI への防御ではない(ADR-0800 と同じ立場)。
+
+## 追記(2026-10-03): iOS のゲート(ユーザー決定。「iOS レーンで、テストが通って条件を満たした PR はマージできるように」)
+- **背景**: ゲートのローカル検証の `make test` は Go 専用(`engine`・`services`)で、iOS の XCTest・XCUITest を含まない。iOS だけを変える PR は
+  iOS のテストを一度も通さずにマージできてしまう。iOS レーンの完了条件は `make ios-test`(ios/README.md・COORDINATION.md)。
+- **決定**: ゲートの手順 4 に続けて、**`ios/` または OpenAPI 契約(`api/openapi.yaml`・`services/*/api/openapi.yaml`)を変える PR は
+  `make ios-test` も通す**(lint・生成物の一致・件数上限の同期・XCTest・XCUITest・Info.plist 検査)。契約を含めるのは、
+  契約の変更が iOS の生成物(`ios-gen-check`)を壊しうるため。Xcode(`xcodebuild`)が無い環境では中止する(スキップを成功と数えない)。
+  コマンドラインツールだけが選ばれている環境では `DEVELOPER_DIR` を Xcode に向ける。
+- **積み上げた PR(base が main でない)**: ゲートは変えない。下位の PR が先にマージされてから、上位の PR の base を main に直して流す
+  (`gh pr edit <番号> --base main`。base の変更はマージではない)。
+- **所要時間**: XCUITest を含むため十数分〜数十分かかる。`run_in_background` で流す。シミュレータは `IOS_SIMULATOR` で指定でき、
+  他のセッションが使っている機種を避ける。
+- **却下した案**: (a) iOS のテストをゲートに入れず作成者の自己申告に任せる(スキップを成功と数える運用になる)。(b) `swift test` だけ流す
+  (View・identifier・AX5 の不具合を検出できない。P6-25 では XCUITest だけが実装側の不具合 2 件を見つけた)。
+

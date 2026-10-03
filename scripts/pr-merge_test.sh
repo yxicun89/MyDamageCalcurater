@@ -136,6 +136,21 @@ grep -q '^make test-golden$' "$WORK/calls" && ok || ng "engine 変更で test-go
 FAKE_FILES=docs/a.md run_gate 5
 grep -q '^make test-golden$' "$WORK/calls" && ng "docs だけで test-golden を流した" || ok
 
+begin "iOS: ios/ または OpenAPI 契約を変える PR だけ make ios-test も流す"
+for f in ios/PokeCalc/RootView.swift api/openapi.yaml services/speed/api/openapi.yaml; do
+  FAKE_FILES="$f" run_gate 5
+  grep -q '^make ios-test$' "$WORK/calls" && ok || ng "$f の変更で make ios-test を流していない"
+  [ "$GATE_RC" = 0 ] && ok || ng "iOS ゲートを通ればマージするはず($f): $(cat "$WORK/out")"
+done
+FAKE_FILES=docs/a.md run_gate 5
+grep -q '^make ios-test$' "$WORK/calls" && ng "docs だけで make ios-test を流した" || ok
+FAKE_FILES=services/pokedex/x.go run_gate 5
+grep -q '^make ios-test$' "$WORK/calls" && ng "Go だけで make ios-test を流した" || ok
+
+begin "iOS: make ios-test が失敗したらマージしない(make test が通っていても)"
+FAKE_FILES=ios/PokeCalc/RootView.swift FAKE_MAKE_FAIL=ios-test run_gate 5
+expect_stop "ローカル検証に失敗"
+
 begin "PR の先頭が取得した SHA と違えば中止"
 FAKE_SHA_FORCE=0000000000000000000000000000000000000001 run_gate 5
 expect_stop "一致しません"
