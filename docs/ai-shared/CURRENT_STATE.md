@@ -111,6 +111,7 @@ Next: キュー順に対応:
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic 待ち)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)

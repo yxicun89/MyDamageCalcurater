@@ -37,6 +37,9 @@ var preStopServices = []struct{ name, manifest, mainFile string }{
 	{"calc", "deploy/k8s/base/calc/deployment.yaml", "services/calc/cmd/calc/main.go"},
 	{"gateway", "deploy/k8s/base/gateway/deployment.yaml", "services/gateway/cmd/gateway/main.go"},
 	{"web", "deploy/k8s/base/web/deployment.yaml", ""},
+	// ADR-0220 §1
+	{"record", "deploy/k8s/base/record/deployment.yaml", "services/record/cmd/record/main.go"},
+	{"team", "deploy/k8s/base/team/deployment.yaml", "services/team/cmd/team/main.go"},
 }
 
 var shutdownTimeoutRe = regexp.MustCompile(`shutdownTimeout\s*=\s*(\d+)\s*\*\s*time\.Second`)

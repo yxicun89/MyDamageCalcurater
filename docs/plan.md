@@ -132,9 +132,9 @@
 - [ ] P5-1 TiDB(ADR-0211。範囲は `devices`・purge journal の2表とプロビジョニングまで): スキーマ/migrate CLI(PR #205)と TidbCluster・TidbInitializer のマニフェストは実装済み。**残り**: 共有 k3d への実適用(AC-T3・AC-T8: TidbCluster・TidbInitializer が Ready/Completed になること)と、`tnir/mysqlclient`(amd64 専用)の Apple Silicon での起動可否の確認。purge journal の DB 外の保存先は P7-4 が決めるまで未充足(ADR-0209 追記・ADR-0211 §6)
 - [x] P5-2 NATS JetStream と calc-svc からのイベント発行
 - [x] P5-3 record-svc
-- [ ] P5-3b record-svc の残作業(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
+- [x] P5-3b record-svc の残作業(実装: ADR-0220。base/record・gateway 配線・`record expire` と CronJob・NetworkPolicy・/metrics)(P5-3 の critic レビューより。2026-09-25): (1) `deploy/k8s/base/record` に Deployment・Service を追加し `GATEWAY_RECORD_URL` を配線、k3d で `/api/record/*` が届く(`scripts/up.sh` のイメージビルド対象に `record` の `server` を追加)。(2) ADR-0209 §4 の失効ジョブ(日次 CronJob。生イベント90日・お気に入り540日・devices 行30日・purge journal 90日。冪等・1回の上限あり)。team 側の同等ジョブも合わせて検討
 - [x] P5-4 team-svc
-- [ ] P5-4b team-svc の残作業(P5-3b と対): (1) `deploy/k8s/base/team` に Deployment・Service を追加し `GATEWAY_TEAM_URL` を配線、k3d で `/api/team/*` が届く(`scripts/up.sh` に `team` を追加)。(2) ADR-0209 §4 の失効ジョブ(構築540日・devices 行30日・purge journal 90日を `TEAM_*` 環境変数で判定。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
+- [x] P5-4b team-svc の残作業(実装: ADR-0220。P5-3b と同じ形)(P5-3b と対): (1) `deploy/k8s/base/team` に Deployment・Service を追加し `GATEWAY_TEAM_URL` を配線、k3d で `/api/team/*` が届く(`scripts/up.sh` に `team` を追加)。(2) ADR-0209 §4 の失効ジョブ(構築540日・devices 行30日・purge journal 90日を `TEAM_*` 環境変数で判定。冪等・1回の上限あり)。P5-3b と同じ形なので一緒に実装してよい
 - [ ] P5-5 Web: 履歴・よく計算する相手・構築ビルダー(Showdown 形式のインポート/エクスポートを含む。requirements.md §2・ADR-0213 §4。ADR-0209 §8 の文言と「この端末のデータを削除」の UI を含む)。PR 単位に分割(Web レーン)。Showdown 形式の変換部は判定レーンが `web/src/team/showdownFormat.ts` で担当
   - [x] 
   - [ ] **P5-5b メンバー編集(PR-A2)**: 6体の枠と個体(種族検索・技・持ち物・特性・性格・SP のグリッド・テラスタイプ)。
@@ -270,6 +270,11 @@ requirements.md の項目のうち、計画に無かったものをここに置�
 
 
 **【人間の確認待ち】**
+- **失効ジョブ(record-expire・team-expire)を k3d の実データへ初めて向ける承認**(ADR-0209 の「人間の確認」・ADR-0220 未決事項 0。P5-3b・P5-4b): 既定案は「承認までは local・cloud とも CronJob を `suspend: true` のまま(自動で実データを消さない)」。承認後に `deploy/k8s/overlays/local/cronjob-expire-suspend-patch.yaml` と kustomization の `patches` を外す。承認前の確認は手動 Job(`kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。docs/runbooks/api.md §8)。作業は止まらない。
+- **P4-5 の Safari 実機確認**(仕様ブロッカーではない。作業は止めない。Chrome は 2026-09-22 に確認済み): `make web-dev` で開き、Safari で計算・逆算が動くこと、`.wasm` の MIME type(`application/wasm`)・`WebAssembly.instantiateStreaming`(失敗時は arrayBuffer にフォールバック)・キャッシュ・初回ロード(約4.6MB / gzip 1.3MB)・メモリを確認する。加えて issue #333: 375px 幅未満でタブ列を左端までスクロールし、先頭の「計算」タブが読める・押せること(`justify-content: safe center` の Safari 対応)。確認できるまで P4-5 は「実装・自動テスト済み、Safari 実機未確認」として扱う。
+
+- **観測%の丸め方**(逆算の入力側。ADR-0010 §R2): 実機の相手 HP の減少は整数%で表示される。丸め方(切り捨てか四捨五入か)だけが未確認。確認できるまでは、どの丸めでも真値を落とさない区間で照合する(P1-12 で実装済み。作業は止まらない)。確認できたら `Observation.Matches` の1か所で区間を狭める。確認方法の例: HP が分かっている自分のポケモンで、実点数のダメージと画面の%を見比べる。
+
 - **公開のタイミング**(R-2-9・LICENSE・issue #328): 公開するときに、クリーンコピーの作成と、第三者データを含まない状態の確認、LICENSE の決定を行う。それまでは今のリポジトリで開発を続ける。
 
 ## 改善要望(/improve で追加)

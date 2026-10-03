@@ -1747,6 +1747,18 @@ Impact: 既存の正常な入力の数値は不変(ゴールデン全件一致)�
 **API レーンへの依頼**(契約は変えていない。既定案は ADR-0123 §7): (1) `MasterMove.mechanisms: string[]`(昇順・通常の技は空配列。ADR-0121 の依頼の再掲)。(2) `CalcResponse`・`BulkRow.result`・`ReverseCandidate` に `unsupported: UnsupportedMark[]`(必須・印なしは `[]`)、`UnsupportedMark = {target: move|attacker_item|attacker_ability|defender_item|defender_ability, reason: <機構 13 種>|zero_power|unsupported_effect, id: string}`。入ったら `services/calc/internal/httpapi/parity_test.go` の `dropEmptyUnsupported` を消して印も比べる。
 **Web / iOS レーンへ**: 印の表示(「未対応」の注記)は各レーンの作業。WASM の形は ADR-0123 §6。
 
+## 2026-10-02: record-svc・team-svc を k3d に配線し、失効ジョブを CronJob にした(API レーン。他レーンへの連絡。ADR-0220)
+Decision: `deploy/k8s/base/{record,team}` を追加し、base の kustomization と gateway(`GATEWAY_RECORD_URL=http://record`・`GATEWAY_TEAM_URL=http://team`)に配線した。
+失効(ADR-0209 §4)は同じバイナリのサブコマンド `record expire` / `team expire` を日次 CronJob(`record-expire`・`team-expire`。日本時間 12:00)で起動する。
+Reason: 設定の解釈を serve と共有でき、イメージを増やさない(ADR-0220 §3)。
+Impact(他レーンへ):
+- Web・iOS: `make up` 後、k3d で `/api/record/*`・`/api/team/*` が gateway 経由で届く(TiDB の導入に成功し record/team の Pod が Ready のとき。無ければ従来どおり 503 `upstream_unavailable`)。
+- 運用: 失効ジョブの CronJob が増えた(失敗は kube_job_status_failed で見る。削除件数はログの `expire done` 1行)。cloud overlay では TiDB・Secret が無いので suspend 済み。
+  NetworkPolicy は record/team の gateway 上流・TiDB・NATS(購読)・Prometheus を許可し、record ↔ team・calc → record/team・record/team → mysql を拒否する。ServiceMonitor は8サービスになった。
+  `make deploy-latest` に record/team を加えるかは運用レーンの判断(今回は触っていない)。up.sh は record/team の Ready を待たない。
+- 失効ジョブは local・cloud とも `suspend: true`(実データへ初めて向ける承認 ADR-0209・ADR-0220 未決事項 0 が済むまで。既定案。plan.md ブロッカー)。手動実行は `kubectl -n pokecalc create job --from=cronjob/record-expire record-expire-manual-...`。承認後に local の suspend patch を外す。
+- 保持日数は ConfigMap `record-retention`・`team-retention` の1か所(ADR-0211 §7 の既定値。変えるときは ADR も更新)。
+
 ## 2026-09-25: issue #271/#270 の API レーン担当分(mechanisms 公開・unsupported 印)を実装(API レーン → データ・Web・iOS レーンへ)
 Decision: データレーンからの依頼(ADR-0121 §4・ADR-0123 §7)を反映した。
 `api/openapi.yaml`: `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)を追加。
