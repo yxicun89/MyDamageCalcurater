@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { FetchType, Genre, Site } from "../api/types";
 import type { ApiClient } from "../lib/api";
+import { formatAliasGroup, parseAliasGroups } from "../lib/aliases";
 import { isHttpUrl, isValidSearchTemplate } from "../lib/deeplink";
 import type { Settings as SettingsValue } from "../lib/settings";
 import { ErrorText, Modal, errorMessage } from "./Modal";
@@ -20,6 +21,8 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
   const [name, setName] = useState(genre?.name ?? "");
   const [template, setTemplate] = useState(genre?.query_template ?? "{name} {option}");
   const [siteIds, setSiteIds] = useState<number[]>(genre?.site_ids ?? []);
+  const originalAliases = genre?.aliases ?? [];
+  const [aliasLines, setAliasLines] = useState<string[]>(originalAliases.map(formatAliasGroup));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -43,14 +46,21 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
   };
 
   const save = async () => {
+    const { groups, invalidRow } = parseAliasGroups(aliasLines);
+    if (invalidRow !== null) {
+      setError(`別名グループ${String(invalidRow)}は2語以上をカンマで区切って入力してください`);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
       if (genre) {
-        const patch: { name?: string; query_template?: string; site_ids?: number[] } = {};
+        const patch: { name?: string; query_template?: string; site_ids?: number[]; aliases?: string[][] } =
+          {};
         if (name.trim() !== genre.name) patch.name = name.trim();
         if (template !== genre.query_template) patch.query_template = template;
         if (siteIds.join(",") !== genre.site_ids.join(",")) patch.site_ids = siteIds;
+        if (JSON.stringify(groups) !== JSON.stringify(originalAliases)) patch.aliases = groups;
         const updated = Object.keys(patch).length === 0 ? genre : await client.updateGenre(genre.id, patch);
         onSaved(genres.map((g) => (g.id === genre.id ? updated : g)));
       } else {
@@ -61,6 +71,7 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
           query_template: template,
           sort_order: sortOrder,
           site_ids: siteIds,
+          aliases: groups,
         });
         onSaved([...genres, created]);
       }
@@ -126,6 +137,36 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
           );
         })}
       </ul>
+      <h3>別名グループ</h3>
+      {aliasLines.map((line, i) => (
+        <div key={i} className="check-row">
+          <input
+            type="text"
+            aria-label={`別名グループ${String(i + 1)}`}
+            value={line}
+            onChange={(e) => {
+              setAliasLines((cur) => cur.map((l, j) => (j === i ? e.target.value : l)));
+            }}
+          />
+          <button
+            type="button"
+            aria-label={`別名グループ${String(i + 1)}を削除`}
+            onClick={() => {
+              setAliasLines((cur) => cur.filter((_, j) => j !== i));
+            }}
+          >
+            削除
+          </button>
+        </div>
+      ))}
+      <button
+        type="button"
+        onClick={() => {
+          setAliasLines((cur) => [...cur, ""]);
+        }}
+      >
+        別名グループを追加
+      </button>
       <ErrorText message={error} />
       <div className="actions">
         <button type="button" onClick={onClose}>

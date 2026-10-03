@@ -118,6 +118,14 @@ type Genre struct {
 	SortOrder     int32
 }
 
+type GenreAlias struct {
+	ID         int64
+	GenreID    int64
+	GroupNo    int32
+	Alias      string
+	Normalized string
+}
+
 type GenreSite struct {
 	GenreID   int64
 	SiteID    int64

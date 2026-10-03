@@ -146,14 +146,14 @@ type target struct {
 }
 
 // targets は商品の対象サイトを返す。商品が無ければ item.ErrNotFound。
-func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []target, error) {
+func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []target, [][]string, error) {
 	it, err := s.d.Items.GetItem(ctx, itemID)
 	if err != nil {
-		return item.Item{}, nil, err
+		return item.Item{}, nil, nil, err
 	}
 	genres, err := s.d.Items.ListGenres(ctx)
 	if err != nil {
-		return item.Item{}, nil, err
+		return item.Item{}, nil, nil, err
 	}
 	var genre *item.Genre
 	for i := range genres {
@@ -162,11 +162,11 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 		}
 	}
 	if genre == nil {
-		return it, nil, nil
+		return it, nil, nil, nil
 	}
 	sites, err := s.d.Items.ListSites(ctx)
 	if err != nil {
-		return item.Item{}, nil, err
+		return item.Item{}, nil, nil, err
 	}
 	byID := make(map[int64]item.Site, len(sites))
 	for _, st := range sites {
@@ -200,7 +200,7 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 		}
 		out = append(out, target{site: st, f: f, nightlyOnly: s.d.Fetchers.NightlyOnly(st), query: query.Build(genre.QueryTemplate, it.Name, opt, it.QueryOverride, siteQuery)})
 	}
-	return it, out, nil
+	return it, out, genre.Aliases, nil
 }
 
 // needsFetch は t を今回取るべきか。ModeAll は常に取る。ModeStale は「目安が無い・failed・MaxAge より古い」うち、
@@ -297,7 +297,7 @@ func (s *Service) running(itemID int64) bool {
 
 // run は 1 商品の更新の本体(singleflight の外側から呼ばない)。
 func (s *Service) run(ctx context.Context, itemID int64, mode Mode) (Report, error) {
-	it, targets, err := s.targets(ctx, itemID)
+	it, targets, aliases, err := s.targets(ctx, itemID)
 	if err != nil {
 		return Report{}, err
 	}
@@ -354,7 +354,7 @@ func (s *Service) run(ctx context.Context, itemID int64, mode Mode) (Report, err
 		}
 		inputs = append(inputs, in)
 	}
-	result := estimate.Evaluate(estimate.Item{Name: it.Name, MinPrice: it.MinPrice}, inputs)
+	result := estimate.Evaluate(estimate.Item{Name: it.Name, MinPrice: it.MinPrice, Aliases: aliases}, inputs)
 
 	now := s.d.Now()
 	for i, o := range outs {
@@ -477,7 +477,7 @@ func (s *Service) view(ctx context.Context, itemID int64, targets []target) (Vie
 // Estimates は保存済みの目安を返す。ModeStale で取るべき対象サイトがあれば裏で更新を起動して Refreshing を true にする
 // (実行中も true)。対象サイトが無ければ Refreshing は false。商品が無ければ item.ErrNotFound。
 func (s *Service) Estimates(ctx context.Context, itemID int64) (View, error) {
-	_, targets, err := s.targets(ctx, itemID)
+	_, targets, _, err := s.targets(ctx, itemID)
 	if err != nil {
 		return View{}, err
 	}
@@ -509,7 +509,7 @@ func (s *Service) Estimates(ctx context.Context, itemID int64) (View, error) {
 // Refresh は裏で ModeAll の更新を起動し(実行中なら起動しない)、保存済みの目安を返す。
 // Refreshing は夜間専用でない対象サイトがあれば true。商品が無ければ item.ErrNotFound。
 func (s *Service) Refresh(ctx context.Context, itemID int64) (View, error) {
-	_, targets, err := s.targets(ctx, itemID)
+	_, targets, _, err := s.targets(ctx, itemID)
 	if err != nil {
 		return View{}, err
 	}

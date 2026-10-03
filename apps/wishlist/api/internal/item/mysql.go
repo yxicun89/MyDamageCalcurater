@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
+	"example.com/pokecalc/apps/wishlist/api/internal/query"
 	"example.com/pokecalc/apps/wishlist/api/internal/store"
 )
 
@@ -301,13 +302,21 @@ func (r *MySQLRepository) ListGenres(ctx context.Context) ([]Genre, error) {
 	for _, l := range links { // genre_id, sort_order, site_id 順
 		byGenre[l.GenreID] = append(byGenre[l.GenreID], l.SiteID)
 	}
+	aliasRows, err := r.q.ListGenreAliases(ctx)
+	if err != nil {
+		return nil, err
+	}
+	aliasesByGenre := map[int64][]store.GenreAlias{}
+	for _, a := range aliasRows { // genre_id, group_no, id 順
+		aliasesByGenre[a.GenreID] = append(aliasesByGenre[a.GenreID], a)
+	}
 	out := make([]Genre, 0, len(rows))
 	for _, g := range rows {
 		ids := byGenre[g.ID]
 		if ids == nil {
 			ids = []int64{}
 		}
-		out = append(out, Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids})
+		out = append(out, Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasesByGenre[g.ID])})
 	}
 	return out, nil
 }
@@ -335,7 +344,45 @@ func (r *MySQLRepository) getGenre(ctx context.Context, q *store.Queries, id int
 	for _, l := range links {
 		ids = append(ids, l.SiteID)
 	}
-	return Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids}, nil
+	aliasRows, err := q.ListGenreAliasesByGenre(ctx, id)
+	if err != nil {
+		return Genre{}, err
+	}
+	return Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasRows)}, nil
+}
+
+// toAliasGroups は group_no, id 順の行を、保存した順のグループにまとめる(無ければ長さ 0)。
+func toAliasGroups(rows []store.GenreAlias) [][]string {
+	out := [][]string{}
+	for i, a := range rows {
+		if i == 0 || a.GroupNo != rows[i-1].GroupNo {
+			out = append(out, []string{})
+		}
+		out[len(out)-1] = append(out[len(out)-1], a.Alias)
+	}
+	return out
+}
+
+// replaceGenreAliases は genre_aliases を groups で置き換える。正規化後の重複は ErrInvalid。
+func replaceGenreAliases(ctx context.Context, q *store.Queries, genreID int64, groups [][]string) error {
+	if err := checkAliasDuplicates(groups); err != nil {
+		return err
+	}
+	if err := q.DeleteGenreAliases(ctx, genreID); err != nil {
+		return err
+	}
+	for gi, g := range groups {
+		for _, w := range g {
+			err := q.InsertGenreAlias(ctx, store.InsertGenreAliasParams{GenreID: genreID, GroupNo: int32(gi), Alias: w, Normalized: query.Normalize(w)})
+			if mysqlErr(err, mysqlDuplicateEntry) {
+				return fmt.Errorf("%w: alias %q is duplicated after normalization", ErrInvalid, w)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // replaceGenreSites は genre_sites を ids(指定順)で置き換える。
@@ -373,6 +420,9 @@ func (r *MySQLRepository) CreateGenre(ctx context.Context, in NewGenre) (Genre, 
 			return err
 		}
 		if err := replaceGenreSites(ctx, q, id, in.SiteIDs); err != nil {
+			return err
+		}
+		if err := replaceGenreAliases(ctx, q, id, in.Aliases); err != nil {
 			return err
 		}
 		out, err = r.getGenre(ctx, q, id, false)
@@ -417,6 +467,11 @@ func (r *MySQLRepository) UpdateGenre(ctx context.Context, id int64, p GenrePatc
 		}
 		if p.SiteIDs != nil {
 			if err := replaceGenreSites(ctx, q, id, *p.SiteIDs); err != nil {
+				return err
+			}
+		}
+		if p.Aliases != nil {
+			if err := replaceGenreAliases(ctx, q, id, *p.Aliases); err != nil {
 				return err
 			}
 		}

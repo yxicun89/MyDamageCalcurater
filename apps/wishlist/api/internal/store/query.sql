@@ -114,3 +114,15 @@ FROM listings WHERE item_id = ? ORDER BY price, id;
 -- name: ListListingsByItemSite :many
 SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at
 FROM listings WHERE item_id = ? AND site_id = ? ORDER BY price, id;
+
+-- name: ListGenreAliases :many
+SELECT id, genre_id, group_no, alias, normalized FROM genre_aliases ORDER BY genre_id, group_no, id;
+
+-- name: ListGenreAliasesByGenre :many
+SELECT id, genre_id, group_no, alias, normalized FROM genre_aliases WHERE genre_id = ? ORDER BY group_no, id;
+
+-- name: DeleteGenreAliases :exec
+DELETE FROM genre_aliases WHERE genre_id = ?;
+
+-- name: InsertGenreAlias :exec
+INSERT INTO genre_aliases (genre_id, group_no, alias, normalized) VALUES (?, ?, ?, ?);

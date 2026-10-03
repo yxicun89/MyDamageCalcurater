@@ -89,6 +89,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Genre/site_ids`.
             public var siteIds: [Components.Schemas.Id]
+            /// - Remark: Generated from `#/components/schemas/Genre/aliases`.
+            public var aliases: Components.Schemas.AliasGroups?
             /// Creates a new `Genre`.
             ///
             /// - Parameters:
@@ -97,18 +99,21 @@ extension Components {
             ///   - queryTemplate: `{name}` と `{option}` を埋め込む
             ///   - sortOrder:
             ///   - siteIds: 表示するサイト(表示順)
+            ///   - aliases:
             public init(
                 id: Components.Schemas.Id,
                 name: Swift.String,
                 queryTemplate: Swift.String,
                 sortOrder: Swift.Int,
-                siteIds: [Components.Schemas.Id]
+                siteIds: [Components.Schemas.Id],
+                aliases: Components.Schemas.AliasGroups? = nil
             ) {
                 self.id = id
                 self.name = name
                 self.queryTemplate = queryTemplate
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
+                self.aliases = aliases
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -116,6 +121,7 @@ extension Components {
                 case queryTemplate = "query_template"
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
+                case aliases
             }
         }
         /// - Remark: Generated from `#/components/schemas/GenreCreate`.
@@ -128,6 +134,8 @@ extension Components {
             public var sortOrder: Swift.Int?
             /// - Remark: Generated from `#/components/schemas/GenreCreate/site_ids`.
             public var siteIds: [Components.Schemas.Id]?
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/aliases`.
+            public var aliases: Components.Schemas.AliasGroups?
             /// Creates a new `GenreCreate`.
             ///
             /// - Parameters:
@@ -135,22 +143,26 @@ extension Components {
             ///   - queryTemplate:
             ///   - sortOrder:
             ///   - siteIds:
+            ///   - aliases:
             public init(
                 name: Swift.String,
                 queryTemplate: Swift.String? = nil,
                 sortOrder: Swift.Int? = nil,
-                siteIds: [Components.Schemas.Id]? = nil
+                siteIds: [Components.Schemas.Id]? = nil,
+                aliases: Components.Schemas.AliasGroups? = nil
             ) {
                 self.name = name
                 self.queryTemplate = queryTemplate
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
+                self.aliases = aliases
             }
             public enum CodingKeys: String, CodingKey {
                 case name
                 case queryTemplate = "query_template"
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
+                case aliases
             }
         }
         /// - Remark: Generated from `#/components/schemas/GenreUpdate`.
@@ -165,6 +177,8 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/GenreUpdate/site_ids`.
             public var siteIds: [Components.Schemas.Id]?
+            /// - Remark: Generated from `#/components/schemas/GenreUpdate/aliases`.
+            public var aliases: Components.Schemas.AliasGroups?
             /// Creates a new `GenreUpdate`.
             ///
             /// - Parameters:
@@ -172,24 +186,36 @@ extension Components {
             ///   - queryTemplate:
             ///   - sortOrder:
             ///   - siteIds: 渡すと表示するサイトと順序を全件置き換える
+            ///   - aliases:
             public init(
                 name: Swift.String? = nil,
                 queryTemplate: Swift.String? = nil,
                 sortOrder: Swift.Int? = nil,
-                siteIds: [Components.Schemas.Id]? = nil
+                siteIds: [Components.Schemas.Id]? = nil,
+                aliases: Components.Schemas.AliasGroups? = nil
             ) {
                 self.name = name
                 self.queryTemplate = queryTemplate
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
+                self.aliases = aliases
             }
             public enum CodingKeys: String, CodingKey {
                 case name
                 case queryTemplate = "query_template"
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
+                case aliases
             }
         }
+        /// 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
+        /// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
+        /// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
+        /// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/AliasGroups`.
+        public typealias AliasGroups = [[Swift.String]]
         /// - Remark: Generated from `#/components/schemas/Site`.
         public struct Site: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/Site/id`.
