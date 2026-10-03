@@ -417,3 +417,42 @@ describe("AC-6 マウスの操作は今までどおり(キーボードと排他�
     expect(view.search.resolvedKeys).toEqual([fixtureSpecies(0).key]);
   });
 });
+
+describe("親の選択に追従する(selectedNameJa。攻守入れ替えなど。ADR-0313 の回帰)", () => {
+  test("selectedNameJa が変わると、入力欄の文字が追従し、出ていた候補一覧は閉じる", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
+    const search = searchOf(3);
+    const onResolved = createOnResolved();
+    const { rerender } = render(
+      <SpeciesSearchField
+        label={LABEL}
+        masterSearch={search}
+        onResolved={onResolved}
+        selectedNameJa="最初"
+      />,
+    );
+    expect(comboboxInput()).toHaveValue("最初");
+
+    // 別の文字を打って候補を出す(親の選択とは別の入力中の状態)。
+    await user.clear(comboboxInput());
+    await user.type(comboboxInput(), QUERY);
+    act(() => {
+      vi.advanceTimersByTime(SPECIES_SEARCH_DEBOUNCE_MS);
+    });
+    await screen.findAllByRole("option");
+
+    rerender(
+      <SpeciesSearchField
+        label={LABEL}
+        masterSearch={search}
+        onResolved={onResolved}
+        selectedNameJa="入れ替え後"
+      />,
+    );
+
+    expect(comboboxInput()).toHaveValue("入れ替え後");
+    expect(screen.queryAllByRole("option")).toHaveLength(0);
+    expect(comboboxInput()).toHaveAttribute("aria-expanded", "false");
+  });
+});

@@ -189,6 +189,8 @@ export const appText = {
    */
   masterLoadErrorDetailLabel: "原因",
   masterLoadRetryLabel: "再試行",
+  /** ADR-0313: オフラインでキャッシュが空(初回・未取得・破棄後)のときの案内。 */
+  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてマスタを取得してください",
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
