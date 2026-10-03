@@ -29,6 +29,7 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `PokeCalcKit/Sources/PokeCalcAPI/Generated` | `api/openapi.yaml` の生成物(`pokedex`・`calc` タグだけ。コミットする・手で編集しない) |
+| `PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated` | `services/balance/api/openapi.yaml` の生成物(タイプバランス。schema 名が衝突するので別モジュール。ADR-0415) |
 | `PokeCalcKit/Sources/PokeCalcCore` | ドメインの型・`PokeCalcService`(API 実装とモック)・ViewModel・表示の整形・設定・端末 ID |
 | `PokeCalcKit/Sources/PokeCalcCore/Resources` | モックの架空データ(JSON。名前はすべて「テスト」で始める) |
 | `PokeCalcKit/Sources/PokeCalcDesign` | デザイントークン(docs/design.md と同じ名前・値) |

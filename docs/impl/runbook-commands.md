@@ -63,7 +63,7 @@
 
 | 操作 | 場所 | 経路 |
 |---|---|---|
-| `http://localhost:8080` を開く(Chrome・Safari) | ブラウザ → host:8080 | serverlb → Traefik → Ingress `gateway`(`/`)→ gateway → `/`は `GATEWAY_WEB_URL=http://web` へ転送。`/api/*` は gateway が検証して calc・pokedex へ。`/api/balance` は Ingress が直接 balance へ |
+| `http://localhost:8080` を開く(Chrome・Safari) | ブラウザ → host:8080 | serverlb → Traefik → Ingress `gateway`(`/`)→ gateway → `/`は `GATEWAY_WEB_URL=http://web` へ転送。`/api/*` は gateway が検証して calc・pokedex へ。`/api/balance` は gateway が balance へ転送 |
 | 計算タブ・逆算タブ・タイプバランスタブ(verify §6-1・§6-2) | 同上 | 計算・逆算は **ブラウザ内 WASM**(HTTP を使わない。ADR-0011)またはオンライン時に gateway の API。タイプバランスは `/api/balance/*` |
 | `http://localhost:8080/reverse` を直接開く | 同上 | gateway → web の SPA フォールバック(`web/nginx.conf`) |
 
@@ -71,7 +71,7 @@
 
 | コマンド | 出現 | 裏で走るもの | 場所 | つなぐもの / 副作用 |
 |---|---|---|---|---|
-| `make balance-k3d-deploy` | balance §2・§9 | `balance-docker-build`(`docker build -t pokecalc/balance:local services/balance`)→ `k3d image import` → `kubectl apply -k services/balance/deploy/k8s/overlays/local`(例データの ConfigMap 3 つ)→ `rollout restart`/`status` | host → k3d | Ingress `/api/balance` → balance Service → Pod。gateway を通らない |
+| `make balance-k3d-deploy` | balance §2・§9 | `balance-docker-build`(`docker build -t pokecalc/balance:local services/balance`)→ `k3d image import` → `kubectl apply -k services/balance/deploy/k8s/overlays/local`(例データの ConfigMap 3 つ)→ `rollout restart`/`status` | host → k3d | gateway が `/api/balance/*` を balance Service へ転送 → Pod |
 | `make balance-smoke` | balance §2・§9 | `services/balance/scripts/smoke.sh`(`BALANCE_URL` 既定 8080)。`/api/balance/healthz` と `v1/team-balance/{analyze,coverage,recommendations,threats}`・`v1/move-range/analyze` を叩く | host → 8080 | — |
 | `make balance-k3d-deploy-readmodel` | balance §2b | `k3d-deploy-readmodel.sh`: `docker build` → `k3d image import` → `kubectl create configmap balance-readmodel … \| apply --server-side` → `apply -k overlays/local-readmodel` → `rollout restart`/`status` | host → k3d | **要 `make pokedex-export` 済み**(実データ由来の read model を ConfigMap に載せる) |
 | `make balance-smoke-readmodel` | balance §2b | `smoke-readmodel.sh`: 先頭のポケモンで analyze と recommendations が 200 | host → 8080 | — |

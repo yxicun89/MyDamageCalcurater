@@ -31,6 +31,11 @@ export const MAX_TEAM_NAME_LENGTH = 50;
  */
 export interface TeamScreenProps {
   readonly teamClient: TeamClient;
+  /**
+   * 「この端末のデータを削除」の後に一覧を取り直す合図(P5-5d。ADR-0318 §6)。
+   * マウント後に値が変わったら list() を呼び直す(最初の値ではマウント時の1回だけ)。
+   */
+  readonly reloadToken?: number;
   readonly master: MasterData;
   readonly masterSearch?: MasterSpeciesSearch;
 }
@@ -105,16 +110,23 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
 /**
  * 構築ビルダーの画面(ADR-0309 §4)。
  */
-export function TeamScreen({ teamClient, master, masterSearch }: TeamScreenProps): ReactNode {
+export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
   // create()/update()/remove() が一度でも成功したら true にする。list() は mount 時に1回しか呼ばないが、
   // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
   // (サーバーには存在するのに画面から消えて見える)。書き込み成功後に届いた list() 応答は捨てる。
   const hasWrittenRef = useRef(false);
 
-  // マウント時に1回だけ list() を呼ぶ(cancelled フラグで古い応答を捨てる。SpeedScreen.tsx と同じ形)。
+  // マウント時と reloadToken が変わったときに list() を呼ぶ(cancelled フラグで古い応答を捨てる。
+  // SpeedScreen.tsx と同じ形)。取り直しは「削除後の最新」なので、読み込み中に戻し、書き込み済みフラグも下ろす。
+  const [prevReloadToken, setPrevReloadToken] = useState(reloadToken);
+  if (reloadToken !== prevReloadToken) {
+    setPrevReloadToken(reloadToken);
+    setList({ status: "loading" });
+  }
   useEffect(() => {
     let cancelled = false;
+    hasWrittenRef.current = false;
     void teamClient.list().then((result) => {
       if (cancelled || hasWrittenRef.current) {
         return;
@@ -126,7 +138,7 @@ export function TeamScreen({ teamClient, master, masterSearch }: TeamScreenProps
     return () => {
       cancelled = true;
     };
-  }, [teamClient]);
+  }, [teamClient, reloadToken]);
 
   const [createState, setCreateState] = useState<CreateFormState>(initialCreateFormState);
 

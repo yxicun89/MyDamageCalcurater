@@ -9,9 +9,9 @@
 #                       (Bad Gateway)だけを再試行する回数(既定 30。1秒間隔)。404・503 は意味のある
 #                       最終状態(pokedex 未投入・Web 未デプロイ等)でもありうるので再試行しない
 #   API_SMOKE_STRICT    1 のとき web と balance が 200 でなければ失敗にする(既定は web=503・balance=skipped も成功。issue #321)。
-#   API_SMOKE_BALANCE   /api/balance/healthz が balance の Ingress に届くかの確認。
-#                       auto(既定: kubectl で balance の Ingress があるときだけ見る)/ on / off
-#   API_SMOKE_NAMESPACE auto のときに balance の Ingress を探す namespace(既定 pokecalc)
+#   API_SMOKE_BALANCE   /api/balance/healthz が gateway 経由で balance に届くかの確認。
+#                       auto(既定: kubectl で balance の Service があるときだけ見る)/ on / off
+#   API_SMOKE_NAMESPACE auto のときに balance の Service を探す namespace(既定 pokecalc)
 #
 # 計算に使う ID(性格・種族・技)は、まず GET /api/pokedex/natures を叩いて入手元を見分け(ADR-0206 §3・§4)、
 # pokedex-svc に繋がっている(200)なら公開 API から実際に引く。繋がっていない(503)なら
@@ -301,13 +301,13 @@ case "$status" in
   *) fail "GET /" ;;
 esac
 
-# 7. 任意: balance がデプロイされているとき、/api/balance は balance の Ingress に届く(gateway の `/` が奪わない)。
+# 7. 任意: balance がデプロイされているとき、/api/balance は gateway が balance へ転送して届く(issue #284。直結 Ingress は撤去済み)。
 check_balance=no
 case "$balance_mode" in
   on) check_balance=yes ;;
   off) ;;
   auto)
-    if command -v kubectl >/dev/null 2>&1 && kubectl -n "$namespace" get ingress balance >/dev/null 2>&1; then
+    if command -v kubectl >/dev/null 2>&1 && kubectl -n "$namespace" get service balance >/dev/null 2>&1; then
       check_balance=yes
     fi
     ;;
@@ -316,7 +316,7 @@ esac
 balance_result=skipped
 if [ "$check_balance" = yes ]; then
   request_with_retry GET /api/balance/healthz "" none
-  expect_status 200 "GET /api/balance/healthz (must reach balance, not the gateway)"
+  expect_status 200 "GET /api/balance/healthz (gateway must forward to balance)"
   balance_result=200
 fi
 
