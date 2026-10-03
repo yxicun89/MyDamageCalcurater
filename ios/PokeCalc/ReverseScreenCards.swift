@@ -62,6 +62,8 @@ struct ReverseMyCardView: View {
 /// 相手のカード: 種族セレクタだけ(相手の SP・性格は逆算の対象なので入力しない)。
 struct ReverseOpponentCardView: View {
     let viewModel: ReverseViewModel
+    /// 種族シートの「よく使う相手」(P6-23。相手だけに渡す。自分には出さない)。
+    var frequentOpponents: FrequentOpponentsViewModel?
     @State private var isSpeciesSearchPresented = false
 
     private var species: SpeciesSummary? { viewModel.opponentSpecies }
@@ -77,7 +79,7 @@ struct ReverseOpponentCardView: View {
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
             .sheet(isPresented: $isSpeciesSearchPresented) {
-                SpeciesSearchSheet(viewModel: viewModel) { option in
+                SpeciesSearchSheet(viewModel: viewModel, frequentOpponents: frequentOpponents) { option in
                     viewModel.scheduleLatest { await $0.selectOpponentSpecies(key: option.key) }
                 }
             }

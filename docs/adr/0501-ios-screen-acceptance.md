@@ -3757,6 +3757,107 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
   AX5 の新規テストを含む他は全件成功)。
 
+## P6-23 の受け入れ条件(iOS: 種族ピッカーの「よく使う相手」。ADR-0209・requirements.md §2。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-02 / 担当レーン: iOS / 関連: api/openapi.yaml(`listFrequentOpponents`・`FrequentOpponent`)、ADR-0209(頻度の保存・減衰・
+  プライバシー)、ADR-0212、本 ADR「P6-7」(別プロトコル・モックの流儀)・「issue #68」(種族検索シート)、CLAUDE.md 絶対ルール5、
+  DECISIONS.md 本タスクの新規エントリ「P6-23」、docs/plan.md P6-23
+- 背景: `GET /api/record/frequent-opponents`(ヘッダー `X-Device-Id`・`X-Session-Id`、クエリ `limit` 1〜50〈既定10、範囲外は 400〉)は
+  `FrequentOpponent[]`(`speciesKey`・`score`・`count`・`lastCalculatedAt`)をスコア降順・同点は `speciesKey` 昇順で返す。記録が無ければ
+  空配列(404 にしない)。503 は `store_unavailable` / `upstream_unavailable`。**名前・タイプは返さない**ので pokedex で解決する。
+  頻度は calc-svc が計算のたびに NATS へ非同期発行し record-svc が保存する(**クライアントは記録を POST しない**)。
+  iOS の生成クライアントに record タグは含まれる(P6-7)が、`listFrequentOpponents` を呼ぶ口は無かった。Web は `frequent-opponents` 未使用。
+
+### 1. 事実と判断の要約
+
+| 論点 | 決定 | 理由 |
+|---|---|---|
+| どのピッカーに出すか | **計算の防御側・逆算の相手のみ**。攻撃側・逆算の自分・構築メンバー(新規含む)には出さない | 頻度は「相手(防御側)として計算した回数」(ADR-0209 §4)。攻撃側・自分・構築メンバーは相手ではなく、出すと意味が混ざる |
+| いつ出すか | 空クエリのときだけ、一覧の先頭に「よく使う相手」セクション。検索語がある間は出さない(消せば戻る) | 検索結果に別の並びを混ぜない。`MasterSearchRow.hint`(空クエリの案内)はそのまま残す |
+| 件数 | `limit` = 10(`FrequentOpponents.defaultLimit`) | openapi の既定。セクション1つに収まる量 |
+| 名前解決 | `PokeCalcService.species(key:)` を1件ずつ。同時実行は 4(`maxConcurrentResolutions`)。解決できない key(`not_found`・通信失敗等)は黙って省く。重複 key は1回だけ解決・1行だけ表示。サーバーが `limit` を超えて返しても `limit` 件までしか引かない | 検索 API は key 指定に向かない。マスタに無い・古い key があっても残りを出す |
+| 失敗・空 | 取得失敗(通信・503・400)・空配列・全件未解決は**何も出さない**(エラー表示なし)。検索 UI と計算は塞がない | 絶対ルール5。この機能は補助 |
+| 取得のタイミング | **シートを開くたびに1回**(`.task`)。再取得中は前回の候補を出したまま(ちらつかせない)。取得失敗で前回の候補を消す | 計算のたびにスコアが変わる。1シート=1リクエスト |
+| 古い応答・キャンセル | 新しい `refresh()` は先行を無効にして cancel(古い応答・古い名前解決は反映しない)。Task cancel(シートを閉じる)では候補を変えず、解決中の `species(key:)` も cancel | `LatestTaskRunner` / 検索の世代管理と同じ規則 |
+| 選んだとき | 通常の検索結果と同じ `onSelect(SpeciesSummary)`(防御側なら `selectDefender(speciesKey:)`、逆算の相手なら `selectOpponentSpecies(key:)`)→ シートを閉じる | 反映の経路を増やさない |
+| 依存の形 | `PokeCalcService` とは別のプロトコル `FrequentOpponentsService`(`DeviceDataService` と同じ理由)。`CalcViewModel`/`ReverseViewModel`/`TeamEditViewModel` には依存を足さない。`FrequentOpponentsViewModel`(Core、`@MainActor @Observable`)が取得・解決・世代管理を持ち、`SpeciesSearchSheet` が任意引数 `frequentOpponents: FrequentOpponentsViewModel? = nil` で受け取る | 計算系の呼び出し回数・テストを不変に保つ |
+| 依存の渡し方 | `AppEnvironment.ready` に値を足す(P6-7 の `deviceData` と同じ流儀)。モックは `MockFrequentOpponentsService(environment:)`、API は同じ `APIPokeCalcService`(extension で準拠) | 既存の流儀 |
+| 文言 | `FrequentOpponentsLabels.sectionTitle = "よく使う相手"`(Core に1か所) | coding-rules §2 |
+| identifier(追加のみ) | セクション `frequentOpponentsSection`、行 `frequentOpponentRow-<speciesKey>`(行のボタンのラベルは種族名)。既存の `speciesSearchResult-<key>` は変えない | 既存 XCUITest 不変 |
+
+### 2. 状態の仕様
+
+- `FrequentOpponentsViewModel(service:resolver:limit:maxConcurrentResolutions:)`。`service == nil` なら何もしない。
+- `refresh()`: `service.frequentOpponents(limit:)` → 先頭 `limit` 件の重複を除いた key を同時 4 件までで `resolver.species(key:)` →
+  サーバーの順で `items`(`SpeciesSummary`)を置き換える。`isLoading` は進行中だけ true。
+- `visibleItems(forQuery:)`: 前後空白を除いて空なら `items`、そうでなければ `[]`(View はこれだけを見て描く)。
+- モック(XCUITest 用): `POKECALC_MOCK_FREQUENT_OPPONENTS` = なし/未知で `list`(`9003-000`・`9001-000`・`9999-000`〈マスタに無い〉の
+  3件を `prefix(limit)`、スコア降順)/ `empty`(空配列)/ `fail`(transport エラー)。**既存の `MockPokeCalcService` と
+  `species(key:)` の呼び出し回数は変えない**(別の service なので)。
+
+### 3. 受け入れ条件(検証可能な形)
+
+1. API 写像(`APIFrequentOpponentsServiceTests`): GET・パス `/api/record/frequent-opponents`・クエリ `limit` がそのまま載る(範囲外もクライアントで
+   丸めない)・`X-Device-Id`/`X-Session-Id`・200 の全フィールドとサーバー順の保持・空配列は成功・400(`invalid_input`)・503
+   (`store_unavailable`/`upstream_unavailable`)の code 保持・通信不能は `transport`。
+2. `FrequentOpponentsViewModel` の解決: 既定 `limit` 10 で取得、名前はサーバーの順で `species(key:)` から引く(検索 API は呼ばない)。
+   未解決・解決失敗の key は黙って省き順序を保つ。`limit` 超過分は引かない。重複は1回。
+3. 失敗・空: 取得失敗(`store_unavailable`・`upstream_unavailable`・`invalid_input`・`transport`)・空配列・service なし・全件未解決は
+   `items == []` で例外を出さず、失敗時は `species(key:)` を呼ばない。成功後の失敗は古い候補を消す。
+4. 再取得: `refresh()` のたびに取得し直し、前回の候補は再取得中も出したまま、完了で置き換える。
+5. 古い応答の破棄: 新しい `refresh()` が先行を cancel し、先行の取得・名前解決の応答は新しい結果を上書きしない。
+6. キャンセル: Task cancel で候補を変えず `isLoading` を戻し、取得中・解決中の要求を cancel する。
+7. 同時実行: 名前解決の同時実行は上限(テストでは 3)を超えず、1件返ると次が始まる。結果の順序はサーバーの順。
+8. `visibleItems(forQuery:)` は空・空白だけで `items`、検索語ありで `[]`。
+9. 既存への影響なし: `CalcViewModel`・`ReverseViewModel` は `FrequentOpponentsService` に依存せず(呼ばない)、`refresh()` は検索 API を呼ばない。
+10. モック(`MockFrequentOpponentsServiceTests`): 環境変数の写像、`list` の順序と `limit`、`empty`、`fail`、架空の key(9xxx)のみ。
+11. XCUITest(`FrequentOpponentsUITests`・モック): 防御側ピッカーでセクションと行がサーバー順に出て未解決 key は出ない・行を選ぶとシートが
+    閉じ防御側が変わる・検索語でセクションが消え消すと戻る・攻撃側には出ない・逆算は相手だけに出て自分には出ない・`empty`/`fail` では
+    セクションが出ず検索結果と計算結果の行は出る。
+12. AX5 で `frequentOpponentsSection` と行が横にはみ出さない(`LargeTextLayoutUITests.testFrequentOpponentsSectionNoHorizontalOverflowAtAX5`)。
+13. 既存の XCTest・XCUITest・identifier は1つも編集・変更しない(`LargeTextLayoutUITests` へのメソッド追加のみ)。
+    `api/openapi.yaml`・Generated は変更しない(契約の変更なし)。
+
+### 4. 追加したテスト(spec 時点)
+
+- 足場(既定値付き。`TODO(implementer` を検索): `PokeCalcCore/FrequentOpponents.swift`(`FrequentOpponent`・`FrequentOpponentsService`・
+  `FrequentOpponents`〈定数〉・`FrequentOpponentsLabels`・`FrequentOpponentsViewModel`〈何もしない〉)、
+  `PokeCalcCore/MockFrequentOpponentsService.swift`(空配列)、`APIPokeCalcService.swift` 末尾の extension(空配列)
+- `Tests/PokeCalcCoreTests/APIFrequentOpponentsServiceTests.swift`(7件)・`MockFrequentOpponentsServiceTests.swift`(6件)・
+  `FrequentOpponentsViewModelTests.swift`(21件)・`Support/StubFrequentOpponentsService.swift`(台本・保留・cancel 観測付きのスタブ)
+- `PokeCalcUITests/FrequentOpponentsUITests.swift`(6件)と `LargeTextLayoutUITests.testFrequentOpponentsSectionNoHorizontalOverflowAtAX5`(既存は無編集)
+
+`swift test`(`ios/PokeCalcKit`): 610件中、新規34件のうち25件(47アサーション)が失敗。足場が何もしないため。残り9件(失敗・空・nil の
+「何も出さない」系)は足場でも成立する。既存576件は成功。`xcodebuild build-for-testing`(XCUITest 7件を含む)は `** TEST BUILD SUCCEEDED **`。
+XCUITest の実行は未実施(identifier 未実装のため失敗する)。
+
+### 5. 実装者への注意
+
+- 構築編集(`TeamEditView`・`TeamEditMemberCard`)と計算の攻撃側・逆算の自分の `SpeciesSearchSheet` 呼び出しは `frequentOpponents` を渡さない
+  (既定 nil で今まで通り)。防御側(`CalcScreenCards` の防御側)と逆算の相手(`ReverseScreenCards`)だけ渡す。
+- `FrequentOpponentsViewModel` は View(または `RootView`)が `@State` で持ち、計算系 ViewModel には持たせない。シートの `.task` で
+  `refresh()` を呼ぶ(シートを閉じれば Task が cancel される)。`resolver` は計算と同じ `PokeCalcService`。
+- `refresh()` の「新しい呼び出しが先行を cancel する」は、内部で保持する Task を cancel するか、世代番号+`Task.checkCancellation` で実現する。
+  テスト `testStaleServiceResponseIsDiscarded`・`testStaleNameResolutionIsDiscarded` は先行の要求が cancel されることまで確認する。
+- 同時実行の上限は `withThrowingTaskGroup` に最大 N 件だけ追加し、1件終わるごとに次を追加する形(テスト `testNameResolutionRespectsConcurrencyCap`)。
+  結果は index で並べ直す。
+- 失敗は握りつぶして `items = []`(ログは任意)。`PokeCalcError` を画面のエラー表示(`CalcScreenError` 等)に流さない。
+- セクションは `List` の `Section` か先頭の行群。見出し文言は `FrequentOpponentsLabels.sectionTitle`。行の見た目は `MasterSearchRow.species` を共用し、
+  `.accessibilityLabel(option.nameJa)` を付ける(既存の検索結果と同じ)。AX5 では行が折り返してもはみ出さない。
+- `AppEnvironment.ready` に値を足すと `RootView` の `case .ready(let service, _, let backendDescription)` が壊れるので直す。
+- `ios/README.md` の操作説明・`docs/plan.md`(P6-23 のチェック)を更新する。
+
+### 6. 実装結果(P6-23。implementer)
+
+- `swift test`(`ios/PokeCalcKit`): 610件すべて成功(新規34件を含む。3回連続で安定)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。
+  `xcodebuild build-for-testing`(iPhone 18 Pro)は `** TEST BUILD SUCCEEDED **`。XCUITest は未実行(別途実行)。
+- `refresh()` は内部 Task + 世代番号で先行を無効化・cancel(呼び出し元の cancel は `withTaskCancellationHandler` で内側へ伝える)。
+  名前解決は `withTaskGroup` で最大 N 件(1件終わるごとに次を追加、index で並べ直し)。
+- View: `SpeciesSearchSheet` の先頭に `Section`(見出し Text に `frequentOpponentsSection`、行は `MasterSearchRow.species` を共用)。
+  identifier は `Section` ではなく見出し Text に付けた(List 内の Section 自体への identifier は XCUITest から見えない場合があるため)。
+  `FrequentOpponentsViewModel` は `CalcScreenView`・`ReverseScreenView` が `@State` で持ち、防御側カード・相手カードだけに渡す。
+- テストの矛盾は無かった。
+
 ## P6-20 の受け入れ条件(構築の Showdown 風テキストのインポート/エクスポート。spec-writer: 受け入れ条件とテストのみ。実装はしない)
 
 - 日付: 2026-10-02 / 担当レーン: iOS / 関連: requirements.md §2、ADR-0213 §4、ADR-0506(日本語名・非互換の決定)、ADR-0500 §4、
