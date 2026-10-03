@@ -718,6 +718,58 @@ components:
         updated_at:
           type: string
           format: date-time
+        watch_official:
+          type: boolean
+          description: |
+            公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
+            サーバーは常に返す(required にしないのは、古い応答・キャッシュを読めるようにするため。無ければ false として扱う)
+        official_status:
+          description: 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/OfficialStatus'
+
+    OfficialState:
+      type: string
+      description: |
+        公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+        unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+        blocked robots.txt が許していないので取得しない / failed 取得できなかった
+      enum: [available, preorder, soldout, ended, unknown, ambiguous, blocked, failed]
+
+    OfficialStatus:
+      type: object
+      description: |
+        status は最後に判定できた状態。最後の試行が failed・blocked でも、判定済みの status は上書きしない
+        (そのときは last_result・last_attempt_at だけが変わる)。一度も判定できていなければ status は failed・blocked のまま
+      required: [status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at]
+      properties:
+        status: { $ref: '#/components/schemas/OfficialState' }
+        evidence:
+          type: array
+          description: 判定の根拠にした語(最大 3。ページに現れた順)。unknown・failed・blocked は空
+          items:
+            type: string
+        checked_at:
+          type: string
+          format: date-time
+          description: status を確かめた時刻
+        changed_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: status が前回の判定から変わった時刻(変わったことが無ければ null)
+        previous_status:
+          type: string
+          enum: [available, preorder, soldout, ended, unknown, ambiguous, blocked, failed]
+          nullable: true
+          description: changed_at のときの変化前の status
+        last_result:
+          $ref: '#/components/schemas/OfficialState'
+        last_attempt_at:
+          type: string
+          format: date-time
+          description: 最後に試した時刻(failed・blocked を含む)
 
     ItemFields:
       type: object
@@ -742,6 +794,9 @@ components:
           minimum: 0
         sort_order:
           type: integer
+        watch_official:
+          type: boolean
+          description: true にするには source_url が必要(無ければ 422)
 
     ItemCreateJSON:
       allOf:
@@ -771,6 +826,9 @@ components:
           type: integer
         sort_order:
           type: integer
+        watch_official:
+          type: boolean
+          description: '`true` / `false`(それ以外は 400)。true にするには source_url が必要(無ければ 422)'
         image:
           type: string
           format: binary
@@ -804,6 +862,11 @@ components:
         site_overrides:
           type: array
           items: { $ref: '#/components/schemas/SiteOverride' }
+        watch_official:
+          type: boolean
+          description: |
+            更新後の商品に source_url が無いのに true になるなら 422(source_url を null にするときは false も送る)。
+            source_url を別の値・null に変えると、保存済みの official_status は消える
 
     FromURLRequest:
       type: object

@@ -41,28 +41,28 @@ INSERT INTO sites (name, search_url_template, fetch_type, is_reference) VALUES (
 UPDATE sites SET name = ?, search_url_template = ?, fetch_type = ?, is_reference = ? WHERE id = ?;
 
 -- name: ListItems :many
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items ORDER BY sort_order, id DESC;
 
 -- name: ListItemsByGenre :many
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE genre_id = ? ORDER BY sort_order, id DESC;
 
 -- name: GetItem :one
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE id = ?;
 
 -- name: GetItemForUpdate :one
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE id = ? FOR UPDATE;
 
 -- name: CreateItem :execlastid
-INSERT INTO items (genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO items (genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, watch_official)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateItem :exec
 UPDATE items
-SET genre_id = ?, name = ?, option_text = ?, query_override = ?, image_path = ?, source_url = ?, min_price = ?, sort_order = ?
+SET genre_id = ?, name = ?, option_text = ?, query_override = ?, image_path = ?, source_url = ?, min_price = ?, sort_order = ?, watch_official = ?
 WHERE id = ?;
 
 -- name: TouchItem :exec
@@ -139,3 +139,23 @@ FROM price_history WHERE item_id = ? AND day >= ? ORDER BY site_id, day;
 
 -- name: PrunePriceHistory :execrows
 DELETE FROM price_history WHERE day < ?;
+
+-- 公式サイトの販売状況(フェーズ4-3)。1 商品 1 行。
+
+-- name: ListOfficialStatuses :many
+SELECT item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at
+FROM official_status ORDER BY item_id;
+
+-- name: GetOfficialStatus :one
+SELECT item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at
+FROM official_status WHERE item_id = ?;
+
+-- name: UpsertOfficialStatus :exec
+INSERT INTO official_status (item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE status = VALUES(status), evidence = VALUES(evidence), checked_at = VALUES(checked_at),
+  changed_at = VALUES(changed_at), previous_status = VALUES(previous_status), last_result = VALUES(last_result),
+  last_attempt_at = VALUES(last_attempt_at);
+
+-- name: DeleteOfficialStatus :exec
+DELETE FROM official_status WHERE item_id = ?;

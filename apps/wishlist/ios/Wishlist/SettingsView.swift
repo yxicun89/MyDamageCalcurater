@@ -135,6 +135,12 @@ enum SiteEditTarget: Identifiable {
     }
 }
 
+/// 別名グループの 1 行(編集中の値。ID で行を区別する)
+private struct AliasLine: Identifiable {
+    let id = UUID()
+    var text: String
+}
+
 /// ジャンルの追加・編集。表示するサイトとその順序(「上へ」)を決める。
 struct GenreEditSheet: View {
     let target: GenreEditTarget
@@ -146,6 +152,8 @@ struct GenreEditSheet: View {
     @State private var name = ""
     @State private var template = ""
     @State private var siteIDs: [Int] = []
+    /// 表記揺れの辞書(1 グループ = 1 行。カンマ区切り)
+    @State private var aliasLines: [AliasLine] = []
 
     private var original: Genre? {
         if case .edit(let genre) = target { genre } else { nil }
@@ -156,6 +164,22 @@ struct GenreEditSheet: View {
             Form {
                 TextField("名前", text: $name)
                 TextField("検索ワードのテンプレート({name} {option})", text: $template)
+                Section("別名グループ(同じ意味の語をカンマで区切る)") {
+                    // 行に ID を持たせる(添字で回すと、削除で範囲外を読んで落ちることがある)
+                    ForEach($aliasLines) { $line in
+                        let number = (aliasLines.firstIndex { $0.id == line.id } ?? 0) + 1
+                        HStack {
+                            TextField("例: S.H.Figuarts, SHフィギュアーツ", text: $line.text)
+                                .accessibilityIdentifier("aliasLine-\(number)")
+                            Button("削除", systemImage: "minus.circle") { aliasLines.removeAll { $0.id == line.id } }
+                                .labelStyle(.iconOnly)
+                                .buttonStyle(.borderless)
+                                .accessibilityIdentifier("removeAliasLine-\(number)")
+                        }
+                    }
+                    Button("別名グループを追加", systemImage: "plus") { aliasLines.append(AliasLine(text: "")) }
+                        .accessibilityIdentifier("addAliasLine")
+                }
                 Section("表示するサイト(上から順)") {
                     ForEach(siteIDs, id: \.self) { id in
                         HStack {
@@ -185,9 +209,11 @@ struct GenreEditSheet: View {
                         Task {
                             let saved: Genre?
                             if let original {
-                                saved = await viewModel.updateGenre(original, name: name, queryTemplate: template, siteIDs: siteIDs)
+                                saved = await viewModel.updateGenre(
+                                    original, name: name, queryTemplate: template, siteIDs: siteIDs, aliasLines: aliasLines.map(\.text))
                             } else {
-                                saved = await viewModel.addGenre(name: name, queryTemplate: template, siteIDs: siteIDs)
+                                saved = await viewModel.addGenre(
+                                    name: name, queryTemplate: template, siteIDs: siteIDs, aliasLines: aliasLines.map(\.text))
                             }
                             if saved != nil {
                                 onDone()
@@ -202,6 +228,7 @@ struct GenreEditSheet: View {
                     name = original.name
                     template = original.queryTemplate
                     siteIDs = original.siteIDs
+                    aliasLines = SettingsListViewModel.aliasLines(of: original).map { AliasLine(text: $0) }
                 }
             }
         }

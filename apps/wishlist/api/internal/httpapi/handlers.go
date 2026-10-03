@@ -49,6 +49,33 @@ func toAPIItem(it item.Item) api.Item {
 	for _, o := range it.SiteOverrides {
 		out.SiteOverrides = append(out.SiteOverrides, api.SiteOverride{SiteId: o.SiteID, Query: nullableOf(o.Query), Enabled: o.Enabled})
 	}
+	watch := it.WatchOfficial
+	out.WatchOfficial = &watch
+	if it.Official == nil {
+		out.OfficialStatus = nullable.NewNullNullable[api.OfficialStatus]()
+	} else {
+		out.OfficialStatus = nullable.NewNullableWithValue(toAPIOfficial(*it.Official))
+	}
+	return out
+}
+
+func toAPIOfficial(o item.OfficialStatus) api.OfficialStatus {
+	ev := o.Evidence
+	if ev == nil {
+		ev = []string{}
+	}
+	out := api.OfficialStatus{
+		Status: api.OfficialState(o.Status), Evidence: ev, CheckedAt: o.CheckedAt.UTC(),
+		LastResult: api.OfficialState(o.LastResult), LastAttemptAt: o.LastAttemptAt.UTC(),
+		ChangedAt:      nullable.NewNullNullable[time.Time](),
+		PreviousStatus: nullable.NewNullNullable[api.OfficialStatusPreviousStatus](),
+	}
+	if o.ChangedAt != nil {
+		out.ChangedAt = nullable.NewNullableWithValue(o.ChangedAt.UTC())
+	}
+	if o.PreviousStatus != nil {
+		out.PreviousStatus = nullable.NewNullableWithValue(api.OfficialStatusPreviousStatus(*o.PreviousStatus))
+	}
 	return out
 }
 
@@ -149,6 +176,9 @@ func (s *server) CreateItem(ctx context.Context, req api.CreateItemRequestObject
 			return nil, badRequest("image_url is required")
 		}
 		in = item.NewItem{GenreID: b.GenreId, Name: b.Name, OptionText: b.OptionText, QueryOverride: b.QueryOverride, SourceURL: b.SourceUrl}
+		if b.WatchOfficial != nil {
+			in.WatchOfficial = *b.WatchOfficial
+		}
 		if b.MinPrice != nil {
 			in.MinPrice = b.MinPrice
 		}
@@ -243,7 +273,7 @@ func (s *server) UpdateItem(ctx context.Context, req api.UpdateItemRequestObject
 	}
 	p := item.ItemPatch{
 		GenreID: b.GenreId, Name: b.Name, OptionText: b.OptionText, QueryOverride: b.QueryOverride,
-		SourceURL: b.SourceUrl, MinPrice: b.MinPrice, SortOrder: b.SortOrder,
+		SourceURL: b.SourceUrl, MinPrice: b.MinPrice, SortOrder: b.SortOrder, WatchOfficial: b.WatchOfficial,
 	}
 	if b.SiteOverrides != nil {
 		o := toOverrides(*b.SiteOverrides)
@@ -605,6 +635,15 @@ func (f itemForm) newItem() (item.NewItem, error) {
 			return in, badRequest("sort_order must be an integer")
 		}
 		in.SortOrder = n
+	}
+	if v, ok := f.fields["watch_official"]; ok {
+		switch v {
+		case "true":
+			in.WatchOfficial = true
+		case "false":
+		default:
+			return in, badRequest("watch_official must be true or false")
+		}
 	}
 	return in, nil
 }

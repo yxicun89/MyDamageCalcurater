@@ -203,6 +203,71 @@ final class WishlistUITests: XCTestCase {
         XCTAssertFalse(element(app, "priceHistoryChart").exists)
     }
 
+    // MARK: - フェーズ4-3・4-1(docs/phase4-spec.md の AC-IOS-OFF-UI-01・AC-IOS-ALI-UI-01)
+    // `WISHLIST_USE_FAKE=official`(WishlistFixtures.makeServiceWithOfficial。キャッシュも officialItems・officialGenres):
+    // 商品 12 グリスは監視中(予約受付中・根拠「予約受付中」「予約する」・10/4 確認)、11 は監視しない。ジャンル 1 に別名グループ 1 つ。
+    // 追加の accessibilityIdentifier: 詳細シートの `officialStatus`(ラベル = summary)・`officialEvidence`・`officialChange`・`officialLastAttempt`、
+    // 編集の `watchOfficialToggle`(値は "1" / "0")・`watchOfficialHint`、ジャンル編集の `aliasLine-<N>`(1 始まりのテキスト欄)・
+    // `addAliasLine`(別名グループを追加)・`removeAliasLine-<N>`、保存は既存の「保存」ボタン。
+
+    /// AC-IOS-OFF-UI-01: 監視中の商品の詳細シートに「公式」の行と根拠が出る。監視していない商品には出ない。編集にトグルがある。
+    func testOfficialStatusInDetailSheetAndEditToggle() {
+        let app = launch(fake: "official")
+        requireExists(app, "item-12").tap()
+        XCTAssertEqual(requireExists(app, "officialStatus").label, "公式: 予約受付中(10/4 確認)")
+        XCTAssertEqual(requireExists(app, "officialEvidence").label, "根拠: 予約受付中・予約する")
+        XCTAssertFalse(element(app, "officialChange").exists, "変化が無ければ出さない")
+        requireExists(app, "closeSheet").tap()
+
+        requireExists(app, "item-11").tap()
+        _ = requireExists(app, "detailSheet")
+        XCTAssertFalse(element(app, "officialStatus").exists, "監視していない商品には出さない")
+        requireExists(app, "closeSheet").tap()
+
+        requireExists(app, "item-12").press(forDuration: 0.8)
+        requireExists(app, "menuEdit").tap()
+        let toggle = requireExists(app, "watchOfficialToggle")
+        XCTAssertEqual(toggle.value as? String, "1")
+        XCTAssertTrue(toggle.isEnabled)
+    }
+
+    /// AC-IOS-ALI-UI-01: 設定のジャンル編集で、別名グループを 1 行ずつ編集・追加して保存でき、開き直すと残っている。
+    func testGenreAliasesCanBeEditedInSettings() {
+        let app = launch(fake: "official")
+        requireExists(app, "settingsButton").tap()
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "S.H.Figuarts, SHフィギュアーツ")
+        requireExists(app, "addAliasLine").tap()
+        let line2 = requireExists(app, "aliasLine-2")
+        line2.tap()
+        line2.typeText("真骨彫, 真骨彫製法")
+        app.buttons["保存"].firstMatch.tap()
+        XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-1")), "保存したら閉じる")
+
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "S.H.Figuarts, SHフィギュアーツ")
+        XCTAssertEqual(requireExists(app, "aliasLine-2").value as? String, "真骨彫, 真骨彫製法")
+    }
+
+    /// 別名グループの行を消せる(番号は詰める)。保存して開き直すと、消した行は無い。
+    func testGenreAliasLineCanBeRemoved() {
+        let app = launch(fake: "official")
+        requireExists(app, "settingsButton").tap()
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        requireExists(app, "addAliasLine").tap()
+        let line2 = requireExists(app, "aliasLine-2")
+        line2.tap()
+        line2.typeText("真骨彫, 真骨彫製法")
+        requireExists(app, "removeAliasLine-1").tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法", "消すと番号が詰める")
+        XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-2")))
+        app.buttons["保存"].firstMatch.tap()
+        XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-1")), "保存したら閉じる")
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法")
+        XCTAssertFalse(element(app, "aliasLine-2").exists)
+    }
+
     private func waitForDisappearance(_ target: XCUIElement) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: target)
         return XCTWaiter().wait(for: [expectation], timeout: Self.timeout) == .completed

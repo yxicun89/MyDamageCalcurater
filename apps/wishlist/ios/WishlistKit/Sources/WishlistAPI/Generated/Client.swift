@@ -277,7 +277,8 @@ public struct Client: APIProtocol {
                             "option_text",
                             "query_override",
                             "sort_order",
-                            "source_url"
+                            "source_url",
+                            "watch_official"
                         ],
                         zeroOrMoreTimesPartNames: [],
                         encoding: { part in
@@ -376,6 +377,20 @@ public struct Client: APIProtocol {
                                 )
                                 return .init(
                                     name: "sort_order",
+                                    filename: wrapped.filename,
+                                    headerFields: headerFields,
+                                    body: body
+                                )
+                            case let .watchOfficial(wrapped):
+                                var headerFields: HTTPTypes.HTTPFields = .init()
+                                let value = wrapped.payload
+                                let body = try converter.setRequiredRequestBodyAsBinary(
+                                    value.body,
+                                    headerFields: &headerFields,
+                                    contentType: "text/plain"
+                                )
+                                return .init(
+                                    name: "watch_official",
                                     filename: wrapped.filename,
                                     headerFields: headerFields,
                                     body: body

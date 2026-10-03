@@ -35,6 +35,8 @@ struct ItemDetailSheet: View {
                     Text(notice).font(.footnote).foregroundStyle(.secondary)
                 }
 
+                if let official = viewModel.official { officialSection(official) }
+
                 Button("更新") { Task { await viewModel.refresh() } }
                     .buttonStyle(.bordered)
                     .disabled(!viewModel.canRefresh)
@@ -59,6 +61,24 @@ struct ItemDetailSheet: View {
         .presentationDetents([.medium, .large])
         .task { await viewModel.loadEstimates() }
         .onDisappear { viewModel.stopPolling() }
+    }
+
+    /// 公式ページの販売状況(監視中の商品だけ。文字だけで、アニメーションは使わない)
+    private func officialSection(_ official: OfficialLines) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            officialLine(official.summary, id: "officialStatus", font: .subheadline)
+            if let evidence = official.evidence { officialLine(evidence, id: "officialEvidence", font: .footnote) }
+            if let change = official.change { officialLine(change, id: "officialChange", font: .footnote) }
+            if let lastAttempt = official.lastAttempt { officialLine(lastAttempt, id: "officialLastAttempt", font: .footnote) }
+        }
+    }
+
+    private func officialLine(_ text: String, id: String, font: Font) -> some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel(text)
+            .accessibilityIdentifier(id)
     }
 
     @ViewBuilder

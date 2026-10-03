@@ -70,6 +70,8 @@ type env struct {
 	est   *refresh.Service
 	fetch *fakeFetcher
 	now   *fakeNow
+	// repo は Service の下の Repository(フェーズ4-3 の販売状況を直接保存するため)。
+	repo *item.MemoryRepository
 }
 
 func newEnv(t *testing.T) *env {
@@ -103,7 +105,7 @@ func newEnv(t *testing.T) *env {
 	})
 	t.Cleanup(est.Wait)
 	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: token})
-	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2, est: est, fetch: fetch, now: now}
+	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2, est: est, fetch: fetch, now: now, repo: repo}
 }
 
 type req struct {

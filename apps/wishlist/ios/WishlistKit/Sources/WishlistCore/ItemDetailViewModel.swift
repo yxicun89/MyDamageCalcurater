@@ -48,6 +48,18 @@ public final class ItemDetailViewModel {
         self.sleep = sleep
     }
 
+    // MARK: - フェーズ4-3: 公式サイトの販売状況(docs/phase4-spec.md AC-IOS-OFF-05)
+
+    /// 「公式」の行。`item.watchOfficial` が false なら nil(保存済みの状態があっても出さない)。
+    /// true なら `OfficialFormat` で作る(summary は常に、evidence・change〈now で判定〉・lastAttempt はあるときだけ)。
+    public var official: OfficialLines? {
+        guard item.watchOfficial else { return nil }
+        let status = item.officialStatus
+        return OfficialLines(
+            summary: OfficialFormat.summary(status), evidence: OfficialFormat.evidence(status),
+            change: OfficialFormat.change(status, now: now()), lastAttempt: OfficialFormat.lastAttempt(status))
+    }
+
     // MARK: - フェーズ3: 目安価格(docs/phase3-ios-spec.md)
 
     /// 直近に反映した estimates(取得できていなければ nil)

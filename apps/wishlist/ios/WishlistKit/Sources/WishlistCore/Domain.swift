@@ -19,13 +19,32 @@ public struct Genre: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var sortOrder: Int
     /// 表示するサイト(表示順)
     public var siteIDs: [Int]
+    /// 表記揺れの辞書(フェーズ4-1)。1 グループ = 同じものを指す語(2 語以上)。無ければ空。
+    public var aliases: [[String]]
 
-    public init(id: Int, name: String, queryTemplate: String = "{name} {option}", sortOrder: Int = 0, siteIDs: [Int] = []) {
+    public init(
+        id: Int, name: String, queryTemplate: String = "{name} {option}", sortOrder: Int = 0, siteIDs: [Int] = [],
+        aliases: [[String]] = []
+    ) {
         self.id = id
         self.name = name
         self.queryTemplate = queryTemplate
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
+        self.aliases = aliases
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, queryTemplate, sortOrder, siteIDs, aliases
+    }
+
+    /// 保存済みのキャッシュ(aliases を持たない古い JSON)も読めるよう、aliases が無ければ空にする。
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decode(Int.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
+            queryTemplate: try c.decode(String.self, forKey: .queryTemplate), sortOrder: try c.decode(Int.self, forKey: .sortOrder),
+            siteIDs: try c.decode([Int].self, forKey: .siteIDs), aliases: try c.decodeIfPresent([[String]].self, forKey: .aliases) ?? [])
     }
 }
 
@@ -74,12 +93,17 @@ public struct Item: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var siteOverrides: [SiteOverride]
     public var createdAt: Date
     public var updatedAt: Date
+    /// 公式ページ(sourceURL)の販売状況を夜間に監視するか(フェーズ4-3)。応答に無ければ false
+    public var watchOfficial: Bool
+    /// 公式ページの販売状況(まだ確かめていなければ nil)
+    public var officialStatus: OfficialStatus?
 
     public init(
         id: Int, genreID: Int, name: String, optionText: String? = nil, queryOverride: String? = nil,
         imageURLPath: String, sourceURL: String? = nil, minPrice: Int? = nil, sortOrder: Int = 0,
         siteOverrides: [SiteOverride] = [], createdAt: Date = Date(timeIntervalSince1970: 1_790_000_000),
-        updatedAt: Date = Date(timeIntervalSince1970: 1_790_000_000)
+        updatedAt: Date = Date(timeIntervalSince1970: 1_790_000_000), watchOfficial: Bool = false,
+        officialStatus: OfficialStatus? = nil
     ) {
         self.id = id
         self.genreID = genreID
@@ -93,6 +117,70 @@ public struct Item: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.siteOverrides = siteOverrides
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.watchOfficial = watchOfficial
+        self.officialStatus = officialStatus
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, genreID, name, optionText, queryOverride, imageURLPath, sourceURL, minPrice, sortOrder, siteOverrides, createdAt, updatedAt
+        case watchOfficial, officialStatus
+    }
+
+    /// 保存済みのキャッシュ(watchOfficial・officialStatus を持たない古い JSON)も読めるよう、無ければ false・nil にする。
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            id: try c.decode(Int.self, forKey: .id), genreID: try c.decode(Int.self, forKey: .genreID),
+            name: try c.decode(String.self, forKey: .name), optionText: try c.decodeIfPresent(String.self, forKey: .optionText),
+            queryOverride: try c.decodeIfPresent(String.self, forKey: .queryOverride),
+            imageURLPath: try c.decode(String.self, forKey: .imageURLPath), sourceURL: try c.decodeIfPresent(String.self, forKey: .sourceURL),
+            minPrice: try c.decodeIfPresent(Int.self, forKey: .minPrice), sortOrder: try c.decode(Int.self, forKey: .sortOrder),
+            siteOverrides: try c.decode([SiteOverride].self, forKey: .siteOverrides),
+            createdAt: try c.decode(Date.self, forKey: .createdAt), updatedAt: try c.decode(Date.self, forKey: .updatedAt),
+            watchOfficial: try c.decodeIfPresent(Bool.self, forKey: .watchOfficial) ?? false,
+            officialStatus: try c.decodeIfPresent(OfficialStatus.self, forKey: .officialStatus))
+    }
+}
+
+// MARK: - フェーズ4-3 公式サイトの販売状況(docs/phase4-spec.md 4-3)
+
+/// 公式ページの販売状況(api/openapi.yaml の OfficialState)
+public enum OfficialState: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
+    case available
+    case preorder
+    case soldout
+    case ended
+    case unknown
+    case ambiguous
+    case blocked
+    case failed
+}
+
+/// 保存された販売状況。`status` は最後に判定できた状態(最後の試行が failed・blocked でも上書きしない)。
+/// `lastResult`・`lastAttemptAt` は最後の試行の結果と時刻。
+public struct OfficialStatus: Codable, Sendable, Equatable, Hashable {
+    public var status: OfficialState
+    /// 判定の根拠にした語(最大 3。ページに現れた順)
+    public var evidence: [String]
+    /// `status` を確かめた時刻
+    public var checkedAt: Date
+    /// `status` が前回の判定から変わった時刻(無ければ nil)
+    public var changedAt: Date?
+    public var previousStatus: OfficialState?
+    public var lastResult: OfficialState
+    public var lastAttemptAt: Date
+
+    public init(
+        status: OfficialState, evidence: [String] = [], checkedAt: Date, changedAt: Date? = nil, previousStatus: OfficialState? = nil,
+        lastResult: OfficialState? = nil, lastAttemptAt: Date? = nil
+    ) {
+        self.status = status
+        self.evidence = evidence
+        self.checkedAt = checkedAt
+        self.changedAt = changedAt
+        self.previousStatus = previousStatus
+        self.lastResult = lastResult ?? status
+        self.lastAttemptAt = lastAttemptAt ?? checkedAt
     }
 }
 
@@ -166,11 +254,14 @@ public struct ItemPatch: Sendable, Equatable {
     public var minPrice: FieldUpdate<Int> = .keep
     public var sortOrder: Int?
     public var siteOverrides: [SiteOverride]?
+    /// 公式ページの監視(フェーズ4-3)。nil なら送らない
+    public var watchOfficial: Bool?
 
     public init(
         genreID: Int? = nil, name: String? = nil, optionText: FieldUpdate<String> = .keep,
         queryOverride: FieldUpdate<String> = .keep, sourceURL: FieldUpdate<String> = .keep,
-        minPrice: FieldUpdate<Int> = .keep, sortOrder: Int? = nil, siteOverrides: [SiteOverride]? = nil
+        minPrice: FieldUpdate<Int> = .keep, sortOrder: Int? = nil, siteOverrides: [SiteOverride]? = nil,
+        watchOfficial: Bool? = nil
     ) {
         self.genreID = genreID
         self.name = name
@@ -180,6 +271,7 @@ public struct ItemPatch: Sendable, Equatable {
         self.minPrice = minPrice
         self.sortOrder = sortOrder
         self.siteOverrides = siteOverrides
+        self.watchOfficial = watchOfficial
     }
 
     /// 何も変えない(送る項目が無い)なら true
@@ -192,12 +284,15 @@ public struct GenreCreate: Sendable, Equatable {
     public var queryTemplate: String?
     public var sortOrder: Int?
     public var siteIDs: [Int]?
+    /// 表記揺れの辞書(フェーズ4-1)。nil なら送らない
+    public var aliases: [[String]]?
 
-    public init(name: String, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil) {
+    public init(name: String, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil) {
         self.name = name
         self.queryTemplate = queryTemplate
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
+        self.aliases = aliases
     }
 }
 
@@ -207,12 +302,15 @@ public struct GenreUpdate: Sendable, Equatable {
     public var sortOrder: Int?
     /// 渡すと表示するサイトと順序を全件置き換える
     public var siteIDs: [Int]?
+    /// 渡すと表記揺れの辞書を全件置き換える(空なら全部消す。フェーズ4-1)
+    public var aliases: [[String]]?
 
-    public init(name: String? = nil, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil) {
+    public init(name: String? = nil, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil) {
         self.name = name
         self.queryTemplate = queryTemplate
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
+        self.aliases = aliases
     }
 }
 

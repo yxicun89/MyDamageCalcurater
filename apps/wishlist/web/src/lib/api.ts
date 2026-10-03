@@ -145,7 +145,7 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
 
   const toForm = (fields: ItemFields, image: ImageFile): FormData => {
     const form = new FormData();
-    for (const [k, v] of Object.entries<string | number | undefined>(fields))
+    for (const [k, v] of Object.entries<string | number | boolean | undefined>(fields))
       if (v !== undefined) form.append(k, String(v));
     form.append("image", image);
     return form;

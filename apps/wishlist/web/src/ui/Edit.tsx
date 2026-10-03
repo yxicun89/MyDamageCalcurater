@@ -21,6 +21,8 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
   const [override, setOverride] = useState(item.query_override ?? "");
   const [genreId, setGenreId] = useState(item.genre_id);
   const [minPrice, setMinPrice] = useState(item.min_price == null ? "" : String(item.min_price));
+  const [watch, setWatch] = useState(item.watch_official ?? false);
+  const hasSource = (item.source_url ?? "").trim() !== "";
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,6 +47,7 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
     if (genreId !== item.genre_id) patch.genre_id = genreId;
     const nextMin = minPrice.trim() === "" ? null : Number(minPrice);
     if (nextMin !== (item.min_price ?? null)) patch.min_price = nextMin;
+    if (watch !== (item.watch_official ?? false)) patch.watch_official = watch;
     return patch;
   };
 
@@ -124,6 +127,20 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
           }}
         />
       </label>
+      <label className="field">
+        <span>
+          <input
+            type="checkbox"
+            checked={watch}
+            disabled={!hasSource}
+            onChange={(e) => {
+              setWatch(e.target.checked);
+            }}
+          />{" "}
+          公式ページを監視する
+        </span>
+      </label>
+      {hasSource ? null : <p className="site-meta">公式ページの URL が無いので監視できません</p>}
       <label className="field">
         <span>画像を差し替え</span>
         <input

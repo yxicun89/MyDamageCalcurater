@@ -31,8 +31,8 @@ func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (int64
 }
 
 const createItem = `-- name: CreateItem :execlastid
-INSERT INTO items (genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO items (genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, watch_official)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateItemParams struct {
@@ -44,6 +44,7 @@ type CreateItemParams struct {
 	SourceUrl     sql.NullString
 	MinPrice      sql.NullInt32
 	SortOrder     int32
+	WatchOfficial bool
 }
 
 func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (int64, error) {
@@ -56,6 +57,7 @@ func (q *Queries) CreateItem(ctx context.Context, arg CreateItemParams) (int64, 
 		arg.SourceUrl,
 		arg.MinPrice,
 		arg.SortOrder,
+		arg.WatchOfficial,
 	)
 	if err != nil {
 		return 0, err
@@ -142,6 +144,15 @@ func (q *Queries) DeleteListingsBySite(ctx context.Context, arg DeleteListingsBy
 	return err
 }
 
+const deleteOfficialStatus = `-- name: DeleteOfficialStatus :exec
+DELETE FROM official_status WHERE item_id = ?
+`
+
+func (q *Queries) DeleteOfficialStatus(ctx context.Context, itemID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteOfficialStatus, itemID)
+	return err
+}
+
 const getGenre = `-- name: GetGenre :one
 SELECT id, name, query_template, sort_order FROM genres WHERE id = ?
 `
@@ -175,7 +186,7 @@ func (q *Queries) GetGenreForUpdate(ctx context.Context, id int64) (Genre, error
 }
 
 const getItem = `-- name: GetItem :one
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE id = ?
 `
 
@@ -194,12 +205,13 @@ func (q *Queries) GetItem(ctx context.Context, id int64) (Item, error) {
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WatchOfficial,
 	)
 	return i, err
 }
 
 const getItemForUpdate = `-- name: GetItemForUpdate :one
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE id = ? FOR UPDATE
 `
 
@@ -218,6 +230,28 @@ func (q *Queries) GetItemForUpdate(ctx context.Context, id int64) (Item, error) 
 		&i.SortOrder,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.WatchOfficial,
+	)
+	return i, err
+}
+
+const getOfficialStatus = `-- name: GetOfficialStatus :one
+SELECT item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at
+FROM official_status WHERE item_id = ?
+`
+
+func (q *Queries) GetOfficialStatus(ctx context.Context, itemID int64) (OfficialStatus, error) {
+	row := q.db.QueryRowContext(ctx, getOfficialStatus, itemID)
+	var i OfficialStatus
+	err := row.Scan(
+		&i.ItemID,
+		&i.Status,
+		&i.Evidence,
+		&i.CheckedAt,
+		&i.ChangedAt,
+		&i.PreviousStatus,
+		&i.LastResult,
+		&i.LastAttemptAt,
 	)
 	return i, err
 }
@@ -598,7 +632,7 @@ func (q *Queries) ListItemSiteOverridesByItem(ctx context.Context, itemID int64)
 }
 
 const listItems = `-- name: ListItems :many
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items ORDER BY sort_order, id DESC
 `
 
@@ -623,6 +657,7 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WatchOfficial,
 		); err != nil {
 			return nil, err
 		}
@@ -638,7 +673,7 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 }
 
 const listItemsByGenre = `-- name: ListItemsByGenre :many
-SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at
+SELECT id, genre_id, name, option_text, query_override, image_path, source_url, min_price, sort_order, created_at, updated_at, watch_official
 FROM items WHERE genre_id = ? ORDER BY sort_order, id DESC
 `
 
@@ -663,6 +698,7 @@ func (q *Queries) ListItemsByGenre(ctx context.Context, genreID int64) ([]Item, 
 			&i.SortOrder,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.WatchOfficial,
 		); err != nil {
 			return nil, err
 		}
@@ -746,6 +782,45 @@ func (q *Queries) ListListingsByItemSite(ctx context.Context, arg ListListingsBy
 			&i.InStock,
 			&i.SuspiciousReasons,
 			&i.FetchedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listOfficialStatuses = `-- name: ListOfficialStatuses :many
+
+SELECT item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at
+FROM official_status ORDER BY item_id
+`
+
+// 公式サイトの販売状況(フェーズ4-3)。1 商品 1 行。
+func (q *Queries) ListOfficialStatuses(ctx context.Context) ([]OfficialStatus, error) {
+	rows, err := q.db.QueryContext(ctx, listOfficialStatuses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []OfficialStatus
+	for rows.Next() {
+		var i OfficialStatus
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.Status,
+			&i.Evidence,
+			&i.CheckedAt,
+			&i.ChangedAt,
+			&i.PreviousStatus,
+			&i.LastResult,
+			&i.LastAttemptAt,
 		); err != nil {
 			return nil, err
 		}
@@ -898,7 +973,7 @@ func (q *Queries) UpdateGenre(ctx context.Context, arg UpdateGenreParams) (int64
 
 const updateItem = `-- name: UpdateItem :exec
 UPDATE items
-SET genre_id = ?, name = ?, option_text = ?, query_override = ?, image_path = ?, source_url = ?, min_price = ?, sort_order = ?
+SET genre_id = ?, name = ?, option_text = ?, query_override = ?, image_path = ?, source_url = ?, min_price = ?, sort_order = ?, watch_official = ?
 WHERE id = ?
 `
 
@@ -911,6 +986,7 @@ type UpdateItemParams struct {
 	SourceUrl     sql.NullString
 	MinPrice      sql.NullInt32
 	SortOrder     int32
+	WatchOfficial bool
 	ID            int64
 }
 
@@ -924,6 +1000,7 @@ func (q *Queries) UpdateItem(ctx context.Context, arg UpdateItemParams) error {
 		arg.SourceUrl,
 		arg.MinPrice,
 		arg.SortOrder,
+		arg.WatchOfficial,
 		arg.ID,
 	)
 	return err
@@ -985,6 +1062,39 @@ func (q *Queries) UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) 
 		arg.InStockCount,
 		arg.Status,
 		arg.FetchedAt,
+	)
+	return err
+}
+
+const upsertOfficialStatus = `-- name: UpsertOfficialStatus :exec
+INSERT INTO official_status (item_id, status, evidence, checked_at, changed_at, previous_status, last_result, last_attempt_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON DUPLICATE KEY UPDATE status = VALUES(status), evidence = VALUES(evidence), checked_at = VALUES(checked_at),
+  changed_at = VALUES(changed_at), previous_status = VALUES(previous_status), last_result = VALUES(last_result),
+  last_attempt_at = VALUES(last_attempt_at)
+`
+
+type UpsertOfficialStatusParams struct {
+	ItemID         int64
+	Status         OfficialStatusStatus
+	Evidence       json.RawMessage
+	CheckedAt      time.Time
+	ChangedAt      sql.NullTime
+	PreviousStatus NullOfficialStatusPreviousStatus
+	LastResult     OfficialStatusLastResult
+	LastAttemptAt  time.Time
+}
+
+func (q *Queries) UpsertOfficialStatus(ctx context.Context, arg UpsertOfficialStatusParams) error {
+	_, err := q.db.ExecContext(ctx, upsertOfficialStatus,
+		arg.ItemID,
+		arg.Status,
+		arg.Evidence,
+		arg.CheckedAt,
+		arg.ChangedAt,
+		arg.PreviousStatus,
+		arg.LastResult,
+		arg.LastAttemptAt,
 	)
 	return err
 }

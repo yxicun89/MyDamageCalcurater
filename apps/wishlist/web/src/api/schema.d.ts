@@ -362,6 +362,50 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * @description 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
+             *     サーバーは常に返す(required にしないのは、古い応答・キャッシュを読めるようにするため。無ければ false として扱う)
+             */
+            watch_official?: boolean;
+            /** @description 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す */
+            official_status?: components["schemas"]["OfficialStatus"] | null;
+        };
+        /**
+         * @description 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
+         *     unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
+         *     blocked robots.txt が許していないので取得しない / failed 取得できなかった
+         * @enum {string}
+         */
+        OfficialState: "available" | "preorder" | "soldout" | "ended" | "unknown" | "ambiguous" | "blocked" | "failed";
+        /**
+         * @description status は最後に判定できた状態。最後の試行が failed・blocked でも、判定済みの status は上書きしない
+         *     (そのときは last_result・last_attempt_at だけが変わる)。一度も判定できていなければ status は failed・blocked のまま
+         */
+        OfficialStatus: {
+            status: components["schemas"]["OfficialState"];
+            /** @description 判定の根拠にした語(最大 3。ページに現れた順)。unknown・failed・blocked は空 */
+            evidence: string[];
+            /**
+             * Format: date-time
+             * @description status を確かめた時刻
+             */
+            checked_at: string;
+            /**
+             * Format: date-time
+             * @description status が前回の判定から変わった時刻(変わったことが無ければ null)
+             */
+            changed_at: string | null;
+            /**
+             * @description changed_at のときの変化前の status
+             * @enum {string|null}
+             */
+            previous_status: "available" | "preorder" | "soldout" | "ended" | "unknown" | "ambiguous" | "blocked" | "failed" | null;
+            last_result: components["schemas"]["OfficialState"];
+            /**
+             * Format: date-time
+             * @description 最後に試した時刻(failed・blocked を含む)
+             */
+            last_attempt_at: string;
         };
         ItemFields: {
             genre_id: components["schemas"]["ID"];
@@ -371,6 +415,8 @@ export interface components {
             source_url?: string;
             min_price?: number;
             sort_order?: number;
+            /** @description true にするには source_url が必要(無ければ 422) */
+            watch_official?: boolean;
         };
         ItemCreateJSON: components["schemas"]["ItemFields"] & {
             /** @description http(s) の画像 URL。サーバーが取得して保存する */
@@ -384,6 +430,8 @@ export interface components {
             source_url?: string;
             min_price?: number;
             sort_order?: number;
+            /** @description `true` / `false`(それ以外は 400)。true にするには source_url が必要(無ければ 422) */
+            watch_official?: boolean;
             /** Format: binary */
             image: string;
         };
@@ -396,6 +444,11 @@ export interface components {
             min_price?: number | null;
             sort_order?: number;
             site_overrides?: components["schemas"]["SiteOverride"][];
+            /**
+             * @description 更新後の商品に source_url が無いのに true になるなら 422(source_url を null にするときは false も送る)。
+             *     source_url を別の値・null に変えると、保存済みの official_status は消える
+             */
+            watch_official?: boolean;
         };
         FromURLRequest: {
             /** @description http(s) の商品ページ URL */

@@ -25,6 +25,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/dbwait"
 	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
+	"example.com/pokecalc/apps/wishlist/api/internal/official"
 	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 )
 
@@ -74,8 +75,11 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 	}
 
 	repo := item.NewMySQLRepository(db)
+	reg := newRegistry(cfg)
 	svc := refresh.New(refresh.Deps{
-		Items: repo, Prices: repo, Fetchers: newRegistry(cfg),
+		Items: repo, Prices: repo, Fetchers: reg,
+		// 公式ページの取得は価格の取得と同じホスト間隔(Gate)を共有する(フェーズ4-3)
+		Official: official.NewChecker(official.Config{Gate: reg.Gate()}), Officials: repo,
 		Logger: slog.New(slog.NewJSONHandler(stderr, nil)), BaseContext: ctx,
 	})
 	report, err := svc.RefreshAll(ctx)
@@ -116,9 +120,9 @@ func exitCode(r refresh.AllReport) int {
 	return 0
 }
 
-// printReport は結果を 1 行で出す(例 `refresher: items=3 failed=1`)。
+// printReport は結果を 1 行で出す(例 `refresher: items=3 failed=1 official=2 official_failed=0`)。
 func printReport(w io.Writer, r refresh.AllReport) {
-	fmt.Fprintf(w, "refresher: items=%d failed=%d\n", r.Items, r.Failed)
+	fmt.Fprintf(w, "refresher: items=%d failed=%d official=%d official_failed=%d\n", r.Items, r.Failed, r.OfficialChecked, r.OfficialFailed)
 }
 
 // newRegistry は取得の登録表を作る。ChromiumPath があるときだけ headless(メルカリ)用の Renderer を渡す。

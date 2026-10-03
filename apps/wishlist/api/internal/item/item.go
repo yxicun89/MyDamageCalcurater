@@ -112,6 +112,10 @@ type Item struct {
 	SiteOverrides []SiteOverride
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	// WatchOfficial は公式ページ(SourceURL)の販売状況を夜間に監視するか(フェーズ4-3)。
+	WatchOfficial bool
+	// Official は保存した販売状況(official_status)。まだ無ければ nil。ListItems・GetItem・CreateItem・UpdateItem が埋める。
+	Official *OfficialStatus
 }
 
 // NewItem は商品の作成値。
@@ -124,6 +128,8 @@ type NewItem struct {
 	SourceURL     *string
 	MinPrice      *int
 	SortOrder     int
+	// WatchOfficial が true なら SourceURL が必要(Service が検査する。無ければ ErrInvalid)。
+	WatchOfficial bool
 }
 
 // ItemPatch は部分更新(docs/design.md W-08)。
@@ -139,6 +145,9 @@ type ItemPatch struct {
 	SortOrder     *int
 	SiteOverrides *[]SiteOverride
 	ImagePath     *string
+	// WatchOfficial は nil なら変えない。更新後に WatchOfficial が true で SourceURL が無くなるなら ErrInvalid(Service が検査する)。
+	// SourceURL を今と違う値・null にすると、Repository は保存済みの販売状況(Official)を消す。
+	WatchOfficial *bool
 }
 
 // Repository は永続化。1 回の呼び出しは不可分(途中で失敗したら何も変えない)。

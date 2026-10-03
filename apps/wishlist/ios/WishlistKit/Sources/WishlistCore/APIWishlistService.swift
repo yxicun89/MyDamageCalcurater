@@ -104,7 +104,7 @@ public struct APIWishlistService: WishlistService {
         try await call {
             var body = Schemas.ItemUpdate(
                 genreId: patch.genreID.map(Int64.init), name: patch.name, sortOrder: patch.sortOrder,
-                siteOverrides: patch.siteOverrides?.map(Self.siteOverride))
+                siteOverrides: patch.siteOverrides?.map(Self.siteOverride), watchOfficial: patch.watchOfficial)
             var cleared: Set<String> = []
             switch patch.optionText {
             case .keep: break
@@ -209,7 +209,8 @@ public struct APIWishlistService: WishlistService {
     public func createGenre(_ body: GenreCreate) async throws -> Genre {
         try await call {
             let request = Schemas.GenreCreate(
-                name: body.name, queryTemplate: body.queryTemplate, sortOrder: body.sortOrder, siteIds: body.siteIDs?.map(Int64.init))
+                name: body.name, queryTemplate: body.queryTemplate, sortOrder: body.sortOrder, siteIds: body.siteIDs?.map(Int64.init),
+                aliases: body.aliases)
             return Self.genre(try await client.createGenre(body: .json(request)).created.body.json)
         }
     }
@@ -218,7 +219,7 @@ public struct APIWishlistService: WishlistService {
         try await call {
             let request = Schemas.GenreUpdate(
                 name: patch.name, queryTemplate: patch.queryTemplate, sortOrder: patch.sortOrder,
-                siteIds: patch.siteIDs?.map(Int64.init))
+                siteIds: patch.siteIDs?.map(Int64.init), aliases: patch.aliases)
             return Self.genre(try await client.updateGenre(path: .init(id: Int64(id)), body: .json(request)).ok.body.json)
         }
     }
@@ -257,11 +258,20 @@ public struct APIWishlistService: WishlistService {
             id: Int(i.id), genreID: Int(i.genreId), name: i.name, optionText: i.optionText, queryOverride: i.queryOverride,
             imageURLPath: i.imageUrl, sourceURL: i.sourceUrl, minPrice: i.minPrice, sortOrder: i.sortOrder,
             siteOverrides: i.siteOverrides.map { SiteOverride(siteID: Int($0.siteId), query: $0.query, enabled: $0.enabled) },
-            createdAt: i.createdAt, updatedAt: i.updatedAt)
+            createdAt: i.createdAt, updatedAt: i.updatedAt, watchOfficial: i.watchOfficial ?? false,
+            officialStatus: i.officialStatus.map { Self.officialStatus($0.value1) })
+    }
+
+    private static func officialStatus(_ o: Schemas.OfficialStatus) -> OfficialStatus {
+        OfficialStatus(
+            status: OfficialState(rawValue: o.status.rawValue) ?? .unknown, evidence: o.evidence, checkedAt: o.checkedAt,
+            changedAt: o.changedAt, previousStatus: o.previousStatus.flatMap { OfficialState(rawValue: $0.rawValue) },
+            lastResult: OfficialState(rawValue: o.lastResult.rawValue) ?? .unknown, lastAttemptAt: o.lastAttemptAt)
     }
 
     private static func genre(_ g: Schemas.Genre) -> Genre {
-        Genre(id: Int(g.id), name: g.name, queryTemplate: g.queryTemplate, sortOrder: g.sortOrder, siteIDs: g.siteIds.map(Int.init))
+        Genre(id: Int(g.id), name: g.name, queryTemplate: g.queryTemplate, sortOrder: g.sortOrder, siteIDs: g.siteIds.map(Int.init),
+            aliases: g.aliases ?? [])
     }
 
     private static func site(_ s: Schemas.Site) -> Site {

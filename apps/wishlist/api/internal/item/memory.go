@@ -20,6 +20,7 @@ type MemoryRepository struct {
 	estimates map[[2]int64]Estimate // (item_id, site_id)
 	listings  []Listing
 	history   map[historyKey]PricePoint // 価格の推移(フェーズ4-2。memory_history.go)
+	officials map[int64]OfficialStatus  // 公式の販売状況(フェーズ4-3。memory_official.go)
 	nowFunc   func() time.Time
 }
 
@@ -33,6 +34,7 @@ func NewMemoryRepository() *MemoryRepository {
 		items:     map[int64]Item{},
 		estimates: map[[2]int64]Estimate{},
 		history:   map[historyKey]PricePoint{},
+		officials: map[int64]OfficialStatus{},
 		nowFunc:   time.Now,
 	}
 }
@@ -78,6 +80,10 @@ func cloneItem(it Item) Item {
 	it.QueryOverride = cloneP(it.QueryOverride)
 	it.SourceURL = cloneP(it.SourceURL)
 	it.MinPrice = cloneP(it.MinPrice)
+	if it.Official != nil {
+		o := cloneOfficial(*it.Official)
+		it.Official = &o
+	}
 	return it
 }
 
@@ -104,7 +110,7 @@ func (m *MemoryRepository) ListItems(_ context.Context, genreID *int64) ([]Item,
 	out := []Item{}
 	for _, it := range m.items {
 		if genreID == nil || it.GenreID == *genreID {
-			out = append(out, cloneItem(it))
+			out = append(out, cloneItem(m.withOfficial(it)))
 		}
 	}
 	slices.SortFunc(out, func(a, b Item) int {
@@ -120,7 +126,7 @@ func (m *MemoryRepository) GetItem(_ context.Context, id int64) (Item, error) {
 	if !ok {
 		return Item{}, ErrNotFound
 	}
-	return cloneItem(it), nil
+	return cloneItem(m.withOfficial(it)), nil
 }
 
 func (m *MemoryRepository) CreateItem(_ context.Context, in NewItem) (Item, error) {
@@ -133,7 +139,7 @@ func (m *MemoryRepository) CreateItem(_ context.Context, in NewItem) (Item, erro
 	it := Item{
 		ID: m.id(), GenreID: in.GenreID, Name: in.Name, OptionText: in.OptionText, QueryOverride: in.QueryOverride,
 		ImagePath: in.ImagePath, SourceURL: in.SourceURL, MinPrice: in.MinPrice, SortOrder: in.SortOrder,
-		SiteOverrides: []SiteOverride{}, CreatedAt: now, UpdatedAt: now,
+		SiteOverrides: []SiteOverride{}, CreatedAt: now, UpdatedAt: now, WatchOfficial: in.WatchOfficial,
 	}
 	it = cloneItem(it)
 	m.items[it.ID] = it
@@ -176,11 +182,18 @@ func (m *MemoryRepository) UpdateItem(_ context.Context, id int64, p ItemPatch) 
 	}
 	it.OptionText = applyNullable(it.OptionText, p.OptionText)
 	it.QueryOverride = applyNullable(it.QueryOverride, p.QueryOverride)
+	oldSource := it.SourceURL
 	it.SourceURL = applyNullable(it.SourceURL, p.SourceURL)
+	if !sameStrP(oldSource, it.SourceURL) {
+		delete(m.officials, id) // 別のページの状態を見せない
+	}
 	it.MinPrice = applyNullable(it.MinPrice, p.MinPrice)
+	if p.WatchOfficial != nil {
+		it.WatchOfficial = *p.WatchOfficial
+	}
 	it.UpdatedAt = m.now()
 	m.items[id] = it
-	return cloneItem(it), nil
+	return cloneItem(m.withOfficial(it)), nil
 }
 
 func (m *MemoryRepository) DeleteItem(_ context.Context, id int64) (string, error) {
@@ -191,6 +204,7 @@ func (m *MemoryRepository) DeleteItem(_ context.Context, id int64) (string, erro
 		return "", ErrNotFound
 	}
 	delete(m.items, id)
+	delete(m.officials, id)
 	m.deletePriceData(id)
 	return it.ImagePath, nil
 }
@@ -314,4 +328,11 @@ func (m *MemoryRepository) UpdateSite(_ context.Context, id int64, p SitePatch) 
 	}
 	m.sites[id] = s
 	return s, nil
+}
+
+func sameStrP(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
