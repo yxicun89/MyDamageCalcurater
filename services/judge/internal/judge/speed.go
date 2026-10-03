@@ -189,3 +189,53 @@ func IsChoiceScarf(itemID, scarfItemID string) bool {
 	}
 	return itemID == scarfItemID
 }
+
+// 素早さの計算に効かせた補正の名前(契約の SpeedFactor。ADR-0710)。
+const (
+	SpeedFactorRank        = "rank"
+	SpeedFactorTailwind    = "tailwind"
+	SpeedFactorChoiceScarf = "choiceScarf"
+)
+
+// AppliedSpeedFactors は Speed が実際に効かせる補正を、rank → tailwind → choiceScarf の順で返す
+// (ADR-0710)。効かせる補正が無ければ空のスライス(nil にはしない)。
+func AppliedSpeedFactors(in Individual) []string {
+	factors := []string{}
+	if in.Ranks.Spe != 0 {
+		factors = append(factors, SpeedFactorRank)
+	}
+	if in.Tailwind {
+		factors = append(factors, SpeedFactorTailwind)
+	}
+	if in.Scarf {
+		factors = append(factors, SpeedFactorChoiceScarf)
+	}
+	return factors
+}
+
+// 素早さに影響しうるのに反映していない入力の名前(契約の SpeedIgnoredInput。ADR-0710)。
+const (
+	IgnoredSpeedAbility = "abilityId"
+	IgnoredSpeedItem    = "itemId"
+	IgnoredSpeedWeather = "fieldWeather"
+)
+
+// IgnoredSpeedInputs は、指定されたが素早さに反映していない入力を abilityId → itemId → fieldWeather の順で返す
+// (ADR-0710)。judge は特性・持ち物の素早さ補正のデータを持たないので、「影響するか」ではなく
+// 「指定されたか」で判定する(素早さに効かない特性でも入る。第2段のデータ駆動までの印)。
+//   - ability: abilityID が空でない
+//   - item: itemID が空でなく、こだわりスカーフではない(isScarf が false)
+//   - weather: 天候があり(none 以外)、かつ abilityID も指定されている(天候依存の素早さ特性があり得るため)
+func IgnoredSpeedInputs(abilityID, itemID string, isScarf, hasWeather bool) []string {
+	ignored := []string{}
+	if abilityID != "" {
+		ignored = append(ignored, IgnoredSpeedAbility)
+	}
+	if itemID != "" && !isScarf {
+		ignored = append(ignored, IgnoredSpeedItem)
+	}
+	if hasWeather && abilityID != "" {
+		ignored = append(ignored, IgnoredSpeedWeather)
+	}
+	return ignored
+}

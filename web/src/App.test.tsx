@@ -28,6 +28,14 @@ test("アプリが描画される", () => {
 
 // P4-2: App はヘッダーと計算画面を出す。マスタは MasterSource(既定は架空の例データ。ADR-0300 §3)から、
 // 計算は CalcEngine(既定は browserWasmLoader の WASM 実装。ADR-0300 §2)から受け取り、テストでは差し替える。
+/** fetch の第1引数(RequestInfo | URL)を URL 文字列にする。 */
+function requestUrl(input: RequestInfo | URL): string {
+  if (typeof input === "string") {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
+}
+
 describe("P4-2 計算画面の組み込み", () => {
   function deferredMasterSource(): {
     source: MasterSource;
@@ -81,7 +89,12 @@ describe("P4-2 計算画面の組み込み", () => {
     render(<App />);
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // ADR-0317 §3: 既定(オンライン)では「よく計算する相手」のために /api/record を読む(表示専用)。
+    // engine.wasm・計算 API・マスタは読まない。
+    const nonRecordCalls = fetchSpy.mock.calls.filter(
+      ([input]) => !requestUrl(input).includes("/api/record/"),
+    );
+    expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();
     expect(headAppendChildSpy).not.toHaveBeenCalled();
   });
@@ -212,14 +225,19 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // P5-5 PR-A1(ADR-0309 §1): 最後のタブは構築。判定・素早さ・タイプバランスは End からそれぞれ
-    // 1・2・3つ手前(JD5 の時点では判定が末尾だった)。
+    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・判定・素早さ・タイプバランスは End からそれぞれ
+    // 1・2・3・4つ手前(P5-5 PR-A1 の時点では構築、JD5 の時点では判定が末尾だった)。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
     const judgeTab = screen.getByRole("tab", { name: "判定" });
     const teamTab = screen.getByRole("tab", { name: "構築" });
+    const adjustTab = screen.getByRole("tab", { name: "調整" });
     calcTab.focus();
     await user.keyboard("{End}");
+    expect(adjustTab).toHaveAttribute("aria-selected", "true");
+    expect(adjustTab).toHaveFocus();
+
+    await user.keyboard("{ArrowLeft}");
     expect(teamTab).toHaveAttribute("aria-selected", "true");
     expect(teamTab).toHaveFocus();
 
@@ -485,7 +503,12 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     render(<App />);
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+    // ADR-0317 §3: オンラインでは「よく計算する相手」のために /api/record を1回だけ読む(表示専用。
+    // 計算・マスタ・engine.wasm とは無関係)。それ以外(calc・pokedex・engine.wasm)は読まない。
+    const nonRecordCalls = fetchSpy.mock.calls.filter(
+      ([input]) => !requestUrl(input).includes("/api/record/"),
+    );
+    expect(nonRecordCalls).toEqual([]);
     expect(headAppendSpy).not.toHaveBeenCalled();
     expect(headAppendChildSpy).not.toHaveBeenCalled();
   });

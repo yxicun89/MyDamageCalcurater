@@ -55,11 +55,11 @@ readonly ALL_CONSTS="KUBE_PROMETHEUS_STACK_VERSION KUBE_PROMETHEUS_STACK_SHA256 
 readonly SHA_CONSTS="KUBE_PROMETHEUS_STACK_SHA256 LOKI_SHA256 ALLOY_SHA256"
 readonly VERSION_CONSTS="KUBE_PROMETHEUS_STACK_VERSION LOKI_VERSION ALLOY_VERSION"
 
-# ServiceMonitor の対象6サービスと、その既存 Service 定義の置き場所。
-readonly SERVICES="balance speed judge gateway pokedex calc"
+# ServiceMonitor の対象8サービスと、その既存 Service 定義の置き場所(record・team は ADR-0220 §2)。
+readonly SERVICES="balance speed judge gateway pokedex calc record team"
 service_yaml() {
   case "$1" in
-    gateway | pokedex | calc) echo "deploy/k8s/base/$1/service.yaml" ;;
+    gateway | pokedex | calc | record | team) echo "deploy/k8s/base/$1/service.yaml" ;;
     balance | speed | judge) echo "services/$1/deploy/k8s/base/service.yaml" ;;
   esac
 }
@@ -695,15 +695,15 @@ test_servicemonitors() {
 }
 
 test_kustomize_render() {
-  begin "kustomize: $OBS_REL が描画でき、6つの ServiceMonitor を含み、Ingress・Secret を含まない"
+  begin "kustomize: $OBS_REL が描画でき、8つの ServiceMonitor を含み、Ingress・Secret を含まない"
   if ! command -v kubectl >/dev/null 2>&1; then
     ng "kubectl が PATH に無い"
     return
   fi
   local out s
   if out=$(kubectl kustomize "$ROOT/$OBS_REL" 2>&1); then ok; else ng "kubectl kustomize $OBS_REL が失敗: $out"; return; fi
-  if [ "$(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')" = 6 ]; then ok; else
-    ng "描画結果の ServiceMonitor が6つでない: $(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')"
+  if [ "$(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')" = 8 ]; then ok; else
+    ng "描画結果の ServiceMonitor が8つでない: $(printf '%s\n' "$out" | grep -cE '^kind: ServiceMonitor$')"
   fi
   printf '%s\n' "$out" >"$WORK/rendered.yaml"
   for s in $SERVICES; do

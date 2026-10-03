@@ -320,6 +320,10 @@ function matchup(index: number, overrides: Partial<Schemas["Matchup"]> = {}): Sc
     defenderKo: ko(3 + index, false, 10 + index),
     attackerKoUnsupported: [],
     defenderKoUnsupported: [],
+    attackerSpeedApplied: [],
+    defenderSpeedApplied: [],
+    attackerSpeedIgnored: [],
+    defenderSpeedIgnored: [],
     ...overrides,
   };
 }
@@ -660,6 +664,22 @@ describe("A5 結果の表示", () => {
     expect(row).toHaveTextContent(judgeScreenText.attackerMovesFirstLabel);
   });
 
+  test("素早さに反映した補正と、反映していない入力を側ごとに出す(issue 235)", async () => {
+    await submitTwoCandidates([
+      matchup(0, {
+        attackerSpeedApplied: ["rank", "tailwind"],
+        defenderSpeedIgnored: ["abilityId", "fieldWeather"],
+      }),
+      matchup(1),
+    ]);
+
+    const rows = matchupRows();
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("自分", ["ランク補正", "追い風"]));
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedIgnoredNote("相手", ["特性", "天候"]));
+    // 空の欄は文を出さない。
+    expect(rows[1]).not.toHaveTextContent("反映");
+  });
+
   test("同速は「同速」として出す(outspeeds の false と区別する。ADR-0700 §6-1)", async () => {
     await submitTwoCandidates([
       matchup(0, { outspeeds: false, speedTie: true, attackerSpeed: 150, defenderSpeed: 150 }),
@@ -736,6 +756,8 @@ describe("A6 エラーの表示", () => {
   });
 
   test.each([
+    ["missing_header", judgeErrorText.missing_header],
+    ["invalid_header", judgeErrorText.invalid_header],
     ["invalid_request", judgeErrorText.invalid_request],
     ["unknown_species", judgeErrorText.unknown_species],
     ["unknown_nature", judgeErrorText.unknown_nature],

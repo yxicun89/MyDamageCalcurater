@@ -2,7 +2,7 @@
 
 ## Damage Calculator
 Lane: データ(engine・マスタ・pokedex。どの AI が進めてもよい。COORDINATION.md)
-Active: Claude Code(2026-10-01〜。issue #403 の残りパッケージを D22 から順に)
+Active: なし(2026-10-02 の区切りで終了。次は Next から)
 Branch: 次は main から feat/data-<名前> か fix/data-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater は main 追従の確認用。作業は git worktree で)
 Status: Phase 1・P2-1・P1-10・Phase R・P1-13・P1-11・P1-12・P2-1b・P2-1c・P2-2a・P2-2b・P2-2c・P2-2d・P2-3(pokedex-svc。内部 API・公開 API・natures・balance/speed 向け export。ADR-0105)は完了(critic レビュー済み)
 Status(追記): P2-3b(無効・吸収の特性)も完了・main 統合済み(ADR-0106)。calc・gateway の pokedex-svc 接続(API レーンの依頼)も PR #87 で解決済み(api-smoke で master=pokedex 確認済み)。
@@ -21,6 +21,7 @@ Status(追記): 2026-10-01、D10(issue #220・ADR-0127)完了。内部 API(/inte
 Status(追記): 2026-10-01、D07(共通の scripts/require-k3d-context.sh・scripts/image-tag.sh とテスト、up.sh・deploy-latest・pokedex-registry-push・import-k8s の context 検査を共通化、Secret を kubectl create で作る。#327・#295-shared・#291-shared)。各レーンの *-k3d-deploy への組み込みは各レーン(DECISIONS.md 2026-10-01)。
 Status(追記): 2026-10-01、D23(`make test-db-docker`: Docker の使い捨て MySQL・TiDB で `make test-db` を流して消す。verify-m1 §2・test-strategy L8。#223)。
 Status(追記): issue #403 D20 のデータ部分(#281-data・#108-a・#259-a。ADR-0128)実装済み。dataVersion を source=version@checksum先頭8桁にし(内部 API と export が internal/dataversion を共有)、export に metadata.json・type-chart.json を追加(6ファイル)。#211-data は API レーンの契約待ちで残る。
+Status(追記): #281・#108 の残り(ADR-0135): calc の起動ログと /readyz に dataVersion、runbooks/data.md §5a(export → deploy-latest → check-master-version)、`make check-master-version`(calc は /readyz、balance・speed は配備時の Deployment 注釈)。残り: balance・speed の loader が版を保持・表示、import 待機から smoke までの単一ターゲット、版が同じなら再生成しない判定。
 Status(追記): 2026-10-01、D18(issue #111・ADR-0104 追記)。importer の PVC に容量の事前確認(`prune.mjs check`、不足は終了コード3)と、現在版+直前の成功版・report 52 件の保持 prune(`prune.mjs prune`、DB apply 成功後)を追加。手順は docs/runbooks/data.md。
 Status(追記): 2026-10-01、issue #437(取り込み中に MySQL が OOMKill)を修正。memory.cnf(performance_schema=OFF 等)と limit 768Mi。k3d に反映済み(待機 499Mi → 165Mi、全置換3回で restart 0)。
 Status(追記): 2026-10-01、D11(issue #107・#323・#324・#299 の pokedex 分。ADR-0129)。`/readyz`(DB の最小条件に連動)・DB 呼び出しの締め切り5秒・preStop sleep 5秒。新規クラスタは初回 import 前に pokedex が Ready にならない(deploy-latest は失敗時に make import-k8s を案内)。
@@ -30,7 +31,9 @@ Status(追記): 2026-10-01、D25(issue #240・ADR-0132)。pokecalc に ingress �
 Status: D27(#252・#319・#290・#221 の runbook 部分)実装済み。`docs/runbooks/{data,api}.md`・`docs/impl/{k8s-local,db-mysql,make-targets}.md`・`docs/verify-m1.md` §3 を今の main に合わせて直した(確認方法・Secret 5キー・NetworkPolicy・終了コード3と PVC 消失の復旧手順・行番号の除去)。新しいクラスタでの verify-m1 §3 の通し実行は人間の確認待ち。
 Status: D29(#226・#296・#314・#224・#254 の索引・#256 の C・#227 のデータ分)実装済み(文書のみ)。README を現状(動くもの・未実装は assets のみ・起動手順)に、overview の状態列を plan.md への委譲に、requirements に3機能と契約4本の索引、test-strategy にサービス別の索引、ゴールデン関連(known_diffs・gen9 表記・1,392 種族)を実態に直し、ADR-0002・0011・0012・0100・0101・0104・0105・0108 の状態欄を実装後の事実(PR 番号)に更新。CLAUDE.md・docs/impl の known_diffs 記述は他担当(D31)。0207 欠番は API レーンの判断。
 Status: D19(issue #222 案A〈ユーザー確認待ち。DECISIONS.md〉・#301。ADR-0101 追記)実装済み。取得物の内容ハッシュ(Showdown 展開後ツリー・PokeAPI の各 CSV)を config.json の integrity と照合し、不一致は終了コード3。`npm ci --ignore-scripts`。CronJob を initContainer `fetch`(DSN なし)と `import` に分離し、cronjob.sh は fetch|import|引数なしと引き渡しファイルでロックの隙間を埋める。実データの再取得でハッシュ一致・dry-run は blockers: none。
-Next: データレーンの open issue を解消中(2026-10-02。triage → 実装済みのクローズ → 残りの実装)。#403 の残り: D26・D28〈T05 待ち〉・D30・D31〈CLAUDE.md・AGENTS.md はユーザー確認〉・D32・D21〈T04・S04・A06 待ち〉・#211-data〈API レーン待ち〉。後続: ADR-0126 の計算量の最適化。
+Status(追記): 2026-10-02、データ・運用の open issue を解消: #445(#301・#222 案A)・#460(#349)・#461(版の固定。D26)・#464(plan.md の整理。D30 の一部)・#465(#320・#293)・#466(#330)・#467(#295・#324・#321)・#470(#331 staticcheck)・#471(#262 MySQL 非 root・バックアップ手順)・#473(deploy-latest が Argo CD 管理の balance で止まる不具合)・ADR-0126 の最適化(逆算の最悪 43.7ms → 14ms)。#74・#75 は解決済みとしてクローズ。k3d は main の内容で全 smoke 緑。
+Status(追記): 2026-10-02 調整機能(docs/plan.md「AJ: 調整」。ADR-0150・0250・0251・0319)の AJ0〜AJ6 を実装(engine・調整 API・技の逆引き・Web の「調整」タブ)。PR #476(AJ0〜AJ3)→ #491(AJ4〜AJ6)の順にマージ。AJ7(iOS の調整画面。ADR-0502)も実装済み。AJ は全タスク完了(実機・ブラウザでの目視確認のみ人間の確認待ち)。
+Next: データレーンの open issue の解消(2026-10-02)。残りは人間の判断待ち(#313 DECISIONS の退避・#302 Ingress の待ち受け・#283・#285・#229・#230・#232・#243・#297 のレジストリ・#328 とリポジトリの公開状態)、D31(CLAUDE.md・AGENTS.md の編集はユーザー確認)、他レーン待ち(D21: T04・S04・A06、#211-data: API の契約)。WASM の逆算そのものの速度(特性なしで約 30ms。ADR-0126 追記)は後続。
 
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
@@ -107,11 +110,13 @@ critic 1回目FAILで発覚し修正済み)。deployment.yamlへの実URL配線�
 healthz例外の欠如・README.mdのルーティング表が古いまま〉→修正→2回目PASS)。**main未統合**。
 Status(追記): 2026-10-01 PR #416(issue #284: balance・speed・judgeをgatewayの後ろに統一)を main 統合。続けて UnsupportedMark の target・reason を string に緩めた(ADR-0215。Web・iOS の追従込み)。
 Status(追記): 2026-10-03 issue #315 のメガ部分実装済み(メガ種族+requiredItemId 以外の持ち物は 400 invalid_input。ADR-0200 §4 追記。テラスタイプは別作業)。
+Status(追記): 2026-10-02、issue #236 の judge 分を完了(ADR-0219。ブランチ fix/api-236-header-validation、PR 待ち。balance は PR #458)。端末ID・セッションIDを gateway・speed と同じ正準 UUID 検証に揃え、code は `missing_header`/`invalid_header`。judge は非 UUID を calc へ転送しない。judge の openapi・Web 生成型・ja.ts を更新。
 Next: キュー順に対応:
 (2) defenderOverride.ranks/status は実装済み(ADR-0216。critic・コミット・PR 待ち)、(3) P5-3b・P5-4b(失効ジョブ・Deployment配線。
 issue #284のdeployment.yaml配線も含む。優先度低)。
 issue #103・#148の依頼(データ・Web・iOS・運用レーンへ)、getMove 実装の再レビュー依頼(データレーンへ。
 60fbe25で対応済み)・iOS再生成依頼(a1f5d5eで対応済み)、P4-17完了(Webレーンへ連絡予定)はDECISIONS.mdに記録済み
+Status(追記): P5-3b・P5-4b 実装済み(ADR-0220。critic 待ち)。`deploy/k8s/base/{record,team}`(Deployment・Service・保持日数の ConfigMap・日次の失効 CronJob)、gateway の `GATEWAY_RECORD_URL`・`GATEWAY_TEAM_URL`(base)、`record expire`・`team expire`(同じバイナリのサブコマンド。`internal/expire`。冪等・1回の上限・終了コード 0/1/2)、NetworkPolicy 4本、/metrics と ServiceMonitor、cloud overlay での失効ジョブ suspend、up.sh の server イメージ build。TiDB 実機(`make test-db-docker`)の expire テスト含め green。k3d への実デプロイは未確認(人間が確認)。
 
 ## Web
 Lane: Web(`web/`・Playwright。どの AI が進めてもよい)
@@ -425,6 +430,9 @@ JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)ま�
 Status(追記): 2026-10-02 issue 309 `web/src/judge/` を変更: 技は ID 自由入力から種族の learnset の select へ(ADR-0705 §5 を置き換え)、調整プリセット(無振り・最速・攻撃特化・HB/HD特化)、SP6欄・ランク5欄は「詳細」に畳む、検証エラーは欄ごとに aria-invalid+文言。ADR-0711。
 Status(追記): 2026-10-01 issue #258 judge の GitOps(gitops overlay・Argo CD Application・image 公開スクリプト。ADR-0709)を実装。
 実クラスタへの適用(`judge-argocd-app`・registry push・sync)は人間確認待ちで未実施。
+Status(追記): 2026-10-03 issue #288(ダブル)は技の対象のマスタ化待ち。データレーンへ依頼済み(DECISIONS.md)。暫定でダブルを非表示(PR #421)。
+Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・反映していない入力を応答と判定画面に出す。ADR-0710)を実装。
+第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Next: issue 309 の critic レビューと PR(共通部品化〈MoveSelect・プリセット選択〉と SpeciesSearchField の aria-invalid 対応は別タスク提案。ADR-0711)。以降は新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):

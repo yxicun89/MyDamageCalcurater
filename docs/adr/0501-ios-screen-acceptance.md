@@ -3756,3 +3756,74 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
 - テスト結果: `swift test` 576 件中 2 件失敗(上記の矛盾の2件のみ。新規 API 4 件を含む他は成功)/ `make ios-lint ios-gen-check
   ios-check-request-limits` 成功 / `make ios-test-ui` 53 件中 1 件失敗(`testFailureThenRetryCompletes`。上記の矛盾のみ。
   AX5 の新規テストを含む他は全件成功)。
+
+## P6-21 の受け入れ条件(iOS のタイプバッジ・エンブレム文字色を design.md「タイプバッジ」に合わせる。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-02 / 担当レーン: iOS / 関連: docs/design.md「タイプ色」「タイプバッジ」(issue #306)、
+  `web/src/styles/typeBadgeContrast.test.ts`・tokens.css の `--type-<id>-ink`、docs/plan.md P6-21
+- 背景: design.md は文字色を「黒か白のうちタイプ色とのコントラスト比が高い方(白は どく/ゴースト/ドラゴン/あく の4つだけ。
+  最小 4.59:1)」とし、iOS にも同名トークン(`typeInk(_:)`)を求める。iOS は `TypeBadgeView`・`SpeciesEmblemView` が `.white` 固定で、
+  でんき(1.6:1 級)など14タイプが 4.5:1 に届かない。API・Generated は触らない。
+
+### 1. トークンの仕様(判断)
+
+- `TypeColorToken` に `ink(forTypeID:) -> RGBA?`(黒 `#000000` / 白 `#FFFFFF`。未知 ID・大文字は nil)、`inkColor(forTypeID:) -> Color?`、
+  純粋関数 `preferredInk(over: RGBA) -> RGBA` を足す(design.md の `typeInk(_:)` に当たる。Swift の命名として `ink(forTypeID:)`
+  にし、既存の `rgba(forTypeID:)`・`color(forTypeID:)` と並べた)。
+- **判断: 18 タイプの文字色の表を二重に持たず、`rgba(forTypeID:)`(タイプ色の単一の正)から `preferredInk(over:)` で導出する。**
+  `preferredInk` は WCAG 2.2 の相対輝度 `0.2126 R + 0.7152 G + 0.0722 B`(sRGB は `c <= 0.03928 ? c/12.92 : ((c+0.055)/1.055)^2.4`)で
+  黒・白のコントラスト比を比べ、高い方(同値は黒)を返す。理由: タイプ色を変えたとき文字色が自動で追従し、
+  「色を変えたのに文字色が古い」を防げる。design.md の表との一致は下のテストが担保する。
+- Web との一致: iOS から `web/` は読めないため、テストには design.md の表を転記した期待値(白4タイプの集合)を置く。Web 側は
+  tokens.test.ts が design.md と照合しているので、両者は design.md を介して同じ表を見る。design.md の文字色表を変えるときは
+  tokens.css・Web テスト・本テストの表を同じ変更で直す。
+
+### 2. View
+
+- `TypeBadgeView`: 文字色を `TypeColorToken.inkColor(forTypeID:)`(未知なら従来の背景 `textSecondary` に対する既定として `.white`)に。
+  `.lineLimit(1).fixedSize()`・padding・Capsule は維持。
+- `SpeciesEmblemView` の頭文字: **既定案どおり ink に揃える**。背景がタイプ色のグラデーションで、でんき・こおり等の明るい色の上では
+  白だと読めないため。2タイプのグラデーションは先頭タイプ(左上、頭文字の位置に近い側)の ink を使う。
+  タイプ無し(`textSecondary` 単色)のときは従来どおり `.white`。
+- カードのふち・ダメージバー等の色の使い方は変えない(スコープ外)。
+
+### 3. 追加したテスト(`PokeCalcKit/Tests/PokeCalcDesignTests/DesignTokenTests.swift`。既存の期待値は不変)
+
+- `testTypeInkMatchesDesignDocTableForAll18Types`(18 タイプの ink が design.md の表と一致)
+- `testOnlyFourTypesUseWhiteInk`(白は poison・ghost・dragon・dark の4つだけ)
+- `testTypeInkContrastIsAtLeast4_5ForAll18Types`(独立実装 `ColorContrast.swift` で 4.5 以上)
+- `testTypeInkIsTheHigherContrastOfBlackAndWhite`(黒・白のうち高い方)
+- `testMinimumTypeInkContrastIsAbout4_59`(最小 fighting 4.59±0.01、次 poison 4.79±0.01)
+- `testPreferredInkSelectsByContrast`(黒→白、白→黒、#777777→黒、#757575→白(境界)、#707070→白)
+- `testUnknownTypeIDHasNoInk`(未知・大文字は nil、`inkColor` の有無)
+
+View の色そのものは単体で検証しづらいため、ink の選択を純粋関数に寄せて上で検証した。XCUITest は追加しない。
+
+### 4. 受け入れ条件(検証可能な形)
+
+1. 18 タイプすべてで ink のコントラスト比が 4.5 以上。
+2. 白は poison・ghost・dragon・dark のみ。他14は黒(design.md の表と一致)。
+3. 最小コントラストは fighting の約 4.59、次が poison の約 4.79。
+4. 未知 ID・大文字 ID の ink は nil。
+5. `TypeBadgeView` の文字色が ink。1行・自然幅(`.lineLimit(1).fixedSize()`)は維持。
+6. `SpeciesEmblemView` の頭文字色が先頭タイプの ink。
+7. 既存テスト・accessibilityIdentifier・`api/openapi.yaml`・Generated は不変。
+
+### 5. spec 時点の結果(2026-10-02)
+
+追加 7 テスト(`swift test --filter PokeCalcDesignTests`)。足場が常に黒を返すため、**37 個のアサーションが失敗**
+(白4タイプの一致・高い方の選択・純粋関数の黒背景→白など。失敗は新規 7 テストのうち 5 件)。既存は全件成功(`swift test` 全体は 576 件+新規 7 件のうち上記のみ失敗)。
+
+### 6. 実装者への注意(`TODO(implementer P6-21` を検索)
+
+- `PokeCalcDesign.swift` の `preferredInk(over:)` と `ink(forTypeID:)` の足場(常に黒)を、上記 §1 の導出に置き換える。
+  相対輝度の式を `ColorContrast.swift`(テスト用)からコピーせず、製品側に1箇所だけ置く(`precondition(alpha == 1.0)` 相当は不要、タイプ色は不透明)。
+- `CalcScreenCards.swift` の `TypeBadgeView`・`SpeciesEmblemView` を §2 のとおり直す。エンブレムは `types.first` の ink を使う。
+- `ios/README.md`/`docs/plan.md`(P6-21 のチェック)を更新。design.md は変更不要(「`typeInk(_:)`」と書いてあるが Swift 側の名前は `ink(forTypeID:)`。差が気になるなら design.md の文言を実装者が直す)。
+
+### 7. 実装結果(2026-10-02)
+
+- `TypeColorToken.preferredInk(over:)`(WCAG の相対輝度式を製品側に1箇所。同値は黒)と `ink(forTypeID:)`(`rgba(forTypeID:)` から導出)を実装。
+  `TypeBadgeView` の文字色と `SpeciesEmblemView` の頭文字色(先頭タイプの ink)を ink に。未知 ID・タイプ無しは従来の白。
+- design.md の `typeInk(_:)` に当たる Swift 側の名前は `ink(forTypeID:)`(design.md は変更しない)。`ios/README.md` に追記すべき項目は無い。
+- 結果: `swift test` 全件成功(新規 7 件を含む)。critic PASS(軽微のみ。plan.md の項目追記と本章の更新を反映)。

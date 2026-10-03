@@ -23,6 +23,9 @@ const (
 	// pokedexServiceName は gateway が /api/pokedex/* を転送する pokedex-svc の Service 名
 	// (deploy/k8s/base/pokedex。ADR-0105・ADR-0206)。
 	pokedexServiceName = "pokedex"
+	// balanceServiceName は gateway が /api/balance/* を転送する balance-svc の Service 名
+	// (services/balance/deploy/k8s/base。issue #284)。
+	balanceServiceName = "balance"
 )
 
 // assertServiceURL は cfg の上流 URL が Service 名の 80 番(パス・クエリなし)であることを確かめる。
@@ -47,8 +50,8 @@ func TestManifestGatewayWorkload(t *testing.T) {
 }
 
 // AC-S3: gateway の Ingress は traefik・path "/" Prefix・ホスト指定なしで gateway の Service を指す
-// (balance の "/api/balance" は今も最長一致で balance 自身の Ingress に届く。ADR-0012。gateway 側の
-// ルーティングは issue #284 で実装済みだが、直結 Ingress の撤去と URL 配線は別タスク)。
+// (balance の "/api/balance" は gateway が転送する。balance の直結 Ingress は issue #284 で撤去。
+// speed・judge の直結 Ingress は残っている)。
 func TestManifestGatewayIngress(t *testing.T) {
 	var ing deploytest.Ingress
 	deploytest.Find(t, deploytest.BaseObjects(t, gatewayService), "Ingress", gatewayService).Decode(t, &ing)
@@ -96,6 +99,18 @@ func TestManifestGatewayBaseConfig(t *testing.T) {
 	if cfg.Gateway.AssetsURL != nil {
 		t.Errorf("base に %s がある(画像配信はまだ無い)", envAssetsURL)
 	}
+}
+
+// issue #284: GATEWAY_BALANCE_URL は balance の Service 名(80 番)を指す(Ingress の直結をやめて gateway 経由にした)。
+// Service 名はクラウドでも同じなので base に置く。
+func TestManifestGatewayBalanceURL(t *testing.T) {
+	d := deploytest.BaseDeployment(t, gatewayService)
+	env := d.Container(t, gatewayService).EnvMap(t)
+	cfg, err := loadConfig(lookupFrom(env))
+	if err != nil {
+		t.Fatalf("base の環境変数で loadConfig が失敗: %v", err)
+	}
+	assertServiceURL(t, envBalanceURL, cfg.Gateway.BalanceURL, balanceServiceName)
 }
 
 // AC-S4 / AC-P2(ADR-0206): local overlay(base + deploy/k8s/overlays/local/api)の環境変数で loadConfig が通り、
