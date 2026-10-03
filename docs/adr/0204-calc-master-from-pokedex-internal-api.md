@@ -151,3 +151,20 @@ ADR-0012 §6 は「共通マスタのためだけに新しい実行時サービ�
   内部 API をクライアントに出したくなければ iOS の生成設定で `internal` タグを除外する(iOS レーンの判断)。
 - データレーン: §5 の提案(内部 API の実装・natures テーブル)。
 - ADR-0200 §3 の暫定マスタ境界は、この ADR で置き換える。
+
+## 追記(issue #322): 本文の上限を 16MiB から 4MiB に下げる
+
+- 問題: 本文の上限が 16MiB で、`io.ReadAll` で全部読んでからデコードするため、異常に大きな本文を返す上流だけで
+  Pod の memory limit(64Mi、GOMEMLIMIT 56MiB)を超えて OOMKill になり、`master_unavailable` で再試行を続けるはずが再起動ループに入る
+  (macOS ネイティブの最大 RSS: 4MiB で 44MB・8MiB で 59MB・12MiB で 77MB)。
+- 決定: 上限(`master.MaxExportBytes`)を 4MiB にする。実マスタ(種族 349・技 515・持ち物・特性・効果・技の機構)は、
+  例のファイルの1行あたりの大きさ(種族約 360B・技約 155B 等。実データは効果・機構で数倍)からの見積りで 0.5〜1MB で、
+  4MiB は数倍の余裕。上限超過は従来どおり `ErrInvalidMaster`(再試行)。
+- 関係の固定: RSS ≈ 基礎 29MB + 約 3.75 × 上限(上の実測)。切り上げて「基礎 32MiB + 4 × 上限 ≤ limits.memory の 8 割」を
+  `cmd/calc` の `TestMasterBodyLimitFitsMemoryLimit` が検査する(4MiB で 48MiB ≤ 51.2MiB)。limits を下げる・上限を上げるときは両方を見直す。
+- 却下: ストリーミングデコード(`json.Decoder` を `LimitReader` に直接掛ける)。必須フィールド・effect キーの有無・
+  後続データの厳格検証が本文の複数回の走査に依存しており、変更が大きい。実マスタが 4MiB に近づいたら再検討する。
+- 限界: Linux コンテナでの RSS は未測定。k3d 実機で上限ちょうどの偽サーバを使った確認は未実施。
+
+**実測(2026-10-02)**: k3d 上の pokedex-svc(実データ。種族 349・技 515)の `GET /internal/pokedex/master` の本文は 231,766 バイト(約 226KB)。
+上限 4MiB はその約 18 倍で、実マスタが上限に近づく見込みは当面ない。

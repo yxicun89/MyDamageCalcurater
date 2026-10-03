@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -532,6 +533,46 @@ func (q *Querier) ListSpeciesLearnset(_ context.Context, arg store.ListSpeciesLe
 		}
 	}
 	return out, nil
+}
+
+// ListMoveLearners は技を覚える種族(ADR-0251)。実 DB のクエリと同じ規則で返す: learnsets のうち、
+// 種族が regulation_species、技が regulation_moves(どちらも arg.RegulationID)にあるものを、
+// species の (DexNo, Form) 昇順に並べ、Offset 件飛ばして Limit 件まで。
+func (q *Querier) ListMoveLearners(_ context.Context, arg store.ListMoveLearnersParams) ([]store.ListMoveLearnersRow, error) {
+	if err := q.record("ListMoveLearners", arg); err != nil {
+		return nil, err
+	}
+	if !set(q.RegulationMoves[arg.RegulationID])[arg.MoveID] {
+		return nil, nil
+	}
+	inSpecies := set(q.RegulationSpecies[arg.RegulationID])
+	learns := map[string]bool{}
+	for _, l := range q.Learnsets {
+		if l.MoveID == arg.MoveID {
+			learns[l.SpeciesKey] = true
+		}
+	}
+	var all []store.ListMoveLearnersRow
+	for _, s := range q.Species {
+		if inSpecies[s.Key] && learns[s.Key] {
+			all = append(all, store.ListMoveLearnersRow{Key: s.Key, DexNo: s.DexNo, Form: s.Form, NameJa: s.NameJa, Type1: s.Type1, Type2: s.Type2})
+		}
+	}
+	sort.Slice(all, func(i, j int) bool {
+		if all[i].DexNo != all[j].DexNo {
+			return all[i].DexNo < all[j].DexNo
+		}
+		return all[i].Form < all[j].Form
+	})
+	start := int(arg.Offset)
+	if start > len(all) {
+		start = len(all)
+	}
+	end := start + int(arg.Limit)
+	if end > len(all) {
+		end = len(all)
+	}
+	return all[start:end], nil
 }
 
 func set(ids []string) map[string]bool {

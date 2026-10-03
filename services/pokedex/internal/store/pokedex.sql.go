@@ -1123,6 +1123,72 @@ func (q *Queries) ListMoveIDs(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
+const listMoveLearners = `-- name: ListMoveLearners :many
+SELECT s.` + "`" + `key` + "`" + `, s.dex_no, s.form, s.name_ja, s.type1, s.type2
+FROM learnsets l
+JOIN species s ON s.` + "`" + `key` + "`" + ` = l.species_key
+JOIN regulation_species rs ON rs.species_key = l.species_key AND rs.regulation_id = ?
+JOIN regulation_moves rm ON rm.move_id = l.move_id AND rm.regulation_id = ?
+WHERE l.move_id = ?
+ORDER BY s.dex_no, s.form
+LIMIT ? OFFSET ?
+`
+
+type ListMoveLearnersParams struct {
+	RegulationID string
+	MoveID       string
+	Limit        int32
+	Offset       int32
+}
+
+type ListMoveLearnersRow struct {
+	Key    string
+	DexNo  uint16
+	Form   uint16
+	NameJa string
+	Type1  string
+	Type2  sql.NullString
+}
+
+// 技を覚える種族(learnset の逆引き。ADR-0251)。種族・技の両方が既定のレギュレーションの使用可能集合に
+// あるものだけ(ListSpeciesLearnset と同じ規則)。並びは SearchSpecies と同じ dex_no, form(UNIQUE なので決定的)。
+// learnsets の move_id には FK fk_learnsets_move の索引がある(MySQL が FK のために自動で作る。migration 不要)。
+func (q *Queries) ListMoveLearners(ctx context.Context, arg ListMoveLearnersParams) ([]ListMoveLearnersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listMoveLearners,
+		arg.RegulationID,
+		arg.RegulationID,
+		arg.MoveID,
+		arg.Limit,
+		arg.Offset,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListMoveLearnersRow
+	for rows.Next() {
+		var i ListMoveLearnersRow
+		if err := rows.Scan(
+			&i.Key,
+			&i.DexNo,
+			&i.Form,
+			&i.NameJa,
+			&i.Type1,
+			&i.Type2,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listMoveMechanisms = `-- name: ListMoveMechanisms :many
 SELECT move_id, mechanism
 FROM move_mechanisms

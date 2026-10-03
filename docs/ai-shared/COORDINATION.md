@@ -127,7 +127,13 @@ gh pr create --base main --head <ブランチ> --title "<要約>" --body "<何�
 gh pr checks <番号>                # 全件成功になるまで待つ(赤・未完了なら止まって直す)
 gh pr view <番号> --json headRefOid -q .headRefOid   # この SHA を下の --match-head-commit に付ける
 gh pr merge <番号> --merge --match-head-commit <上の SHA>         # マージコミットで入れる。squash・rebase・force push はしない
+scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカル検証(テスト・lint・公開前検査)をまとめて行う(ADR-0804)
 ```
+- **マージは `scripts/pr-merge.sh` を推奨**(ユーザー決定 2026-10-03・ADR-0804。全レーン共通。素のマージは ADR-0803 の条件でも可)。テスト・lint・公開前検査・CI
+  (在れば)が通った PR は AI がマージしてよく、マージのたびに人間を待たない。素の `gh pr merge` は bash-guard が止める。
+  ゲートを通らないときは理由に従って直す。AI の権限・ガード・クラウド/費用に関わるファイル(`.claude/`・`.codex/`・
+  `scripts/ai-guard/`・`deploy/k8s/overlays/cloud/` 等)を変更する PR は、人間のマージ待ちとして次の作業へ進む(止まらない)。
+- 止めるのは「クラウドへのデプロイなど費用が発生すること」と「機密情報を Git で公開すること」だけ。
 - PR の本文には、テスト・lint・公開前検査の結果と、独立レビューの判定を書く。
 - **競合の解決**: `CURRENT_STATE.md` は自分のレーン欄を残し、他のレーン欄は main 側を採用。`DECISIONS.md` は両方の追記を残す。
   それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
