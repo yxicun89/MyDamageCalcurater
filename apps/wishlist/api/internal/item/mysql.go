@@ -94,11 +94,12 @@ func intPtr(n sql.NullInt32) *int {
 	return &v
 }
 
-func toItem(row store.Item, overrides []store.ItemSiteOverride) Item {
+func toItem(row store.Item, overrides []store.ItemSiteOverride, official *OfficialStatus) Item {
 	it := Item{
 		ID: row.ID, GenreID: row.GenreID, Name: row.Name, OptionText: strPtr(row.OptionText), QueryOverride: strPtr(row.QueryOverride),
 		ImagePath: row.ImagePath, SourceURL: strPtr(row.SourceUrl), MinPrice: intPtr(row.MinPrice), SortOrder: int(row.SortOrder),
 		SiteOverrides: make([]SiteOverride, 0, len(overrides)), CreatedAt: row.CreatedAt, UpdatedAt: row.UpdatedAt,
+		WatchOfficial: row.WatchOfficial, Official: official,
 	}
 	for _, o := range overrides {
 		it.SiteOverrides = append(it.SiteOverrides, SiteOverride{SiteID: o.SiteID, Query: strPtr(o.Query), Enabled: o.Enabled})
@@ -129,9 +130,17 @@ func (r *MySQLRepository) ListItems(ctx context.Context, genreID *int64) ([]Item
 	for _, o := range all {
 		byItem[o.ItemID] = append(byItem[o.ItemID], o)
 	}
+	officials, err := officialByItem(ctx, r.q)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Item, 0, len(rows))
 	for _, row := range rows {
-		out = append(out, toItem(row, byItem[row.ID]))
+		var official *OfficialStatus
+		if o, ok := officials[row.ID]; ok {
+			official = &o
+		}
+		out = append(out, toItem(row, byItem[row.ID], official))
 	}
 	return out, nil
 }
@@ -148,7 +157,19 @@ func (r *MySQLRepository) getItem(ctx context.Context, q *store.Queries, id int6
 	if err != nil {
 		return Item{}, err
 	}
-	return toItem(row, os), nil
+	var official *OfficialStatus
+	orow, err := q.GetOfficialStatus(ctx, id)
+	switch {
+	case err == nil:
+		o, err := toOfficial(orow)
+		if err != nil {
+			return Item{}, err
+		}
+		official = &o
+	case !errors.Is(err, sql.ErrNoRows):
+		return Item{}, err
+	}
+	return toItem(row, os, official), nil
 }
 
 func (r *MySQLRepository) GetItem(ctx context.Context, id int64) (Item, error) {
@@ -166,7 +187,7 @@ func (r *MySQLRepository) CreateItem(ctx context.Context, in NewItem) (Item, err
 	}
 	id, err := r.q.CreateItem(ctx, store.CreateItemParams{
 		GenreID: in.GenreID, Name: in.Name, OptionText: nullStr(in.OptionText), QueryOverride: nullStr(in.QueryOverride),
-		ImagePath: in.ImagePath, SourceUrl: nullStr(in.SourceURL), MinPrice: minPrice, SortOrder: sortOrder,
+		ImagePath: in.ImagePath, SourceUrl: nullStr(in.SourceURL), MinPrice: minPrice, SortOrder: sortOrder, WatchOfficial: in.WatchOfficial,
 	})
 	if mysqlErr(err, mysqlForeignKeyNoRef) {
 		return Item{}, ErrGenreNotFound
@@ -195,6 +216,7 @@ func (r *MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch)
 		arg := store.UpdateItemParams{
 			ID: id, GenreID: cur.GenreID, Name: cur.Name, OptionText: cur.OptionText, QueryOverride: cur.QueryOverride,
 			ImagePath: cur.ImagePath, SourceUrl: cur.SourceUrl, MinPrice: cur.MinPrice, SortOrder: cur.SortOrder,
+			WatchOfficial: cur.WatchOfficial,
 		}
 		if p.GenreID != nil {
 			arg.GenreID = *p.GenreID
@@ -213,6 +235,9 @@ func (r *MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch)
 		arg.OptionText = patchString(arg.OptionText, p.OptionText)
 		arg.QueryOverride = patchString(arg.QueryOverride, p.QueryOverride)
 		arg.SourceUrl = patchString(arg.SourceUrl, p.SourceURL)
+		if p.WatchOfficial != nil {
+			arg.WatchOfficial = *p.WatchOfficial
+		}
 		if p.MinPrice.IsSpecified() {
 			if p.MinPrice.IsNull() {
 				arg.MinPrice = sql.NullInt32{}
@@ -221,6 +246,12 @@ func (r *MySQLRepository) UpdateItem(ctx context.Context, id int64, p ItemPatch)
 				if arg.MinPrice, err = nullInt32(&v); err != nil {
 					return err
 				}
+			}
+		}
+		if arg.SourceUrl != cur.SourceUrl {
+			// 別のページの状態を見せない
+			if err := q.DeleteOfficialStatus(ctx, id); err != nil {
+				return err
 			}
 		}
 		if err := q.UpdateItem(ctx, arg); err != nil {

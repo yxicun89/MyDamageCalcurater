@@ -442,7 +442,7 @@ func sanitize(ls []fetcher.Listing) []fetcher.Listing {
 }
 
 // RefreshAll は全商品を順番に ModeNightly で更新する。1 商品の失敗で止めない(ctx が終わったときだけ止める)。
-// フェーズ4-3(TODO implementer):価格をすべて更新したあと、Deps.Official があれば item.WatchTarget が true の商品を順番に
+// フェーズ4-3:価格をすべて更新したあと、Deps.Official があれば item.WatchTarget が true の商品を順番に
 // Official.Check して Officials.SaveOfficialCheck で保存する(docs/phase4-spec.md AC-O22〜O25)。
 func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
 	s.pruneHistory(ctx)
@@ -463,6 +463,37 @@ func (s *Service) RefreshAll(ctx context.Context) (AllReport, error) {
 			s.d.Logger.Error("refresh item failed", "item_id", it.ID, "error", err)
 		case rep.Targets > 0 && rep.Fetched == 0:
 			r.Failed++
+		}
+	}
+	if s.d.Official == nil || s.d.Officials == nil {
+		return r, nil
+	}
+	for _, it := range items {
+		if err := ctx.Err(); err != nil {
+			return r, err
+		}
+		url, ok := item.WatchTarget(it)
+		if !ok {
+			continue
+		}
+		res := s.d.Official.Check(ctx, url)
+		if err := ctx.Err(); err != nil {
+			return r, err
+		}
+		r.OfficialChecked++
+		if res.State == item.OfficialFailed {
+			r.OfficialFailed++
+		}
+		if _, err := s.d.Officials.SaveOfficialCheck(ctx, it.ID, item.OfficialCheck{State: res.State, Evidence: res.Evidence, At: s.d.Now(), SourceURL: url}); err != nil {
+			if errors.Is(err, item.ErrSourceChanged) {
+				r.OfficialChecked-- // 確認中に source_url が変わった。古い状態は捨てる(次の夜に取り直す)
+				if res.State == item.OfficialFailed {
+					r.OfficialFailed--
+				}
+				continue
+			}
+			r.OfficialFailed++
+			s.d.Logger.Error("save official status failed", "item_id", it.ID, "error", err)
 		}
 	}
 	return r, nil

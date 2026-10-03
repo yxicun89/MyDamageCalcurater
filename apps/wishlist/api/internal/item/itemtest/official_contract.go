@@ -232,6 +232,32 @@ func RunOfficialRepositoryContract(t *testing.T, newRepo func(t *testing.T) Offi
 		}
 	})
 
+	// 確認中に source_url が変わったら、古いページの状態を保存しない(SourceURL つきの保存は今の source_url と同じときだけ)。
+	t.Run("SourceURLChangedDuringCheck", func(t *testing.T) {
+		f := osetup(t)
+		other := "https://tamashii.jp/item/2/"
+		if _, err := f.repo.UpdateItem(ctx, f.it.ID, item.ItemPatch{SourceURL: nullable.NewNullableWithValue(other)}); err != nil {
+			t.Fatal(err)
+		}
+		_, err := f.repo.SaveOfficialCheck(ctx, f.it.ID, item.OfficialCheck{State: item.OfficialAvailable, Evidence: []string{"販売中"}, At: t1, SourceURL: src})
+		if !errors.Is(err, item.ErrSourceChanged) {
+			t.Fatalf("古い URL の保存: err = %v, want ErrSourceChanged", err)
+		}
+		if got := get(t, f.repo, f.it.ID); got.Official != nil {
+			t.Errorf("古い URL の状態が保存された: %s", officialString(got.Official))
+		}
+		save(t, f.repo, f.it.ID, item.OfficialCheck{State: item.OfficialAvailable, Evidence: []string{"販売中"}, At: t1, SourceURL: other})
+		if got := get(t, f.repo, f.it.ID); got.Official == nil {
+			t.Error("今の URL の保存ができない")
+		}
+		if _, err := f.repo.UpdateItem(ctx, f.it.ID, item.ItemPatch{SourceURL: nullable.NewNullNullable[string]()}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := f.repo.SaveOfficialCheck(ctx, f.it.ID, item.OfficialCheck{State: item.OfficialAvailable, At: t2, SourceURL: other}); !errors.Is(err, item.ErrSourceChanged) {
+			t.Errorf("source_url が無くなったあとの保存: err = %v, want ErrSourceChanged", err)
+		}
+	})
+
 	// AC-O8: 商品を消すと状態も消える(同じ ID には保存できない)。
 	t.Run("DeleteItemCascades", func(t *testing.T) {
 		f := osetup(t)

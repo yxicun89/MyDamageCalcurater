@@ -3,6 +3,7 @@ import type { Genre, Item, ItemEstimates, Listing, PriceHistory, Site, SiteEstim
 import { ApiError, resolveImageUrl, type ApiClient } from "../lib/api";
 import { CHART_BOX, buildChart, historyLabel } from "../lib/history";
 import { itemQuery, resolveSiteLinks } from "../lib/links";
+import { officialChange, officialEvidence, officialLastAttempt, officialSummary } from "../lib/official";
 import { formatAge, formatJstDate, formatRange, formatYen, isHttpUrl, reasonLabel } from "../lib/price";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
@@ -230,6 +231,8 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
         {summaryText(summary)}
       </p>
 
+      {item.watch_official ? <OfficialStatusView status={item.official_status} /> : null}
+
       <p>
         <button
           type="button"
@@ -285,6 +288,25 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
         {historyOpen ? <History state={history} sites={sites} /> : null}
       </details>
     </Modal>
+  );
+}
+
+/** 公式ページの販売状況(監視中の商品だけ。alert にしない)。 */
+function OfficialStatusView({ status }: { status: Item["official_status"] }) {
+  const lines = [
+    officialSummary(status),
+    officialEvidence(status),
+    officialChange(status, new Date()),
+    officialLastAttempt(status),
+  ].filter((l): l is string => l != null);
+  return (
+    <section aria-label="公式の販売状況" className="official">
+      {lines.map((l) => (
+        <p key={l} className="site-meta">
+          {l}
+        </p>
+      ))}
+    </section>
   );
 }
 

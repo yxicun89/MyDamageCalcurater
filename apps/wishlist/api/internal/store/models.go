@@ -55,6 +55,150 @@ func (ns NullEstimatesStatus) Value() (driver.Value, error) {
 	return string(ns.EstimatesStatus), nil
 }
 
+type OfficialStatusLastResult string
+
+const (
+	OfficialStatusLastResultAvailable OfficialStatusLastResult = "available"
+	OfficialStatusLastResultPreorder  OfficialStatusLastResult = "preorder"
+	OfficialStatusLastResultSoldout   OfficialStatusLastResult = "soldout"
+	OfficialStatusLastResultEnded     OfficialStatusLastResult = "ended"
+	OfficialStatusLastResultUnknown   OfficialStatusLastResult = "unknown"
+	OfficialStatusLastResultAmbiguous OfficialStatusLastResult = "ambiguous"
+	OfficialStatusLastResultBlocked   OfficialStatusLastResult = "blocked"
+	OfficialStatusLastResultFailed    OfficialStatusLastResult = "failed"
+)
+
+func (e *OfficialStatusLastResult) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OfficialStatusLastResult(s)
+	case string:
+		*e = OfficialStatusLastResult(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OfficialStatusLastResult: %T", src)
+	}
+	return nil
+}
+
+type NullOfficialStatusLastResult struct {
+	OfficialStatusLastResult OfficialStatusLastResult
+	Valid                    bool // Valid is true if OfficialStatusLastResult is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOfficialStatusLastResult) Scan(value interface{}) error {
+	if value == nil {
+		ns.OfficialStatusLastResult, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OfficialStatusLastResult.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOfficialStatusLastResult) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OfficialStatusLastResult), nil
+}
+
+type OfficialStatusPreviousStatus string
+
+const (
+	OfficialStatusPreviousStatusAvailable OfficialStatusPreviousStatus = "available"
+	OfficialStatusPreviousStatusPreorder  OfficialStatusPreviousStatus = "preorder"
+	OfficialStatusPreviousStatusSoldout   OfficialStatusPreviousStatus = "soldout"
+	OfficialStatusPreviousStatusEnded     OfficialStatusPreviousStatus = "ended"
+	OfficialStatusPreviousStatusUnknown   OfficialStatusPreviousStatus = "unknown"
+	OfficialStatusPreviousStatusAmbiguous OfficialStatusPreviousStatus = "ambiguous"
+	OfficialStatusPreviousStatusBlocked   OfficialStatusPreviousStatus = "blocked"
+	OfficialStatusPreviousStatusFailed    OfficialStatusPreviousStatus = "failed"
+)
+
+func (e *OfficialStatusPreviousStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OfficialStatusPreviousStatus(s)
+	case string:
+		*e = OfficialStatusPreviousStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OfficialStatusPreviousStatus: %T", src)
+	}
+	return nil
+}
+
+type NullOfficialStatusPreviousStatus struct {
+	OfficialStatusPreviousStatus OfficialStatusPreviousStatus
+	Valid                        bool // Valid is true if OfficialStatusPreviousStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOfficialStatusPreviousStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.OfficialStatusPreviousStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OfficialStatusPreviousStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOfficialStatusPreviousStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OfficialStatusPreviousStatus), nil
+}
+
+type OfficialStatusStatus string
+
+const (
+	OfficialStatusStatusAvailable OfficialStatusStatus = "available"
+	OfficialStatusStatusPreorder  OfficialStatusStatus = "preorder"
+	OfficialStatusStatusSoldout   OfficialStatusStatus = "soldout"
+	OfficialStatusStatusEnded     OfficialStatusStatus = "ended"
+	OfficialStatusStatusUnknown   OfficialStatusStatus = "unknown"
+	OfficialStatusStatusAmbiguous OfficialStatusStatus = "ambiguous"
+	OfficialStatusStatusBlocked   OfficialStatusStatus = "blocked"
+	OfficialStatusStatusFailed    OfficialStatusStatus = "failed"
+)
+
+func (e *OfficialStatusStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = OfficialStatusStatus(s)
+	case string:
+		*e = OfficialStatusStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for OfficialStatusStatus: %T", src)
+	}
+	return nil
+}
+
+type NullOfficialStatusStatus struct {
+	OfficialStatusStatus OfficialStatusStatus
+	Valid                bool // Valid is true if OfficialStatusStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullOfficialStatusStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.OfficialStatusStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.OfficialStatusStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullOfficialStatusStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.OfficialStatusStatus), nil
+}
+
 type SitesFetchType string
 
 const (
@@ -144,6 +288,7 @@ type Item struct {
 	SortOrder     int32
 	CreatedAt     time.Time
 	UpdatedAt     time.Time
+	WatchOfficial bool
 }
 
 type ItemSiteOverride struct {
@@ -164,6 +309,17 @@ type Listing struct {
 	InStock           bool
 	SuspiciousReasons json.RawMessage
 	FetchedAt         time.Time
+}
+
+type OfficialStatus struct {
+	ItemID         int64
+	Status         OfficialStatusStatus
+	Evidence       json.RawMessage
+	CheckedAt      time.Time
+	ChangedAt      sql.NullTime
+	PreviousStatus NullOfficialStatusPreviousStatus
+	LastResult     OfficialStatusLastResult
+	LastAttemptAt  time.Time
 }
 
 type PriceHistory struct {

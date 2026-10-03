@@ -19,10 +19,12 @@ type Querier interface {
 	DeleteItemSiteOverrides(ctx context.Context, itemID int64) error
 	// 目安価格(フェーズ3)。listings は商品×サイトごとに最新の取得分だけ残す(取得のたびに消して入れ直す)。
 	DeleteListingsBySite(ctx context.Context, arg DeleteListingsBySiteParams) error
+	DeleteOfficialStatus(ctx context.Context, itemID int64) error
 	GetGenre(ctx context.Context, id int64) (Genre, error)
 	GetGenreForUpdate(ctx context.Context, id int64) (Genre, error)
 	GetItem(ctx context.Context, id int64) (Item, error)
 	GetItemForUpdate(ctx context.Context, id int64) (Item, error)
+	GetOfficialStatus(ctx context.Context, itemID int64) (OfficialStatus, error)
 	GetSite(ctx context.Context, id int64) (Site, error)
 	InsertGenreAlias(ctx context.Context, arg InsertGenreAliasParams) error
 	InsertGenreSite(ctx context.Context, arg InsertGenreSiteParams) error
@@ -42,6 +44,8 @@ type Querier interface {
 	ListItemsByGenre(ctx context.Context, genreID int64) ([]Item, error)
 	ListListingsByItem(ctx context.Context, itemID int64) ([]Listing, error)
 	ListListingsByItemSite(ctx context.Context, arg ListListingsByItemSiteParams) ([]Listing, error)
+	// 公式サイトの販売状況(フェーズ4-3)。1 商品 1 行。
+	ListOfficialStatuses(ctx context.Context) ([]OfficialStatus, error)
 	ListPriceHistory(ctx context.Context, arg ListPriceHistoryParams) ([]PriceHistory, error)
 	ListSites(ctx context.Context) ([]Site, error)
 	MarkEstimateFailed(ctx context.Context, arg MarkEstimateFailedParams) error
@@ -51,6 +55,7 @@ type Querier interface {
 	UpdateItem(ctx context.Context, arg UpdateItemParams) error
 	UpdateSite(ctx context.Context, arg UpdateSiteParams) (int64, error)
 	UpsertEstimate(ctx context.Context, arg UpsertEstimateParams) error
+	UpsertOfficialStatus(ctx context.Context, arg UpsertOfficialStatusParams) error
 	// 価格の推移(フェーズ4-2)。day は JST の日付。
 	UpsertPriceHistory(ctx context.Context, arg UpsertPriceHistoryParams) error
 }

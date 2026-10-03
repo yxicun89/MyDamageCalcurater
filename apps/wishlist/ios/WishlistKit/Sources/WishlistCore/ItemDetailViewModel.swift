@@ -53,7 +53,11 @@ public final class ItemDetailViewModel {
     /// 「公式」の行。`item.watchOfficial` が false なら nil(保存済みの状態があっても出さない)。
     /// true なら `OfficialFormat` で作る(summary は常に、evidence・change〈now で判定〉・lastAttempt はあるときだけ)。
     public var official: OfficialLines? {
-        nil // TODO(implementer)
+        guard item.watchOfficial else { return nil }
+        let status = item.officialStatus
+        return OfficialLines(
+            summary: OfficialFormat.summary(status), evidence: OfficialFormat.evidence(status),
+            change: OfficialFormat.change(status, now: now()), lastAttempt: OfficialFormat.lastAttempt(status))
     }
 
     // MARK: - フェーズ3: 目安価格(docs/phase3-ios-spec.md)

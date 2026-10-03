@@ -3,7 +3,12 @@ package item
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/url"
+	"slices"
+	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 // フェーズ4-3 公式サイトの販売状況の監視(docs/phase4-spec.md AC-O*)。
@@ -55,6 +60,9 @@ type OfficialCheck struct {
 	State    OfficialState
 	Evidence []string
 	At       time.Time
+	// SourceURL は確かめた URL。空でなければ、保存の時点の商品の source_url と同じときだけ保存する
+	// (確認中に source_url が変わったら、古いページの状態を新しい URL に保存しない。違えば ErrSourceChanged で何も変えない)。
+	SourceURL string
 }
 
 // OfficialStatus は保存した販売状況(official_status。1 商品 1 行)。時刻は秒未満を切り捨てた UTC。
@@ -76,17 +84,69 @@ type OfficialStatus struct {
 // MergeOfficial は前回の状態 prev(無ければ nil)に試行の結果 c を重ねた新しい状態を返す(純関数。規則は OfficialStatus の説明)。
 // 時刻は秒未満を切り捨てた UTC にする。Evidence は c のものをコピーする(failed・blocked で上書きしないときは prev のもの)。
 func MergeOfficial(prev *OfficialStatus, c OfficialCheck) OfficialStatus {
-	return OfficialStatus{} // TODO(implementer): docs/phase4-spec.md 4-3 の規則で実装する
+	at := c.At.UTC().Truncate(time.Second)
+	out := OfficialStatus{LastResult: c.State, LastAttemptAt: at}
+	judgedPrev := prev != nil && prev.Status.Judged()
+	if !c.State.Judged() {
+		if judgedPrev {
+			out.Status, out.Evidence, out.CheckedAt = prev.Status, slices.Clone(prev.Evidence), prev.CheckedAt.UTC().Truncate(time.Second)
+			out.ChangedAt, out.PreviousStatus = cloneP(prev.ChangedAt), cloneP(prev.PreviousStatus)
+			if out.Evidence == nil {
+				out.Evidence = []string{}
+			}
+			return out
+		}
+		out.Status, out.Evidence, out.CheckedAt = c.State, []string{}, at
+		return out
+	}
+	out.Status, out.Evidence, out.CheckedAt = c.State, slices.Clone(c.Evidence), at
+	if out.Evidence == nil {
+		out.Evidence = []string{}
+	}
+	if prev != nil {
+		out.ChangedAt, out.PreviousStatus = cloneP(prev.ChangedAt), cloneP(prev.PreviousStatus)
+	}
+	if judgedPrev && prev.Status != c.State {
+		prevStatus := prev.Status
+		out.ChangedAt, out.PreviousStatus = &at, &prevStatus
+	}
+	return out
 }
 
 // WatchTarget は夜間に公式ページを取りに行く商品なら、その URL(source_url)と true を返す。
 // WatchOfficial が true で、SourceURL が http(s) の絶対 URL(ホストあり)のときだけ。
 func WatchTarget(it Item) (string, bool) {
-	return "", false // TODO(implementer)
+	if !it.WatchOfficial || it.SourceURL == nil {
+		return "", false
+	}
+	u, err := url.Parse(*it.SourceURL)
+	if err != nil || u.Hostname() == "" {
+		return "", false
+	}
+	if scheme := strings.ToLower(u.Scheme); scheme != "http" && scheme != "https" {
+		return "", false
+	}
+	return *it.SourceURL, true
 }
 
-// errNotImplemented はスタブの戻り値(implementer が消す)。
-var errNotImplemented = errors.New("item: not implemented")
+// validateOfficialCheck は SaveOfficialCheck の入力の検査(状態・根拠の規則。違反は ErrInvalid)。
+func validateOfficialCheck(c OfficialCheck) error {
+	if !c.State.Valid() {
+		return fmt.Errorf("%w: official state is invalid", ErrInvalid)
+	}
+	if len(c.Evidence) > MaxOfficialEvidence {
+		return fmt.Errorf("%w: official evidence has too many words", ErrInvalid)
+	}
+	for _, w := range c.Evidence {
+		if w == "" || utf8.RuneCountInString(w) > MaxOfficialEvidenceLen {
+			return fmt.Errorf("%w: official evidence word is empty or too long", ErrInvalid)
+		}
+	}
+	return nil
+}
+
+// ErrSourceChanged は確認した URL が、保存の時点の商品の source_url と違うこと(保存しない)。
+var ErrSourceChanged = errors.New("item: source_url changed")
 
 // OfficialRepository は販売状況の永続化。
 type OfficialRepository interface {

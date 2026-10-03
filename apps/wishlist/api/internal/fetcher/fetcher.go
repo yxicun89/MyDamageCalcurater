@@ -18,7 +18,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
@@ -113,30 +112,23 @@ const mercariHost = "jp.mercari.com"
 // ThrottleWith は Throttle にホストごとの最小間隔 hostIntervals(nil 可)を足したもの。
 // そのホストの間隔は interval と表の値の長いほう。
 func ThrottleWith(inner Fetcher, interval time.Duration, hostIntervals map[string]time.Duration, clock Clock) Fetcher {
-	return &throttled{inner: inner, interval: interval, hostIntervals: hostIntervals, clock: clock, sites: map[string]*siteGate{}}
+	return throttleOn(inner, NewHostGate(interval, hostIntervals, clock))
+}
+
+// throttleOn は inner を gate(他の Fetcher・公式ページの取得と共有してよい)で包む。
+func throttleOn(inner Fetcher, gate *HostGate) Fetcher {
+	return &throttled{inner: inner, gate: gate}
 }
 
 type throttled struct {
-	inner    Fetcher
-	interval time.Duration
-	clock    Clock
-	// hostIntervals はホストごとの最小間隔(nil 可)。
-	hostIntervals map[string]time.Duration
-
-	mu    sync.Mutex
-	sites map[string]*siteGate
-}
-
-// siteGate はサイトごとの直列化(容量 1 のチャネル。待ちを ctx で取り消せる)と、前回の取得が終わった時刻。
-type siteGate struct {
-	sem  chan struct{}
-	last time.Time // 前回の取得が終わった時刻(初回はゼロ値)
+	inner Fetcher
+	gate  *HostGate
 }
 
 // gateKey は待ち合わせのキー。検索 URL テンプレートのホスト名(小文字・ポートなし)。読めなければ Site.ID。
 func gateKey(site Site) string {
 	if h := siteHost(site); h != "" {
-		return "host:" + h
+		return h
 	}
 	return "id:" + strconv.FormatInt(site.ID, 10)
 }
@@ -150,44 +142,14 @@ func siteHost(site Site) string {
 	return strings.ToLower(u.Hostname())
 }
 
-func (t *throttled) intervalFor(site Site) time.Duration {
-	if d := t.hostIntervals[siteHost(site)]; d > t.interval {
-		return d
-	}
-	return t.interval
-}
-
-func (t *throttled) gate(id string) *siteGate {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	g, ok := t.sites[id]
-	if !ok {
-		g = &siteGate{sem: make(chan struct{}, 1)}
-		t.sites[id] = g
-	}
-	return g
-}
-
 func (t *throttled) Fetch(ctx context.Context, site Site, query string) ([]Listing, error) {
-	g := t.gate(gateKey(site))
-	select {
-	case g.sem <- struct{}{}:
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
-	defer func() { <-g.sem }()
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if !g.last.IsZero() {
-		if wait := t.intervalFor(site) - t.clock.Now().Sub(g.last); wait > 0 {
-			if err := t.clock.Sleep(ctx, wait); err != nil {
-				return nil, err
-			}
-		}
-	}
-	defer func() { g.last = t.clock.Now() }()
-	return t.inner.Fetch(ctx, site, query)
+	var out []Listing
+	err := t.gate.Do(ctx, gateKey(site), func(ctx context.Context) error {
+		var err error
+		out, err = t.inner.Fetch(ctx, site, query)
+		return err
+	})
+	return out, err
 }
 
 // Config は NewRegistry の設定。
@@ -208,6 +170,8 @@ type Registry struct {
 	scrape map[string]Fetcher
 	// headless は同じくホストごとの Fetcher(Config.Renderer があるときだけ)。
 	headless map[string]Fetcher
+	// gate は NewRegistry の Fetcher が共有する HostGate(NewRegistryWith では nil)。
+	gate *HostGate
 }
 
 // NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape(ホスト別)・headless(メルカリ。Renderer があるときだけ)、link_only は取得しない。
@@ -221,22 +185,23 @@ func NewRegistry(cfg Config) *Registry {
 	if clock == nil {
 		clock = SystemClock
 	}
+	gate := NewHostGate(interval, HostMinIntervals, clock)
 	m := map[item.FetchType]Fetcher{}
 	if appID := strings.TrimSpace(cfg.YahooAppID); appID != "" {
 		y := NewYahoo(appID, cfg.Client)
 		y.Endpoint = cfg.YahooEndpoint
-		m[item.FetchAPI] = ThrottleWith(y, interval, HostMinIntervals, clock)
+		m[item.FetchAPI] = throttleOn(y, gate)
 	}
 	scrape := map[string]Fetcher{
-		"www.cardrush-dm.jp":           ThrottleWith(NewCardrush(cfg.Client), interval, HostMinIntervals, clock),
-		"slist.amiami.jp":              ThrottleWith(NewAmiami(cfg.Client), interval, HostMinIntervals, clock),
-		"paypayfleamarket.yahoo.co.jp": ThrottleWith(NewYahooFurima(cfg.Client), interval, HostMinIntervals, clock),
-		"www.suruga-ya.jp":             ThrottleWith(NewSurugaya(cfg.Client), interval, HostMinIntervals, clock),
+		"www.cardrush-dm.jp":           throttleOn(NewCardrush(cfg.Client), gate),
+		"slist.amiami.jp":              throttleOn(NewAmiami(cfg.Client), gate),
+		"paypayfleamarket.yahoo.co.jp": throttleOn(NewYahooFurima(cfg.Client), gate),
+		"www.suruga-ya.jp":             throttleOn(NewSurugaya(cfg.Client), gate),
 	}
-	reg := &Registry{m: m, scrape: scrape}
+	reg := &Registry{m: m, scrape: scrape, gate: gate}
 	if cfg.Renderer != nil {
 		reg.headless = map[string]Fetcher{
-			mercariHost: ThrottleWith(NewMercari(cfg.Renderer, clock), interval, HostMinIntervals, clock),
+			mercariHost: throttleOn(NewMercari(cfg.Renderer, clock), gate),
 		}
 	}
 	return reg

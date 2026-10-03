@@ -101,6 +101,13 @@ struct EditItemSheet: View {
                     }
                     TextField("最低価格(円。空なら未設定)", text: $viewModel.minPriceText)
                         .keyboardType(.numberPad)
+                    Toggle("公式ページを監視する", isOn: $viewModel.watchOfficial)
+                        .disabled(!viewModel.canWatchOfficial)
+                        .accessibilityIdentifier("watchOfficialToggle")
+                    if let hint = viewModel.watchOfficialHint {
+                        Text(hint).font(.footnote).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("watchOfficialHint")
+                    }
                 }
                 Section("画像") {
                     PhotosPicker(selection: $pickerItem, matching: .images) {

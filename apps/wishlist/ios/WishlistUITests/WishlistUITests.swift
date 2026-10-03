@@ -249,6 +249,25 @@ final class WishlistUITests: XCTestCase {
         XCTAssertEqual(requireExists(app, "aliasLine-2").value as? String, "真骨彫, 真骨彫製法")
     }
 
+    /// 別名グループの行を消せる(番号は詰める)。保存して開き直すと、消した行は無い。
+    func testGenreAliasLineCanBeRemoved() {
+        let app = launch(fake: "official")
+        requireExists(app, "settingsButton").tap()
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        requireExists(app, "addAliasLine").tap()
+        let line2 = requireExists(app, "aliasLine-2")
+        line2.tap()
+        line2.typeText("真骨彫, 真骨彫製法")
+        requireExists(app, "removeAliasLine-1").tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法", "消すと番号が詰める")
+        XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-2")))
+        app.buttons["保存"].firstMatch.tap()
+        XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-1")), "保存したら閉じる")
+        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法")
+        XCTAssertFalse(element(app, "aliasLine-2").exists)
+    }
+
     private func waitForDisappearance(_ target: XCUIElement) -> Bool {
         let expectation = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: target)
         return XCTWaiter().wait(for: [expectation], timeout: Self.timeout) == .completed

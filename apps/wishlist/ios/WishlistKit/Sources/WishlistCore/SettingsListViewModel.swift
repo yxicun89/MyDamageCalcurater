@@ -86,12 +86,16 @@ public final class SettingsListViewModel {
     /// ジャンルを追加する。名前が空白のみなら API を呼ばず nil。テンプレートが空白のみなら送らない(サーバーの既定 `{name} {option}`)。
     /// `siteIDs` は表示順のまま送る。成功したら `genres` に追加して返す。
     public func addGenre(name: String, queryTemplate: String, siteIDs: [Int]) async -> Genre? {
+        await addGenre(name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: nil)
+    }
+
+    private func addGenre(name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?) async -> Genre? {
         let name = Self.trimmed(name)
         guard !name.isEmpty else { return nil }
         let template = Self.trimmed(queryTemplate)
         do {
             let genre = try await service.createGenre(
-                GenreCreate(name: name, queryTemplate: template.isEmpty ? nil : template, siteIDs: siteIDs))
+                GenreCreate(name: name, queryTemplate: template.isEmpty ? nil : template, siteIDs: siteIDs, aliases: aliases))
             genres.append(genre)
             errorMessage = nil
             return genre
@@ -104,12 +108,17 @@ public final class SettingsListViewModel {
     /// ジャンルを編集する。変えた項目だけ PATCH。`siteIDs` は元と(順序込みで)違うときだけ、全件置き換えとして送る。
     /// 何も変えていなければ API を呼ばず元のジャンルを返す。成功したら `genres` を更新して返す。
     public func updateGenre(_ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int]) async -> Genre? {
+        await updateGenre(genre, name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: nil)
+    }
+
+    private func updateGenre(_ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?) async -> Genre? {
         var patch = GenreUpdate()
         let newName = Self.trimmed(name)
         if newName != genre.name { patch.name = newName }
         let template = Self.trimmed(queryTemplate)
         if template != genre.queryTemplate, !template.isEmpty { patch.queryTemplate = template }
         if siteIDs != genre.siteIDs { patch.siteIDs = siteIDs }
+        if let aliases, aliases != genre.aliases { patch.aliases = aliases }
         if patch == GenreUpdate() { return genre }
         do {
             let updated = try await service.updateGenre(id: genre.id, patch: patch)
@@ -126,20 +135,30 @@ public final class SettingsListViewModel {
 
     /// 編集画面に出す行(1 グループ = 1 行。`AliasLines.format`)。辞書が無ければ空
     public static func aliasLines(of genre: Genre) -> [String] {
-        [] // TODO(implementer)
+        genre.aliases.map(AliasLines.format)
     }
 
     /// ジャンルを追加する(`addGenre(name:queryTemplate:siteIDs:)` と同じ規則に加えて辞書)。
     /// `aliasLines` を `AliasLines.parseGroups` で読み、1 語だけの行があれば API を呼ばず
     /// `errorMessage = AliasLines.invalidRowMessage(行)` にして nil。それ以外は常に `aliases`(空の行を除く。無ければ [])を送る。
     public func addGenre(name: String, queryTemplate: String, siteIDs: [Int], aliasLines: [String]) async -> Genre? {
-        nil // TODO(implementer)
+        let parsed = AliasLines.parseGroups(aliasLines)
+        if let row = parsed.invalidRow {
+            errorMessage = AliasLines.invalidRowMessage(row)
+            return nil
+        }
+        return await addGenre(name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: parsed.groups)
     }
 
     /// ジャンルを編集する(`updateGenre(_:name:queryTemplate:siteIDs:)` と同じ規則に加えて辞書)。
     /// 1 語だけの行の扱いは addGenre と同じ。読み直したグループが元(`genre.aliases`)と違うときだけ `aliases` を送る(全部消したら [])。
     /// 何も変えていなければ API を呼ばず元のジャンルを返す。
     public func updateGenre(_ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int], aliasLines: [String]) async -> Genre? {
-        nil // TODO(implementer)
+        let parsed = AliasLines.parseGroups(aliasLines)
+        if let row = parsed.invalidRow {
+            errorMessage = AliasLines.invalidRowMessage(row)
+            return nil
+        }
+        return await updateGenre(genre, name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: parsed.groups)
     }
 }

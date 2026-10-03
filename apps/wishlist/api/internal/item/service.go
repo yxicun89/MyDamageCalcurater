@@ -81,7 +81,33 @@ func (s *Service) UpdateItem(ctx context.Context, id int64, p ItemPatch) (Item, 
 	if err := validateItemPatch(p); err != nil {
 		return Item{}, err
 	}
+	if p.WatchOfficial != nil || p.SourceURL.IsSpecified() {
+		if err := s.checkWatchAfterUpdate(ctx, id, p); err != nil {
+			return Item{}, err
+		}
+	}
 	return s.repo.UpdateItem(ctx, id, p)
+}
+
+// checkWatchAfterUpdate は更新後に watch_official が true で source_url が無くなる更新を ErrInvalid にする(フェーズ4-3)。
+func (s *Service) checkWatchAfterUpdate(ctx context.Context, id int64, p ItemPatch) error {
+	cur, err := s.repo.GetItem(ctx, id)
+	if err != nil {
+		return err
+	}
+	watch := cur.WatchOfficial
+	if p.WatchOfficial != nil {
+		watch = *p.WatchOfficial
+	}
+	hasSource := cur.SourceURL != nil && *cur.SourceURL != ""
+	if p.SourceURL.IsSpecified() {
+		v, ok := nullableValue(p.SourceURL)
+		hasSource = ok && v != ""
+	}
+	if watch && !hasSource {
+		return fmt.Errorf("%w: watch_official needs source_url", ErrInvalid)
+	}
+	return nil
 }
 
 // ReplaceImage は新しい画像を保存して商品を更新し、成功したら古い画像を消す。
@@ -327,6 +353,9 @@ func ValidateNewItem(in NewItem) error {
 		if err := checkMinPrice(*in.MinPrice); err != nil {
 			return err
 		}
+	}
+	if in.WatchOfficial && (in.SourceURL == nil || *in.SourceURL == "") {
+		return fmt.Errorf("%w: watch_official needs source_url", ErrInvalid)
 	}
 	return checkInt32("sort_order", in.SortOrder)
 }

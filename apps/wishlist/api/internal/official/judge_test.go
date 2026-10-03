@@ -92,7 +92,7 @@ func TestTerms(t *testing.T) {
 		item.OfficialAvailable: `["販売中" "在庫あり" "カートに入れる" "購入手続きへ"]`,
 		item.OfficialPreorder:  `["予約受付中" "予約する" "予約受付"]`,
 		item.OfficialSoldOut:   `["在庫切れ" "売り切れ" "SOLD OUT" "在庫なし"]`,
-		item.OfficialEnded:     `["販売終了" "受付終了" "予約受付終了" "販売を終了"]`,
+		item.OfficialEnded:     `["販売終了" "受付終了" "予約受付終了" "販売を終了" "予約受付は終了" "予約受付を終了" "販売は終了"]`,
 	}
 	if len(official.Terms) != len(want) {
 		t.Fatalf("Terms の種類 = %d", len(official.Terms))
@@ -109,7 +109,7 @@ func TestTerms(t *testing.T) {
 			seen[w] = true
 		}
 	}
-	if got := fmt.Sprintf("%q", official.Neutral); got != `["販売中止" "在庫ありません" "予約受付前" "予約受付開始前"]` {
+	if got := fmt.Sprintf("%q", official.Neutral); got != `["販売中止" "在庫ありません" "予約受付前" "予約受付開始前" "受付を終了" "受付は終了"]` {
 		t.Errorf("Neutral = %s", got)
 	}
 }

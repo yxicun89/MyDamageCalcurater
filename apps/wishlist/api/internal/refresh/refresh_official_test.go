@@ -219,11 +219,12 @@ func TestRefreshAll_OfficialOnlyNightlyAndAfterPrices(t *testing.T) {
 	}
 
 	o.f.takeCalls()
-	priceCalls := 0
+	// Check ごとに、その直前までの価格の取得回数を記録する(takeCalls は記録を空にするので上書きしない)
+	var perCheck []int
 	o.checker.onCheck = func() {
 		mu.Lock()
 		defer mu.Unlock()
-		priceCalls = len(o.f.takeCalls())
+		perCheck = append(perCheck, len(o.f.takeCalls()))
 	}
 	if _, err := o.svc.RefreshAll(ctx); err != nil {
 		t.Fatal(err)
@@ -237,8 +238,13 @@ func TestRefreshAll_OfficialOnlyNightlyAndAfterPrices(t *testing.T) {
 	if rest := o.f.takeCalls(); len(rest) != 0 {
 		t.Errorf("公式ページの確認のあとに価格を取った: %v", rest)
 	}
-	if priceCalls == 0 {
-		t.Error("公式ページの確認より前に価格を取っていない")
+	if len(perCheck) == 0 || perCheck[0] == 0 {
+		t.Errorf("公式ページの確認より前に価格を取っていない: %v", perCheck)
+	}
+	for i, n := range perCheck[1:] {
+		if n != 0 {
+			t.Errorf("%d 回目の確認の前に価格を取った(確認の間に価格の取得が挟まった): %v", i+2, perCheck)
+		}
 	}
 }
 

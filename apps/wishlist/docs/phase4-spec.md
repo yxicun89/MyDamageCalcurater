@@ -260,8 +260,13 @@ PWA は SVG(新しい npm 依存なし)、iOS は Swift Charts。出品が無い
   - 照合:テキストと語をそれぞれ NFKC・小文字・空白 1 つにしてから部分一致。全語(下の表と Neutral)を**長い順**(rune 数。同じ長さは表の順、Neutral は後)に探し、見つけた箇所を消してから次を探す
   - 見つけた種類(Neutral を除く)が**ちょうど 1 つ**ならその状態、0 なら unknown、2 つ以上なら ambiguous
   - 根拠(evidence):見つけた語を**表の表記のまま**、テキストに最初に現れた順に最大 3 つ(重複なし)。unknown・failed・blocked は空(`[]`。nil にしない)
-  - **Neutral**(表の語を含むが意味が逆・別の語。消すだけで数えない・根拠にしない):`販売中止`・`在庫ありません`・`予約受付前`・`予約受付開始前`。
+  - **Neutral**(表の語を含むが意味が逆・別の語。消すだけで数えない・根拠にしない):`販売中止`・`在庫ありません`・`予約受付前`・`予約受付開始前`・`受付を終了`・`受付は終了`(「受付を終了しました」だけでは何の受付か分からないので、数えない)。
     「販売中止」が available、「在庫ありません」が available になる誤判定を防ぐ(推測の判定をしないための既定案)
+  - **「予約受付は終了しました」は ended にする**(既定案。「予約受付」を含むので、そのままだと preorder と誤判定するため、より長い語として ended に足した。
+    「予約受付を終了」「販売は終了」も同様)。「受付を終了」「受付は終了」のように何の受付か分からないものは Neutral(unknown になる)
+  - **既知の限界**:ページの本文全体の語を見るので、ナビ・関連商品・おすすめの欄にある「在庫あり」などの語も拾う(別の種類の語が混じれば ambiguous、同じ種類だけなら誤って確定し得る)。
+    根拠の語を一緒に出しているので、人が気づける。サイト固有の構造は推測しないため、除外しない
+  - 文字コードは Content-Type・BOM・`<meta charset>` から判定して UTF-8 にする(`charset.NewReader`。Shift_JIS 等)。robots.txt は先頭の BOM(U+FEFF)を除いてから読む
   - 語の表(`official.Terms`。変えるときはこの表とテスト `TestTerms` も変える):
 
     | 状態 | 語 |
@@ -269,7 +274,7 @@ PWA は SVG(新しい npm 依存なし)、iOS は Swift Charts。出品が無い
     | available(販売中) | 販売中・在庫あり・カートに入れる・購入手続きへ |
     | preorder(予約受付中) | 予約受付中・予約する・予約受付 |
     | soldout(在庫切れ) | 在庫切れ・売り切れ・SOLD OUT・在庫なし |
-    | ended(販売終了) | 販売終了・受付終了・予約受付終了・販売を終了 |
+    | ended(販売終了) | 販売終了・受付終了・予約受付終了・販売を終了・予約受付は終了・予約受付を終了・販売は終了 |
 
 - **保存(`official_status`。純関数 `item.MergeOfficial(前回, 今回)` で重ねる)**:
   - `status`・`evidence`・`checked_at` は**最後に判定できた状態**とそれを確かめた時刻。今回が判定済み(available〜ambiguous)なら置き換える
@@ -277,6 +282,8 @@ PWA は SVG(新しい npm 依存なし)、iOS は Swift Charts。出品が無い
     最後の試行の結果は **`last_result`・`last_attempt_at` の 2 列**に持つ(「どう持つか」の既定案)。一度も判定できていなければ status も failed・blocked(evidence は空)
   - `changed_at`・`previous_status` は、**判定済みの status が別の判定済みの状態に変わったときだけ**更新(初回・同じ状態・failed/blocked からの判定は変化にしない。
     failed/blocked → 判定は「前の判定が無い」ので変化ではない)。available → unknown は変化として記録する(判定済み同士)
+  - **確認中に source_url が変わった場合**:`OfficialCheck.SourceURL`(確かめた URL)が空でなければ、保存のトランザクションの中で今の source_url と比べ、違えば `ErrSourceChanged` で何も保存しない
+    (古いページの状態を新しい URL に付けない)。RefreshAll はこれを数えず次へ進む
   - 時刻は秒未満を切り捨てた UTC。`SaveOfficialCheck` は状態が 8 つ以外・根拠が 3 つ超・1 語 64 文字超・空の語なら ErrInvalid、商品が無ければ ErrNotFound(何も変えない)
 - **DB(migration `000008_official_status`)**:
 

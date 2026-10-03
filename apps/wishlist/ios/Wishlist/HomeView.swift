@@ -28,6 +28,10 @@ struct HomeView: View {
         Array(repeating: GridItem(.flexible(), spacing: 4), count: HomeLayout.gridColumnCount)
     }
 
+    private var isSettingsOpen: Bool {
+        if case .settings = sheet { true } else { false }
+    }
+
     var body: some View {
         let home = model.home
         ScrollView {
@@ -50,6 +54,8 @@ struct HomeView: View {
             }
             .padding(.bottom, 96)
         }
+        // 設定を開いている間は、背面の一覧(ジャンルのチップなど)を支援技術・UI テストから隠す(設定のジャンル行と同じ名前のため)
+        .accessibilityHidden(isSettingsOpen)
         .refreshable { await home.refresh() }
         .overlay(alignment: .topTrailing) {
             GlassCircleButton(systemImage: "gearshape", label: "設定") { sheet = .settings }

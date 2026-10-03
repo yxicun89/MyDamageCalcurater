@@ -7,6 +7,7 @@ import WishlistCore
 /// 起動の取り決め(docs/phase2-ios-spec.md の XCUITest):
 /// - `WISHLIST_USE_FAKE=1`: 通信しない。WishlistFixtures の FakeWishlistService + InMemoryWishlistCache、設定済みの接続設定。
 /// - `WISHLIST_USE_FAKE=estimates`: `1` と同じ。ただし目安価格・参考外の出品つき(`WishlistFixtures.makeServiceWithEstimates`)。
+/// - `WISHLIST_USE_FAKE=official`: `1` と同じ。ただし商品 12 は公式の販売状況を監視中、ジャンル 1 に別名グループつき(`WishlistFixtures.makeServiceWithOfficial`)。
 /// - `WISHLIST_USE_FAKE=offline`: SwiftData のキャッシュに WishlistFixtures があり、Service は通信できない。
 /// - 環境変数なし: 本物の設定(UserDefaults)と API。未設定なら設定画面から始まる。
 @MainActor
@@ -41,6 +42,12 @@ final class AppModel {
                 ? WishlistFixtures.makeServiceWithEstimates()
                 : FakeWishlistService(items: WishlistFixtures.items, genres: WishlistFixtures.genres, sites: WishlistFixtures.sites)
             settings = Self.fakeSettings
+        case "official":
+            store = UserDefaultsSettingsStore(defaults: UserDefaults(suiteName: "wishlist.fake") ?? .standard)
+            cache = InMemoryWishlistCache(
+                items: WishlistFixtures.officialItems, genres: WishlistFixtures.officialGenres, sites: WishlistFixtures.sites)
+            service = WishlistFixtures.makeServiceWithOfficial()
+            settings = Self.fakeSettings
         case "offline":
             store = UserDefaultsSettingsStore(defaults: UserDefaults(suiteName: "wishlist.fake") ?? .standard)
             let persistent: any WishlistCache = (try? SwiftDataWishlistCache(inMemory: true)) ?? InMemoryWishlistCache()
@@ -65,7 +72,7 @@ final class AppModel {
         self.cache = cache
         self.service = service
         self.settings = settings
-        self.usesFixedBackend = mode != nil && (mode == "1" || mode == "estimates" || mode == "offline")
+        self.usesFixedBackend = mode != nil && (mode == "1" || mode == "estimates" || mode == "official" || mode == "offline")
         self.seed = seed
         self.imageCache = Self.makeImageCache(settings: settings, offline: usesFixedBackend)
         self.home = HomeViewModel(service: service, cache: cache, settings: settings)
