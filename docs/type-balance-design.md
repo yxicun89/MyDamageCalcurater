@@ -39,7 +39,7 @@ services/balance/
 ├─ testdata/               # 架空データの example
 ├─ scripts/                # smoke(架空データ版・実データ版)
 └─ deploy/
-   ├─ k8s/base                     # Deployment(replicas 1)・Service・Ingress /api/balance
+   ├─ k8s/base                     # Deployment(replicas 1)・Service(Ingress は無い。gateway が転送)
    ├─ k8s/overlays/local           # 架空データの read model(ConfigMap)
    ├─ k8s/overlays/local-readmodel # pokedex export の実データ(ADR-0403)
    ├─ k8s/overlays/gitops          # digest 固定(ADR-0018)
@@ -48,8 +48,8 @@ services/balance/
 ```
 
 - 計算コアは HTTP・k8s から分離している。ハンドラにタイプ計算を書かない。単体テストは k8s を起動せずコアを直接検証する。
-- Ingress は `/api/balance`。gateway 経由のルーティング(`/api/balance/*`)は gateway 側に実装済み(issue #284)。
-  直結の Ingress の撤去と gateway への URL の配線は未対応(§11)。
+- balance は Ingress を持たない。クライアントは gateway(`/api/balance/*`)経由で届き、gateway が Service `balance` へ転送する
+  (`GATEWAY_BALANCE_URL=http://balance`。issue #284・ADR-0414)。端末ID・セッションIDの検証は gateway でも掛かる。
 - リソースは requests 10m/16Mi・limits 100m/64Mi、`GOMEMLIMIT=56MiB`(§8)。HPA は付けていない(軽量 API のため。必要になってから)。
 
 ## 4. 計算の考え方(`internal/balance`)
@@ -141,7 +141,7 @@ services/balance/
 | 項目 | 状態 |
 |---|---|
 | iOS のタイプバランス画面 | 未対応(Web のみ) |
-| gateway 経由への一本化 | gateway のルーティングは実装済み。balance の直結 Ingress の撤去と `GATEWAY_BALANCE_URL` 等の配線は別タスク |
+| gateway 経由への一本化 | balance は完了(直結 Ingress を撤去し `GATEWAY_BALANCE_URL` を配線。ADR-0414)。speed・judge の直結 Ingress は各レーンで残り |
 | 自動 sync・prune・selfHeal | 意図的に無効。有効化は未決 |
 | ApplicationSet・App-of-Apps・judge/calc 系の Application | なし |
 | クラウドへのデプロイ(EKS / GKE の選択・クラウドのレジストリ・実データの GitOps 配布) | 未決(クラウド公開はしない方針。ADR-0210) |
