@@ -21,6 +21,30 @@ public enum BalanceLabels {
         "×\(multiplier)"
     }
 
+    /// 仮想敵の受ける/与える倍率(`MatchupMultiplier`)。攻撃技が無ければ nil で「攻撃技なし」。
+    /// category を持たないので、倍率の範囲から弱点・耐性を判定し直さない(語を添えない)。
+    public static func matchupMultiplierLabel(_ multiplier: String?) -> String {
+        guard let multiplier else { return BalanceScreenText.coverageNoAttackMove }
+        return multiplierLabel(multiplier)
+    }
+
+    /// 「安全に受けられるか」(`ThreatMatchup.safe`)。応答の真偽値をそのまま語にする。
+    public static func safeLabel(_ safe: Bool) -> String {
+        safe ? BalanceScreenText.safe : BalanceScreenText.unsafe
+    }
+
+    /// 「抜群が取れるか」(`ThreatMatchup.superEffective`)。応答の真偽値をそのまま語にする。
+    public static func superEffectiveLabel(_ superEffective: Bool) -> String {
+        superEffective ? BalanceScreenText.superEffective : BalanceScreenText.notSuperEffective
+    }
+
+    /// タイプの一覧(「ほのお・みず」。空なら「なし」)。
+    public static func typeListText(_ types: [PokeType]) -> String {
+        types.isEmpty
+            ? BalanceScreenText.noneLabel
+            : types.map(PokeTypeLabel.japaneseName(for:)).joined(separator: BalanceScreenText.listSeparator)
+    }
+
     private static func defenseWord(_ category: BalanceDefenseCategory) -> String {
         switch category {
         case .quadWeak, .weak: return "弱点"
@@ -71,6 +95,54 @@ public enum BalanceScreenText {
     public static let attackTypesLabel = "攻撃タイプ"
     public static let duplicateMove = "同じ技が重複しています"
     public static let tooManyMoves = "技は\(TeamLimits.maxMovesPerMember)個までです"
+
+    // 第3段: 仮想敵(Web の balanceScreenText と同じ語)
+    public static let threatsRegionLabel = "仮想敵"
+    public static let addThreatLabel = "仮想敵を追加"
+    public static let threatMatchupTableLabel = "相性"
+    public static let incomingColumnLabel = "受ける倍率"
+    public static let outgoingColumnLabel = "与える倍率"
+    public static let safeColumnLabel = "安全"
+    public static let safe = "安全"
+    public static let unsafe = "注意"
+    public static let superEffective = "抜群"
+    public static let notSuperEffective = "ふつう"
+    public static let threatsLoadingNotice = "仮想敵を計算中"
+    public static let tooManyThreats = "仮想敵は\(TeamLimits.maxMembers)体までです"
+    public static let emptyThreatsNotice = "仮想敵を追加すると、自分のメンバーとの相性が表示されます"
+    // 第3段: おすすめタイプ(Web と同じ語)
+    public static let recommendationsRegionLabel = "おすすめタイプ"
+    public static let recommendationsLoadingNotice = "おすすめタイプを計算中"
+    public static let candidatesTableLabel = "おすすめタイプの候補"
+    public static let typesColumnLabel = "タイプ"
+    public static let defenseCoveredColumnLabel = "ふさぐ防御の穴"
+    public static let offenseCoveredColumnLabel = "ふさぐ攻撃範囲の穴"
+    public static let pokemonColumnLabel = "ポケモン"
+    public static let abilityOptionsTableLabel = "特性で補えるポケモン"
+    public static let listSeparator = "・"
+    // 第3段: 技範囲チェッカー(Web に画面が無いので iOS で決めた文言)
+    public static let moveRangeRegionLabel = "技範囲チェッカー"
+    public static let moveRangeAddMoveLabel = "技を追加"
+    public static let moveRangeEmptyNotice = "技を1つ以上選ぶと、攻撃範囲と受けられるポケモンが表示されます"
+    public static let moveRangeLoadingNotice = "技範囲を計算中"
+    public static let moveRangeTypeChartLabel = "技構成の攻撃範囲"
+    public static let walledByLabel = "半減以下で受けられるポケモン"
+    public static let walledByAbilityLabel = "特性で半減以下にできるポケモン"
+    public static let noWalledNotice = "受けられるポケモンはいません"
+    public static let retryLabel = "再計算"
+
+    public static func threatGroupLabel(_ number: Int) -> String { "仮想敵\(number)" }
+    public static func removeThreatLabel(_ number: Int) -> String { "仮想敵\(number)を削除" }
+    public static func threatRegionLabel(_ number: Int, name: String) -> String { "仮想敵\(number)(\(name))" }
+    public static func safeMembersLabel(_ count: Int) -> String { "安全に受けられる \(count)人" }
+    public static func superEffectiveMembersLabel(_ count: Int) -> String { "抜群を取れる \(count)人" }
+    public static func defenseHolesLabel(_ list: String) -> String { "防御の穴: \(list)" }
+    public static func offenseHolesLabel(_ list: String) -> String { "攻撃範囲の穴: \(list)" }
+    public static func abilityOptionEntryLabel(name: String, ability: String, multiplier: String) -> String {
+        "\(name)(\(ability) \(multiplier))"
+    }
+    public static func moreCountLabel(_ count: Int) -> String { "ほか \(count)件" }
+    public static func moveRangeMoveLabel(_ slot: Int) -> String { "技\(slot)" }
 
     public static func weakSummary(weak: Int, quadWeak: Int) -> String { "弱点 \(weak)(うち×4 \(quadWeak))" }
     public static func resistSummary(_ count: Int) -> String { "耐性 \(count)" }
@@ -140,4 +212,12 @@ public struct BalanceScreenError: Equatable, Sendable {
             code = pokeCalcError.code
         }
     }
+}
+
+/// 長い一覧・名前の解決の上限(端末で出し切らない・マスタを引き過ぎない。ADR-0415 §8)。
+public enum BalanceDisplayLimits {
+    /// 1つの一覧(候補のポケモン・受けられるポケモン)に出す件数。超えた分は「ほか N件」。
+    public static let pokemonPerList = 20
+    /// 応答に出たポケモンから特性名を引く(`species(key:)`)最大の件数。引けない分は特性 ID のまま出す。
+    public static let abilityNameResolveLimit = 40
 }

@@ -102,10 +102,42 @@ func validateIndividual(label string, in engine.Individual) error {
 	return nil
 }
 
+// checkMegaItem はメガシンカ後の種族の持ち物規則(issue #315・ADR-0200 §4 追記)を検証する。
+// メガ種族は requiredItemId の持ち物か持ち物なし(nil)だけを受け付け、別の持ち物は 400 invalid_input。
+// メガでない種族は何も検査しない。label は入力の場所(例 "攻撃側"・"itemVariants[1]")。
+func (s *Server) checkMegaItem(label string, species engine.Species, item *engine.Item) error {
+	if item == nil {
+		return nil
+	}
+	required, isMega := s.store.MegaRequiredItem(species.Key)
+	if !isMega || item.ID == required {
+		return nil
+	}
+	if required == "" {
+		return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物を持たせられない(指定: %q)",
+			label, species.Key, item.ID)
+	}
+	return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物 %q を持たせられない(持てるのはメガストーン %q だけ)",
+		label, species.Key, item.ID, required)
+}
+
+// checkMegaItems は持ち物候補の各要素に checkMegaItem を当てる(bulk の itemVariants・reverse の itemCandidates)。
+func (s *Server) checkMegaItems(label string, species engine.Species, items []*engine.Item) error {
+	for i, it := range items {
+		if err := s.checkMegaItem(fmt.Sprintf("%s[%d]", label, i), species, it); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // --- 厳格デコード(engine/wasmapi の decodeStrict と同じ振る舞い) --------------
 
 // decodeStrict は未知フィールドを拒否して JSON オブジェクトを dst へ読む。
-func decodeStrict(r io.Reader, dst any) error {
+// individualKeys は本文の直下にある Individual のキー名(attacker / defender / known)で、
+// それぞれの sp(StatBlock の6キー)が契約どおりそろっていることも確かめる(issue #316。
+// 生成型は値型でゼロ値が入るため、キーの有無は生の JSON で見る。ADR-0200 §4)。
+func decodeStrict(r io.Reader, dst any, individualKeys ...string) error {
 	data, err := io.ReadAll(r)
 	if err != nil {
 		return newError(api.InvalidJson, "リクエスト本文を読めない: %v", err)
@@ -123,7 +155,57 @@ func decodeStrict(r io.Reader, dst any) error {
 	if _, err := dec.Token(); !errors.Is(err, io.EOF) {
 		return newError(api.InvalidJson, "JSON の後ろに余計なデータがある")
 	}
+	return requireIndividualSP(data, individualKeys)
+}
+
+// statBlockKeys は契約の StatBlock の必須6キー。
+var statBlockKeys = []string{"hp", "atk", "def", "spa", "spd", "spe"}
+
+// requireIndividualSP は、本文直下の各 Individual の sp が存在し、6キーすべてを(null でなく)持つことを
+// 確かめる(欠落は invalid_input。judge-svc の toStats と同じ扱い)。Individual 自体の欠落は
+// ここでは見ない(speciesKey 空として既存どおり unknown_species になる)。encoding/json は
+// キー名の大文字小文字を区別せず束縛するので("Attacker" は attacker に入る)、ここでも EqualFold で探す。
+func requireIndividualSP(data []byte, individualKeys []string) error {
+	if len(individualKeys) == 0 {
+		return nil
+	}
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(data, &top); err != nil {
+		return nil // decodeStrict が構文は検証済み
+	}
+	for _, key := range individualKeys {
+		rawInd, ok := lookupFold(top, key)
+		if !ok {
+			continue
+		}
+		var ind map[string]json.RawMessage
+		if json.Unmarshal(rawInd, &ind) != nil || ind == nil {
+			continue
+		}
+		var sp map[string]json.RawMessage
+		if raw, ok := lookupFold(ind, "sp"); !ok || json.Unmarshal(raw, &sp) != nil || sp == nil {
+			return newError(api.InvalidInput, "%s.sp が必須(能力ポイントの6キーをすべて指定する)", key)
+		}
+		for _, k := range statBlockKeys {
+			if raw, ok := lookupFold(sp, k); !ok || string(bytes.TrimSpace(raw)) == "null" {
+				return newError(api.InvalidInput, "%s.sp.%s が必須(能力ポイントの6キーをすべて指定する)", key, k)
+			}
+		}
+	}
 	return nil
+}
+
+// lookupFold は大文字小文字を区別せずキーを探す(encoding/json の束縛と同じ)。
+func lookupFold(m map[string]json.RawMessage, key string) (json.RawMessage, bool) {
+	if v, ok := m[key]; ok {
+		return v, true
+	}
+	for k, v := range m {
+		if strings.EqualFold(k, key) {
+			return v, true
+		}
+	}
+	return nil, false
 }
 
 // unknownFieldPrefix は encoding/json が DisallowUnknownFields で返すエラーの接頭辞。

@@ -58,6 +58,7 @@ type fakeStore struct {
 	abilities map[string]engine.Ability
 	natures   map[string]engine.Nature
 	chart     engine.TypeChart
+	megaItems map[string]string // メガ種族キー → requiredItemId(メガでない種族は無い)
 	panicOn   bool
 }
 
@@ -118,6 +119,12 @@ func (f *fakeStore) NatureID(n engine.Nature) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+func (f *fakeStore) MegaRequiredItem(speciesKey string) (string, bool) {
+	f.check()
+	id, ok := f.megaItems[speciesKey]
+	return id, ok
 }
 
 func (f *fakeStore) TypeChart() engine.TypeChart {
@@ -216,7 +223,6 @@ type indiv struct {
 	natureID   string
 	abilityID  string // "" は省略
 	itemID     string // "" は省略(持ち物なし)
-	moveID     string // "" は省略(Individual.moveId)
 	sp         engine.Stats
 	ranks      engine.Ranks
 	tera       engine.Type   // "" は省略
@@ -244,9 +250,6 @@ func (in indiv) http() map[string]any {
 	}
 	if in.itemID != "" {
 		m["itemId"] = in.itemID
-	}
-	if in.moveID != "" {
-		m["moveId"] = in.moveID
 	}
 	if in.tera != "" {
 		m["teraType"] = string(in.tera)
