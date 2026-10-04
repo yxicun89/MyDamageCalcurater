@@ -8,7 +8,7 @@
 //   POST api/calc/adjust/min-sp-to-ko       adjustMinSpToKo
 //   POST api/calc/adjust/min-sp-to-survive  adjustMinSpToSurvive
 //   POST api/calc/adjust/allocation         adjustAllocation
-//   POST api/calc/adjust/goals              adjustGoals(ADR-0331。段階 A はスタブ)
+//   POST api/calc/adjust/goals              adjustGoals(ADR-0331)
 //   GET  api/pokedex/moves/{key}/learners   listMoveLearners(?limit=&offset=)
 //
 // 失敗の写像(ADR-0319 §3):
@@ -178,8 +178,7 @@ export function createAdjustClient(input: CreateAdjustClientInput): AdjustClient
     minSpToKo: (request, signal) => post(ADJUST_PATHS.minSpToKo, request, signal),
     minSpToSurvive: (request, signal) => post(ADJUST_PATHS.minSpToSurvive, request, signal),
     allocation: (request, signal) => post(ADJUST_PATHS.allocation, request, signal),
-    // スタブ(ADR-0331 段階 A で post(ADJUST_GOALS_PATH, ...) にする。テストは adjustClient.goals.test.ts)。
-    goals: () => Promise.resolve(unavailableResult()),
+    goals: (request, signal) => post(ADJUST_GOALS_PATH, request, signal),
     moveLearners: (moveId, page, signal) => send(moveLearnersPath(moveId, page), { method: "GET" }, signal),
   };
 }

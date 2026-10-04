@@ -1,12 +1,13 @@
 // F-11(ADR-0331 §5・§6): 調整の「相手を選んで目標を選ぶ」の定数と、要求を組み立てる純粋関数。
 // 定数は「入力の作り方の型」(画面の選択肢)で、マスタではない(ポケモン・技・持ち物のリストは持たない)。
 // 相手の素早さの実数値は Web で計算しない(サーバーが engine で求める。ADR-0331 §3)。
-//
-// スタブ: 関数の中身は段階 A の実装で書く(spec 段階。テストは adjustGoals.test.ts)。
 
 import type { components } from "../api/openapi.gen";
-import type { AttackerPresetKey } from "../domain/attackerPresets";
-import type { DefenderPresetKey } from "../domain/defenderPresets";
+import { resolveAttackerPreset, type AttackerPresetKey } from "../domain/attackerPresets";
+import { resolveDefenderPreset, type DefenderPresetKey } from "../domain/defenderPresets";
+import { megaItemLock } from "../domain/mega";
+import { MAX_SP_PER_STAT, NEUTRAL_NATURE, ZERO_SP } from "../domain/requests";
+import { DEFAULT_ADJUST_THRESHOLD_PERCENT, natureIdForPreset } from "./adjustRequest";
 import type { Item, MoveCategory, Nature, Stats } from "../engine/types";
 import type { MasterNature, MasterSpecies } from "../master/types";
 
@@ -53,7 +54,14 @@ export interface ResolvedSpeedPreset {
 
 /** 素早さのプリセットの SP・性格(ADR-0331 §5 の表)。 */
 export function resolveSpeedPreset(key: SpeedPresetKey): ResolvedSpeedPreset {
-  throw new Error(`未実装(ADR-0331 段階 A): resolveSpeedPreset(${key})`);
+  switch (key) {
+    case "fastest":
+      return { sp: { ...ZERO_SP, spe: MAX_SP_PER_STAT }, nature: { plus: "spe", minus: "atk" } };
+    case "neutral_max":
+      return { sp: { ...ZERO_SP, spe: MAX_SP_PER_STAT }, nature: { ...NEUTRAL_NATURE } };
+    case "none":
+      return { sp: { ...ZERO_SP }, nature: { ...NEUTRAL_NATURE } };
+  }
 }
 
 /** 目標の相手の振り方(種類ごとにプリセットの種類が違う)。 */
@@ -76,7 +84,20 @@ export interface GoalOpponentInput {
  * プリセットの性格がマスタに無ければ null(別の性格で代えない)。
  */
 export function goalOpponentIndividual(input: GoalOpponentInput): Schemas["Individual"] | null {
-  throw new Error(`未実装(ADR-0331 段階 A): goalOpponentIndividual(${input.species.key})`);
+  const { species, preset, natures, items } = input;
+  const resolved =
+    preset.kind === "outspeed"
+      ? resolveSpeedPreset(preset.key)
+      : preset.kind === "survive"
+        ? resolveAttackerPreset(preset.key, preset.category)
+        : resolveDefenderPreset(preset.key);
+  const natureId = natureIdForPreset(natures, resolved.nature);
+  if (natureId === null) {
+    return null;
+  }
+  const individual: Schemas["Individual"] = { speciesKey: species.key, level: 50, natureId, sp: resolved.sp };
+  const lock = megaItemLock(species, items);
+  return lock.kind === "locked" ? { ...individual, itemId: lock.item.id } : individual;
 }
 
 export interface GoalRequestInput {
@@ -90,5 +111,16 @@ export interface GoalRequestInput {
 
 /** 1つの目標の要求(省略可の欄は送らない。ADR-0331 §6)。 */
 export function buildGoalRequest(input: GoalRequestInput): Schemas["AdjustGoal"] {
-  throw new Error(`未実装(ADR-0331 段階 A): buildGoalRequest(${input.kind})`);
+  const { kind, opponent, moveId, hits, thresholdPercent } = input;
+  if (kind === "outspeed") {
+    return moveId === null ? { kind, opponent } : { kind, opponent, moveId };
+  }
+  const goal: Schemas["AdjustGoal"] = { kind, opponent, hits };
+  if (moveId !== null) {
+    goal.moveId = moveId;
+  }
+  if (thresholdPercent !== DEFAULT_ADJUST_THRESHOLD_PERCENT) {
+    goal.thresholdPercent = thresholdPercent;
+  }
+  return goal;
 }
