@@ -13,6 +13,36 @@
   color: var(--text-primary);
 }
 
+.team-member-editor__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.team-member-editor__header h2 {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  overflow-wrap: anywhere;
+}
+
+.team-member-editor__leave {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.team-member-editor__leave p {
+  margin: 0;
+}
+
+.team-member-editor__unsaved {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 .team-member-editor__actions {
   display: flex;
   flex-wrap: wrap;
@@ -30,12 +60,14 @@
   color: var(--danger);
 }
 
+/* 枠は .ui-card(種族が決まるとタイプ色の .ui-card--typed)。ここは並べ方だけ。 */
 .team-member {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
   padding: var(--space-3) var(--space-4);
 }
 
@@ -110,6 +142,7 @@
 
 /* メガ種族の持ち物固定の理由・補正の通知(issue 515、ADR-0320)。 */
 .team-member__reason,
+.team-member__hint,
 .team-member__notice {
   margin: 0;
   color: var(--text-secondary);

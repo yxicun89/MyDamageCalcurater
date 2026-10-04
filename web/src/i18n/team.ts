@@ -14,9 +14,8 @@ export const teamClientText = {
 } as const;
 
 /**
- * P5-5 PR-A1: 構築ビルダーの画面(team/TeamScreen.tsx、ADR-0309)の文言。
- * この段階(PR-A1)で扱うのは一覧・新規作成(名前だけ)・名前変更・削除まで。
- * メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2 で足す。
+ * 構築ビルダーの画面(team/TeamScreen.tsx、ADR-0309・ADR-0332)の文言。
+ * 構築名は廃止した(ADR-0332 §1)。一覧の表示名はサーバーの既定名のとき「構築 N」にする(team/teamName.ts)。
  */
 export const teamScreenText = {
   /** 画面全体の領域(role="region" の名前)。 */
@@ -24,25 +23,22 @@ export const teamScreenText = {
   /** 一覧(`<ul>`)の名前と、その上の見出し。 */
   listLabel: "保存した構築",
   listHeading: "保存した構築",
-  /** 一覧を読み込んでいる間(新規作成のフォームは先に使える。ADR-0309 §4)。 */
+  /** 一覧を読み込んでいる間([新しい構築]は先に使える。ADR-0309 §4)。 */
   loadingNotice: "読み込み中",
-  /** 1件も無いとき(エラーと取り違えない案内。ADR-0309 §4)。 */
-  emptyNotice: "保存した構築はまだありません。名前を付けて作成してください",
-  /** 構築1件の要約(メンバー数・最終更新。PR-A1 ではメンバーは常に0体)。 */
+  /** 1件も無いとき(エラーと取り違えない案内。次にすることを書く)。 */
+  emptyNotice: "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます",
+  /** 構築1件の要約(メンバー数・最終更新)。 */
   memberCountLabel: (count: number, max: number): string => `${count}/${max}体`,
   updatedAtLabel: (date: string): string => `最終更新 ${date}`,
-  // ---- 新規作成 ----
-  createHeading: "新しい構築",
-  nameLabel: "構築名",
-  createLabel: "作成",
-  /** 送信前の検査(契約の TeamInput.name と同じ範囲。前後の空白を除いて1〜50文字)。 */
-  nameRequiredNotice: "構築名を入力してください",
-  nameTooLongNotice: (max: number): string => `構築名は${max}文字までです`,
-  // ---- 名前変更 ----
-  renameLabel: (name: string): string => `「${name}」の名前を変更`,
-  renameFieldLabel: (name: string): string => `「${name}」の新しい構築名`,
-  renameSaveLabel: "名前を保存",
-  renameCancelLabel: "名前の変更をやめる",
+  /** 既定名の構築の表示名(N は既定名の構築を作成の古い順に数えた番号)。 */
+  untitledTeamName: (n: number): string => `構築 ${n}`,
+  /** 一覧のカードのアイコン列(role="group")の名前と、種族を引けないメンバーのアイコンの名前。 */
+  memberIconsLabel: (name: string): string => `「${name}」のポケモン`,
+  unknownMemberIcon: (n: number): string => `${n}体目`,
+  createLabel: "新しい構築",
+  /** カードの見える文字(ボタンの名前は editLabel / deleteLabel の「<名前>」を含む文。WCAG 2.5.3)。 */
+  openLabel: "開く",
+  deleteShortLabel: "削除",
   // ---- 削除(2段階。window.confirm は使わない。ADR-0309 §5)----
   deleteLabel: (name: string): string => `「${name}」を削除`,
   deleteConfirmLabel: (name: string): string => `「${name}」の削除を確定`,
@@ -51,7 +47,6 @@ export const teamScreenText = {
   // ---- 失敗(role="alert"。サーバーの message はこの見出しに続けてそのまま出す)----
   loadErrorHeading: "構築の一覧を読み込めませんでした",
   createErrorHeading: "構築を作成できませんでした",
-  renameErrorHeading: "構築の名前を変えられませんでした",
   deleteErrorHeading: "構築を削除できませんでした",
 } as const;
 
@@ -61,19 +56,23 @@ export const teamScreenText = {
  * 体の番号は名前に含めない。SP の6欄だけは statLetterJa の1文字表記を使う。
  */
 export const teamMemberText = {
-  /** 構築の行から編集領域を開く / 領域の名前 / 閉じる(未保存の編集は捨てる。API は呼ばない)。 */
-  editLabel: (name: string): string => `「${name}」のメンバーを編集`,
+  /** 一覧のカードから編集画面を開く / 編集画面の名前 / 一覧に戻る(未保存なら2段階。API は呼ばない)。 */
+  editLabel: (name: string): string => `「${name}」を開く`,
   editorLabel: (name: string): string => `「${name}」のメンバー編集`,
-  closeLabel: "編集を閉じる",
-  /** パーティ全体を保存する(update は全置換。ADR-0309 §4)。 */
-  saveLabel: "メンバーを保存",
+  closeLabel: "一覧に戻る",
+  /** 構築を保存する(update は全置換。ADR-0309 §4。種族の決まった枠だけを枠の順に送る)。 */
+  saveLabel: "保存",
   savedNotice: "保存しました",
   saveErrorHeading: "メンバーを保存できませんでした",
-  /** メンバーの追加・削除・並べ替え。 */
-  addLabel: "メンバーを追加",
-  addDisabledNotice: (max: number): string => `メンバーは${max}体までです`,
+  /** 保存していない変更の印と、戻るときの確認(ADR-0332 §2)。 */
+  unsavedNotice: "保存していない変更があります",
+  leaveConfirmNotice: "保存していない変更があります。保存せずに一覧に戻りますか",
+  leaveDiscardLabel: "保存せずに戻る",
+  leaveCancelLabel: "編集を続ける",
+  /** 空の枠の案内。 */
+  emptySlotHint: "ポケモンを選ぶと、技・持ち物・特性などを決められます",
   memberLegend: (position: number): string => `${position}体目`,
-  removeLabel: (position: number): string => `${position}体目を削除`,
+  removeLabel: (position: number): string => `${position}体目を外す`,
   moveUpLabel: (position: number): string => `${position}体目を上へ`,
   moveDownLabel: (position: number): string => `${position}体目を下へ`,
   /** 各項目のラベル(メンバーの group の中で引く)。 */
@@ -99,6 +98,7 @@ export const teamMemberText = {
   /** 入力の検査(role="alert")。 */
   spStatError: (letter: string, max: number): string => `${letter}は0〜${max}の整数で入力してください`,
   spTotalError: (over: number, max: number): string => `合計が${max}を${over}超えています`,
+  /** 種族が未選択のメンバーを保存できない理由。6枠の画面では空の枠を保存の対象にしないので届かない(team/teamMember.ts の検査として残す)。 */
   speciesRequiredError: "ポケモンを選んでください",
   moveDuplicateError: "同じ技は1体に1つだけ選べます",
 } as const;
@@ -128,20 +128,34 @@ const issueReason: Record<ShowdownIssueCode, string> = {
 };
 
 export const teamShowdownText = {
-  // ---- 取り込み ----
+  // ---- 取り込み(一覧の下の閉じた折りたたみの中。ADR-0332 §3)----
+  importFoldLabel: "Showdown 形式で取り込む",
+  importHelp:
+    "Pokémon Showdown などで作った構築のテキストを貼り付けると、新しい構築として取り込めます。ポケモン・持ち物・特性・技は日本語の名前で書き、ポケモンごとに空の行で区切ります",
+  importExampleLabel: "入力の例(1体分)",
+  /** 1体分の入力例(ADR-0310 の形。名前は日本語。SP は EVs 行に 0〜32 をそのまま書く)。実在の名前を直書きしてよいのはこの例文だけ。 */
+  importExample: [
+    "ガブリアス @ いのちのたま",
+    "Ability: さめはだ",
+    "EVs: 2 HP / 32 Atk / 32 Spe",
+    "ようき Nature",
+    "- じしん",
+    "- ドラゴンクロー",
+  ].join("\n"),
   importRegionLabel: "Showdown 形式から取り込む",
   importTextLabel: "取り込むテキスト",
-  importNameLabel: "取り込む構築名",
   importPreviewLabel: "内容を確認",
   importCreateLabel: "この内容で作成",
   importResolving: "名前を確認しています",
   importErrorHeading: "構築を取り込めませんでした",
   previewSummary: (count: number): string => `${count}体を取り込めます`,
   previewNone: "取り込めるメンバーがいません",
-  importCreated: (name: string, count: number): string => `「${name}」を${count}体で作成しました`,
+  importCreated: (count: number): string => `${count}体の構築を作りました`,
   issuesLabel: "取り込みの問題",
   notesLabel: "取り込み時の補正",
-  // ---- 書き出し ----
+  // ---- 書き出し(編集画面の下の閉じた折りたたみの中。保存した内容を書き出す)----
+  exportFoldLabel: "Showdown 形式で書き出す",
+  exportHelp: "保存した内容を Showdown 形式のテキストにします。コピーして他のアプリに貼り付けられます",
   exportLabel: (name: string): string => `「${name}」を Showdown 形式で書き出す`,
   exportRegionLabel: (name: string): string => `「${name}」の Showdown 形式`,
   exportTextLabel: (name: string): string => `「${name}」の書き出しテキスト`,
