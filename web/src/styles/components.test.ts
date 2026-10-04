@@ -1,4 +1,4 @@
-// F-12(I-web-6、ADR-0331 §2): 共通の見た目の部品(styles/components.css の .ui-* クラス)の静的検査。
+// F-12(I-web-6、ADR-0334 §2): 共通の見た目の部品(styles/components.css の .ui-* クラス)の静的検査。
 // 画面ごとの CSS に同じ見た目を何度も書かず、カード・ボタン・チップ・表・タブ・入力・案内を共通のクラスに寄せる。
 // 色・角丸・影・時間は tokens.css の変数だけを参照する(色の直書きの禁止は tokens.test.ts が全 CSS で見る)。
 // 部品の一覧は docs/design.md「共通の部品」にも書く(この検査と同期する)。
@@ -11,7 +11,7 @@ import { localPath } from "../test/localPath";
 
 const componentsPath = localPath("./components.css", import.meta.url);
 
-/** ADR-0331 §2 の部品のクラス(design.md「共通の部品」に全部書く)。 */
+/** ADR-0334 §2 の部品のクラス(design.md「共通の部品」に全部書く)。 */
 const REQUIRED_CLASSES = [
   ".ui-card",
   ".ui-card--typed",
@@ -51,7 +51,7 @@ function flatten(nodes: readonly CssNode[], atRules: readonly string[] = []): Lo
 
 function readComponents(): LocatedRule[] {
   if (!existsSync(componentsPath)) {
-    throw new Error("web/src/styles/components.css が無い(ADR-0331 §2)");
+    throw new Error("web/src/styles/components.css が無い(ADR-0334 §2)");
   }
   return flatten(parseCss(readFileSync(componentsPath, "utf8"))).filter(
     ({ atRules }) => !atRules.some((prelude) => /prefers-reduced-motion/.test(prelude)),

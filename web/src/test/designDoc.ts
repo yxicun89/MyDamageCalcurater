@@ -101,7 +101,7 @@ export function baseTokens(markdown: string): BaseToken[] {
 }
 
 /**
- * F-12(ADR-0331): design.md「ポップ配色」の表(| トークン | ライト | ダーク | 用途 |)。
+ * F-12(ADR-0334): design.md「ポップ配色」の表(| トークン | ライト | ダーク | 用途 |)。
  * 色の書き方は「ベース」と同じ(#RRGGBB・`黒 10%` など。designColorToCss)。用途の列は読まない。
  */
 export function popPaletteTokens(markdown: string): BaseToken[] {
