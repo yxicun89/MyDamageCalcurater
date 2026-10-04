@@ -6,7 +6,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { App } from "./App";
-import { SCREENS } from "./app/screens";
+import { SCREENS, visibleScreens } from "./app/screens";
 import { appText } from "./i18n/ja";
 import { createFakeEngine } from "./test/fakeEngine";
 
@@ -33,7 +33,8 @@ describe("タブ列", () => {
     }
   });
 
-  test.each(SCREENS.map((registered) => [registered.label, registered.id] as const))(
+  // 非表示の画面(判定。ADR-0330)はタブに出ないので対象外。
+  test.each(visibleScreens(SCREENS).map((registered) => [registered.label, registered.id] as const))(
     "%s のタブは装飾のアイコン(aria-hidden の svg.ui-icon)を持ち、名前は画面名のまま",
     async (label) => {
       await renderApp();
