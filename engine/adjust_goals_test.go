@@ -379,6 +379,32 @@ func goalsCases() []goalsCase {
 		{"上限 0(下限より上に振らない)", func(t *testing.T) SPGoalsInput {
 			return goalsInput(t, goalsSelf(NatureNeutral, Stats{}), Stats{}, outspeedGoal(NatureNeutral, 30, 0, 0))
 		}, boolPtr(false)},
+		// critic I-1(a): 最上位のキー「満たす目標の数」。予算 34 では耐えるは届かず素早さ(S 25)は届く。目標の順(耐えるが先)より
+		// 満たす数が優先なので S 25 になる(満たす数を比べないと、前の目標の近さで H と B に振ってしまう)。
+		{"満たす数が最上位(耐えるが先でも届かないなら素早さを満たす)", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{SpA: 32}), Stats{HP: 32, Def: 32, Spe: 32},
+				surviveGoal(CategoryPhysical, 220, 1, 0), outspeedGoal(natureGoalsSpeUp, 32, 0, 0))
+		}, boolPtr(false)},
+		// 同じく耐久側の中(表の側のキー): 前の「耐える」(物理・50%)は予算 32 では届かず、後ろの「耐える」(特殊)は H に振れば届く。
+		// 満たす数が先なので後ろを満たす組(H11 B21)になる(満たす数を比べないと、前の目標の近さで H5 B27 になる)。
+		{"満たす数が最上位(耐久側の2件)", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{Atk: 32, Spe: 2}), statsAll(MaxSPPerStat),
+				surviveGoal(CategoryPhysical, 220, 1, 50), surviveGoal(CategorySpecial, 160, 1, 0))
+		}, boolPtr(false)},
+		// critic C-1: 攻撃側・素早さの表で、下限の合計に上限までの値を足すと 66 を超える組を CalcDamage に渡さない(500 の回帰)。
+		{"下限 H32・B32 で倒す(上限は既定の 32)", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{HP: 32, Def: 32}), full, koGoal(CategoryPhysical, 130, 2, 0))
+		}, nil},
+		{"下限の合計ちょうど 66 で倒す", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{HP: 32, Def: 32, Atk: 2}), full, koGoal(CategoryPhysical, 130, 2, 0))
+		}, nil},
+		{"下限の合計ちょうど 66 で素早さ + 倒す(特殊)", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{HP: 32, SpD: 32, Spe: 2}), full,
+				outspeedGoal(natureGoalsSpeUp, 32, 0, 0), koGoal(CategorySpecial, 130, 2, 0))
+		}, boolPtr(false)},
+		{"下限 A32・C32 で耐える(耐久側の予算は 2)", func(t *testing.T) SPGoalsInput {
+			return goalsInput(t, goalsSelf(NatureNeutral, Stats{Atk: 32, SpA: 32}), full, surviveGoal(CategoryPhysical, 200, 1, 0))
+		}, nil},
 	}
 }
 
@@ -664,6 +690,35 @@ func TestSPGoalsSharedHPForTwoSurviveGoals(t *testing.T) {
 		if !o.Met || o.Kind != SPGoalSurvive {
 			t.Errorf("goals[%d] = %+v, want survive・満たす", i, o)
 		}
+	}
+}
+
+// 満たす目標の数が最上位のキー(critic I-1(a))。前の目標(耐える)が届かないときは、後ろの目標(素早さ)を満たす組を選ぶ。
+func TestSPGoalsMetCountComesFirst(t *testing.T) {
+	in := goalsInput(t, goalsSelf(NatureNeutral, Stats{SpA: 32}), Stats{HP: 32, Def: 32, Spe: 32},
+		surviveGoal(CategoryPhysical, 220, 1, 0), outspeedGoal(natureGoalsSpeUp, 32, 0, 0))
+	got := mustSuggestGoals(t, in)
+	if got.Goals[0].Met || !got.Goals[1].Met || got.Plan.SP != (Stats{SpA: 32, Spe: 25}) {
+		t.Errorf("goals=%+v SP=%+v, want 耐える✗・素早さ✓・S25", got.Goals, got.Plan.SP)
+	}
+}
+
+// 耐久側の同点は H, B, D の辞書順(小さい方)で決める(critic I-1(b)。ADR-0150 §6)。
+// H の実数値 = 100 + h、B の実数値 = 100 + b になる種族では、(h, b) と (b, h) が合計 SP・耐久指数・満たすかで同点になる。
+func TestSPGoalsBulkTieBrokenByLexOrder(t *testing.T) {
+	sp := adjSelfAttackerSpecies()
+	sp.BaseStats.HP = sp.BaseStats.Def - 55 // H 実数値 = 100 + h、B 実数値 = 100 + b
+	self := Individual{Species: sp, Level: DefaultLevel, Nature: NatureNeutral, Status: StatusNone}
+	in := goalsInput(t, self, statsAll(MaxSPPerStat), surviveGoal(CategoryPhysical, 120, 1, 0))
+	cache := goalsOracleCountCache{}
+	low, high := goalsOracleEval(t, in, Stats{HP: 13, Def: 16}, cache), goalsOracleEval(t, in, Stats{HP: 16, Def: 13}, cache)
+	if low.met != 1 || high.met != 1 || !slices.Equal(low.bulk, high.bulk) {
+		t.Fatalf("前提が崩れた: (H13, B16) と (H16, B13) が同点でない: %+v / %+v", low, high)
+	}
+	got := mustSuggestGoals(t, in)
+	assertGoalsResult(t, got, goalsOracle(t, in))
+	if got.Plan.SP != (Stats{HP: 13, Def: 16}) {
+		t.Errorf("SP = %+v, want H13 B16(同点は H が小さい方)", got.Plan.SP)
 	}
 }
 

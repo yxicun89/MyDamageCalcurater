@@ -192,6 +192,14 @@ func adjGoalsCases() []adjGoalsCase {
 				{kind: "survive", opponent: hitter, moveID: movePhysical, hits: hitsOf(1)},
 				{kind: "survive", opponent: caster, moveID: moveSpecial, hits: hitsOf(1)},
 			}},
+		// critic C-1: 下限が大きく ceiling を省略(32)しても 500 にしない(66 を超える組を計算に渡さない)。
+		{name: "下限 H32・B32 で倒す(ceiling 省略)", self: indiv{speciesKey: speciesAttacker, natureID: natureNeutral, sp: engine.Stats{HP: 32, Def: 32}},
+			goals: []adjGoalCase{{kind: "ko", opponent: bulkyFoe, moveID: movePhysical, hits: hitsOf(3)}}},
+		{name: "下限の合計 66 で素早さ + 倒す", self: indiv{speciesKey: speciesAttacker, natureID: natureNeutral, sp: engine.Stats{HP: 32, Def: 32, Spe: 2}},
+			goals: []adjGoalCase{
+				{kind: "outspeed", opponent: fastLeaf},
+				{kind: "ko", opponent: bulkyFoe, moveID: movePhysical, hits: hitsOf(3)},
+			}},
 	}
 }
 

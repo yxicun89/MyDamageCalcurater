@@ -225,6 +225,13 @@ func (s *goalsSearch) statRange(k StatKey) (lo, hi int) {
 	return lo, lo
 }
 
+// tableRange は outspeed・ko の表を作る能力 k の範囲。上限は statRange の上限と、ほかの能力を下限にしたときに
+// 合計が MaxSPTotal に収まる値の小さい方(66 を超える組を CalcDamage に渡さない。超えた値は pickBest で予算が負になり使われない)。
+func (s *goalsSearch) tableRange(k StatKey) (lo, hi int) {
+	lo, hi = s.statRange(k)
+	return lo, min(hi, MaxSPTotal-(s.in.Self.SP.Sum()-lo))
+}
+
 // minSum は能力の組 keys の下限の合計。
 func (s *goalsSearch) minSum(keys [3]StatKey) int {
 	sum := 0
@@ -335,7 +342,7 @@ func (s *goalsSearch) prepareOffense() error {
 			rank := min(6, max(-6, s.in.Self.Ranks.Spe+g.SelfSpeedStage))
 			opponent := EffectiveStat(g.Opponent, StatSpe)
 			table := &[MaxSPPerStat + 1]goalEval{}
-			lo, hi := s.statRange(StatSpe)
+			lo, hi := s.tableRange(StatSpe)
 			for v := lo; v <= hi; v++ {
 				self := s.selfWith(s.in.Self.SP.WithStat(StatSpe, v))
 				self.Ranks.Spe = rank
@@ -352,7 +359,7 @@ func (s *goalsSearch) prepareOffense() error {
 		case SPGoalKO:
 			k := reverseStat(SideAttacker, g.Move.Category)
 			table := &[MaxSPPerStat + 1]goalEval{}
-			lo, hi := s.statRange(k)
+			lo, hi := s.tableRange(k)
 			for v := lo; v <= hi; v++ {
 				self := s.selfWith(s.in.Self.SP.WithStat(k, v))
 				e, err := s.damageEval(i, self, [2]int{RealStats(self).Get(k), 0})
