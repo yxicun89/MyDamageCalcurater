@@ -207,5 +207,7 @@ App.tsx・app/screens.tsx・app/routes.ts・i18n/ja.ts を編集している未�
 固定中の表示は「{基本種名}のメガストーン」。文言は `web/src/i18n/items.ts`。マスタのキャッシュ版は 3。iOS の同じ語での追従は iOS レーンに残る。
 
 **判定タブの非表示(2026-10-04。ADR-0330。I-web-5 / F-07。ブランチ feat/web-hide-judge-f07)**: `defineScreen` の `hidden: true` で画面をタブ・URL・マウントから外せる。判定は非表示(コード・単体テストは残す)。Next: I-web-6 以降。
+
+**調整のメガ固定と目標モード段階 A(2026-10-04。ADR-0331。ブランチ feat/web-adjust-goals)**: F-10 調整画面のメガ固定(自分・相手のストーンを要求に送る)と、F-11 の「目標から振り方を決める」モード(`adjustGoals` クライアント・目標カード・結果)を入れた。モードは `ADJUST_GOALS_ENABLED`(`adjust/adjustGoals.ts`)が false の間は出さない。Next: 段階 B(engine・calc-svc。ダメージ計算レーン)が main に入ったら true にし、radio の数を固定する既存テストを 6 へ改める。色・スタイルは F-12 の後。
 Next(F-12 ビジュアルの基盤 / I-web-6): 実装済み・コミット前(ADR-0331 採用)。残りは PR 化のみ。逆算・タイプバランス・判定・お気に入り・このアプリについては共通クラス(`.ui-*`)を当てるだけで済む次の PR。調整(`web/src/adjust/`)は ec レーンが main 取り込み後に同じクラスを当てる。
 iOS はトークン一覧を `decisions/2026-10-04-web-visual-base-pop-tokens.md` から取り込む。

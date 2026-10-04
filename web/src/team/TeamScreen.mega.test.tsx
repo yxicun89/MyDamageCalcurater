@@ -133,7 +133,8 @@ async function save(
   await flush(() => {
     call.resolve({
       ok: true,
-      value: { ...team([]), id: call.args.teamId, name: call.args.input.name, members },
+      // 名前の省略はサーバーが既定名を補う(ADR-0229)。
+      value: { ...team([]), id: call.args.teamId, name: call.args.input.name ?? "名称未設定", members },
     });
   });
   return members;

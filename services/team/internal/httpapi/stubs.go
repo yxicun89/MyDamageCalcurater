@@ -42,6 +42,10 @@ func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocation
 	return notFoundForOtherServices()
 }
 
+func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
+	return notFoundForOtherServices()
+}
+
 func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) error {
 	return notFoundForOtherServices()
 }

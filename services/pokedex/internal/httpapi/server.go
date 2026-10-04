@@ -165,6 +165,10 @@ func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocation
 	return notFoundForCalc()
 }
 
+func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
+	return notFoundForCalc()
+}
+
 // deadlineMiddleware は DB を使う操作の context に締め切りを掛ける(ADR-0129 §2)。
 func deadlineMiddleware(d time.Duration) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
