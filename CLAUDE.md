@@ -25,7 +25,7 @@ engine/                 # 計算エンジン(純粋Go、I/O・外部依存なし
 engine/cmd/wasm/        # ブラウザ用WASMビルド(syscall/js の登録のみ)
 engine/wasmapi/         # WASM/JS 境界の DTO・検証・エラー整形(純粋。ネイティブでテスト可)
 engine/cmd/wasmexpect/  # Go/WASM 一致テストの期待値生成(ネイティブ Go の開発用ツール)
-services/gateway/       # Echo。クライアントの唯一の入口。画像は GATEWAY_IMAGES_DIR から /images/* で配信(ADR-0807)
+services/gateway/       # Echo。クライアントの唯一の入口。画像は GATEWAY_IMAGES_DIR から /images/* で配信(ADR-0808)
 services/pokedex/       # マスタ参照(MySQL)
 services/calc/          # 計算(ステートレス)
 services/balance/       # タイプバランス(設計: docs/type-balance-design.md)
@@ -39,7 +39,7 @@ services/judge/         # 素早さ×確定数の判定(docs/judge-design.md。g
 services/internal/      # サービス間の共有 Go パッケージ(master・api 生成物・dbmigrate・httpguard 等)
 tools/importer/         # マスタの取得(Node。data/generated/ へ。変換・投入は services/pokedex/importer。ADR-0101)
 tools/golden/           # @smogon/calc からテストベクタ生成(Node)
-tools/assets/           # 手元画像の WebP 変換と manifest 生成(Node・sharp。ADR-0807)
+tools/assets/           # 手元画像の WebP 変換と manifest 生成(Node・sharp。ADR-0808)
 testdata/golden/        # 生成済みテストベクタ(コミットする)
 web/                    # Vite + React + TypeScript
 ios/                    # SwiftUI アプリ
@@ -99,7 +99,7 @@ make e2e          # k3d 上のスモーク + Playwright
 make ios-test     # iOS シミュレータでテスト
 make wasm         # engine を WASM にビルドして web/public へ
 make import       # マスタデータ取込
-make assets       # 手元画像を WebP 2サイズ + manifest に変換(data/generated/images。画像なしでも成功。ADR-0807)
+make assets       # 手元画像を WebP 2サイズ + manifest に変換(data/generated/images。画像なしでも成功。ADR-0808)
 ```
 
 ## Claude Code 固有の開発ワークフロー

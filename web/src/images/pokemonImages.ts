@@ -1,4 +1,4 @@
-// ポケモン画像の manifest(ADR-0807 の契約、ADR-0325)を読む純粋関数。
+// ポケモン画像の manifest(ADR-0808 の契約、ADR-0325)を読む純粋関数。
 // manifest は { version: 1, images: { "<種族キー>": { thumb, detail } } }。画像の URL は "/images/" + 相対パス。
 // 取れない・不正・version 違い・キー無し・危険なパスは「画像なし」(= タイプ色エンブレム)。エラーにはしない。
 
@@ -25,7 +25,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 /**
  * `.webp` で終わる安全な相対パスだけ true(.. ・絶対・スキーム・// ・バックスラッシュ・クエリ・フラグメント・空は不可)。
  * `%` も不可: `%2e%2e` は URL の仕様で `..` と同じに扱われ、`/images/` の外へ出られる。正規のパスは
- * 内容 hash 付きの ASCII ファイル名(変換ツール tools/assets が作る。ADR-0807)で、パーセントエンコードは要らない。
+ * 内容 hash 付きの ASCII ファイル名(変換ツール tools/assets が作る。ADR-0808)で、パーセントエンコードは要らない。
  */
 function isSafeRelativeWebpPath(path: unknown): path is string {
   if (typeof path !== "string" || path === "" || !path.endsWith(".webp")) {
