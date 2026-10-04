@@ -6,9 +6,10 @@
 //
 // 画面の構成(詳細は ADR-0319 §2・テストは adjust/AdjustScreen.test.tsx):
 //   region「自分」          ポケモン・性格・特性・持ち物・技(+「覚えるポケモン」ボタン)・固定する能力ポイント 6 欄
-//   region「調整の内容」    モードの radio 5 つと、モードごとの欄(耐久の基準・上限、攻撃の分類・上限・素早さの目標、「目標を指定する」)
+//   region「調整の内容」    モードの radio 5 つ(目標モードが有効なら先頭に 1 つ足して 6 つ)と、モードごとの欄(耐久の基準・上限、攻撃の分類・上限・素早さの目標、「目標を指定する」)
 //   region「相手」          ポケモン・調整(プリセット)・技(相手が攻撃する側のときだけ)。相手が要るモードだけ出す
-//   region「目標」          発数・確率(プリセット)。相手が要るモードだけ出す
+//   region「目標」          発数・確率(プリセット)。相手が要るモードだけ出す。
+//                          「目標から振り方を決める」(ADR-0331)では、目標のカード(種類・相手・振り方・技)の一覧
 //   button「調整する」
 //   region「調整の結果」    今の振り方の指数と 16n + モードの結果 + 未対応の印
 //   region「この技を覚えるポケモン」 「覚えるポケモン」を押したときだけ出す
@@ -30,8 +31,13 @@ import {
   resolveDefenderPreset,
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
-import { ADJUST_ITEM_ROLE_FILTER, itemsForRole, itemsWithStoneLabels } from "../domain/itemRoles";
-import { megaStoneItemIds } from "../domain/mega";
+import {
+  ADJUST_ITEM_ROLE_FILTER,
+  itemsForRole,
+  itemsWithStoneLabels,
+  megaStoneLabel,
+} from "../domain/itemRoles";
+import { itemIdAfterSpeciesChange, megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { damagingLearnsetMoves, isDamagingMove } from "../domain/moves";
 import { BATTLE_LEVEL, MAX_SP_PER_STAT, MAX_SP_TOTAL, STAT_ORDER } from "../domain/requests";
 import { unsupportedMarkLabels } from "../domain/unsupportedLabels";
@@ -44,7 +50,13 @@ import {
 } from "../engine/types";
 import { adjustScreenText, unsupportedText, type AdjustModeKey } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
-import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
+import type {
+  MasterData,
+  MasterSpecies,
+  MasterSpeciesResolution,
+  MasterSpeciesSearch,
+} from "../master/types";
+import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import "./AdjustScreen.css";
 import type { AdjustClient, AdjustResult } from "./adjustClient";
@@ -59,6 +71,21 @@ import {
   firepowerModifier,
   natureIdForPreset,
 } from "./adjustRequest";
+import {
+  ADJUST_GOALS_ENABLED,
+  ADJUST_GOAL_KINDS,
+  DEFAULT_ADJUST_GOAL_KIND,
+  DEFAULT_KO_PRESET,
+  DEFAULT_SPEED_PRESET,
+  DEFAULT_SURVIVE_PRESET,
+  MAX_ADJUST_GOALS,
+  SPEED_PRESET_KEYS,
+  buildGoalRequest,
+  goalOpponentIndividual,
+  type AdjustGoalKind,
+  type GoalOpponentPreset,
+  type SpeedPresetKey,
+} from "./adjustGoals";
 
 type Schemas = components["schemas"];
 
@@ -71,10 +98,17 @@ export interface AdjustScreenProps {
   readonly master: MasterData;
   /** 種族を都度引く口(`master.capabilities.speciesList` が false のとき SpeciesSearchField で使う)。 */
   readonly masterSearch?: MasterSpeciesSearch;
+  /**
+   * 「目標から振り方を決める」モードを出すか(ADR-0331 §2)。省略時は adjustGoals.ts の ADJUST_GOALS_ENABLED。
+   */
+  readonly goalsEnabled?: boolean;
 }
 
 /** モードの表示順(radio の並び)。 */
 const MODES: readonly AdjustModeKey[] = ["indices", "bulk", "offense", "minKo", "minSurvive"];
+
+/** 目標モードが有効なときの radio の並び(先頭に足す。既定のモードは indices のまま。ADR-0331 §5)。 */
+const MODES_WITH_GOALS: readonly AdjustModeKey[] = ["goals", ...MODES];
 
 /** 能力ポイントの上限の既定(契約の省略と同じ 32)。 */
 const DEFAULT_CEILING = String(MAX_SP_PER_STAT);
@@ -87,6 +121,8 @@ const OFFENSE_CATEGORIES: readonly Schemas["MoveCategory"][] = ["physical", "spe
 
 /** 1つの種族の選択(名前・タイプ・覚える技・選べる特性)。オンラインでは resolveSpecies の結果から作る。 */
 interface SpeciesChoice {
+  /** 種族の実体(メガの固定に isMega・requiredItemId を使う。ADR-0331 §1)。一覧のマスタは master.species、検索は resolution.species。 */
+  readonly species: MasterSpecies;
   readonly key: string;
   readonly name: string;
   readonly types: readonly string[];
@@ -108,9 +144,33 @@ interface OpponentState {
   readonly moveId: string;
 }
 
+/** 目標カード1つの入力(ADR-0331 §5)。preset は種類ごとのプリセットの key、moveId は種類ごとに別の技(耐える = 相手、倒す・素早さ = 自分)。 */
+interface GoalState {
+  readonly id: number;
+  readonly kind: AdjustGoalKind;
+  readonly opponent: SpeciesChoice | null;
+  readonly preset: string;
+  readonly moveId: string;
+  readonly hits: number;
+  readonly thresholdPercent: number;
+}
+
+/** 送信時点の目標の名前(結果の行に使う。送信後に入力を変えても変わらない。ADR-0331 §7)。 */
+interface GoalDescription {
+  readonly kind: AdjustGoalKind;
+  readonly opponentName: string;
+  readonly moveName: string | null;
+  readonly hits: number;
+}
+
 /** 検査を通った1回分の送信(indices と、モードごとの操作)。 */
 type Operation =
   | { readonly kind: "none" }
+  | {
+      readonly kind: "goals";
+      readonly request: Schemas["AdjustGoalsRequest"];
+      readonly descriptions: readonly GoalDescription[];
+    }
   | { readonly kind: "ko"; readonly request: Schemas["AdjustSearchRequest"] }
   | { readonly kind: "survive"; readonly request: Schemas["AdjustSearchRequest"] }
   | { readonly kind: "allocation"; readonly request: Schemas["AdjustAllocationRequest"] };
@@ -128,6 +188,7 @@ interface PreparedSubmit {
 /** モードの操作の結果(成功の値)。 */
 type ModeResult =
   | { readonly kind: "none" }
+  | { readonly kind: "goals"; readonly value: Schemas["AdjustGoalsResult"] }
   | { readonly kind: "ko"; readonly value: Schemas["AdjustKOResult"] }
   | { readonly kind: "survive"; readonly value: Schemas["AdjustSurviveResult"] }
   | { readonly kind: "allocation"; readonly value: Schemas["AdjustAllocationResult"] };
@@ -174,6 +235,87 @@ function findMove(choice: SpeciesChoice | null, moveId: string): Move | undefine
   return choice?.moves.find((move) => move.id === moveId);
 }
 
+/** 目標の種類ごとのプリセットの既定(ADR-0331 §5)。 */
+function defaultGoalPreset(kind: AdjustGoalKind): string {
+  switch (kind) {
+    case "outspeed":
+      return DEFAULT_SPEED_PRESET;
+    case "survive":
+      return DEFAULT_SURVIVE_PRESET;
+    case "ko":
+      return DEFAULT_KO_PRESET;
+  }
+}
+
+/** 目標カードの技。耐える = 相手の技、倒す・素早さ(先に使う技) = 自分の技。 */
+function goalMove(goal: GoalState, self: SpeciesChoice | null): Move | undefined {
+  return findMove(goal.kind === "survive" ? goal.opponent : self, goal.moveId);
+}
+
+interface ResolvedGoalPreset {
+  readonly preset: GoalOpponentPreset;
+  /** 振り方の表示名(選択肢・結果の行)。 */
+  readonly label: string;
+  /** 選択肢に出す key と表示名(技の分類で変わる)。 */
+  readonly options: readonly { readonly key: string; readonly label: string }[];
+  /** 選択中の key(防御側は技の分類で読み替えた値)。 */
+  readonly selectedKey: string;
+}
+
+/** 目標カードの振り方(ADR-0331 §5 の表)。耐える = 相手の技の分類で A/C、倒す = 自分の技の分類で絞る。 */
+function resolveGoalPreset(goal: GoalState, self: SpeciesChoice | null): ResolvedGoalPreset {
+  const move = goalMove(goal, self);
+  const category: MoveCategory = attackCategoryOf(move) ?? "physical";
+  switch (goal.kind) {
+    case "outspeed": {
+      const key = goal.preset as SpeedPresetKey;
+      return {
+        preset: { kind: "outspeed", key },
+        label: T.speedPresetOption[key],
+        options: SPEED_PRESET_KEYS.map((candidate) => ({
+          key: candidate,
+          label: T.speedPresetOption[candidate],
+        })),
+        selectedKey: key,
+      };
+    }
+    case "survive": {
+      const key = goal.preset as AttackerPresetKey;
+      return {
+        preset: { kind: "survive", key, category },
+        label: attackerPresetLabel(key, category),
+        options: ATTACKER_PRESET_KEYS.map((candidate) => ({
+          key: candidate,
+          label: attackerPresetLabel(candidate, category),
+        })),
+        selectedKey: key,
+      };
+    }
+    case "ko": {
+      const key = defenderPresetForCategory(goal.preset as DefenderPresetKey, category);
+      return {
+        preset: { kind: "ko", key },
+        label: defenderPresetLabel(key),
+        options: defenderPresetKeysFor(category).map((candidate) => ({
+          key: candidate,
+          label: defenderPresetLabel(candidate),
+        })),
+        selectedKey: key,
+      };
+    }
+  }
+}
+
+/** メガ種族ならストーンの itemId を付けた Individual(引けなければ付けない。ADR-0331 §1)。 */
+function withMegaStone(
+  individual: Schemas["Individual"],
+  species: MasterSpecies,
+  items: MasterData["items"],
+): Schemas["Individual"] {
+  const lock = megaItemLock(species, items);
+  return lock.kind === "locked" ? { ...individual, itemId: lock.item.id } : individual;
+}
+
 /** 異なる由来の印を、対象・理由・ID の組で1件にまとめる。 */
 function uniqueMarks(marks: readonly Schemas["UnsupportedMark"][]): Schemas["UnsupportedMark"][] {
   const seen = new Set<string>();
@@ -189,8 +331,9 @@ function uniqueMarks(marks: readonly Schemas["UnsupportedMark"][]): Schemas["Uns
 }
 
 /** 調整の画面(ADR-0319)。 */
-export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScreenProps) {
+export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled }: AdjustScreenProps) {
   const speciesListAvailable = masterCapabilities(master).speciesList;
+  const goalsOn = goalsEnabled ?? ADJUST_GOALS_ENABLED;
 
   const [mode, setMode] = useState<AdjustModeKey>("indices");
   const [self, setSelf] = useState<SelfState>({
@@ -229,6 +372,12 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   const [thresholdPercent, setThresholdPercent] = useState(DEFAULT_ADJUST_THRESHOLD_PERCENT);
   const [result, setResult] = useState<ResultState>({ status: "idle" });
   const [learners, setLearners] = useState<LearnersState | null>(null);
+  const [goals, setGoals] = useState<readonly GoalState[]>([]);
+  const nextGoalIdRef = useRef(1);
+  const goalsRegionRef = useRef<HTMLElement | null>(null);
+  const addGoalButtonRef = useRef<HTMLButtonElement | null>(null);
+  /** 追加・削除のあとにフォーカスを移す先(目標のカードの id = そのカードの種類、"add" = 「目標を追加」)。 */
+  const pendingFocusRef = useRef<number | "add" | null>(null);
 
   // 送信ごとの連番と取り消し(古い応答で上書きしない。ADR-0319 §4)。
   const submitSeqRef = useRef(0);
@@ -254,15 +403,34 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
     };
   }, []);
 
+  // 追加したカードの種類・外したあとの「目標を追加」へフォーカスを移す(ADR-0331 §5)。
+  useEffect(() => {
+    const target = pendingFocusRef.current;
+    if (target === null) {
+      return;
+    }
+    pendingFocusRef.current = null;
+    if (target === "add") {
+      addGoalButtonRef.current?.focus();
+      return;
+    }
+    goalsRegionRef.current?.querySelector<HTMLElement>(`[data-goal-id="${String(target)}"] select`)?.focus();
+  }, [goals]);
+
   // ---- 導出する値 ----
 
   const needsOpponent =
     mode === "minKo" || mode === "minSurvive" || ((mode === "bulk" || mode === "offense") && useGoal);
   const opponentAttacks = mode === "minSurvive" || (mode === "bulk" && useGoal);
-  // ADR-0326: 持ち物は攻撃・防御のどちらかの役割を持つものだけ(メガストーンは出さない。調整にメガの固定は無い)。
+  // ADR-0326: 持ち物は攻撃・防御のどちらかの役割を持つものだけ(メガストーンは出さない。メガ種族はストーンに固定する。ADR-0331 §1)。
   const selectableItems = useMemo(
     () => itemsForRole(master.items, ADJUST_ITEM_ROLE_FILTER, megaStoneItemIds(master.species)),
     [master.items, master.species],
+  );
+  // ストーンの実体はマスタの持ち物の全件から引く(絞った選択肢からは引かない。ADR-0326 §4)。
+  const selfLock = useMemo(
+    () => megaItemLock(self.choice?.species ?? null, master.items),
+    [self.choice, master.items],
   );
   const selfMove = findMove(self.choice, self.moveId);
   const opponentMove = findMove(opponent.choice, opponent.moveId);
@@ -280,26 +448,29 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   // ---- 入力の更新 ----
 
   function choiceFromSpecies(
-    key: string,
-    name: string,
-    types: readonly string[],
+    species: MasterSpecies,
     moves: readonly Move[],
     abilities: readonly Ability[],
   ): SpeciesChoice {
-    return { key, name, types, moves: moves.filter(isDamagingMove), abilities };
+    return {
+      species,
+      key: species.key,
+      name: species.nameJa,
+      types: species.types,
+      moves: moves.filter(isDamagingMove),
+      abilities,
+    };
   }
 
   function chooseFromList(key: string): SpeciesChoice | null {
     const species = master.species.find((candidate) => candidate.key === key);
     return species === undefined
       ? null
-      : choiceFromSpecies(
-          species.key,
-          species.nameJa,
-          species.types,
-          damagingLearnsetMoves(species, master.moves),
-          master.abilities,
-        );
+      : choiceFromSpecies(species, damagingLearnsetMoves(species, master.moves), master.abilities);
+  }
+
+  function choiceFromResolution(resolution: MasterSpeciesResolution): SpeciesChoice {
+    return choiceFromSpecies(resolution.species, resolution.moves, resolution.abilities);
   }
 
   function selectSelfSpecies(choice: SpeciesChoice | null): void {
@@ -307,8 +478,65 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
       ...current,
       choice,
       moveId: choice?.moves.some((move) => move.id === current.moveId) === true ? current.moveId : "",
+      // メガ種族ならストーン、メガから非メガ・未選択なら未選択に戻す(ADR-0331 §1。計算・判定と同じ関数)。
+      itemId: itemIdAfterSpeciesChange({
+        previous: current.choice?.species ?? null,
+        next: choice?.species ?? null,
+        items: master.items,
+        currentItemId: current.itemId,
+      }),
     }));
+    // 選べなくなった自分の技(倒す・先に使う技)は未選択に戻す(ADR-0331 §5)。
+    setGoals((current) =>
+      current.map((goal) =>
+        goal.kind !== "survive" &&
+        goal.moveId !== "" &&
+        choice?.moves.some((move) => move.id === goal.moveId) !== true
+          ? { ...goal, moveId: "" }
+          : goal,
+      ),
+    );
     setOffenseCategoryOverride(null);
+  }
+
+  // ---- 目標の編集(ADR-0331 §5) ----
+
+  function addGoal(): void {
+    const id = nextGoalIdRef.current;
+    nextGoalIdRef.current += 1;
+    pendingFocusRef.current = id;
+    setGoals((current) => [
+      ...current,
+      {
+        id,
+        kind: DEFAULT_ADJUST_GOAL_KIND,
+        opponent: null,
+        preset: defaultGoalPreset(DEFAULT_ADJUST_GOAL_KIND),
+        moveId: "",
+        hits: DEFAULT_ADJUST_HITS,
+        thresholdPercent: DEFAULT_ADJUST_THRESHOLD_PERCENT,
+      },
+    ]);
+  }
+
+  function removeGoal(id: number): void {
+    pendingFocusRef.current = "add";
+    setGoals((current) => current.filter((goal) => goal.id !== id));
+  }
+
+  function updateGoal(id: number, patch: Partial<GoalState>): void {
+    setGoals((current) => current.map((goal) => (goal.id === id ? { ...goal, ...patch } : goal)));
+  }
+
+  /** 種類を変えたら、相手のポケモンは保ち、振り方・技は新しい種類の既定に戻す。 */
+  function changeGoalKind(id: number, kind: AdjustGoalKind): void {
+    updateGoal(id, { kind, preset: defaultGoalPreset(kind), moveId: "" });
+  }
+
+  function selectGoalOpponent(goal: GoalState, choice: SpeciesChoice | null): void {
+    const keepMove =
+      goal.kind !== "survive" || choice?.moves.some((move) => move.id === goal.moveId) === true;
+    updateGoal(goal.id, { opponent: choice, moveId: keepMove ? goal.moveId : "" });
   }
 
   function selectSelfMove(moveId: string): void {
@@ -324,6 +552,64 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   }
 
   // ---- 送信 ----
+
+  /** 目標モードの検査と request の組み立て(ADR-0331 §6)。最初の違反だけ返す。 */
+  function prepareGoals(
+    base: Omit<PreparedSubmit, "operation">,
+    individual: Schemas["Individual"],
+  ): PreparedSubmit | { readonly message: string } {
+    if (goals.length === 0) {
+      return { message: T.goalsRequiredMessage };
+    }
+    const requests: Schemas["AdjustGoal"][] = [];
+    const descriptions: GoalDescription[] = [];
+    for (const [index, goal] of goals.entries()) {
+      const n = index + 1;
+      if (goal.opponent === null) {
+        return { message: T.goalOpponentRequiredMessage(n) };
+      }
+      const move = goalMove(goal, self.choice);
+      if (goal.kind === "survive" && move === undefined) {
+        return { message: T.goalOpponentMoveRequiredMessage(n) };
+      }
+      if (goal.kind === "ko" && move === undefined) {
+        return { message: T.goalSelfMoveRequiredMessage(n) };
+      }
+      const resolved = resolveGoalPreset(goal, self.choice);
+      const opponentIndividual = goalOpponentIndividual({
+        species: goal.opponent.species,
+        preset: resolved.preset,
+        natures: master.natures,
+        items: master.items,
+      });
+      if (opponentIndividual === null) {
+        return { message: T.goalNatureNotFoundMessage(n) };
+      }
+      requests.push(
+        buildGoalRequest({
+          kind: goal.kind,
+          opponent: opponentIndividual,
+          moveId: move?.id ?? null,
+          hits: goal.hits,
+          thresholdPercent: goal.thresholdPercent,
+        }),
+      );
+      descriptions.push({
+        kind: goal.kind,
+        opponentName: T.goalOpponentName(goal.opponent.name, resolved.label),
+        moveName: move?.nameJa ?? null,
+        hits: goal.hits,
+      });
+    }
+    return {
+      ...base,
+      operation: {
+        kind: "goals",
+        request: { format: "single", self: individual, goals: requests },
+        descriptions,
+      },
+    };
+  }
 
   /** 送信前の検査と request の組み立て(ADR-0319 §4・§5)。違反なら理由(message)を返す。 */
   function prepare(): PreparedSubmit | { readonly message: string } {
@@ -351,8 +637,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
     if (self.abilityId !== "") {
       individual.abilityId = self.abilityId;
     }
-    if (self.itemId !== "") {
-      individual.itemId = self.itemId;
+    // メガ種族はストーン(引けなければ送らない)。それ以外は選んだ持ち物(ADR-0331 §1)。
+    const itemId =
+      selfLock.kind === "locked" ? selfLock.item.id : selfLock.kind === "missing" ? "" : self.itemId;
+    if (itemId !== "") {
+      individual.itemId = itemId;
     }
 
     const indices: Schemas["AdjustIndicesRequest"] = { individual };
@@ -399,7 +688,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
       if (natureId === null) {
         return { message: T.natureNotFoundMessage };
       }
-      return { speciesKey: opponent.choice.key, level: BATTLE_LEVEL, natureId, sp: { ...resolved.sp } };
+      return withMegaStone(
+        { speciesKey: opponent.choice.key, level: BATTLE_LEVEL, natureId, sp: { ...resolved.sp } },
+        opponent.choice.species,
+        master.items,
+      );
     }
 
     function searchRequest(
@@ -443,6 +736,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
         ...base,
         operation: { kind: "survive", request: searchRequest(attacker, individual, opponentMove.id) },
       };
+    }
+
+    if (mode === "goals") {
+      return prepareGoals(base, individual);
     }
 
     // bulk / offense(配分)。
@@ -505,6 +802,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
     switch (operation.kind) {
       case "none":
         return { ok: true, value: { kind: "none" } };
+      case "goals": {
+        const response = await adjustClient.goals(operation.request, signal);
+        return response.ok ? { ok: true, value: { kind: "goals", value: response.value } } : response;
+      }
       case "ko": {
         const response = await adjustClient.minSpToKo(operation.request, signal);
         return response.ok ? { ok: true, value: { kind: "ko", value: response.value } } : response;
@@ -521,11 +822,21 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   }
 
   function allMoves(): readonly Move[] {
-    return [...master.moves, ...(self.choice?.moves ?? []), ...(opponent.choice?.moves ?? [])];
+    return [
+      ...master.moves,
+      ...(self.choice?.moves ?? []),
+      ...(opponent.choice?.moves ?? []),
+      ...goals.flatMap((goal) => goal.opponent?.moves ?? []),
+    ];
   }
 
   function allAbilities(): readonly Ability[] {
-    return [...master.abilities, ...(self.choice?.abilities ?? []), ...(opponent.choice?.abilities ?? [])];
+    return [
+      ...master.abilities,
+      ...(self.choice?.abilities ?? []),
+      ...(opponent.choice?.abilities ?? []),
+      ...goals.flatMap((goal) => goal.opponent?.abilities ?? []),
+    ];
   }
 
   async function handleSubmit(): Promise<void> {
@@ -640,6 +951,8 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
   const goalHeadingId = useId();
   const fixedSpHintId = useId();
   const minSpeedHintId = useId();
+  const megaReasonId = useId();
+  const goalLimitHintId = useId();
 
   const abilityOptions = self.choice?.abilities ?? (speciesListAvailable ? master.abilities : []);
 
@@ -657,15 +970,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
             speciesListAvailable={speciesListAvailable}
             master={master}
             masterSearch={masterSearch}
-            fromResolution={(resolution) =>
-              choiceFromSpecies(
-                resolution.species.key,
-                resolution.species.nameJa,
-                resolution.species.types,
-                resolution.moves,
-                resolution.abilities,
-              )
-            }
+            fromResolution={choiceFromResolution}
           />
           <LabeledSelect
             visibleLabel={T.natureFieldLabel}
@@ -700,18 +1005,27 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
           <LabeledSelect
             visibleLabel={T.itemFieldLabel}
             name={T.selfItemLabel}
-            value={self.itemId}
+            value={selfLock.kind === "locked" ? selfLock.item.id : self.itemId}
+            disabled={selfLock.kind !== "none"}
+            describedBy={selfLock.kind === "none" ? undefined : megaReasonId}
             onChange={(itemId) => {
               setSelf((current) => ({ ...current, itemId }));
             }}
           >
             <option value="">{T.unselectedOption}</option>
-            {selectableItems.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.nameJa}
+            {selfLock.kind === "locked" && self.choice !== null ? (
+              <option value={selfLock.item.id}>
+                {megaStoneLabel(self.choice.species, selfLock.item.nameJa)}
               </option>
-            ))}
+            ) : (
+              selectableItems.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.nameJa}
+                </option>
+              ))
+            )}
           </LabeledSelect>
+          <MegaItemReason id={megaReasonId} lock={selfLock} className="adjust-screen__hint" />
           <MoveField
             visibleLabel={T.moveFieldLabel}
             name={T.selfMoveLabel}
@@ -750,7 +1064,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
       <section aria-labelledby={modeHeadingId} className="adjust-screen__region">
         <h2 id={modeHeadingId}>{T.modeRegionLabel}</h2>
         <div role="radiogroup" aria-label={T.modeGroupLabel} className="adjust-screen__modes">
-          {MODES.map((candidate) => (
+          {(goalsOn ? MODES_WITH_GOALS : MODES).map((candidate) => (
             <label key={candidate} className="adjust-screen__choice">
               <input
                 type="radio"
@@ -832,6 +1146,58 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
         )}
       </section>
 
+      {mode === "goals" && (
+        <section
+          aria-labelledby={goalHeadingId}
+          className="adjust-screen__region"
+          ref={(element) => {
+            goalsRegionRef.current = element;
+          }}
+        >
+          <h2 id={goalHeadingId}>{T.goalRegionLabel}</h2>
+          {goals.length === 0 && <p className="adjust-screen__notice">{T.noGoalsNotice}</p>}
+          {goals.map((goal, index) => (
+            <GoalCard
+              key={goal.id}
+              n={index + 1}
+              goal={goal}
+              selfChoice={self.choice}
+              master={master}
+              masterSearch={masterSearch}
+              speciesListAvailable={speciesListAvailable}
+              chooseFromList={chooseFromList}
+              fromResolution={choiceFromResolution}
+              onKindChange={(kind) => {
+                changeGoalKind(goal.id, kind);
+              }}
+              onOpponentSelect={(choice) => {
+                selectGoalOpponent(goal, choice);
+              }}
+              onUpdate={(patch) => {
+                updateGoal(goal.id, patch);
+              }}
+              onRemove={() => {
+                removeGoal(goal.id);
+              }}
+            />
+          ))}
+          <button
+            type="button"
+            ref={addGoalButtonRef}
+            disabled={goals.length >= MAX_ADJUST_GOALS}
+            aria-describedby={goals.length >= MAX_ADJUST_GOALS ? goalLimitHintId : undefined}
+            onClick={addGoal}
+          >
+            {T.addGoalLabel}
+          </button>
+          {goals.length >= MAX_ADJUST_GOALS && (
+            <p id={goalLimitHintId} className="adjust-screen__hint">
+              {T.goalLimitHint(MAX_ADJUST_GOALS)}
+            </p>
+          )}
+        </section>
+      )}
+
       {needsOpponent && (
         <section aria-labelledby={opponentHeadingId} className="adjust-screen__region">
           <h2 id={opponentHeadingId}>{T.opponentRegionLabel}</h2>
@@ -845,15 +1211,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
               speciesListAvailable={speciesListAvailable}
               master={master}
               masterSearch={masterSearch}
-              fromResolution={(resolution) =>
-                choiceFromSpecies(
-                  resolution.species.key,
-                  resolution.species.nameJa,
-                  resolution.species.types,
-                  resolution.moves,
-                  resolution.abilities,
-                )
-              }
+              fromResolution={choiceFromResolution}
             />
             {opponentAttacks ? (
               <LabeledSelect
@@ -1011,11 +1369,22 @@ interface LabeledSelectProps {
   readonly name: string;
   readonly value: string;
   readonly onChange: (value: string) => void;
+  readonly disabled?: boolean;
+  /** 理由・説明の文の id(aria-describedby)。 */
+  readonly describedBy?: string;
   readonly children: ReactNode;
 }
 
 /** select と、for で結んだ見えるラベル(select の中の option の文字をラベルに混ぜない)。 */
-function LabeledSelect({ visibleLabel, name, value, onChange, children }: LabeledSelectProps) {
+function LabeledSelect({
+  visibleLabel,
+  name,
+  value,
+  onChange,
+  disabled,
+  describedBy,
+  children,
+}: LabeledSelectProps) {
   const id = useId();
   return (
     <div className="adjust-screen__field">
@@ -1024,6 +1393,8 @@ function LabeledSelect({ visibleLabel, name, value, onChange, children }: Labele
         id={id}
         aria-label={name}
         value={value}
+        disabled={disabled}
+        aria-describedby={describedBy}
         onChange={(event) => {
           onChange(event.target.value);
         }}
@@ -1170,6 +1541,150 @@ function MoveField({
   );
 }
 
+interface GoalCardProps {
+  readonly n: number;
+  readonly goal: GoalState;
+  readonly selfChoice: SpeciesChoice | null;
+  readonly master: MasterData;
+  readonly masterSearch?: MasterSpeciesSearch;
+  readonly speciesListAvailable: boolean;
+  readonly chooseFromList: (key: string) => SpeciesChoice | null;
+  readonly fromResolution: (resolution: MasterSpeciesResolution) => SpeciesChoice;
+  readonly onKindChange: (kind: AdjustGoalKind) => void;
+  readonly onOpponentSelect: (choice: SpeciesChoice | null) => void;
+  readonly onUpdate: (patch: Partial<GoalState>) => void;
+  readonly onRemove: () => void;
+}
+
+/** 目標のカード1つ(ADR-0331 §5)。group「目標 n」、欄の accessible name は「目標 n の<見えるラベル>」。 */
+function GoalCard({
+  n,
+  goal,
+  selfChoice,
+  master,
+  masterSearch,
+  speciesListAvailable,
+  chooseFromList,
+  fromResolution,
+  onKindChange,
+  onOpponentSelect,
+  onUpdate,
+  onRemove,
+}: GoalCardProps) {
+  const boostHintId = useId();
+  const resolved = resolveGoalPreset(goal, selfChoice);
+  const damaging = goal.kind !== "outspeed";
+  const moveChoice = goal.kind === "survive" ? goal.opponent : selfChoice;
+  const moveLabel =
+    goal.kind === "survive"
+      ? T.goalOpponentMoveFieldLabel
+      : goal.kind === "ko"
+        ? T.goalSelfMoveFieldLabel
+        : T.goalBoostMoveFieldLabel;
+  return (
+    <fieldset className="adjust-screen__goal" data-goal-id={goal.id}>
+      <legend>{T.goalCardLegend(n)}</legend>
+      <div className="adjust-screen__fields">
+        <LabeledSelect
+          visibleLabel={T.goalKindFieldLabel}
+          name={T.goalFieldName(n, T.goalKindFieldLabel)}
+          value={goal.kind}
+          onChange={(value) => {
+            onKindChange(value as AdjustGoalKind);
+          }}
+        >
+          {ADJUST_GOAL_KINDS.map((kind) => (
+            <option key={kind} value={kind}>
+              {T.goalKindOption[kind]}
+            </option>
+          ))}
+        </LabeledSelect>
+        <SpeciesField
+          visibleLabel={T.goalOpponentSpeciesFieldLabel}
+          name={T.goalFieldName(n, T.goalOpponentSpeciesFieldLabel)}
+          choice={goal.opponent}
+          onSelect={onOpponentSelect}
+          chooseFromList={chooseFromList}
+          speciesListAvailable={speciesListAvailable}
+          master={master}
+          masterSearch={masterSearch}
+          fromResolution={fromResolution}
+        />
+        <LabeledSelect
+          visibleLabel={T.goalPresetFieldLabel}
+          name={T.goalFieldName(n, T.goalPresetFieldLabel)}
+          value={resolved.selectedKey}
+          onChange={(preset) => {
+            onUpdate({ preset });
+          }}
+        >
+          {resolved.options.map((option) => (
+            <option key={option.key} value={option.key}>
+              {option.label}
+            </option>
+          ))}
+        </LabeledSelect>
+        <LabeledSelect
+          visibleLabel={moveLabel}
+          name={T.goalFieldName(n, moveLabel)}
+          value={goal.moveId}
+          describedBy={goal.kind === "outspeed" ? boostHintId : undefined}
+          onChange={(moveId) => {
+            onUpdate({ moveId });
+          }}
+        >
+          <option value="">{goal.kind === "outspeed" ? T.goalBoostMoveNone : T.movePlaceholder}</option>
+          {(moveChoice?.moves ?? []).map((move) => (
+            <option key={move.id} value={move.id}>
+              {move.nameJa}
+            </option>
+          ))}
+        </LabeledSelect>
+        {goal.kind === "outspeed" && (
+          <p id={boostHintId} className="adjust-screen__hint">
+            {T.goalBoostMoveHint}
+          </p>
+        )}
+        {damaging && (
+          <>
+            <LabeledSelect
+              visibleLabel={T.hitsLabel}
+              name={T.goalFieldName(n, T.hitsLabel)}
+              value={String(goal.hits)}
+              onChange={(value) => {
+                onUpdate({ hits: Number(value) });
+              }}
+            >
+              {ADJUST_HITS_OPTIONS.map((option) => (
+                <option key={option} value={String(option)}>
+                  {T.hitsOption(option)}
+                </option>
+              ))}
+            </LabeledSelect>
+            <LabeledSelect
+              visibleLabel={T.thresholdLabel}
+              name={T.goalFieldName(n, T.thresholdLabel)}
+              value={String(goal.thresholdPercent)}
+              onChange={(value) => {
+                onUpdate({ thresholdPercent: Number(value) });
+              }}
+            >
+              {ADJUST_THRESHOLD_PRESETS.map((option) => (
+                <option key={option} value={String(option)}>
+                  {T.thresholdOption(option)}
+                </option>
+              ))}
+            </LabeledSelect>
+          </>
+        )}
+      </div>
+      <button type="button" aria-label={T.removeGoalName(n)} onClick={onRemove}>
+        {T.removeGoalLabel}
+      </button>
+    </fieldset>
+  );
+}
+
 // ---- 結果 ----
 
 function ResultBody({ view }: { readonly view: ResultView }) {
@@ -1180,6 +1695,9 @@ function ResultBody({ view }: { readonly view: ResultView }) {
         <p className="adjust-screen__notice">{unsupportedText.notice(view.unsupportedLabels)}</p>
       )}
       <IndicesView indices={view.indices} />
+      {modeResult.kind === "goals" && prepared.operation.kind === "goals" && (
+        <GoalsView result={modeResult.value} descriptions={prepared.operation.descriptions} />
+      )}
       {modeResult.kind === "ko" && (
         <p>
           {modeResult.value.feasible
@@ -1224,6 +1742,65 @@ function ResultBody({ view }: { readonly view: ResultView }) {
         />
       )}
     </>
+  );
+}
+
+/** 目標ごとの1行(送信した時点の名前から作る。ADR-0331 §7)。 */
+function goalOutcomeText(
+  n: number,
+  description: GoalDescription,
+  outcome: Schemas["AdjustGoalOutcome"],
+): string {
+  if (description.kind === "outspeed") {
+    const boost =
+      description.moveName === null
+        ? null
+        : { moveName: description.moveName, rank: outcome.selfSpeedRank ?? 0 };
+    return T.outspeedOutcome(
+      n,
+      description.opponentName,
+      outcome.met,
+      outcome.selfSpeed ?? 0,
+      outcome.opponentSpeed ?? 0,
+      boost,
+    );
+  }
+  const text = description.kind === "survive" ? T.surviveOutcome : T.koOutcome;
+  return text(
+    n,
+    description.opponentName,
+    description.moveName ?? "",
+    description.hits,
+    outcome.met,
+    formatChancePercent(outcome.chancePercent ?? 0),
+  );
+}
+
+function GoalsView({
+  result,
+  descriptions,
+}: {
+  readonly result: Schemas["AdjustGoalsResult"];
+  readonly descriptions: readonly GoalDescription[];
+}) {
+  const headingId = useId();
+  return (
+    <section aria-labelledby={headingId} className="adjust-screen__subregion">
+      <h3 id={headingId}>{result.feasible ? T.goalsPlanHeading : T.goalsNearestHeading}</h3>
+      {!result.feasible && <p className="adjust-screen__notice">{T.goalsInfeasibleNotice}</p>}
+      <p>{T.planSpLine(result.plan.sp)}</p>
+      <p>{T.planTotal(result.plan.totalSp)}</p>
+      <p>{T.statsLine(result.plan.stats)}</p>
+      <p>{T.remainingLabel(result.remaining)}</p>
+      <ul aria-label={T.goalOutcomesLabel} className="adjust-screen__lines">
+        {descriptions.map((description, index) => {
+          const outcome = result.goals[index];
+          return outcome === undefined ? null : (
+            <li key={index}>{goalOutcomeText(index + 1, description, outcome)}</li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 

@@ -33,6 +33,7 @@ function pendingClient(): AdjustClient {
     minSpToKo: never,
     minSpToSurvive: never,
     allocation: never,
+    goals: never,
     moveLearners: never,
   };
 }
