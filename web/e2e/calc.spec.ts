@@ -174,3 +174,28 @@ test("「詳細」で防御側のランク B を +1 にすると、物理技の�
     })
     .toBeLessThan(beforeMax);
 });
+
+test("技の並びを 五十音順 に切り替えると、技の選択肢が並び替わり、選んでいた技は変わらない(I-web-9 = F-02)", async ({
+  page,
+}) => {
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const move = combobox(page, "技");
+  const optionNames = () => move.locator("option").allTextContents();
+  const nameOf = (text: string) => text.split("・")[0] ?? text;
+
+  // 既定は習得順(テストほのお: たいあたり → かえんパンチ)。選ばれている技を覚えておく。
+  const selectedBefore = await move.inputValue();
+  expect((await optionNames()).map(nameOf)).toEqual(["テストたいあたり", "テストかえんパンチ"]);
+
+  await chooseRadio(page, "技の並び", "五十音順");
+  // 五十音順(か行 → た行)に入れ替わる。
+  await expect
+    .poll(async () => (await optionNames()).map(nameOf))
+    .toEqual(["テストかえんパンチ", "テストたいあたり"]);
+  await expect(move).toHaveValue(selectedBefore);
+
+  await chooseRadio(page, "技の並び", "習得順");
+  await expect
+    .poll(async () => (await optionNames()).map(nameOf))
+    .toEqual(["テストたいあたり", "テストかえんパンチ"]);
+});
