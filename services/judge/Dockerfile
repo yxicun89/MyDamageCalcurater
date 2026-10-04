@@ -14,6 +14,8 @@ WORKDIR /src
 COPY engine ./engine
 COPY services/judge ./services/judge
 WORKDIR /src/services/judge
+# API 契約・SQL の生成物は Git に置かず、ホストで make gen したものをコンテキストから受け取る(ADR-0807)。
+RUN test -f internal/api/openapi.gen.go || { echo "生成物が無い: リポジトリのルートで make gen を実行してから docker build する(ADR-0807)" >&2; exit 1; }
 RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags="-s -w" -o /out/judge-api ./cmd/api
 
 FROM scratch

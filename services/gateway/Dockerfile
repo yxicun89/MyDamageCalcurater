@@ -8,6 +8,8 @@ COPY engine ./engine
 COPY services ./services
 WORKDIR /src/services
 RUN go mod download
+# API 契約・SQL の生成物は Git に置かず、ホストで make gen したものをコンテキストから受け取る(ADR-0807)。
+RUN test -f internal/api/openapi.gen.go || { echo "生成物が無い: リポジトリのルートで make gen を実行してから docker build する(ADR-0807)" >&2; exit 1; }
 # ビルドの版(git の短縮 SHA など)。version.Version に埋め込み、起動ログと /healthz に出す(issue #217)。
 ARG VERSION=0.0.0-dev
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w -X example.com/pokecalc/services/internal/version.Version=${VERSION}" -o /out/gateway ./gateway/cmd/gateway
