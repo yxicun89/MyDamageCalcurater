@@ -4511,3 +4511,48 @@ XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので
   4 配列が文字列の配列でない行は触らず従来どおり decode エラー)。`APIJudgeService` の `init(serverURL:transport:identity:)` と `init(baseURL:identity:)` が同じ経路でミドルウェア付きの `Client` を作る(`init(client:identity:)` は不変)。
   `Package.swift` は変更なし(`HTTPTypes` は OpenAPIRuntime 経由で参照できる)。
 - 既存の `scrollUntilHittable` が状態異常ボタンの追加で通り越す問題は起きなかった(テストの操作変更なし)。
+
+## メガストーンの正式名称の受け入れ条件(2026-10-04。設計は ADR-0509 追記 §6'。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+ユーザー要望: メガリザードンX を選んだら「リザードナイトX」のような正式名称を出す。§6 を更新(ADR-0509 追記)。契約・API・保存データは不変。
+
+### 受け入れ条件
+
+1. `ItemDisplayName.containsJapanese(_:)` は、ひらがな・カタカナ・長音「ー」・半角カナ・漢字を1文字以上含むと true、英数字のみ・数字のみ・全角英数字・空白・記号のみ・空文字は false(純粋関数)。
+2. `ItemDisplayName.megaStoneName(for:baseSpeciesNameJa:)` は、`nameJa` が日本語の文字を含めばそのまま(基本種名が無くても)、含まなければ「{基本種名}のメガストーン」(基本種名が無ければ「メガストーン」)。
+3. 固定中の持ち物欄・`MegaItemLock.locked` の `displayName`・構築の補正の通知・結果の行(計算の防御側)・逆算の候補・未対応の印の注記は、すべて条件 2 の表示名を使う(計算・逆算・判定・調整・構築の5画面で同じ)。
+4. 既存の英語名のストーンの表示(「{基本種名}のメガストーン」「メガストーン」)は変わらない。
+5. 表示名を変えても、要求の `itemId`(例 `attacker.itemId`・`itemCandidates`)と構築の保存値は ID のまま。
+6. 持ち物の選択肢には、正式名称のメガストーンも出ない(§2)。
+7. XCUITest: モックのメガ種族を選ぶと、固定中の持ち物欄(操作不可・理由の文あり)に「テストどうぐメガいし」が出て「テストモンいちのメガストーン」はどこにも出ない。結果の行にも正式名称が出る。iPhone 17e・iPhone 18 Pro の両方で通る。
+
+### 追加・変更したテスト
+
+| ファイル | 件数 | 内容 |
+|---|---|---|
+| `PokeCalcKitTests/.../MegaStoneOfficialNameTests.swift` | 19 | 条件 1(14 ケース表)・2(6 ケース表)・`text`(メガ情報なし/ありの両方)・`displayItems`・`BulkRowDisplay.itemLabel`・`MegaItemLock.make`/`correction`・未対応の印の注記・計算(攻撃側の固定+要求の ID・基本種名なし・防御側の行・英語名は従来)・逆算(候補の表示名+要求の ID)・判定・調整・構築(固定・補正の通知・非メガの保存値) |
+| `ios/PokeCalcUITests/MegaStoneOfficialNameUITests.swift`(XCUITest・モック) | 3 | 固定中の欄に正式名称・組み立てた名前が出ない / 選択肢に出ない / 結果の行に出る |
+| `ios/PokeCalcUITests/MegaItemLockUITests.swift`(期待値の変更) | 0(既存 3 本の期待値のみ) | ADR-0509 追記「期待値が変わる既存テスト」の表 |
+| `Support/StubMegaMaster.swift` | (足場) | `officialStone`(nameJa「テストナイトX」)・`megaOfficial`・`megaOfficialNoBaseName`・`makeOfficialService()`。英語名のスタブの値を変更(上の表) |
+
+単体 19 件追加: 実装前は失敗 18(31 アサーション)・成功 1(英語名は従来どおり)。既存テストの失敗 0。全体 1395 件。
+XCUITest 実装前の結果: iPhone 17e は 6 件中 失敗 3(新規 2 + 期待値を変えた既存 1)・成功 3、iPhone 18 Pro は 6 件中 失敗 4(同 3 + 既知の `MegaItemLockUITests.testLockReasonFitsAtAX5`。18 Pro では既知の失敗。結果の行が画面下端にはみ出す機種依存で、今回は触らない)。
+
+### 実装者への注意
+
+- 足場(`TODO(implementer` を検索): `ItemDisplayName.containsJapanese`(いまは常に false)・`ItemDisplayName.megaStoneName(for:baseSpeciesNameJa:)`(いまは従来の組み立てだけ)。どちらも `ItemRoles.swift`。
+- 実装箇所: ① 2 関数を完成(漢字は U+4E00–9FFF と U+3400–4DBF、かな U+3041–30FF、半角カナ U+FF66–FF9F。全角英数字 U+FF01–FF5E は含めない)。
+  ② `MegaItemLock.make(for:allItems:)` はストーンの `Item` を引いて `megaStoneName` で `displayName` を作る。③ `ItemDisplayName.text` の `isMegaStone == true` の分岐(メガ情報なし)も `megaStoneName(for: item, baseSpeciesNameJa: nil)`。
+  ④ 各 VM の `megaStoneNames`・`displayItems` は ②③ の結果をそのまま使う(View・VM に別の判定を持たない)。`MegaItemText.stoneName` は英語名のときの組み立てとして残す。
+- モックの `nameJa` は「テスト」始まりに固定(`MockPokeCalcServiceTests`)なので、モックのストーンは日本語の正式名称。英語名のフォールバックは単体テストだけ。モックのデータは変えていない。
+- 結果の行の XCUITest(`testOfficialStoneNameIsShownInResultRows`)は、防御側がメガのとき行の accessibility ラベルに持ち物名が含まれる前提。含まれない画面構造なら、行の持ち物名の identifier を足してテストの探し方を直す(検証の強さは変えない)。
+- Web(`web/src/domain/itemRoles.ts` の `megaStoneLabel`・`itemsWithStoneLabels`、ADR-0326)は別タスクで同じ判定へ更新(データレーン依頼。この章の定義を正とする)。
+- 完了条件: `swift test`・`make ios-test`(XCUITest は iPhone 17e・iPhone 18 Pro の両方)・`make ios-lint`。18 Pro の `testLockReasonFitsAtAX5` は既知の失敗として記録する。
+
+
+### 実装結果(2026-10-04)
+
+- 実装: `ItemRoles.swift` のみ(`containsJapanese`・`megaStoneName`・`MegaItemLock.make` はストーンの `Item` を引く・`ItemDisplayName.text` の isMegaStone 分岐)。各 VM は既存の `MegaItemLock` の表示名と `ItemDisplayName` をそのまま使うので変更なし。
+- `swift test`: 1395 件 失敗 0。`make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing` 成功。
+- XCUITest(MegaItemLockUITests・MegaStoneOfficialNameUITests 計 6 件): iPhone 17e は 6 件成功。iPhone 18 Pro は 5 件成功・1 件失敗(既知の `testLockReasonFitsAtAX5`。触っていない)。
+- 関連の既存 XCUITest(17e): CalcScreenUITests・UnsupportedMarksUITests 成功。TeamScreenUITests の `testMemberSpeciesAndMoveSlotSearchSheetsFilterAndSelect` が 1 回だけ「シートが閉じる」で失敗したが、単独の再実行で成功(メガと無関係の時間依存)。
