@@ -11,6 +11,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState, type Keyboard
 import "./App.css";
 import { screenIconName } from "./app/screenIcons";
 import { Icon } from "./ui/Icon";
+import type { components } from "./api/openapi.gen";
 import { createApiEngine } from "./api/apiEngine";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
@@ -35,6 +36,7 @@ import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
+import type { FavoriteRestoreRequest } from "./favorites/favoriteCalc";
 import { createRecordClient, type RecordClient } from "./record/recordClient";
 import { createTeamClient } from "./team/teamClient";
 import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
@@ -136,6 +138,9 @@ export function App({
   const bumpFavoritesReloadToken = useCallback(() => {
     setFavoritesReloadToken((token) => token + 1);
   }, []);
+  // I-web-8(ADR-0333 §3): お気に入りから計算画面へ入力を戻す要求。token を進めた要求を置き、計算タブへ移す
+  // (計算画面は token が変わったときだけ適用する)。
+  const [favoriteRestore, setFavoriteRestore] = useState<FavoriteRestoreRequest | undefined>(undefined);
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
@@ -299,6 +304,12 @@ export function App({
     selectTab(nextTab);
   }
 
+  /** お気に入りの「計算に使う」: 復元の要求を置いて(token +1)計算タブへ移る。 */
+  function openFavoriteInCalc(favorite: Favorite): void {
+    setFavoriteRestore((previous) => ({ token: (previous?.token ?? 0) + 1, favorite }));
+    navigateToTab("calc");
+  }
+
   /** ArrowLeft/ArrowRight/Home/End でタブの選択とフォーカスを移動する(automatic activation)。 */
   function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
     let nextIndex: number;
@@ -450,6 +461,8 @@ export function App({
                   teamReloadToken={teamReloadToken}
                   favoritesReloadToken={favoritesReloadToken}
                   onFavoriteAdded={bumpFavoritesReloadToken}
+                  favoriteRestore={favoriteRestore}
+                  onUseFavorite={openFavoriteInCalc}
                   recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
@@ -486,6 +499,8 @@ export function App({
   );
 }
 
+type Favorite = components["schemas"]["Favorite"];
+
 interface AppTabPanelProps {
   readonly tab: ScreenId;
   /** 登録された画面の描画の口(タブの並び順。ADR-0323)。 */
@@ -498,6 +513,8 @@ interface AppTabPanelProps {
   readonly teamReloadToken: number;
   readonly favoritesReloadToken: number;
   readonly onFavoriteAdded: () => void;
+  readonly favoriteRestore: FavoriteRestoreRequest | undefined;
+  readonly onUseFavorite: (favorite: Favorite) => void;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -523,6 +540,8 @@ function AppTabPanel({
   teamReloadToken,
   favoritesReloadToken,
   onFavoriteAdded,
+  favoriteRestore,
+  onUseFavorite,
   recordClient,
   mode,
   retryMasterLoad,
@@ -562,6 +581,8 @@ function AppTabPanel({
                   reloadToken: teamReloadToken,
                   favoritesReloadToken,
                   onFavoriteAdded,
+                  favoriteRestore,
+                  onUseFavorite,
                   onlineMasterSource,
                 })}
               </div>
@@ -578,6 +599,7 @@ function AppTabPanel({
                   recordClient,
                   favoritesReloadToken,
                   onFavoriteAdded,
+                  onUseFavorite,
                   onlineMasterSource,
                 })}
               </div>

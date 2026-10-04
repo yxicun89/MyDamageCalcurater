@@ -6,7 +6,11 @@ import type { ReactNode } from "react";
 import type { ClientIds } from "../api/clientIds";
 import type { CalcEngine } from "../engine/types";
 import type { MasterData, MasterSource, MasterSpeciesSearch } from "../master/types";
+import type { components } from "../api/openapi.gen";
+import type { FavoriteRestoreRequest } from "../favorites/favoriteCalc";
 import type { RecordClient } from "../record/recordClient";
+
+type Favorite = components["schemas"]["Favorite"];
 
 /**
  * 画面のクライアントを作る材料(App がマウント時に1回だけ用意する)。基点 URL・fetch・端末 ID/セッション ID は
@@ -38,6 +42,10 @@ export interface ScreenEnvironment {
   readonly favoritesReloadToken?: number;
   /** P5-3c(ADR-0327 §5): お気に入りを追加できたことを App に知らせる(お気に入りタブの一覧を古いままにしない)。 */
   readonly onFavoriteAdded?: () => void;
+  /** I-web-8(ADR-0333 §3): 計算画面に渡す、お気に入りから入力を戻す要求(token が変わったときだけ適用する)。 */
+  readonly favoriteRestore?: FavoriteRestoreRequest;
+  /** I-web-8(ADR-0333 §3): お気に入りの「計算に使う」。App が要求の token を進め、計算タブへ移す。 */
+  readonly onUseFavorite?: (favorite: Favorite) => void;
   /** issue 276(ADR-0411): オンラインのマスタの取得口(API 専用の画面は計算モードに関係なくこれを使う)。 */
   readonly onlineMasterSource: MasterSource;
 }

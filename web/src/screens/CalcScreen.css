@@ -564,3 +564,26 @@
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* I-web-8(ADR-0333): お気に入りから戻したときの案内 */
+.calc-screen__restore {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.calc-screen__restore p,
+.calc-screen__restore ul {
+  margin: 0;
+}
+
+.calc-screen__restore ul {
+  padding-left: var(--space-4);
+}
+
+.calc-screen__restore-error {
+  color: var(--danger);
+}

@@ -214,3 +214,5 @@ iOS はトークン一覧を `decisions/2026-10-04-web-visual-base-pop-tokens.md
 
 **構築の作り直し(2026-10-04。ADR-0332。I-web-7 / F-08。ブランチ feat/web-team-rebuild-f08)**: 構築名を廃止し、新しい構築 → 6枠の編集 → 明示保存の流れにした。Showdown 形式は一覧の下(取り込み)と編集画面の下(書き出し)の折りたたみ。
 Next: 実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-04-web-team-rebuild.md` の語に揃える。
+Next(F-09 お気に入りの復元 / I-web-8): 実装済み・コミット前(ADR-0333 採用)。残りは PR 化のみ。Web は一括計算(bulk)で復元し、iOS は calcDamage(単発)で復元する差を `decisions/2026-10-04-web-favorite-calc-restore.md` に書いた。
+次は I-web-9(F-02 技の並び)。技の選択欄に、お気に入りの技を戻せなかったときの未選択の選択肢(`favoritesRestoreText.moveUnselectedOption`)を足した(F-02 で技の選択欄を触るときに残すこと)。

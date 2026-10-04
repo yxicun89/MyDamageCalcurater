@@ -98,7 +98,17 @@ import { AddFavoriteButton } from "../favorites/AddFavoriteButton";
 import type { RecordClient } from "../record/recordClient";
 import { useFrequentOpponents } from "../record/useFrequentOpponents";
 import { resolveNatureId } from "../api/apiEngine";
+import {
+  favoriteCalcOf,
+  favoriteLabelOf,
+  restoreFavoriteAttacker,
+  restoreFavoriteCalc,
+  type FavoriteRestoreIssue,
+  type FavoriteRestoreLookup,
+  type FavoriteRestoreRequest,
+} from "../favorites/favoriteCalc";
 import { favoriteInputOf } from "../favorites/favoriteInput";
+import { favoritesRestoreText } from "../i18n/favorites";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
@@ -263,6 +273,28 @@ export interface CalcScreenProps {
   readonly recordClient?: RecordClient;
   /** P5-3c(ADR-0327): 攻撃側をお気に入りに追加できたとき(App がお気に入りタブの一覧を取り直させる)。 */
   readonly onFavoriteAdded?: () => void;
+  /**
+   * I-web-8(ADR-0333 §3): お気に入りから入力を戻す要求。token が変わったときだけ(mount 時を含む)入力を戻し、
+   * 通常の calcBulk がそのまま走る。同じ token の再描画では戻さない(利用者の変更を消さない)。
+   */
+  readonly restoreRequest?: FavoriteRestoreRequest;
+}
+
+/** お気に入りから戻したときの案内(ADR-0333 §2・§4)。 */
+interface RestoreNotice {
+  /** 復元の要求の token(案内にフォーカスを移すきっかけ)。 */
+  readonly token: number;
+  readonly title: string;
+  /** 戻した直後の入力(利用者が入力を変えたら案内を消す。最初の描画で記録する)。 */
+  readonly baseline: readonly unknown[] | null;
+  /** calc の無い旧お気に入り(攻撃側だけを戻した)。 */
+  readonly attackerOnly: boolean;
+  readonly issues: readonly FavoriteRestoreIssue[];
+}
+
+/** 戻せなかった項目(alert に出す)。メガの持ち物の固定・反映しなかった項目は案内として別に出す。 */
+function isUnresolvedIssue(issue: FavoriteRestoreIssue): boolean {
+  return issue.kind !== "megaItem" && issue.kind !== "ignored";
 }
 
 /** 計算の状態(判別 union)。idle は入力が揃っていない、status-move は変化技を選んでいる。 */
@@ -307,8 +339,143 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   return firstDamagingMove(species, moves)?.id ?? "";
 }
 
+/** お気に入りの見出し(label が無ければ攻撃側の種族 key)。 */
+function favoriteTitleOf(favorite: FavoriteRestoreRequest["favorite"]): string {
+  return favorite.label ?? favorite.individual.speciesKey;
+}
+
+type RestoredFavorite =
+  | {
+      readonly kind: "calc";
+      readonly state: ReturnType<typeof restoreFavoriteCalc>["state"];
+      readonly issues: readonly FavoriteRestoreIssue[];
+      readonly resolutions: readonly MasterSpeciesResolution[];
+    }
+  | {
+      readonly kind: "attacker";
+      readonly attacker: ReturnType<typeof restoreFavoriteAttacker>;
+      readonly attackerSpecies: MasterSpecies | null;
+      readonly moves: readonly Move[];
+      readonly issues: readonly FavoriteRestoreIssue[];
+      readonly resolutions: readonly MasterSpeciesResolution[];
+    };
+
+interface RestoreFavoriteInputsInput {
+  readonly favorite: FavoriteRestoreRequest["favorite"];
+  readonly master: MasterData;
+  /** 種族を検索で引くマスタ(オンライン)のときだけ渡す。省略は master.species から引く。 */
+  readonly masterSearch: MasterSpeciesSearch | undefined;
+  readonly signal: AbortSignal;
+}
+
+/**
+ * ADR-0333 §3: 保存された key を種族に引き(オンラインは resolveSpecies。引けなければ null)、画面の状態に戻す。
+ * オンラインの解決結果の moves・abilities は、画面の覚え書きに入る前でも lookup に直接渡す
+ * (handleAttackerResolved と同じ理由)。中断されたら null。
+ */
+async function restoreFavoriteInputs(input: RestoreFavoriteInputsInput): Promise<RestoredFavorite | null> {
+  const { favorite, master: data, masterSearch: search, signal } = input;
+  const { calc } = favorite;
+  const attackerKey = calc?.attacker.speciesKey ?? favorite.individual.speciesKey;
+  const resolve = async (key: string | null): Promise<MasterSpeciesResolution | null> => {
+    if (key === null || search === undefined) {
+      return null;
+    }
+    try {
+      return await search.resolveSpecies(key, signal);
+    } catch {
+      return null;
+    }
+  };
+  const [attackerResolution, defenderResolution] = await Promise.all([
+    resolve(attackerKey),
+    resolve(calc?.defender.speciesKey ?? null),
+  ]);
+  if (signal.aborted) {
+    return null;
+  }
+  const resolutions = [attackerResolution, defenderResolution].filter(
+    (resolution): resolution is MasterSpeciesResolution => resolution !== null,
+  );
+  const findSpecies = (key: string, resolution: MasterSpeciesResolution | null): MasterSpecies | null =>
+    data.species.find((species) => species.key === key) ?? resolution?.species ?? null;
+  const lookup: FavoriteRestoreLookup = {
+    attackerSpecies: findSpecies(attackerKey, attackerResolution),
+    defenderSpecies: calc === undefined ? null : findSpecies(calc.defender.speciesKey, defenderResolution),
+    moves: [...data.moves, ...resolutions.flatMap((resolution) => resolution.moves)],
+    items: data.items,
+    stoneIds: megaStoneItemIds([...data.species, ...resolutions.map((resolution) => resolution.species)]),
+    abilities: [...data.abilities, ...resolutions.flatMap((resolution) => resolution.abilities)],
+    natures: data.natures,
+  };
+  if (calc === undefined) {
+    const attacker = restoreFavoriteAttacker(favorite.individual, lookup);
+    return {
+      kind: "attacker",
+      attacker,
+      attackerSpecies: lookup.attackerSpecies,
+      moves: lookup.moves,
+      issues: attacker.issues,
+      resolutions,
+    };
+  }
+  const { state, issues } = restoreFavoriteCalc(calc, lookup);
+  return { kind: "calc", state, issues, resolutions };
+}
+
+/** お気に入りから戻した案内(開いた旨・戻せなかった項目の alert・メガの固定・反映しなかった項目)。 */
+function RestoreNoticeView({ notice }: { readonly notice: RestoreNotice }): ReactElement {
+  // 「計算に使う」で計算タブへ移ったとき、フォーカスが非表示になったお気に入りタブに残らないよう案内へ移す。
+  const noticeRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    noticeRef.current?.focus();
+  }, [notice.token]);
+  const unresolved = notice.issues.filter(isUnresolvedIssue);
+  const megaItem = notice.issues.some((issue) => issue.kind === "megaItem");
+  const ignored = notice.issues.filter((issue) => issue.kind === "ignored");
+  return (
+    <div className="calc-screen__restore">
+      <div role="status" tabIndex={-1} ref={noticeRef}>
+        <p>
+          {notice.attackerOnly
+            ? favoritesRestoreText.attackerOnlyNotice(notice.title)
+            : favoritesRestoreText.restoredNotice(notice.title)}
+        </p>
+        {megaItem && <p>{favoritesRestoreText.megaItemNotice}</p>}
+        {ignored.length > 0 && (
+          <>
+            <p>{favoritesRestoreText.ignoredNotice}</p>
+            <ul>
+              {ignored.map((issue) => (
+                <li key={favoritesRestoreText.issueText(issue)}>{favoritesRestoreText.issueText(issue)}</li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+      {unresolved.length > 0 && (
+        <div role="alert" className="calc-screen__restore-error">
+          <p>{favoritesRestoreText.unresolvedHeading}</p>
+          <ul>
+            {unresolved.map((issue) => (
+              <li key={favoritesRestoreText.issueText(issue)}>{favoritesRestoreText.issueText(issue)}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** 計算画面(design.md「画面: ダメージ計算」、ADR-0300 §2・§6)。攻撃側・防御側・技が揃うと自動で計算する。 */
-export function CalcScreen({ engine, master, masterSearch, recordClient, onFavoriteAdded }: CalcScreenProps) {
+export function CalcScreen({
+  engine,
+  master,
+  masterSearch,
+  recordClient,
+  onFavoriteAdded,
+  restoreRequest,
+}: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
   // 検索で解決した種族・特性の覚え書き(capabilities.speciesList が true のときは常に空のまま。ADR-0304 A-10)。
@@ -365,6 +532,98 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   // 「同時に光るのは1枚だけ」を保つための共有 ref だけを持つ(ref なので、これが変わっても
   // CalcScreen までは再レンダーしない。CalcScreen.holoRender.test.tsx)。
   const activeHoloClearRef = useRef<(() => void) | null>(null);
+
+  // I-web-8(ADR-0333 §3): お気に入りから入力を戻す。token が変わったときだけ(mount 時を含む)戻す。
+  // 戻す材料(マスタ・検索口)は最新の値を ref から読み、token 以外の変化では戻し直さない。
+  const [restoreNotice, setRestoreNotice] = useState<RestoreNotice | null>(null);
+  const restoreContextRef = useRef({
+    request: restoreRequest,
+    master,
+    masterSearch,
+    speciesListAvailable: capabilities.speciesList,
+  });
+  useEffect(() => {
+    restoreContextRef.current = {
+      request: restoreRequest,
+      master,
+      masterSearch,
+      speciesListAvailable: capabilities.speciesList,
+    };
+  });
+  // 利用者が入力を変えたら、古い案内(戻せませんでした等)を消す。戻した直後の入力を最初の描画で記録して比べる。
+  const restoreInputs = [
+    attackerKey,
+    defenderKey,
+    moveId,
+    attackerItemId,
+    defenderItemId,
+    attackerAbilityId,
+    defenderAbilityId,
+    attackerStatInputs,
+    conditions,
+    compareItems,
+  ];
+  if (restoreNotice !== null) {
+    if (restoreNotice.baseline === null) {
+      setRestoreNotice({ ...restoreNotice, baseline: restoreInputs });
+    } else if (restoreInputs.some((value, index) => value !== restoreNotice.baseline?.[index])) {
+      setRestoreNotice(null);
+    }
+  }
+  const restoreToken = restoreRequest?.token ?? null;
+  useEffect(() => {
+    const { request, master: data, masterSearch: search, speciesListAvailable } = restoreContextRef.current;
+    if (restoreToken === null || request === undefined) {
+      return;
+    }
+    const controller = new AbortController();
+    void restoreFavoriteInputs({
+      favorite: request.favorite,
+      master: data,
+      masterSearch: speciesListAvailable ? undefined : search,
+      signal: controller.signal,
+    }).then((restored) => {
+      if (restored === null || controller.signal.aborted) {
+        return;
+      }
+      for (const resolution of restored.resolutions) {
+        registerSpeciesResolution(resolution);
+      }
+      const title = favoriteTitleOf(request.favorite);
+      if (restored.kind === "calc") {
+        const { state } = restored;
+        setAttackerKey(state.attackerKey);
+        setDefenderKey(state.defenderKey);
+        setMoveId(state.moveId);
+        setAttackerItemId(state.attackerItemId);
+        setDefenderItemId(state.defenderItemId);
+        setAttackerAbilityId(state.attackerAbilityId);
+        setDefenderAbilityId(state.defenderAbilityId);
+        setAttackerStatInputs(state.attackerStatInputs);
+        setConditions(state.conditions);
+      } else {
+        const { attacker, attackerSpecies: species, moves } = restored;
+        setAttackerKey(attacker.attackerKey);
+        setAttackerItemId(attacker.attackerItemId);
+        setAttackerAbilityId(attacker.attackerAbilityId);
+        setAttackerStatInputs(attacker.attackerStatInputs);
+        setMoveId((prev) => resolveMoveId(species, moves, prev));
+      }
+      setCompareItems(false);
+      setAttackerDroppedName(null);
+      setDefenderDroppedName(null);
+      setRestoreNotice({
+        token: request.token,
+        baseline: null,
+        title,
+        attackerOnly: restored.kind === "attacker",
+        issues: restored.issues,
+      });
+    });
+    return () => {
+      controller.abort();
+    };
+  }, [restoreToken, registerSpeciesResolution]);
 
   const attackerSpecies = useMemo(
     () => speciesFor(master.species, attackerKey),
@@ -482,7 +741,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     [attackerStatInputs, master.natures, move],
   );
 
-  // P5-3c(ADR-0327 §2): お気に入りに入れる攻撃側(種族・性格・SP・持ち物)。入力が不正なら入れない(ADR-0329 §7)。
+  // P5-3c(ADR-0327 §2)・I-web-8(ADR-0333 §1): お気に入りに入れる内容。攻撃側(種族・性格・SP・持ち物)に、
+  // 攻撃側・防御側・技が揃っていれば計算の入力(calc)も付ける。入力が不正なら入れない(ADR-0329 §7)。
   const favoriteInput = useMemo(() => {
     if (attackerSpecies === null || !attackerStats.ok) {
       return null;
@@ -491,14 +751,51 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     if (natureId === undefined) {
       return null;
     }
+    const calc =
+      move === null
+        ? null
+        : favoriteCalcOf({
+            state: {
+              attackerKey,
+              defenderKey,
+              moveId: move.id,
+              attackerItemId: attackerItem?.id ?? "",
+              defenderItemId: defenderItem?.id ?? "",
+              attackerAbilityId: attackerAbility.id,
+              defenderAbilityId,
+              attackerStatInputs,
+              conditions,
+            },
+            natures: master.natures,
+            moveCategory: move.category,
+          });
     return favoriteInputOf({
-      label: attackerSpecies.nameJa,
+      label: favoriteLabelOf({
+        attackerNameJa: attackerSpecies.nameJa,
+        defenderNameJa: calc === null ? null : (defenderSpecies?.nameJa ?? null),
+        moveNameJa: calc === null ? null : (move?.nameJa ?? null),
+      }),
       speciesKey: attackerSpecies.key,
       natureId,
       sp: attackerStats.sp,
       itemId: attackerItem?.id ?? null,
+      calc,
     });
-  }, [attackerSpecies, attackerStats, master.natures, attackerItem]);
+  }, [
+    attackerSpecies,
+    defenderSpecies,
+    attackerStats,
+    master.natures,
+    attackerItem,
+    defenderItem,
+    attackerKey,
+    defenderKey,
+    move,
+    attackerAbility,
+    defenderAbilityId,
+    attackerStatInputs,
+    conditions,
+  ]);
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);
@@ -808,6 +1105,7 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
 
   return (
     <div className="calc-screen">
+      {restoreNotice !== null && <RestoreNoticeView notice={restoreNotice} />}
       <div className="calc-screen__cards">
         <SpeciesCard
           regionLabel={calcScreenText.attackerRegionLabel}
@@ -1360,6 +1658,12 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
           onChange(event.target.value);
         }}
       >
+        {value === "" && moves.length > 0 && (
+          // お気に入りの技を戻せなかったとき(ADR-0333 §4): 別の技に見えないよう、未選択を表す選択肢を出す。
+          <option value="" disabled>
+            {favoritesRestoreText.moveUnselectedOption}
+          </option>
+        )}
         {moves.map((move) => (
           <option key={move.id} value={move.id}>
             {move.nameJa}

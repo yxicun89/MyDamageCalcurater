@@ -12,5 +12,11 @@ export default defineScreen({
   usesMaster: false,
   // 記録 API のクライアントは App が持つ(オンライン限定で env.recordClient として渡す。ADR-0317)。
   createClient: () => undefined,
-  render: (env) => <FavoritesScreen recordClient={env.recordClient} reloadToken={env.favoritesReloadToken} />,
+  render: (env) => (
+    <FavoritesScreen
+      recordClient={env.recordClient}
+      reloadToken={env.favoritesReloadToken}
+      onUse={env.onUseFavorite}
+    />
+  ),
 });

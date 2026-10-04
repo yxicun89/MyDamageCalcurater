@@ -19,6 +19,8 @@ export interface FavoritesScreenProps {
   readonly recordClient?: RecordClient;
   /** 値が変わったら一覧を取り直す(計算画面での追加・端末データの削除の後。ADR-0327 §5)。 */
   readonly reloadToken?: number;
+  /** ADR-0333: 「計算に使う」を押したとき。渡したときだけ各行にボタンを出す(省略は従来どおり)。 */
+  readonly onUse?: (favorite: Favorite) => void;
 }
 
 type ListState =
@@ -39,7 +41,7 @@ function titleOf(favorite: Favorite): string {
   return favorite.label ?? favorite.individual.speciesKey;
 }
 
-export function FavoritesScreen({ recordClient, reloadToken }: FavoritesScreenProps): ReactNode {
+export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
   const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
 
@@ -144,40 +146,61 @@ export function FavoritesScreen({ recordClient, reloadToken }: FavoritesScreenPr
             const submitting = rowState?.phase === "submitting";
             return (
               <li key={favorite.id} className="favorites-screen__item">
-                <span className="favorites-screen__title">{title}</span>
-                {!confirming ? (
-                  <button
-                    type="button"
-                    disabled={deleteState?.phase === "submitting"}
-                    onClick={() => {
-                      setDeleteState({ id: favorite.id, phase: "confirming", error: null });
-                    }}
-                  >
-                    {favoritesScreenText.deleteLabel(title)}
-                  </button>
-                ) : (
-                  <div className="favorites-screen__confirm">
-                    <p>{favoritesScreenText.deleteConfirmNotice(title)}</p>
+                <div className="favorites-screen__heading">
+                  <span className="favorites-screen__title">{title}</span>
+                  {favorite.calc === undefined && onUse !== undefined && (
+                    <span className="favorites-screen__hint">{favoritesScreenText.attackerOnlyHint}</span>
+                  )}
+                </div>
+                <div className="favorites-screen__actions">
+                  {onUse !== undefined && (
                     <button
                       type="button"
-                      disabled={submitting}
+                      className="ui-button ui-button--primary favorites-screen__use"
                       onClick={() => {
-                        void handleDelete(favorite.id);
+                        onUse(favorite);
                       }}
                     >
-                      {favoritesScreenText.deleteConfirmLabel(title)}
+                      {favoritesScreenText.useLabel(title)}
                     </button>
+                  )}
+                  {!confirming ? (
                     <button
                       type="button"
-                      disabled={submitting}
+                      className="ui-button ui-button--secondary"
+                      disabled={deleteState?.phase === "submitting"}
                       onClick={() => {
-                        setDeleteState(null);
+                        setDeleteState({ id: favorite.id, phase: "confirming", error: null });
                       }}
                     >
-                      {favoritesScreenText.deleteCancelLabel(title)}
+                      {favoritesScreenText.deleteLabel(title)}
                     </button>
-                  </div>
-                )}
+                  ) : (
+                    <div className="favorites-screen__confirm">
+                      <p>{favoritesScreenText.deleteConfirmNotice(title)}</p>
+                      <button
+                        type="button"
+                        className="ui-button ui-button--danger"
+                        disabled={submitting}
+                        onClick={() => {
+                          void handleDelete(favorite.id);
+                        }}
+                      >
+                        {favoritesScreenText.deleteConfirmLabel(title)}
+                      </button>
+                      <button
+                        type="button"
+                        className="ui-button ui-button--secondary"
+                        disabled={submitting}
+                        onClick={() => {
+                          setDeleteState(null);
+                        }}
+                      >
+                        {favoritesScreenText.deleteCancelLabel(title)}
+                      </button>
+                    </div>
+                  )}
+                </div>
                 {rowError !== null && (
                   <div role="alert" className="favorites-screen__error">
                     <p>{favoritesScreenText.deleteErrorHeading}</p>
