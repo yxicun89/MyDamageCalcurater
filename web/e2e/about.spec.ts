@@ -46,7 +46,7 @@ test("「計算に戻る」と、ブラウザの戻る・進む。計算・逆�
   await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
   const selected = await attacker.inputValue();
   await page.getByRole("tab", { name: "逆算", exact: true }).click();
-  const observation = page.getByRole("textbox", { name: "観測1", exact: true });
+  const observation = page.getByRole("textbox", { name: "ダメージ1", exact: true });
   await observation.fill("45");
 
   await page.getByRole("contentinfo").getByRole("link", { name: "このアプリについて", exact: true }).click();

@@ -569,11 +569,11 @@ describe("analyze(防御相性)", () => {
     await act(async () => {
       call.resolve({
         ok: false,
-        error: { code: "balance_unavailable", message: "タイプバランスの API に接続できません" },
+        error: { code: "balance_unavailable", message: "タイプバランスのサーバーに接続できません" },
       });
       await Promise.resolve();
     });
-    expect(screen.getByRole("alert")).toHaveTextContent("タイプバランスの API に接続できません");
+    expect(screen.getByRole("alert")).toHaveTextContent("タイプバランスのサーバーに接続できません");
     expect(screen.queryByRole("table", { name: "防御相性" })).not.toBeInTheDocument();
     expect(screen.queryByText("計算中")).not.toBeInTheDocument();
   });
@@ -1173,14 +1173,14 @@ describe("recommendations(おすすめタイプ)", () => {
     await act(async () => {
       call.resolve({
         ok: false,
-        error: { code: "balance_unavailable", message: "タイプバランスの API に接続できません" },
+        error: { code: "balance_unavailable", message: "タイプバランスのサーバーに接続できません" },
       });
       await Promise.resolve();
     });
 
     await waitFor(() => {
       expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toContain(
-        "タイプバランスの API に接続できません",
+        "タイプバランスのサーバーに接続できません",
       );
     });
     expect(threatRegion(1, enemy.nameJa)).toBeInTheDocument();

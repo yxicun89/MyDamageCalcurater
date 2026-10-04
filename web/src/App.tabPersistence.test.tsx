@@ -1,7 +1,7 @@
 // issue #218(ADR-0308): タブを切り替えても各画面の入力が消えないこと。
 //
 // 以前の App.tsx は選択中の画面だけを描いていたので(当時の `SCREEN_COMPONENTS[tab]`。今は登録ファイルの render。ADR-0323)、
-// タブを離れるたびにその画面が unmount され、種族・技・持ち物・プリセット・観測がすべて初期値に戻る。
+// タブを離れるたびにその画面が unmount され、種族・技・持ち物・プリセット・ダメージがすべて初期値に戻る。
 // ADR-0308 の決定:
 //   1. 一度でも選ばれたタブの画面だけを mount し、以後 unmount しない(未訪問の画面は mount しない。
 //      SpeedScreen はマウント時に speed API を2本呼ぶため〈ADR-0604 §2〉、全画面の先読みはしない)
@@ -119,7 +119,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     expect(calcCombobox("技")).toHaveValue(moveIdBefore);
   });
 
-  test("逆算タブの種族と観測は、計算タブへ行って戻っても残る", async () => {
+  test("逆算タブの種族とダメージは、計算タブへ行って戻っても残る", async () => {
     const { attackerKey, defenderKey } = await examplePicks();
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
@@ -128,7 +128,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     await user.click(tabButton("逆算"));
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), attackerKey);
     await user.selectOptions(calcCombobox("相手のポケモン"), defenderKey);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
     await user.click(tabButton("計算"));
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
@@ -136,7 +136,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
 
     expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toHaveValue(attackerKey);
     expect(calcCombobox("相手のポケモン")).toHaveValue(defenderKey);
-    expect(screen.getByRole("textbox", { name: "観測1" })).toHaveValue("45");
+    expect(screen.getByRole("textbox", { name: "ダメージ1" })).toHaveValue("45");
   });
 
   test("3つ以上のタブを回っても、それぞれの入力がそのまま残る", async () => {
@@ -169,7 +169,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     // タブのクリックで /reverse を pushState(P4-10)。
     await user.click(tabButton("逆算"));
     expect(window.location.pathname).toBe("/reverse");
-    await user.type(await screen.findByRole("textbox", { name: "観測1" }), "45");
+    await user.type(await screen.findByRole("textbox", { name: "ダメージ1" }), "45");
 
     // 戻る → 計算タブ。入力は消えていない。
     simulatePopState("/calc");
@@ -180,7 +180,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     // 進む → 逆算タブ。こちらの入力も消えていない。
     simulatePopState("/reverse");
     expect(tabButton("逆算")).toHaveAttribute("aria-selected", "true");
-    expect(await screen.findByRole("textbox", { name: "観測1" })).toHaveValue("45");
+    expect(await screen.findByRole("textbox", { name: "ダメージ1" })).toHaveValue("45");
   });
 });
 
@@ -289,7 +289,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
   }
 
   function modeRadio(name: string): HTMLElement {
-    const group = screen.getByRole("radiogroup", { name: "ダメージ計算の実行場所" });
+    const group = screen.getByRole("radiogroup", { name: "計算する場所" });
     return within(group).getByRole("radio", { name });
   }
 
@@ -320,7 +320,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue(attacker.key);
     await screen.findByRole("list", { name: "計算結果" });
 
-    await user.click(modeRadio("オンライン(API)"));
+    await user.click(modeRadio("サーバー(オンライン)"));
 
     // 新しいマスタの種族が並ぶまで待つ(攻撃側の select の中だけを見る)。
     await waitFor(() => {
@@ -358,7 +358,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     );
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
-    await user.click(modeRadio("オンライン(API)"));
+    await user.click(modeRadio("サーバー(オンライン)"));
     await waitFor(() => {
       expect(
         within(calcCombobox("攻撃側のポケモン")).getByRole("option", {
@@ -367,7 +367,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
       ).toBeInTheDocument();
     });
 
-    await user.click(modeRadio("オフライン(WASM)"));
+    await user.click(modeRadio("この端末(オフライン)"));
 
     await waitFor(() => {
       expect(
@@ -407,7 +407,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     // 計算タブへ戻ってから、計算モードを切り替えてマスタを入れ替える。
     await user.click(tabButton("計算"));
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(modeRadio("オンライン(API)"));
+    await user.click(modeRadio("サーバー(オンライン)"));
     await waitFor(() => {
       expect(calcCombobox("攻撃側のポケモン")).toHaveValue("");
     });

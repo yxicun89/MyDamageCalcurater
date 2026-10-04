@@ -1,7 +1,7 @@
 // F-12 PR-2(I-web-12、ADR-0336 §2): 逆算画面への共通部品の適用。
 // 自分/相手のカードは ui-card ui-card--typed(--card-type は選んだ種族の最初のタイプ)、
-// 観測側・自分の調整の選択は ui-chip(選択中だけ ui-chip--selected)、ボタンは ui-button、
-// 案内・エラーは ui-notice、推定結果の一覧は ui-rows。
+// ダメージ側・自分の調整の選択は ui-chip(選択中だけ ui-chip--selected)、ボタンは ui-button、
+// 案内・エラーは ui-notice、考えられる振り方の一覧は ui-rows。
 // 既存のクラス(reverse-*)・アクセシブルな名前・role・テキストは変えない(クラスの追加と包みだけ)。
 
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -73,9 +73,9 @@ describe("カード", () => {
 });
 
 describe("選択肢はチップ", () => {
-  test("観測したダメージの側(ラジオ)は ui-chip。選択中だけ ui-chip--selected、切り替えに追従する", async () => {
+  test("どちらのダメージの側(ラジオ)は ui-chip。選択中だけ ui-chip--selected、切り替えに追従する", async () => {
     const user = renderScreen();
-    const group = screen.getByRole("radiogroup", { name: "観測したダメージ" });
+    const group = screen.getByRole("radiogroup", { name: "どちらのダメージ" });
     for (const radio of within(group).getAllByRole("radio")) {
       const option = radio.closest("label");
       expect(option).toHaveClass("ui-chip", "reverse-side__option");
@@ -102,9 +102,9 @@ describe("選択肢はチップ", () => {
     }
   });
 
-  test("観測の単位(ラジオ)は ui-chip。選択中だけ ui-chip--selected", () => {
+  test("ダメージの単位(ラジオ)は ui-chip。選択中だけ ui-chip--selected", () => {
     renderScreen();
-    const group = screen.getByRole("radiogroup", { name: "観測1の単位" });
+    const group = screen.getByRole("radiogroup", { name: "ダメージ1の単位" });
     for (const radio of within(group).getAllByRole("radio")) {
       const option = radio.closest("label");
       expect(option).toHaveClass("ui-chip");
@@ -114,12 +114,12 @@ describe("選択肢はチップ", () => {
 });
 
 describe("ボタン", () => {
-  test("「観測を追加」は ui-button ui-button--secondary、追加した観測の削除も ui-button--secondary", async () => {
+  test("「ダメージを追加」は ui-button ui-button--secondary、追加したダメージの削除も ui-button--secondary", async () => {
     const user = renderScreen();
-    const add = screen.getByRole("button", { name: "観測を追加" });
+    const add = screen.getByRole("button", { name: "ダメージを追加" });
     expect(add).toHaveClass("ui-button", "ui-button--secondary", "reverse-observations__add");
     await user.click(add);
-    expect(screen.getByRole("button", { name: "観測2を削除" })).toHaveClass(
+    expect(screen.getByRole("button", { name: "ダメージ2を削除" })).toHaveClass(
       "ui-button",
       "ui-button--secondary",
     );
@@ -138,13 +138,13 @@ describe("案内・結果", () => {
     );
     const [mine, theirs] = pairWithDifferentPrimaryTypes();
     await choosePair(user, mine, theirs);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
     vi.advanceTimersByTime(1000);
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveClass("ui-notice", "ui-notice--error");
   });
 
-  test("推定結果の一覧(list「推定結果」)は ui-rows(既存の reverse-results__list も残す)", async () => {
+  test("考えられる振り方の一覧(list「考えられる振り方」)は ui-rows(既存の reverse-results__list も残す)", async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) });
     render(
@@ -155,9 +155,9 @@ describe("案内・結果", () => {
     );
     const [mine, theirs] = pairWithDifferentPrimaryTypes();
     await choosePair(user, mine, theirs);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
     vi.advanceTimersByTime(1000);
-    const list = await screen.findByRole("list", { name: "推定結果" });
+    const list = await screen.findByRole("list", { name: "考えられる振り方" });
     await waitFor(() => {
       expect(list).toHaveClass("ui-rows", "reverse-results__list");
     });

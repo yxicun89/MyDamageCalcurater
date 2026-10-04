@@ -729,7 +729,7 @@ describe("A8 エラーでも表示が壊れない", () => {
     await flush(() => {
       lastOf(client.pokemonCalls, "pokemon").resolve({
         ok: false,
-        error: { code: "speed_unavailable", message: "素早さの API に接続できません" },
+        error: { code: "speed_unavailable", message: "素早さのサーバーに接続できません" },
       });
     });
     await flush(() => {
@@ -737,7 +737,7 @@ describe("A8 エラーでも表示が壊れない", () => {
     });
 
     expect(tiers()).toHaveLength(tableResponse.tiers.length);
-    expect(screen.getByRole("alert")).toHaveTextContent("素早さの API に接続できません");
+    expect(screen.getByRole("alert")).toHaveTextContent("素早さのサーバーに接続できません");
   });
 
   test("position() が失敗しても、左の表と入力は残る", async () => {

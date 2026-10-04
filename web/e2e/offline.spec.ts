@@ -1,4 +1,4 @@
-// ADR-0313(issue #210): オフライン(WASM)は、オンラインで一度取得したマスタのキャッシュ(IndexedDB)から読む。
+// ADR-0313(issue #210): この端末(オフライン)は、オンラインで一度取得したマスタのキャッシュ(IndexedDB)から読む。
 // 実データ相当のマスタ(pokedex フィクスチャ。ADR-0307)で、
 //   - 既定の計算モードはオンライン。一度開いて種族を引いたあと /api を遮断してもオフラインで計算できる
 //   - /api を遮断すると通信は一切起きず、engine.wasm は最初の計算で初めて取得する(遅延読み込み。ADR-0300 §2)
@@ -53,12 +53,12 @@ test("既定はオンライン。一度開いて種族を引いたあと /api �
   expect(wasmRequests, "オンラインの間は engine.wasm を取得しない").toEqual([]);
 
   // 2. オフラインに切り替え、バックエンドが落ちている状態を再現して開き直す(届いた要求は全て通信エラー)。
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
   apiRequests.length = 0;
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "オフライン(WASM)", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "この端末(オフライン)", exact: true })).toBeChecked();
   await expect(page.getByRole("alert")).toHaveCount(0);
   await page.waitForLoadState("networkidle");
   expect(wasmRequests, "オフライン表示の時点では engine.wasm を取得しない").toEqual([]);
@@ -86,7 +86,7 @@ test("既定はオンライン。一度開いて種族を引いたあと /api �
 
 test("オフラインではキャッシュに無い種族は引けない(架空データは出ない)", async ({ page }) => {
   await warmOfflineCache(page);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
@@ -125,7 +125,7 @@ test("既定(オンライン)で /api を遮断・キャッシュ空: オフラ�
   await page.goto("/");
 
   await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByRole("radio", { name: "オンライン(API)", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "サーバー(オンライン)", exact: true })).toBeChecked();
   await expect(page.getByRole("button", { name: "再試行", exact: true })).toBeVisible();
   await expect(page.getByText("テストモン")).toHaveCount(0);
 });
@@ -164,7 +164,7 @@ test("キャッシュが壊れていれば破棄して案内を出し、オン�
       };
     });
   }, MASTER_CACHE_DB_NAME);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
 
   await page.goto("/calc");
@@ -176,7 +176,7 @@ test("キャッシュが壊れていれば破棄して案内を出し、オン�
     localStorage.setItem("pokecalc.calcMode", "online");
   });
   await warmOfflineCache(page);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -223,7 +223,7 @@ test("スキーマ版が違うキャッシュは破棄して案内を出す", as
       };
     });
   }, MASTER_CACHE_DB_NAME);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.route("**/api/**", (route) => route.abort("connectionrefused"));
 
   await page.goto("/calc");

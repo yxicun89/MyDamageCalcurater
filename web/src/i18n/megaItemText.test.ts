@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { megaItemText } from "./ja";
 
 test("固定の理由は仕様の例どおり(iOS と同じ語)", () => {
-  expect(megaItemText.lockedReason).toBe("メガシンカ: メガストーンを持ちます");
+  expect(megaItemText.lockedReason).toBe("メガシンカするので、持ち物はメガストーンに決まっています");
 });
 
 test("文言は空でなく、互いに異なる", () => {

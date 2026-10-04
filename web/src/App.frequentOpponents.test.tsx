@@ -65,7 +65,7 @@ test("オンラインに切り替えると取得してチップを出す(端末 
   render(<App engine={createFakeEngine()} masterSource={exampleMasterSource} />);
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByText("オンライン(API)"));
+  await user.click(screen.getByText("サーバー(オンライン)"));
 
   const group = await screen.findByRole("group", { name: "よく計算する相手" });
   expect(group).toHaveTextContent(target.nameJa);
@@ -90,7 +90,7 @@ test("オンラインでも record が 503 なら、チップも alert も出な
   render(<App engine={createFakeEngine()} masterSource={exampleMasterSource} />);
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByText("オンライン(API)"));
+  await user.click(screen.getByText("サーバー(オンライン)"));
 
   await waitFor(() => {
     expect(recordCalls(fetchMock)).toHaveLength(1);

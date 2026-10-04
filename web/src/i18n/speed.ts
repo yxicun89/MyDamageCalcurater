@@ -6,7 +6,7 @@
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
  */
 export const speedClientText = {
-  unavailable: "素早さの API に接続できません",
+  unavailable: "素早さのサーバーに接続できません",
 } as const;
 
 /**
@@ -59,7 +59,7 @@ export const speedScreenText = {
   entrySeparator: "・",
   // ---- 右(自分のポケモン)の入力(ADR-0604 §4) ----
   modeGroupLabel: "入力の方法",
-  modeLabel: { preset: "プリセット", custom: "カスタム", raw: "実数値" } as const,
+  modeLabel: { preset: "定番の振り方", custom: "カスタム", raw: "実数値" } as const,
   pokemonLabel: "ポケモン",
   /** ポケモンを選んでいないときの選択肢(raw では選ばなくてよい)。 */
   unselectedOption: "未選択",
@@ -80,13 +80,13 @@ export const speedScreenText = {
   /** services/speed/api/openapi.yaml の ErrorCode と、Web 側の speed_unavailable に対応する。 */
   errorByCode: {
     invalid_request: "入力の形が正しくありません。値の範囲を確認してください",
-    missing_header: "端末の識別情報が送られていません",
-    invalid_header: "端末の識別情報の形が正しくありません",
-    unknown_pokemon: "このポケモンはマスタにありません",
+    missing_header: "端末の情報が送られていません。ページを開き直してください",
+    invalid_header: "端末の情報が正しくありません。ページを開き直してください",
+    unknown_pokemon: "このポケモンはデータにありません",
     request_too_large: "入力が大きすぎます",
-    master_unavailable: "ポケモンのマスタを読み込めません",
+    master_unavailable: "ポケモンのデータを読み込めません",
     internal_error: "素早さの計算に失敗しました",
-    speed_unavailable: "素早さの API に接続できません",
+    speed_unavailable: "素早さのサーバーに接続できません",
   } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",

@@ -10,7 +10,7 @@ import type { ImportNote } from "../team/showdownImportPlan";
  * サーバーが返す `Error.message` はそのまま運ぶので、ここには含まない。
  */
 export const teamClientText = {
-  unavailable: "構築の API に接続できません",
+  unavailable: "構築のサーバーに接続できません",
 } as const;
 
 /**
@@ -111,7 +111,7 @@ const issueReason: Record<ShowdownIssueCode, string> = {
   empty_input: "テキストが空です",
   too_many_members: "6体を超える分は取り込めません",
   malformed_line: "読み取れない行があります",
-  unresolved_name: "名前がマスタに見つかりません",
+  unresolved_name: "名前がデータに見つかりません",
   missing_nature: "性格の指定がありません",
   sp_out_of_range: "SP は 0〜32 の範囲で指定してください",
   sp_total_exceeded: "SP の合計が66を超えています",
@@ -121,7 +121,7 @@ const issueReason: Record<ShowdownIssueCode, string> = {
   too_many_moves: "技が5つ以上あります(4つまで)",
   duplicate_move: "同じ技が重複しています",
   nickname_too_long: "ニックネームが長すぎます",
-  missing_name: "名前がマスタに無く、書き出せませんでした",
+  missing_name: "名前がデータに無く、書き出せませんでした",
   ambiguous_name: "同じ名前が複数あります(先に見つかったものを使います)",
   duplicate_line: "同じ項目の行が重複しています",
   input_too_large: "テキストが大きすぎます",
@@ -177,5 +177,5 @@ export const teamShowdownText = {
   megaNoteText: (note: ImportNote, speciesName: string): string =>
     note.kind === "mega_item_fixed"
       ? `${note.memberIndex + 1}体目の${speciesName}: メガシンカには専用のメガストーンが必要なため、持ち物をメガストーンに変えました`
-      : `${note.memberIndex + 1}体目の${speciesName}: メガストーンがマスタに無いため、持ち物を空にしました`,
+      : `${note.memberIndex + 1}体目の${speciesName}: メガストーンがデータに無いため、持ち物を空にしました`,
 } as const;

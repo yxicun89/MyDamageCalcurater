@@ -1,9 +1,9 @@
 // issue 276(ADR-0411): API 専用の画面(タイプバランス・判定)は、計算モードに関係なく常にオンラインのマスタを使う。
 // 確かめること:
 //   - オフライン(既定)のままタイプバランスを開いても、画面にはオンラインのマスタの種族が出る
-//   - そのとき計算画面は引き続きオフラインのマスタ(ダメージ計算の実行場所の選択に従う)
+//   - そのとき計算画面は引き続きオフラインのマスタ(計算する場所の選択に従う)
 //   - オンラインのマスタを読めないときは、日本語の案内と「再試行」を出す(オフラインの架空データに落とさない)
-//   - ヘッダーの切替の名前は「ダメージ計算の実行場所」
+//   - ヘッダーの切替の名前は「計算する場所」
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -92,7 +92,7 @@ test("オンラインのマスタを読めないときは、日本語の案内�
   await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
 
   const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent("オンラインのマスタを読み込めませんでした");
+  expect(alert).toHaveTextContent("サーバーからポケモンのデータを読み込めませんでした");
   expect(alert).not.toHaveTextContent("connection refused");
   await user.click(within(alert).getByRole("button", { name: "再試行" }));
   await waitFor(async () => {
@@ -100,10 +100,10 @@ test("オンラインのマスタを読めないときは、日本語の案内�
   });
 });
 
-test("ヘッダーの切替は「ダメージ計算の実行場所」という名前", async () => {
+test("ヘッダーの切替は「計算する場所」という名前", async () => {
   render(<App engine={createFakeEngine()} />);
   expect(
-    await within(screen.getByRole("banner")).findByRole("radiogroup", { name: "ダメージ計算の実行場所" }),
+    await within(screen.getByRole("banner")).findByRole("radiogroup", { name: "計算する場所" }),
   ).toBeInTheDocument();
 });
 

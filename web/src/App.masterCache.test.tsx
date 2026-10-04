@@ -77,7 +77,7 @@ test("既定(オンライン)で API 遮断・キャッシュ空: オフライ�
 
   const alert = await screen.findByRole("alert");
   expect(within(alert).getByText(/API に届かない/)).toBeInTheDocument();
-  expect(screen.getByRole("radio", { name: "オンライン(API)" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "サーバー(オンライン)" })).toBeChecked();
   expect(screen.getByRole("button", { name: "再試行" })).toBeInTheDocument();
   expect(screen.queryByText(/テストほのお|テストモン/)).toBeNull();
 });
@@ -96,9 +96,9 @@ test("オンラインで一度取得したあと、オフラインへ切り替�
     expect(store.peek()).not.toBeNull();
   });
 
-  await user.click(screen.getByRole("radio", { name: "オフライン(WASM)" }));
+  await user.click(screen.getByRole("radio", { name: "この端末(オフライン)" }));
 
   await screen.findByRole("tablist", { name: "画面の切り替え" });
   expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.getByRole("radio", { name: "オフライン(WASM)" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "この端末(オフライン)" })).toBeChecked();
 });

@@ -174,8 +174,8 @@ for (const scheme of ["light", "dark"] as const) {
       for (const mode of [
         "耐久に振る",
         "攻撃と素早さに振る",
-        "倒せる最小の振り方",
-        "耐えられる最小の振り方",
+        "倒せるいちばん少ない振り方",
+        "耐えられるいちばん少ない振り方",
       ]) {
         await group.getByText(mode, { exact: true }).click();
         await expect(group.getByRole("radio", { name: mode, exact: true })).toBeChecked();

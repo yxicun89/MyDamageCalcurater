@@ -8,7 +8,7 @@ import { pokemonFieldLabel, speciesPlaceholderOption } from "./common";
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動でオフラインへは切り替えない)。
  */
 export const balanceClientText = {
-  unavailable: "タイプバランスの API に接続できません",
+  unavailable: "タイプバランスのサーバーに接続できません",
 } as const;
 
 /**
@@ -18,15 +18,15 @@ export const balanceClientText = {
 export const balanceErrorText = {
   missing_header: "端末の情報を送れませんでした。ページを開き直してください",
   invalid_header: "端末の情報が正しくありません。ページを開き直してください",
-  invalid_request: "リクエストが正しくありません。入力を見直してください",
+  invalid_request: "入力の内容が正しくありません。見直してください",
   request_too_large: "入力が大きすぎます。メンバーや技を減らしてください",
-  unknown_pokemon: "選んだポケモンがサーバーのマスタにありません。選び直してください",
-  unknown_move: "選んだ技がサーバーのマスタにありません。選び直してください",
-  unknown_ability: "選んだ特性がサーバーのマスタにありません。選び直してください",
-  master_unavailable: "サーバーのマスタを読み込めません。しばらくしてからもう一度お試しください",
+  unknown_pokemon: "選んだポケモンがサーバーのデータにありません。選び直してください",
+  unknown_move: "選んだ技がサーバーのデータにありません。選び直してください",
+  unknown_ability: "選んだ特性がサーバーのデータにありません。選び直してください",
+  master_unavailable: "サーバーのデータを読み込めません。しばらくしてからもう一度お試しください",
   overloaded: "サーバーが混み合っています。しばらくしてからもう一度お試しください",
   internal_error: "サーバーでエラーが起きました。しばらくしてからもう一度お試しください",
-  balance_unavailable: "タイプバランスの API に接続できません",
+  balance_unavailable: "タイプバランスのサーバーに接続できません",
   fallback: "タイプバランスを計算できませんでした。しばらくしてからもう一度お試しください",
 } as const;
 

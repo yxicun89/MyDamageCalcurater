@@ -399,7 +399,7 @@ describe("英語名のメガストーンを画面に出さない", () => {
     const { user } = await renderScreen([team([member(MEGA_FIRE.key, OTHER_ITEM_ID)])], { master: english });
     const first = group(await openEditor(user, "テストメガ構築"), 1);
 
-    const fallback = "テストほのおのメガストーン";
+    const fallback = "テストほのお専用のメガストーン";
     expect(itemSelect(first)).toHaveDisplayValue(fallback);
     notice(first, megaItemText.correctedNotice(fallback));
     expect(document.body).not.toHaveTextContent("Barbaracite");

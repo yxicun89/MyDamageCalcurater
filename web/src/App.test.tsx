@@ -147,7 +147,7 @@ describe("P4-4 計算・逆算の切り替え", () => {
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
   });
 
-  test("逆算画面も App に渡した engine を使う(観測を入れると fake の calcReverse が呼ばれる)", async () => {
+  test("逆算画面も App に渡した engine を使う(ダメージを入れると fake の calcReverse が呼ばれる)", async () => {
     const engine = createFakeEngine();
     const master = await exampleMasterSource.load();
     const [mine, theirs] = master.species;
@@ -159,7 +159,7 @@ describe("P4-4 計算・逆算の切り替え", () => {
     await user.click(await screen.findByRole("tab", { name: "逆算" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), mine.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), theirs.key);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
     await waitFor(() => {
       expect(engine.reverseRequests.length).toBeGreaterThan(0);
@@ -265,7 +265,7 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
   });
 });
 
-// P4-5: 計算モードの切り替え(ADR-0301 §4)。ヘッダーに「オフライン(WASM)/ オンライン(API)」の
+// P4-5: 計算モードの切り替え(ADR-0301 §4)。ヘッダーに「この端末(オフライン)/ サーバー(オンライン)」の
 // radiogroup を置き、既定はオンライン(ADR-0313 で ADR-0301 §4 の「既定はオフライン」を変更)。選択は localStorage に覚える。App は engines(offline・online)を
 // 受け取れ(テストで差し替える)、選択中のモードの engine だけで計算する。自動のフォールバックはしない。
 describe("P4-5 計算モード(オフライン / オンライン)の切り替え", () => {
@@ -288,17 +288,17 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
 
   function modeRadios() {
     const group = within(screen.getByRole("banner")).getByRole("radiogroup", {
-      name: "ダメージ計算の実行場所",
+      name: "計算する場所",
     });
     return {
       group,
-      offline: within(group).getByRole("radio", { name: "オフライン(WASM)" }),
-      online: within(group).getByRole("radio", { name: "オンライン(API)" }),
+      offline: within(group).getByRole("radio", { name: "この端末(オフライン)" }),
+      online: within(group).getByRole("radio", { name: "サーバー(オンライン)" }),
     };
   }
 
   // ADR-0313: 既定を「オンライン」にした(既定オフラインへの機械的な追従。テストの意図は変えない)。
-  test("ヘッダーに「ダメージ計算の実行場所」の radiogroup があり、既定はオンライン(API)", () => {
+  test("ヘッダーに「計算する場所」の radiogroup があり、既定はサーバー(オンライン)", () => {
     render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
     const { offline, online } = modeRadios();
     expect(online).toBeChecked();
@@ -445,7 +445,7 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     await user.click(await screen.findByRole("tab", { name: "逆算" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), defender.key);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
     await waitFor(() => {
       expect(onlineEngine.reverseRequests.length).toBeGreaterThan(0);

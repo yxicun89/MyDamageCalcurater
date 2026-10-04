@@ -110,7 +110,7 @@ test("戻る・進むでタブが切り替わっても、それぞれの画面�
   const selected = await attacker.inputValue();
 
   await tab(page, "逆算").click();
-  const observation = page.getByRole("textbox", { name: "観測1", exact: true });
+  const observation = page.getByRole("textbox", { name: "ダメージ1", exact: true });
   await observation.fill("45");
 
   await page.goBack();
