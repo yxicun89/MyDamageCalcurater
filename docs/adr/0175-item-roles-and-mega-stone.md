@@ -59,6 +59,9 @@ Web はいま `megaStoneItemIds`(`web/src/domain/mega.ts`)でストーンを自�
 名前の表を持たず、マスタから導く。**使用可能集合(レギュレーション)で絞らない**(使えないメガのストーンも、単独で選ぶ持ち物ではない)。
 pokedex の `SearchItems` の SQL(`EXISTS` の列 `is_mega_stone`)が唯一の判定の場所。
 
+> 追記(2026-10-04・ADR-0140・issue #607): 判定を「`items.is_mega_stone`(取得元 Showdown の持ち物データ `megaStone` と
+> メガ種族の要求から importer が導く。migration 000012)が真 **または** 上の EXISTS」に改めた。唯一の判定の場所は引き続き `SearchItems` の SQL。
+
 ### 3. 公開 API(`api/openapi.yaml`)
 
 - `Item` に省略可の2項目を足す(`required` は `[id, nameJa]` のまま。破壊的変更にしない)。
