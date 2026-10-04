@@ -3,7 +3,7 @@
 // 確かめること:
 //   - 攻撃側の欄は attacker の持ち物だけ、防御側の欄は defender の持ち物だけ(先頭は「持ち物なし」)。
 //     役割の無い持ち物・メガストーン(まだ解決していないメガ種族のものも)はどちらにも出ない
-//   - メガ種族を選ぶと欄は固定され、表示は「{基本種名}のメガストーン」(ストーンの nameJa ではない)。
+//   - メガ種族を選ぶと欄は固定され、表示はマスタの nameJa(日本語名。英語名などはフォールバック「{基本種名}のメガストーン」。ADR-0328)。
 //     基本種名が無いメガ種族は「メガストーン」。固定の理由は見える文言と aria-describedby の両方
 //   - 要求の持ち物は固定したストーン(engine の Item の形。roles・isMegaStone は載らない)
 //   - 攻守入れ替え: 両方の役割を持つ持ち物は保つ。合わなくなった持ち物は「持ち物なし」に戻し、role="status" で
@@ -36,6 +36,7 @@ import {
   MEGA_FIRE_STONE,
   MEGA_FIRE_STONE_LABEL,
   MEGA_WATER,
+  MEGA_WATER_STONE,
   UNNAMED_MEGA_STONE_LABEL,
 } from "../test/megaMaster";
 import { CalcScreen } from "./CalcScreen";
@@ -144,7 +145,7 @@ describe("持ち物の選択肢はその側の役割の持ち物だけ", () => {
 });
 
 describe("メガ種族の固定中の表示", () => {
-  test("攻撃側: 「{基本種名}のメガストーン」を見せ(ストーンの nameJa ではない)、理由を aria-describedby で結ぶ", async () => {
+  test("攻撃側: ストーンの nameJa を見せ、理由を aria-describedby で結ぶ", async () => {
     const { user } = renderScreen();
     await user.selectOptions(attackerSpeciesSelect(), MEGA_FIRE.key);
 
@@ -152,7 +153,7 @@ describe("メガ種族の固定中の表示", () => {
     expect(select).toBeDisabled();
     expect(select).toHaveValue(MEGA_FIRE_STONE.id);
     expect(select).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
-    expect(optionNames(select)).not.toContain(MEGA_FIRE_STONE.nameJa);
+    expect(optionNames(select)).toContain(MEGA_FIRE_STONE_LABEL);
     expect(select).toHaveAccessibleDescription(megaItemText.lockedReason);
     expect(within(attackerCard()).getByText(megaItemText.lockedReason)).toBeVisible();
   });
@@ -166,10 +167,13 @@ describe("メガ種族の固定中の表示", () => {
     expect(defenderItemSelect()).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
   });
 
-  test("基本種名が無いメガ種族は「メガストーン」だけを見せる(名前を推測しない)", async () => {
+  test("ストーンの nameJa が英語で基本種名も無いメガ種族は「メガストーン」だけを見せる(名前を推測しない)", async () => {
     const unnamed: MasterSpecies = { ...MEGA_WATER, baseSpeciesNameJa: null };
     const data: MasterData = {
       ...master,
+      items: master.items.map((item) =>
+        item.id === MEGA_WATER_STONE.id ? { ...item, nameJa: "Examplite W" } : item,
+      ),
       species: master.species.map((species) => (species.key === MEGA_WATER.key ? unnamed : species)),
     };
     const { user } = renderScreen(data);
@@ -316,11 +320,10 @@ describe("結果の行・未対応の印にメガストーンの英語名を出�
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(within(row).getByText(MEGA_FIRE_STONE_LABEL)).toBeVisible();
-      expect(row).not.toHaveTextContent(MEGA_FIRE_STONE.nameJa);
     }
   });
 
-  test("未対応の印の持ち物名も、ストーンは「{基本種名}のメガストーン」", async () => {
+  test("未対応の印の持ち物名も、ストーンはマスタの nameJa", async () => {
     const stoneMark = {
       target: "defender_item",
       reason: "unsupported_effect",
@@ -338,6 +341,5 @@ describe("結果の行・未対応の印にメガストーンの英語名を出�
 
     const matches = await screen.findAllByText(new RegExp(MEGA_FIRE_STONE_LABEL));
     expect(matches.some((element) => element.closest('[role="status"]') !== null)).toBe(true);
-    expect(document.body).not.toHaveTextContent(MEGA_FIRE_STONE.nameJa);
   });
 });

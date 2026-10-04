@@ -42,7 +42,7 @@ import {
   type MegaItemLock,
 } from "../domain/mega";
 import { itemAfterRoleChange, itemsForRole, itemsWithStoneLabels, megaStoneLabel } from "../domain/itemRoles";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
@@ -289,7 +289,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   if (species === null) {
     return "";
   }
-  if (learnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
+  if (damagingLearnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
     return currentMoveId;
   }
   return firstDamagingMove(species, moves)?.id ?? "";
@@ -399,7 +399,9 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   const effectiveCompareItems = compareItems && !compareDisabledByMega;
   const attackerMoves = useMemo(
     () =>
-      attackerSpecies === null ? [] : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
+      attackerSpecies === null
+        ? []
+        : damagingLearnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
     [attackerSpecies, master.moves, attackerKey, movesFor],
   );
   // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または攻撃側の技の候補が
@@ -744,7 +746,7 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   let outcome: Outcome;
   if (attackerSpecies === null || defenderSpecies === null || move === null) {
     outcome = { status: "idle" };
-  } else if (move.category === "status") {
+  } else if (isStatusMove(move)) {
     outcome = { status: "status-move" };
   } else if (
     completed === null ||
@@ -844,6 +846,9 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
 
       <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!movesAvailable} />
       {!movesAvailable && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      {attackerSpecies !== null && capabilities.moves && attackerMoves.length === 0 && (
+        <p className="calc-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
+      )}
 
       <label className="calc-screen__compare">
         <input
@@ -1049,7 +1054,7 @@ function SpeciesCard({
           >
             <option value="">{calcScreenText.noItemOption}</option>
             {itemLock.kind === "locked" && species !== null ? (
-              <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+              <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
             ) : (
               items.map((item) => (
                 <option key={item.id} value={item.id}>

@@ -131,6 +131,7 @@ export const calcScreenText = {
   compareItemCandidatesLabel: "持ち物の候補も比較",
   swapButtonLabel: "攻守入れ替え",
   statusMoveNotice: "変化技はダメージを計算しません",
+  noDamagingMovesNotice: "このポケモンはダメージを与える技を覚えないため、計算できません",
   /** 技セレクタの各行の区切り(「技名・分類・威力n」)。 */
   moveOptionSeparator: "・",
   /** 技セレクタの威力の前置き(「威力80」)。 */

@@ -647,7 +647,7 @@ function IndividualFields({
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
           {itemLock.kind === "locked" && value.species !== null ? (
-            <option value={itemLock.item.id}>{megaStoneLabel(value.species)}</option>
+            <option value={itemLock.item.id}>{megaStoneLabel(value.species, itemLock.item.nameJa)}</option>
           ) : (
             pickableItems.map((item) => (
               <option key={item.id} value={item.id}>
