@@ -17,15 +17,17 @@ struct SpeedScreenView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SpacingToken.x4) {
-                Text(SpeedLabels.screenTitle)
-                    .font(TextStyleToken.heading.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                SpeedSelfSection(viewModel: viewModel, isPokemonSheetPresented: $isPokemonSheetPresented)
-                SpeedTableSection(viewModel: viewModel)
+        ScrollViewReader { proxy in
+            ScrollView {
+                VStack(alignment: .leading, spacing: SpacingToken.x4) {
+                    Text(SpeedLabels.screenTitle)
+                        .font(TextStyleToken.heading.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                    SpeedSelfSection(viewModel: viewModel, isPokemonSheetPresented: $isPokemonSheetPresented)
+                    SpeedTableSection(viewModel: viewModel, scrollToRow: { proxy.scrollTo($0, anchor: .center) })
+                }
+                .padding(SpacingToken.x4)
             }
-            .padding(SpacingToken.x4)
         }
         .background(ColorToken.bgBase.color.ignoresSafeArea())
         .accessibilityIdentifier("speedScreen")

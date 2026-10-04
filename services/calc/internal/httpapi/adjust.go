@@ -251,6 +251,15 @@ func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpT
 	})
 }
 
+// --- goals ---------------------------------------------------------------------------
+
+// AdjustGoals は POST /api/calc/adjust/goals(ADR-0331 の段階 B)。
+// engine の複数目標の探索(ADR-0331「段階 B」の engine 拡張)が入るまでのスタブで、ルートにも登録しない
+// (登録しないので実際の HTTP は Echo の 404。生成物 api.ServerInterface を満たすためだけに置く)。
+func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
+	return newError(api.NotFound, "adjustGoals is not implemented yet (ADR-0331 stage B)")
+}
+
 // --- allocation ----------------------------------------------------------------------
 
 // AdjustAllocation は POST /api/calc/adjust/allocation。
