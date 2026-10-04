@@ -138,8 +138,29 @@ export const calcScreenText = {
   movePowerLabel: "威力",
   /** 入力が揃い calcBulk の応答待ちのときに出す文言(古い行を出さず、これに差し替える)。 */
   loadingNotice: "計算中",
-  /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0300 §5)。 */
-  attackerPresetGroupLabel: "攻撃側の調整",
+} as const;
+
+/** 計算画面の攻撃側の「攻撃」「特攻」の2ブロック(I-web-1・I-web-3、ADR-0329)の文言。iOS と同じ。 */
+export const attackerStatText = {
+  /** ブロックの見出し(攻撃 = atk、特攻 = spa)。 */
+  statName: { atk: "攻撃", spa: "特攻" } as const,
+  /** 選んだ技が使う側の見出しに足す語(色だけに頼らず、文字でも強調する)。 */
+  usedSuffix: "(この技で使用)",
+  /** プリセットのラジオグループの名前(「攻撃の調整」)。 */
+  presetGroupLabel: (name: string) => `${name}の調整`,
+  /** SP の数値入力の名前(「攻撃のSP」)。 */
+  spLabel: (name: string) => `${name}のSP`,
+  /** 性格補正のラジオグループの名前(「攻撃の性格補正」)。 */
+  natureGroupLabel: (name: string) => `${name}の性格補正`,
+  /** プリセットのどれとも一致しない値のときの印。 */
+  custom: "カスタム",
+  modifierLabel: { up: "上昇", neutral: "補正なし", down: "下降" } as const,
+  /** SP が 0〜32 の整数でないときの明示エラー(計算しない)。 */
+  spInvalid: (name: string) => `${name}のSPは0〜32の整数で入力してください`,
+  /** 補正の組み合わせに当たる性格がマスタに無いときの明示エラー(計算しない)。 */
+  natureUnresolved: "この性格補正の組み合わせに当たる性格がマスタにありません",
+  /** 攻撃と特攻を同じ向きにできない理由(選べない選択肢の説明)。 */
+  sameDirectionReason: "攻撃と特攻の両方を上昇、または両方を下降にすることはできません",
 } as const;
 
 /** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
