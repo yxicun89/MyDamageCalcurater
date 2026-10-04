@@ -74,6 +74,7 @@ export function AddFavoriteButton({ recordClient, input, onAdded }: AddFavoriteB
     <div className="calc-screen__favorite">
       <button
         type="button"
+        className="ui-button ui-button--secondary"
         disabled={input === null || state.status === "submitting"}
         onClick={() => {
           void handleAdd();

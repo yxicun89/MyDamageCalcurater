@@ -7,6 +7,7 @@ import { createCachedMasterSources } from "./master/cache/cachedSources";
 import { createOnlineMasterSource } from "./master/onlineSource";
 import type { MasterSources } from "./master/types";
 import "./styles/tokens.css";
+import "./styles/components.css";
 
 const container = document.getElementById("root");
 if (container === null) {
