@@ -208,6 +208,7 @@
 - [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS
 - [x] iOS の計算画面「詳細」に防御側のランク(issue #274 の残り。Web の ADR-0315・契約 `defenderOverride.ranks`)。def〈B〉/ spd〈D〉を別々に保持し、編集対象は選択中の技の分類で決まる(±6・既定 0 なら `defenderOverride` を送らない・非0 で 5 項目・防御側の特性と併存・状態異常は出さない)。防御側の種族変更・入れ替えでは消さない(Web と同じ)。配置は「詳細」の末尾(ADR-0501 末尾「実装結果」の逸脱 1)。`swift test` 1318件・XCUITest 7件成功。critic PASS
 - [x] iOS 判定画面の後続(契約 0.3.0。ADR-0512): 各候補の行に素早さの「反映した補正」「反映していない入力」を表示(自分側・相手側を取り違えない。空は出さない)、自分と各候補に状態異常の入力(まひだけ素早さに反映。none は送らない)、未知の SpeedFactor/SpeedIgnored の値で decode が落ちない(判定専用のミドルウェアで文字列のまま運ぶ。生成物は手編集しない)。`swift test` 1376件・XCUITest 27件(iPhone 17e・18 Pro の両方)成功。critic PASS
+- [x] iOS の計算画面にお気に入りを読み込む導線(お気に入り表示〈ADR-0511〉の後続。Web には読み込みが無いので iOS の「構築から呼び出す」に揃えて先に決めた。ADR-0513)。攻撃側・防御側カードの「構築から選ぶ」行の直下に入口(シート)。攻撃側は種族・性格と SP・特性・持ち物、防御側は種族と特性だけを設定して計算1回(技・ランク・状態異常・天候・急所は変えない)。マスタに無いものは案内、種族が無い・取得失敗は何も変えない。メガ固定・持ち物の役割は ADR-0509 に従う。`swift test` 1450件・XCUITest 14件+既存27件(iPhone 17e・18 Pro の両方)成功。critic PASS
 
 ## TB: タイプバランスチェッカー(タイプバランスレーン。設計は docs/type-balance-design.md)
 - [x] TB0 基盤(型・相性コア・HTTP・Docker/Kustomize・Argo CD・単体テスト)
