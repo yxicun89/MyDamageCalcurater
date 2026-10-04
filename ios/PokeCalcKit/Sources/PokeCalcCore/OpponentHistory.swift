@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// OpponentHistory: 「よく計算する相手」の一覧画面(ADR-0509)。
+// OpponentHistory: 「よく計算する相手」の一覧画面(ADR-0511)。
 //
 // データは `FrequentOpponentsService`(P6-23 で実装済みの `GET /api/record/frequent-opponents`)をそのまま使う。
 // 種族ピッカーの `FrequentOpponentsViewModel` は名前を引けた種族だけを出して件数・時刻を捨てるので、

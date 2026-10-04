@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `MockFavoritesService`(XCUITest 用。環境変数 `POKECALC_MOCK_FAVORITES`。ADR-0509)。
+/// `MockFavoritesService`(XCUITest 用。環境変数 `POKECALC_MOCK_FAVORITES`。ADR-0511)。
 /// 既定は「空のストアで追加・削除が動く」(既存テストを壊さない)。
 final class MockFavoritesServiceTests: XCTestCase {
     private let individual = Individual(

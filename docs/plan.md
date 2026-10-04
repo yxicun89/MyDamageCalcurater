@@ -202,7 +202,7 @@
   後続: 持ち物の書き出しは ID 引き API が無く `searchItems` 先頭ページ頼み(省いた分は件数で通知。ADR-0506)。`getItemsByIds` 相当ができたら置き換える。
   - 完了(2026-10-02): 日本語名の Showdown 風テキスト(ユーザー決定。実 Showdown 非互換。ADR-0506)。書き出し(コピー・共有)・貼り付け取り込み(取り込めなかった行を一覧し、取り込める分だけ追加)。`swift test` 633件・`make ios-test` 全件成功(XCUITest 61件)。critic PASS(指摘対応済み)
 - [-] P6-26 タイプバランス画面(iOS)は**取り下げ**(2026-10-03 ユーザー決定)。タイプバランスレーンが P6-21(ADR-0415)として第1〜2段を main に実装済みで、重複する PR #512 を閉じた。第3段は P6-22(タイプバランスレーン)
-- [x] お気に入り・計算履歴の iOS 表示(API レーンの P5-3c〈ADR-0227。契約は `api/openapi.yaml` の `/api/record/favorites*`〉。ADR-0509)。ルートのピル「お気に入り・履歴」(画面レジストリ。`FavoritesFeature`)でお気に入り一覧と「よく計算する相手」(`frequent-opponents`)を独立に読み込み、計算画面の攻撃側・防御側に「お気に入りに追加」。外すのは即時・404 は成功扱い・上限100。生の計算履歴一覧は契約に無いため「サーバーの対応待ち」と注記(API は足していない)。お気に入りを計算に読み込む導線は後続(Web と揃える)。`swift test` 1237件・XCUITest 13件成功。critic PASS
+- [x] お気に入り・計算履歴の iOS 表示(API レーンの P5-3c〈ADR-0227。契約は `api/openapi.yaml` の `/api/record/favorites*`〉。ADR-0511)。ルートのピル「お気に入り・履歴」(画面レジストリ。`FavoritesFeature`)でお気に入り一覧と「よく計算する相手」(`frequent-opponents`)を独立に読み込み、計算画面の攻撃側・防御側に「お気に入りに追加」。外すのは即時・404 は成功扱い・上限100。生の計算履歴一覧は契約に無いため「サーバーの対応待ち」と注記(API は足していない)。お気に入りを計算に読み込む導線は後続(Web と揃える)。`swift test` 1237件・XCUITest 13件成功。critic PASS
 
 - [x] P6-21 タイプバッジ・エンブレムの文字色を design.md「タイプバッジ」の `typeInk` 規則(黒/白のコントラスト比が高い方。白は どく/ゴースト/ドラゴン/あく のみ)に準拠(エンブレム本体・バッジは実装済みで、残っていたのは文字色の白固定)。`TypeColorToken.ink(forTypeID:)` を追加。`swift test` 全件・`make ios-test` 全件成功(XCUITest 53件)。critic PASS。ADR-0501「P6-21」
 - [x] P8-1c iOS のポケモン画像表示(タイプバランスレーンの依頼。ADR-0807 の契約・ADR-0508)。gateway の `/images/manifest.json` を起動時に1回取得し、manifest にキーがあれば thumb を表示(計算・逆算・構築・調整・タイプバランスの種族ヘッダーと検索の行)、無ければ既存のタイプ色エンブレム。manifest の 404・不正・version 違いも画像なし。モックの既定は画像なし(AC-X)。detail は表示する画面が無いため後続。`swift test` 1158件・XCUITest 成功。critic PASS

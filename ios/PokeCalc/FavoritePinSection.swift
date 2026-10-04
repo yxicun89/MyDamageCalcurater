@@ -2,7 +2,7 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// FavoritePinSection: 計算画面の「お気に入りに追加」(ADR-0509)。攻撃側・防御側の個体をそのまま1件ずつ追加する。
+// FavoritePinSection: 計算画面の「お気に入りに追加」(ADR-0511)。攻撃側・防御側の個体をそのまま1件ずつ追加する。
 // 失敗しても計算は使える(絶対ルール5)ので、結果は1行の案内にとどめる。
 
 struct FavoritePinSection: View {

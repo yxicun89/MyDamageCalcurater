@@ -1,7 +1,7 @@
 import PokeCalcCore
 import SwiftUI
 
-/// お気に入り・計算履歴画面(ADR-0509・ADR-0501「お気に入り・計算履歴の受け入れ条件」)の登録。
+/// お気に入り・計算履歴画面(ADR-0511・ADR-0501「お気に入り・計算履歴の受け入れ条件」)の登録。
 struct FavoritesFeature: AppFeature {
     let id = "favorites"
     let order = 800

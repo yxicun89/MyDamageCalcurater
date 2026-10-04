@@ -2,7 +2,7 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// FavoritesScreenView: お気に入り・計算履歴画面(ADR-0509)。
+// FavoritesScreenView: お気に入り・計算履歴画面(ADR-0511)。
 //
 // ロジックは持たない。`FavoritesViewModel`・`OpponentHistoryViewModel`(PokeCalcCore)の状態を描き、
 // 操作を async メソッドへつなぐだけ。ここが失敗しても計算は使える(絶対ルール5)ので、失敗は画面の中の案内にとどめる。

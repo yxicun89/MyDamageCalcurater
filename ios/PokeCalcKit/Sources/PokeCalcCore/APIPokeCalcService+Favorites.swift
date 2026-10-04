@@ -1,7 +1,7 @@
 import Foundation
 import PokeCalcAPI
 
-// お気に入り(ADR-0227・ADR-0509)。`GET/POST /api/record/favorites`・`DELETE /api/record/favorites/{favoriteId}`。
+// お気に入り(ADR-0227・ADR-0511)。`GET/POST /api/record/favorites`・`DELETE /api/record/favorites/{favoriteId}`。
 // `PokeCalcService` とは別のプロトコル(`FrequentOpponentsService` と同じ理由)。
 // 1回の呼び出しが1回の HTTP 要求。ヘッダは他の操作と同じ `X-Device-Id` / `X-Session-Id`。
 
