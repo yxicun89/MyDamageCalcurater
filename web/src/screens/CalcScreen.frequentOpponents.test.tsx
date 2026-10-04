@@ -52,6 +52,9 @@ function fakeRecord(result: () => Promise<RecordResult<Opponent[]>>): FakeRecord
   return {
     listFrequentOpponents: listMock,
     deleteDeviceData: () => Promise.reject(new Error("このテストでは使わない")),
+    listFavorites: () => Promise.reject(new Error("このテストでは使わない")),
+    createFavorite: () => Promise.reject(new Error("このテストでは使わない")),
+    deleteFavorite: () => Promise.reject(new Error("このテストでは使わない")),
     listMock,
   };
 }

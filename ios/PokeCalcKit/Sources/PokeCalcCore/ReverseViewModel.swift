@@ -49,6 +49,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     private var latestMoveSearchResults: [Move] = []
     /// いまの攻撃側(与えたダメージ=自分、受けたダメージ=相手)の learnset(ID のみ。6章)。
     private var attackingLearnsetIds: [String] = []
+    /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
+    private var megaInfo: [String: MegaSpeciesInfo] = [:]
 
     // MARK: - マスタ(load() で読み込む)
 
@@ -108,19 +110,30 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// いまの相手の `species(key:)` を読み、`opponentAbilityOptions` を入れる(`CalcViewModel.loadDefenderAbilityOptions`
     /// と同じ規則: 読み済みなら何もしない・計算しない・失敗は黙って空・相手が変わっていたら反映しない)。
     public func loadOpponentAbilityOptions() async {
-        guard opponentAbilityOptionsSpeciesKey != opponentSpeciesKey else { return }
+        guard await loadOpponentDetail() else { return }
+        let token = beginInput()
+        await recalculateIfPossible(token: token)
+    }
+
+    /// `loadOpponentAbilityOptions` の本体。相手のメガ固定が変わったら true を返す(ADR-0509 §4 L2)。
+    private func loadOpponentDetail() async -> Bool {
+        guard opponentAbilityOptionsSpeciesKey != opponentSpeciesKey else { return false }
         let key = opponentSpeciesKey
+        let lockBefore = opponentItemLock
         do {
             let detail = try await service.species(key: key)
-            guard opponentSpeciesKey == key else { return }
+            guard opponentSpeciesKey == key else { return false }
             speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             opponentAbilityOptions = detail.abilities
             opponentAbilityOptionsSpeciesKey = key
             if let abilityId = opponentAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
                 opponentAbilityId = nil
             }
+            return opponentItemLock != lockBefore
         } catch {
             // 失敗(キャンセルを含む)は黙って「選択肢なし」のまま(`CalcViewModel` と同じ判断)。
+            return false
         }
     }
 
@@ -276,6 +289,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             do {
                 try await reloadMoveOptions(token: token)
                 guard token == latestRequestToken else { return }
+                applyMyItemLock(previous: .none)
                 try await reselectMove(preferringCurrent: selection.individual.moveId, token: token)
                 guard token == latestRequestToken else { return }
             } catch {
@@ -290,6 +304,12 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         case .attacker:
             // 受けたダメージ: 技は相手の learnset なので触らない(3章)。
             knownDefenderBuildSource = .team(selection)
+            // 持ち物があるときだけ、送れない入力を出さないよう要求の前に自分の詳細を読む(ADR-0509 §4 L1)。
+            if myItemId != nil, megaInfo[mySpeciesKey] == nil {
+                _ = await loadMyDetail()
+                guard token == latestRequestToken else { return }
+            }
+            applyMyItemLock(previous: .none)
             await recalculateIfPossible(token: token)
         }
     }
@@ -421,7 +441,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         myItemId = nil
         toggledOpponentItemIds = []
         opponentItemCandidateIds = []
-        await reloadAttackingMovesAndRecalculate(token: token)
+        await reloadAttackingMovesAndRecalculate(token: token, previousMyLock: .none)
     }
 
     // MARK: - 種族の選択(規則7: 攻撃側の種族が変わったときだけ learnset を読み直す)
@@ -430,11 +450,19 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// と同じ理由: 検索で見つけた種族を選べるようにするため)。
     public func selectMySpecies(key: String) async {
         guard speciesDictionary[key] != nil else { return }
+        let previousLock = myItemLock
         mySpeciesKey = key
         let token = beginInput()
         if side == .defender {
-            await reloadAttackingMovesAndRecalculate(token: token)
+            await reloadAttackingMovesAndRecalculate(token: token, previousMyLock: previousLock)
         } else {
+            // 受けたダメージの自分は読まない約束(ADR-0501「P6-19」)。持ち物があるときだけ L1 で読み、
+            // それ以外は View が `loadMySpeciesDetail()` で固定を反映する(ADR-0509 §4)。
+            if myItemId != nil, megaInfo[key] == nil {
+                _ = await loadMyDetail()
+                guard token == latestRequestToken else { return }
+            }
+            applyMyItemLock(previous: previousLock)
             await recalculateIfPossible(token: token)
         }
     }
@@ -447,8 +475,13 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         opponentSpeciesKey = key
         let token = beginInput()
         if side == .attacker {
-            await reloadAttackingMovesAndRecalculate(token: token)
+            await reloadAttackingMovesAndRecalculate(token: token, previousMyLock: myItemLock)
         } else {
+            // 候補があるときだけ、送れない入力を出さないよう要求の前に相手の詳細を読む(ADR-0509 §4 L1)。
+            if !toggledOpponentItemIds.isEmpty, megaInfo[key] == nil {
+                _ = await loadOpponentDetail()
+                guard token == latestRequestToken else { return }
+            }
             await recalculateIfPossible(token: token)
         }
     }
@@ -464,6 +497,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     }
 
     public func selectMyItem(id: String?) async {
+        guard !myItemLock.disablesItemField else { return }
+        if let id, !myItemOptions.contains(where: { $0.id == id }) { return }
         myItemId = id
         let token = beginInput()
         await recalculateIfPossible(token: token)
@@ -472,6 +507,8 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 相手の持ち物候補のトグル。`opponentItemCandidateIds` はトグルした順ではなく持ち物マスタの順。
     /// 上限到達中の ON 操作は拒否する(OFF は常に通す。issue #110 A6)。
     public func toggleOpponentItemCandidate(itemId: String) async {
+        guard !opponentItemLock.disablesItemField else { return }
+        guard toggledOpponentItemIds.contains(itemId) || opponentItemCandidateOptions.contains(where: { $0.id == itemId }) else { return }
         if toggledOpponentItemIds.contains(itemId) {
             toggledOpponentItemIds.remove(itemId)
         } else {
@@ -582,12 +619,13 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
     /// いまの `attackingSpeciesKey`(与えたダメージ=自分、受けたダメージ=相手)の learnset を読み直し、
     /// 技を選び直してから計算する(失敗したら `error` を立てて計算しない)。
-    private func reloadAttackingMovesAndRecalculate(token: Int) async {
+    private func reloadAttackingMovesAndRecalculate(token: Int, previousMyLock: MegaItemLock) async {
         isLoading = true
         do {
             let previousMoveId = moveId
             try await reloadMoveOptions(token: token)
             guard token == latestRequestToken else { return }
+            applyMyItemLock(previous: previousMyLock)
             try await reselectMove(preferringCurrent: previousMoveId, token: token)
             guard token == latestRequestToken else { return }
         } catch {
@@ -615,6 +653,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         let detail = try await service.species(key: attackingKey)
         guard token == latestRequestToken, detail.key == attackingKey else { return }
         speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
         attackingLearnsetIds = detail.learnset
         recomputeMoveOptions()
     }
@@ -741,8 +780,13 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             // 候補が特性で分かれていて、いまの相手の特性名をまだ持っていなければ、逆算し直さずに
             // species(key:) だけ読んで候補を作り直す(ADR-0501「P6-19」2章・9章と同じ判断)。
             if opponentAbilityOptionsSpeciesKey != opponentSpeciesKey, hasSplitCandidates(response) {
-                await loadOpponentAbilityOptions()
+                let lockChanged = await loadOpponentDetail()
                 guard token == latestRequestToken else { return }
+                if lockChanged {
+                    // 相手がメガと分かった: 候補をストーン1件にして1回だけ逆算し直す(次は読まないので繰り返さない)。
+                    await recalculateIfPossible(token: token)
+                    return
+                }
                 applyReverseResult(response)
             }
         } catch {
@@ -755,11 +799,12 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 特性の印は一覧を持たないので ID のまま出る(ADR-0501「P6-17」3章)。特性名の副題は
     /// `opponentAbilityOptions` から引く(2章)。
     private func applyReverseResult(_ response: ReverseResult) {
-        let names = UnsupportedMarkNames(moves: Array(moveDictionary.values), items: itemOptions, abilities: [])
+        let displayItems = ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames)
+        let names = UnsupportedMarkNames(moves: Array(moveDictionary.values), items: displayItems, abilities: [])
         let abilityNames = Dictionary(
             opponentAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest }
         )
-        result = ReverseResultDisplay(result: response, items: itemOptions, names: names, abilityNames: abilityNames)
+        result = ReverseResultDisplay(result: response, items: displayItems, names: names, abilityNames: abilityNames)
     }
 
     /// `response` の候補が相手の特性で分かれているか(`ResultEntryIdentity.splitBaseIDs` が空でないか)。
@@ -795,13 +840,87 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             }
         }
         // 相手の持ち物候補が1つ以上あれば「持ち物なし」を先頭に含める。無ければ省略(規則6)。
-        let itemCandidates: [String?] = opponentItemCandidateIds.isEmpty
-            ? []
-            : [String?.none] + opponentItemCandidateIds.map { $0 as String? }
+        // 相手がメガならストーン1件(null も混ぜない。ADR-0509 §4)。候補のトグルは固定中は使わない。
+        let itemCandidates: [String?]
+        switch opponentItemLock {
+        case .locked(let stoneId, _): itemCandidates = [stoneId]
+        case .missing: itemCandidates = []
+        case .none:
+            itemCandidates = opponentItemCandidateIds.isEmpty
+                ? []
+                : [String?.none] + opponentItemCandidateIds.map { $0 as String? }
+        }
         return ReverseRequest(
             format: .single, side: side, known: known, unknownSpeciesKey: opponentSpeciesKey, moveId: moveId,
             itemCandidates: itemCandidates, observations: observations, critical: false, maxCandidates: 0,
             unknownAbilityId: opponentAbilityId
         )
+    }
+}
+
+// MARK: - 持ち物の役割・メガ固定(ADR-0509)
+
+extension ReverseViewModel {
+    /// 自分の持ち物の選択肢(与えたダメージ = `.attacker`、受けたダメージ = `.defender`。いまの選択は残す)。
+    public var myItemOptions: [Item] {
+        ItemRoleFilter.options(itemOptions, for: side == .defender ? .attacker : .defender, keeping: myItemId)
+    }
+
+    /// 相手の持ち物候補の選択肢(与えたダメージ = `.defender`、受けたダメージ = `.attacker`。ON の候補は残す)。
+    public var opponentItemCandidateOptions: [Item] {
+        let base = Set(ItemRoleFilter.options(itemOptions, for: side == .defender ? .defender : .attacker).map(\.id))
+        return itemOptions.filter { base.contains($0.id) || (toggledOpponentItemIds.contains($0.id) && $0.isMegaStone != true) }
+    }
+
+    public var myItemLock: MegaItemLock {
+        MegaItemLock.make(for: megaInfo[mySpeciesKey], allItems: itemOptions)
+    }
+
+    public var opponentItemLock: MegaItemLock {
+        MegaItemLock.make(for: megaInfo[opponentSpeciesKey], allItems: itemOptions)
+    }
+
+    /// 受けたダメージで自分の種族の詳細を読む(View が自分の種族の変更ごとに呼ぶ。ADR-0509 §4 L2)。
+    /// 読み済みなら何もしない。固定が変わったときだけ持ち物を直して1回計算し直す。
+    public func loadMySpeciesDetail() async {
+        guard await loadMyDetail() else { return }
+        applyMyItemLock(previous: .none)
+        let token = beginInput()
+        await recalculateIfPossible(token: token)
+    }
+
+    public func itemLabel(for itemId: String?) -> String {
+        ItemDisplayName.text(itemId: itemId, items: itemOptions, megaStoneNames: megaStoneNames)
+    }
+
+    /// 自分の種族の `species(key:)` を読んで覚える。固定が変わったら true。
+    fileprivate func loadMyDetail() async -> Bool {
+        guard megaInfo[mySpeciesKey] == nil else { return false }
+        let key = mySpeciesKey
+        let lockBefore = myItemLock
+        do {
+            let detail = try await service.species(key: key)
+            guard mySpeciesKey == key else { return false }
+            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
+            return myItemLock != lockBefore
+        } catch {
+            return false
+        }
+    }
+
+    /// 自分の種族が変わった後の持ち物(固定・解除。ADR-0509 §4)。
+    fileprivate func applyMyItemLock(previous: MegaItemLock) {
+        myItemId = MegaItemLock.itemIdAfterSpeciesChange(previous: previous, next: myItemLock, currentItemId: myItemId)
+    }
+
+    private var megaStoneNames: [String: String] {
+        var names: [String: String] = [:]
+        for info in megaInfo.values {
+            if case .locked(let itemId, let displayName) = MegaItemLock.make(for: info, allItems: itemOptions) {
+                names[itemId] = displayName
+            }
+        }
+        return names
     }
 }

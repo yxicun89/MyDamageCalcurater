@@ -1,0 +1,16 @@
+{
+  "name": "pokecalc-assets",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "手元のポケモン画像を WebP 2サイズ + manifest.json に変換する(ADR-0807)",
+  "engines": {
+    "node": "26.10.0"
+  },
+  "scripts": {
+    "convert": "node convert.mjs"
+  },
+  "dependencies": {
+    "sharp": "0.35.5"
+  }
+}

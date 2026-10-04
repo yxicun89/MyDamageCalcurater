@@ -265,8 +265,17 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
   test("失敗してもタブ一覧は消えない(7つの画面すべてが選べる)", async () => {
     await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
-    // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。AJ6: 調整(/adjust)をその後ろに足した(ADR-0319 §1)。
-    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "判定", "構築", "調整"]);
+    // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。P5-3c: お気に入り(/favorites、order 650)を構築と調整の間に足した(ADR-0327 §1)。AJ6: 調整(/adjust)は末尾(ADR-0319 §1)。
+    expect(tabLabels()).toEqual([
+      "計算",
+      "逆算",
+      "タイプバランス",
+      "素早さ",
+      "判定",
+      "構築",
+      "お気に入り",
+      "調整",
+    ]);
   });
 
   // P5-5 PR-A1(ADR-0309 §1): 構築は usesMaster: true。PR-A2 のメンバー編集で種族・技・持ち物・特性の
@@ -327,7 +336,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     });
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(7);
+    expect(tabLabels()).toHaveLength(8);
   });
 
   test("「オフラインに切り替える」でオフラインのマスタに戻り、選択も保存される", async () => {
@@ -355,7 +364,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     );
 
     expect(await screen.findByRole("alert")).toBeInTheDocument();
-    expect(tabLabels()).toHaveLength(7);
+    expect(tabLabels()).toHaveLength(8);
 
     await user.click(retryButton());
 
@@ -377,7 +386,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(retryButton()).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "オフラインに切り替える" })).toBeNull();
-    expect(tabLabels()).toHaveLength(7);
+    expect(tabLabels()).toHaveLength(8);
   });
 });
 

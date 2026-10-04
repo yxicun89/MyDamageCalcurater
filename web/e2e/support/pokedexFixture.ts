@@ -14,11 +14,11 @@
 // 実データは持たない(架空の例データだけ。CLAUDE.md ドメイン規約・ADR-0002)。
 
 import type { components } from "../../src/api/openapi.gen";
-import type { Move } from "../../src/engine/types";
+import type { Item, Move } from "../../src/engine/types";
 import { toCalcSnapshotAbilityEffect, toCalcSnapshotItemEffect } from "../../src/master/exportSnapshot";
 import { MOVES_BATCH_MAX_IDS } from "../../src/master/onlineSource";
 import { matchesSpeciesName } from "../../src/master/speciesNameMatch";
-import type { MasterData } from "../../src/master/types";
+import type { MasterData, MasterSpecies } from "../../src/master/types";
 
 type Schemas = components["schemas"];
 
@@ -145,9 +145,53 @@ function handleItems(master: MasterData, query: URLSearchParams): FixtureRespons
   const body: Schemas["Item"][] = sorted.slice(0, limit).map((item) => {
     // issue 211・ADR-0218: 効果を持つ持ち物だけ effect を伴う(キーごと省く)。形は DB の形(PascalCase)。
     const effect = toCalcSnapshotItemEffect(item.effect);
-    return { id: item.id, nameJa: item.nameJa, ...(effect === null ? {} : { effect }) };
+    const isMegaStone = master.species.some(
+      (species) => species.isMega === true && species.requiredItemId === item.id,
+    );
+    // ADR-0175: roles・isMegaStone は pokedex-svc が常に返す(空配列可)。
+    return {
+      id: item.id,
+      nameJa: item.nameJa,
+      ...(effect === null ? {} : { effect }),
+      roles: itemRoles(item.effect, isMegaStone),
+      isMegaStone,
+    };
   });
   return { status: 200, body };
+}
+
+/** 中立でない補正(0 でも 4096 でもない)。 */
+function isActiveMod(mod: number | undefined): boolean {
+  return mod !== undefined && mod !== 0 && mod !== 4096;
+}
+
+/**
+ * 持ち物の役割。pokedex-svc の services/internal/master.ItemRoles(ADR-0175 §1)と同じ規則を、フィクスチャの例データ用に写したもの。
+ * 例データの ItemEffect に「未対応」の印は無い。
+ */
+function itemRoles(effect: Item["effect"], isMegaStone: boolean): Schemas["ItemRole"][] {
+  if (effect === null || isMegaStone) {
+    return [];
+  }
+  const mods = effect.statMods ?? {};
+  const attacker =
+    isActiveMod(mods.atk) ||
+    isActiveMod(mods.spa) ||
+    isActiveMod(effect.damageMod) ||
+    isActiveMod(effect.powerMod) ||
+    (effect.boostType !== undefined && effect.boostType !== "" && isActiveMod(effect.boostTypeMod));
+  const defender =
+    isActiveMod(mods.def) ||
+    isActiveMod(mods.spd) ||
+    (effect.resistBerryType !== undefined && effect.resistBerryType !== "");
+  const roles: Schemas["ItemRole"][] = [];
+  if (attacker) {
+    roles.push("attacker");
+  }
+  if (defender) {
+    roles.push("defender");
+  }
+  return roles;
 }
 
 function handleNatures(master: MasterData): FixtureResponse {
@@ -200,8 +244,25 @@ function handleSpeciesDetail(master: MasterData, key: string): FixtureResponse {
     // issue 515: optional の契約でも pokedex-svc は isMega・requiredItemId を常に出す(省略は非メガ・null)。
     isMega: species.isMega === true,
     requiredItemId: species.requiredItemId ?? null,
+    // ADR-0175: メガ種族の基本種は、種族が持つ baseSpeciesKey(src/test/megaMaster.ts の架空のメガ種族)、無ければ
+    // 同じ図鑑番号の基本形(form 0)とする(例データの規則)。メガでなければ null。
+    ...baseSpeciesFields(master, species),
   };
   return { status: 200, body };
+}
+
+function baseSpeciesFields(
+  master: MasterData,
+  species: MasterSpecies,
+): Pick<Schemas["SpeciesDetail"], "baseSpeciesKey" | "baseSpeciesNameJa"> {
+  const declaredKey = species.baseSpeciesKey ?? null;
+  const base =
+    species.isMega !== true
+      ? undefined
+      : declaredKey !== null
+        ? master.species.find((candidate) => candidate.key === declaredKey)
+        : master.species.find((candidate) => candidate.dexNo === species.dexNo && candidate.form === 0);
+  return { baseSpeciesKey: base?.key ?? null, baseSpeciesNameJa: base?.nameJa ?? null };
 }
 
 function handleMovesBatch(master: MasterData, query: URLSearchParams): FixtureResponse {

@@ -347,7 +347,10 @@ ORDER BY m.name_ja, m.id
 LIMIT ?;
 
 -- name: SearchItems :many
-SELECT i.id, i.name_ja, ie.effect
+-- is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
+-- species.required_item_id の外部キーの索引を使う)。
+SELECT i.id, i.name_ja, ie.effect,
+       EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id) AS is_mega_stone
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
 LEFT JOIN item_effects ie ON ie.item_id = i.id

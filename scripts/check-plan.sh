@@ -13,8 +13,9 @@ dir="$root/docs/plan"
 
 # 分割前(ADR-0172 の時点)の main で ID が重複していたもの。内容を変えずに移したので許可する。新しく足さない。
 # P6-24 は main で同じ行が [ ] と [x] の 2 回ある(マージで古い行が残った)。iOS レーンが古い行を消したらここから外す。
+# P8-1c は分割の後で main に入った重複: Web の画像表示(docs/plan/followups.md)と iOS の画像表示(docs/plan/m3.md)が同じ ID を使っている(どちらも完了)。
 # 許可した ID の行は、4(同じ本文の行)の検査からも外す。
-allowed_dup_ids=" P4-17 P5-5c P5-5d P6-21 P6-24 "
+allowed_dup_ids=" P4-17 P5-5c P5-5d P6-21 P6-24 P8-1c "
 
 errors=0
 fail() {

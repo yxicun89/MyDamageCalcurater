@@ -355,6 +355,30 @@ final class LargeTextLayoutUITests: XCTestCase {
         }
     }
 
+    /// 防御側のランク(issue #274。ADR-0501「防御側のランクの受け入れ条件」)を AX5 で開いたとき、
+    /// 計算画面の「詳細」の防御側のランクが横にはみ出さず、ボタンがタップできる(`isHittable`)こと。
+    func testCalcScreenDefenderRankNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
+
+        let toggle = element(app, "calcConditionsToggle")
+        scrollUntilHittable(app, toggle, containerIdentifier: "calcScreen")
+        toggle.tap()
+        XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
+
+        let defenderRankIdentifiers = [
+            "calcDefenderRankValue",
+            "calcDefenderRankDecrement",
+            "calcDefenderRankIncrement",
+        ]
+        scrollUntilHittable(app, element(app, "calcDefenderRankIncrement"), containerIdentifier: "calcScreen")
+        assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + defenderRankIdentifiers)
+        for identifier in defenderRankIdentifiers {
+            XCTAssertTrue(element(app, identifier).isHittable, "AX5 でもタップできる: \(identifier)")
+        }
+    }
+
     /// P6-15 (3): 既定サイズで%表示(`calcResultPercent-*`)が `minimumScaleFactor` によって
     /// 不要に縮んでいないこと。`ResultRowView.percentRangeTextView` は `.lineLimit(1) +
     /// .minimumScaleFactor(0.7)`(`CalcScreenMetrics.compactMinimumScaleFactor`)を使っている
@@ -749,5 +773,132 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
         assertNoHorizontalOverflow(app, identifiers: ["speedPokemonSheet", "speedPokemonSearchField"])
         assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedPokemonRow-"])
+    }
+    // MARK: - 判定画面(P6-25。ADR-0501「P6-25 の受け入れ条件」の AX5)
+
+    /// 判定画面の識別子(ADR-0504 §10)。長い日本語の文言(「自分の側の追い風」「相手の側の追い風は、すべての相手候補に…」「相手候補を追加」など)を持つものを AX5 で見る。
+    private static let judgeScreenIdentifiers = [
+        "judgeScreen", "judgeAttackerSpeciesButton", "judgeAttackerNatureButton", "judgeAttackerAbilityButton",
+        "judgeAttackerItemButton", "judgeAttackerMoveButton", "judgeAttackerTeamSourceButton", "judgeAttackerSPTotal",
+        "judgeTrickRoom", "judgeAttackerTailwind", "judgeDefenderTailwind", "judgeDefenderTailwindNotice",
+        "judgeCandidate1SpeciesButton", "judgeCandidate1MoveButton", "judgeCandidate1TeamSourceButton",
+        "judgeAddCandidate", "judgeSubmit", "judgeEmptyResult",
+    ]
+
+    private func launchJudgeWithMock(scenario: String? = nil, contentSizeCategory: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        if let scenario { app.launchEnvironment["POKECALC_MOCK_JUDGE"] = scenario }
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
+        app.launch()
+        let openButton = app.buttons["openJudgeScreen"]
+        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openJudgeScreen が無い")
+        openButton.tap()
+        XCTAssertTrue(element(app, "judgeScreen").waitForExistence(timeout: Self.existenceTimeout), "judgeScreen が開かない")
+        return app
+    }
+
+    private func pickJudgeOption(_ app: XCUIApplication, button: String, sheet: String, row: String) {
+        let opener = element(app, button)
+        for _ in 0..<12 where !(opener.exists && opener.isHittable) { app.swipeUp() }
+        opener.tap()
+        XCTAssertTrue(element(app, sheet).waitForExistence(timeout: Self.existenceTimeout), "\(sheet) が開かない")
+        let target = element(app, row)
+        XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "\(row) が無い")
+        target.tap()
+        XCTAssertTrue(element(app, sheet).waitForNonExistence(timeout: Self.existenceTimeout), "\(sheet) が閉じない")
+    }
+
+    /// P6-25: AX5 でも判定画面の入力・場の効果・候補の操作・送信が横にはみ出さない(長い日本語のピル・トグル・案内が折り返す)。
+    func testJudgeScreenNoHorizontalOverflowAtAX5() {
+        let app = launchJudgeWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        assertNoHorizontalOverflow(app, identifiers: Self.judgeScreenIdentifiers)
+    }
+
+    /// P6-25: AX5 で、結果の行(素早さ・優先度・行動順・双方の確定数)と、方向ごとの未対応の印の注記・添え書きが横にはみ出さない。
+    /// `marks` シナリオで、結果の上の注記・行の注記・添え書きがすべて出る状態を見る。
+    func testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5() {
+        let app = launchJudgeWithMock(scenario: "marks", contentSizeCategory: Self.ax5ContentSizeCategory)
+        pickJudgeOption(app, button: "judgeAttackerSpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9001-000")
+        pickJudgeOption(app, button: "judgeAttackerMoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-physical-a")
+        pickJudgeOption(app, button: "judgeCandidate1SpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9002-000")
+        pickJudgeOption(app, button: "judgeCandidate1MoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-special-b")
+        let add = element(app, "judgeAddCandidate")
+        for _ in 0..<12 where !(add.exists && add.isHittable) { app.swipeUp() }
+        add.tap()
+        pickJudgeOption(app, button: "judgeCandidate2SpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9003-000")
+        pickJudgeOption(app, button: "judgeCandidate2MoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-physical-a")
+        let submit = element(app, "judgeSubmit")
+        for _ in 0..<12 where !(submit.exists && submit.isHittable) { app.swipeUp() }
+        submit.tap()
+        XCTAssertTrue(element(app, "judgeRow-1").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
+
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "judgeResult", "judgeAttackerUnsupportedSummary", "judgeRowName-1", "judgeRowSpeed-1", "judgeRowPriority-1",
+                "judgeRowSpeedComparison-1", "judgeRowTurnOrder-1", "judgeRowAttackerKo-1", "judgeRowDefenderKo-1",
+                "judgeRowAttackerKoUnreliable-1", "judgeRowDefenderKoUnreliable-1", "judgeRowDefenderNote-1",
+            ])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeRow-"])
+    }
+
+    /// 判定の素早さの反映/無視・状態異常(ADR-0512): AX5 でも、状態異常のボタンと、結果の行の4つの文(長い日本語)が横にはみ出さない。
+    /// `speed-notes` シナリオで、2 行目に4つとも出る状態を見る(1 行目は自分/相手の反映のみ)。画面の高さが違う機種でも、前方スクロール後に下へ戻って届かせる。
+    func testJudgeSpeedNotesAndStatusNoHorizontalOverflowAtAX5() {
+        let app = launchJudgeWithMock(scenario: "speed-notes", contentSizeCategory: Self.ax5ContentSizeCategory)
+        pickJudgeOption(app, button: "judgeAttackerSpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9001-000")
+        pickJudgeOption(app, button: "judgeAttackerMoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-physical-a")
+        pickJudgeOption(app, button: "judgeCandidate1SpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9002-000")
+        pickJudgeOption(app, button: "judgeCandidate1MoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-special-b")
+        pickJudgeOption(app, button: "judgeAttackerStatusButton", sheet: "judgeOptionSheet", row: "judgeOption-badly_poison")
+        assertNoHorizontalOverflow(app, identifiers: ["judgeAttackerStatusButton", "judgeCandidate1StatusButton"])
+        let add = element(app, "judgeAddCandidate")
+        scrollJudgeUntilHittable(app, add)
+        add.tap()
+        pickJudgeOption(app, button: "judgeCandidate2SpeciesButton", sheet: "speciesSearchSheet", row: "speciesSearchResult-9003-000")
+        pickJudgeOption(app, button: "judgeCandidate2MoveButton", sheet: "moveSearchSheet", row: "moveSearchResult-test-move-physical-a")
+        let submit = element(app, "judgeSubmit")
+        scrollJudgeUntilHittable(app, submit)
+        submit.tap()
+        XCTAssertTrue(element(app, "judgeRow-1").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
+
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "judgeResult", "judgeRowAttackerSpeedApplied-0", "judgeRowDefenderSpeedApplied-0", "judgeRowAttackerSpeedApplied-1",
+                "judgeRowAttackerSpeedIgnored-1", "judgeRowDefenderSpeedIgnored-1",
+            ])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeRow-"])
+    }
+
+    /// 前方(swipeUp)に進めて届かなければ、通り越した場合のために下(swipeDown)へ戻る。画面の高さが機種で違うため両方向を持つ。
+    private func scrollJudgeUntilHittable(_ app: XCUIApplication, _ target: XCUIElement) {
+        for _ in 0..<14 where !(target.exists && target.isHittable) { app.swipeUp() }
+        for _ in 0..<14 where !(target.exists && target.isHittable) { app.swipeDown() }
+    }
+
+    /// 状態異常の選択シート(7 行。長い日本語でも横にはみ出さない。ADR-0512)。
+    func testJudgeStatusOptionSheetNoHorizontalOverflowAtAX5() {
+        let app = launchJudgeWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let button = element(app, "judgeAttackerStatusButton")
+        XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout), "judgeAttackerStatusButton が無い")
+        scrollJudgeUntilHittable(app, button)
+        button.tap()
+        XCTAssertTrue(element(app, "judgeOptionSheet").waitForExistence(timeout: Self.existenceTimeout), "選択シートが開かない")
+        assertNoHorizontalOverflow(app, identifiers: ["judgeOptionSheet"])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeOption-"])
+    }
+
+    /// P6-25: AX5 で選択シート(性格・特性・持ち物の行)が横にはみ出さない。
+    func testJudgeOptionSheetNoHorizontalOverflowAtAX5() {
+        let app = launchJudgeWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let button = element(app, "judgeAttackerNatureButton")
+        XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout))
+        for _ in 0..<12 where !(button.exists && button.isHittable) { app.swipeUp() }
+        button.tap()
+        XCTAssertTrue(element(app, "judgeOptionSheet").waitForExistence(timeout: Self.existenceTimeout), "選択シートが開かない")
+        assertNoHorizontalOverflow(app, identifiers: ["judgeOptionSheet"])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeOption-"])
     }
 }

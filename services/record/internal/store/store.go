@@ -22,6 +22,44 @@ import (
 // クライアントへは出さない(ADR-0105 §2 と同じ扱い)。
 var ErrUnavailable = errors.New("record DB に届かない")
 
+// MaxFavoritesPerDevice は1端末が持てるお気に入りの上限(契約の createFavorite の description と
+// listFavorites の maxItems と同じ値。ADR-0227 §3)。CreateFavorite はこれに達している端末からの
+// (重複でない)作成を ErrFavoriteLimitReached で断る。
+const MaxFavoritesPerDevice = 100
+
+// ErrNotFound は「その端末がその ID のお気に入りを持っていない」。他端末のものか実在しないかを
+// **区別しない**(区別すると存在の有無が漏れる。ADR-0209 §6-2)。httpapi は 404 `not_found` に写す。
+var ErrNotFound = errors.New("この端末のお気に入りに無い")
+
+// ErrFavoriteLimitReached は MaxFavoritesPerDevice に達している端末からの作成。httpapi は
+// 400 `invalid_input` に写す(ADR-0227 §3)。
+var ErrFavoriteLimitReached = errors.New("1端末が持てるお気に入りの上限に達した")
+
+// Favorite は保存済みのお気に入り1件(ADR-0227。record DB の favorites 表の1行)。
+//
+// Snapshot は httpapi が組み立てる**正規化済みの JSON**({"label":…,"individual":…}。既定値を補い、
+// キーの順序が決まった形)で、store は中身を解釈しない(マスタも引かない)。重複の判定は
+// Snapshot のバイト列の SHA-256(favorites.snapshot_hash)で行う(ADR-0227 §2)。
+// 中身には利用者の自由入力(label)を含むので**ログに出さない**(ADR-0209 §3・AC-L1)。
+type Favorite struct {
+	ID         int64 // サーバーが発行する(AUTO_INCREMENT)。契約では10進の文字列(FavoriteId)
+	SpeciesKey string
+	Snapshot   []byte
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+}
+
+// FavoriteOutcome は CreateFavorite の結果の種別(ADR-0227 §2 の冪等性)。
+type FavoriteOutcome int
+
+const (
+	// FavoriteCreated は新しく作った(httpapi は 201)。
+	FavoriteCreated FavoriteOutcome = iota
+	// FavoriteExisted は同じ端末に同じ Snapshot の行がすでにあり、新しく作らずに UpdatedAt だけ now に
+	// 進めた(httpapi は 200)。上限に達していてもこちらは成功する(行は増えない)。
+	FavoriteExisted
+)
+
 // FrequentOpponent は「よく使う相手」1件(ADR-0209 §3 #2)。api.FrequentOpponent に写す。
 type FrequentOpponent struct {
 	SpeciesKey       string
@@ -103,4 +141,27 @@ type Store interface {
 	// 2回目は Duplicate を返す(ADR-0212 §6 の at-least-once 配送)。
 	// ev.OccurredAt <= devices.purged_at のときは何も保存せず Tombstoned を返す(ADR-0209 §7)。
 	SaveCalcEvent(ctx context.Context, ev CalcEvent) (SaveOutcome, error)
+
+	// --- お気に入り(ADR-0227。P5-3c)---------------------------------------------
+	// 3つとも先に端末 ID で絞ってから ID・内容を照合する(ADR-0209 §6-2)。墓石(devices.purged_at)は
+	// 見ない: 全削除の後に利用者が新しくピン留めしたものは保存する(墓石は計算イベントの再出現を
+	// 止めるためのもの。ADR-0227 §6)。
+
+	// ListFavorites はその端末のお気に入りを UpdatedAt の降順(同時刻は ID の降順)で全件返す。
+	// 1件も無ければ長さ0のスライスを返す(エラーにしない)。他端末の行は含めない(§6-3)。
+	ListFavorites(ctx context.Context, deviceID string) ([]Favorite, error)
+
+	// CreateFavorite はお気に入りを1件作る。ID・CreatedAt・UpdatedAt は store が決め(引数の
+	// fav.ID / fav.CreatedAt / fav.UpdatedAt は無視する)、保存後の内容を返す。
+	//   - その端末に同じ Snapshot(SHA-256 が一致)の行があれば、作らずにその行の UpdatedAt を now に
+	//     進めて返し、FavoriteExisted(上限の判定より先に行う)。同時に同じ要求が2つ来ても行は1つ
+	//     (favorites の UNIQUE (device_id, snapshot_hash) で保証する。ADR-0227 §2)。
+	//   - そうでなく、その端末がすでに MaxFavoritesPerDevice 件持っていれば ErrFavoriteLimitReached
+	//     (件数の確認と挿入は同じトランザクションで行い、上限をすり抜けさせない)。
+	//   - 作ったときは CreatedAt == UpdatedAt == now で FavoriteCreated。
+	CreateFavorite(ctx context.Context, deviceID string, fav Favorite, now time.Time) (Favorite, FavoriteOutcome, error)
+
+	// DeleteFavorite はその端末のお気に入りを1件消す。その端末が持っていなければ ErrNotFound
+	// (2回目の削除も ErrNotFound。他端末の行は消さない)。
+	DeleteFavorite(ctx context.Context, deviceID string, favoriteID int64) error
 }

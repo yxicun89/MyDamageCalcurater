@@ -59,6 +59,8 @@ test-services: ## services のユニットテスト
 test-tools:
 	@cd tools && $(GO) test ./...
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
+	@node --test tools/assets/convert.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
@@ -76,10 +78,14 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
+	@./scripts/images-k3d_test.sh
+	@./scripts/k3d-m2-deploy_test.sh
+	@./scripts/tidb-operator-bootstrap_test.sh
 	@./scripts/test-db-docker_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
 	@./scripts/check-plan_test.sh
+	@./scripts/db-backup-k3d_test.sh
 
 .PHONY: lint
 lint: ## gofmt / go vet / shell・Node構文チェック
@@ -100,6 +106,7 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 	@node --check tools/golden/generate.mjs
 	@node --check scripts/wasm-conformance.mjs
 	@for script in tools/importer/*.mjs; do node --check "$$script" || exit; done
+	@for script in tools/assets/*.mjs; do node --check "$$script" || exit; done
 	@$(MAKE) --no-print-directory k8s-render
 	@$(MAKE) --no-print-directory check-publishable
 	@$(MAKE) --no-print-directory check-publishable-selftest
@@ -219,6 +226,14 @@ db-backup: ## DB のバックアップ(MODE=full|journal KIND=pokedex|record|tea
 .PHONY: db-restore
 db-restore: ## DB の復元(KIND=… GEN=<世代|latest>。上書きなので CONFIRM_RESTORE=<DB名> が必須。サービスを止めてから。ADR-0225)
 	@./scripts/db-restore.sh "$(KIND)" "$(or $(GEN),latest)"
+
+.PHONY: db-backup-k3d
+db-backup-k3d: ## k3d の実 DB(record・team・pokedex)をバックアップ(KIND で絞れる。Secret はスクリプト内部で読み値を出さない。非破壊。ADR-0227)
+	@./scripts/db-backup-k3d.sh $(KIND)
+
+.PHONY: db-restore-drill-k3d
+db-restore-drill-k3d: ## k3d の実 TiDB で復元訓練(別名 DB へ最新世代を復元→行数・墓石を照合→別名 DB を削除。稼働中の DB は上書きしない。ADR-0227)
+	@./scripts/db-restore-drill-k3d.sh $(KIND)
 
 .PHONY: test-db-backup
 test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker の使い捨て TiDB・MySQL。Docker が無ければ失敗。make test には含めない。ADR-0225)
@@ -340,8 +355,13 @@ k8s-render-kubectl:
 	@command -v kubectl >/dev/null 2>&1 || { echo "k8s-render: kubectl が無いため overlay を描画できません(brew install kubectl。make doctor で確認)" >&2; exit 1; }
 
 .PHONY: assets
-assets: ## 画像を WebP 2サイズに変換して MinIO へ(未実装。終了コード 2)
-	@echo "assets: 未実装です(画像の配信は計画外。issue #286)。成功と数えないため終了コード 2 で終わります" >&2; exit 2
+assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
+	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
+	@cd tools/assets && node convert.mjs
+
+.PHONY: images-k3d
+images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0807)
+	@./scripts/images-k3d.sh
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable
@@ -399,3 +419,4 @@ include services/judge/Makefile
 include services/gateway/Makefile
 include web/Makefile
 include ios/Makefile
+include apps/wishlist/Makefile

@@ -7,7 +7,7 @@
 // 画面 ID・パス・タブの表示名・文書タイトルの対応は app/routes.ts の SCREEN_ROUTES を正とする。
 // ADR-0323: 各画面(とそのクライアント)は登録ファイル(`*.screen.tsx`)が持つ。画面を足すときこのファイルは触らない。
 
-import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
 import { createApiEngine } from "./api/apiEngine";
 import { apiBaseUrl } from "./api/config";
@@ -28,6 +28,7 @@ import {
 import { browserWasmLoader } from "./engine/browserWasmLoader";
 import type { CalcEngine } from "./engine/types";
 import { createWasmEngine } from "./engine/wasmEngine";
+import { PokemonImagesProvider } from "./images/PokemonImagesContext";
 import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
 import { isSearchableMasterSource } from "./master/capabilities";
@@ -73,6 +74,8 @@ export interface AppProps {
    * 省くと両モードとも masterSource(既定は架空の例データ)。本番の組み立ては main.tsx が渡す。
    */
   readonly masterSources?: (ids: ClientIds) => MasterSources;
+  /** ポケモン画像の manifest を取る fetch(P8-1c、ADR-0325)。省くと globalThis.fetch。テストで差し替える。 */
+  readonly imageFetch?: typeof fetch;
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
@@ -93,7 +96,13 @@ interface MasterLoadState {
  * アプリの最上位。ヘッダーと計算画面(CalcScreen)を出す。マスタを読み込むまでは「読み込み中」、
  * 読み込みに失敗したら role=alert で知らせる。
  */
-export function App({ engine, engines, masterSource = exampleMasterSource, masterSources }: AppProps) {
+export function App({
+  engine,
+  engines,
+  masterSource = exampleMasterSource,
+  masterSources,
+  imageFetch = globalThis.fetch,
+}: AppProps) {
   // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
   const [fallbackOfflineEngine] = useState<CalcEngine>(() => createWasmEngine(browserWasmLoader()));
@@ -120,6 +129,11 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   );
   // 端末データの削除で team が消えたとき進め、開いたままの構築一覧に取り直させる(ADR-0318 §6)。
   const [teamReloadToken, setTeamReloadToken] = useState(0);
+  // お気に入り一覧の取り直しの合図(P5-3c。ADR-0327 §5)。計算画面での追加と、端末データの削除(favorites も消える)で進める。
+  const [favoritesReloadToken, setFavoritesReloadToken] = useState(0);
+  const bumpFavoritesReloadToken = useCallback(() => {
+    setFavoritesReloadToken((token) => token + 1);
+  }, []);
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
@@ -356,7 +370,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
   }, [tab, aboutOpen]);
 
   return (
-    <>
+    <PokemonImagesProvider fetch={imageFetch}>
       {/* main の外に置く: main の内側だと header は banner ランドマークにならない(HTML-AAM)。 */}
       <header className="app-header">
         <h1>{appText.title}</h1>
@@ -372,6 +386,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
             teamClient={teamClient}
             onTeamDataDeleted={() => {
               setTeamReloadToken((token) => token + 1);
+              bumpFavoritesReloadToken();
             }}
           />
         )}
@@ -430,6 +445,8 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
                   activeMasterSearch={activeMasterSearch}
                   onlineMasterSource={onlineMasterSource}
                   teamReloadToken={teamReloadToken}
+                  favoritesReloadToken={favoritesReloadToken}
+                  onFavoriteAdded={bumpFavoritesReloadToken}
                   recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
@@ -461,7 +478,7 @@ export function App({ engine, engines, masterSource = exampleMasterSource, maste
           {aboutText.footerLinkLabel}
         </a>
       </footer>
-    </>
+    </PokemonImagesProvider>
   );
 }
 
@@ -475,6 +492,8 @@ interface AppTabPanelProps {
   readonly activeMasterSearch: MasterSpeciesSearch | undefined;
   readonly onlineMasterSource: MasterSource;
   readonly teamReloadToken: number;
+  readonly favoritesReloadToken: number;
+  readonly onFavoriteAdded: () => void;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -498,6 +517,8 @@ function AppTabPanel({
   activeMasterSearch,
   onlineMasterSource,
   teamReloadToken,
+  favoritesReloadToken,
+  onFavoriteAdded,
   recordClient,
   mode,
   retryMasterLoad,
@@ -535,6 +556,8 @@ function AppTabPanel({
                   masterSearch: activeMasterSearch,
                   recordClient,
                   reloadToken: teamReloadToken,
+                  favoritesReloadToken,
+                  onFavoriteAdded,
                   onlineMasterSource,
                 })}
               </div>
@@ -546,7 +569,13 @@ function AppTabPanel({
             // key は ok 側の分岐と同じ id にする(上のコメントのとおり)。
             return (
               <div key={id} hidden={hidden}>
-                {screen.render({ masterSearch: activeMasterSearch, onlineMasterSource })}
+                {screen.render({
+                  masterSearch: activeMasterSearch,
+                  recordClient,
+                  favoritesReloadToken,
+                  onFavoriteAdded,
+                  onlineMasterSource,
+                })}
               </div>
             );
           }

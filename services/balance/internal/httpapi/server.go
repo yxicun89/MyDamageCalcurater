@@ -53,6 +53,8 @@ var errRequestTooLarge = errors.New("request body exceeds 16 KiB")
 // PokemonCatalog is the list view of the same pokemon read model (ADR-0401 §5); only
 // recommendations uses it, and answers 503 master_unavailable when it is nil.
 type Dependencies struct {
+	// DataVersion は起動時に読んだ read model の版(metadata.json)。空は版不明で、ヘルスに出さない(ADR-0138)。
+	DataVersion    string
 	TypeChart      balance.TypeChartProvider
 	PokemonTypes   balance.PokemonTypeProvider
 	Moves          balance.MoveProvider
@@ -143,12 +145,12 @@ type handler struct {
 
 var _ api.ServerInterface = handler{}
 
-func (handler) Health(c *echo.Context) error {
-	return health(c)
+func (h handler) Health(c *echo.Context) error {
+	return health(c, h.deps)
 }
 
-func (handler) PublicHealth(c *echo.Context) error {
-	return health(c)
+func (h handler) PublicHealth(c *echo.Context) error {
+	return health(c, h.deps)
 }
 
 func (h handler) AnalyzeTeamBalance(c *echo.Context, _ api.AnalyzeTeamBalanceParams) error {
@@ -165,8 +167,12 @@ func (h handler) AnalyzeTeamThreats(c *echo.Context, _ api.AnalyzeTeamThreatsPar
 	return threats(c, h.deps)
 }
 
-func health(c *echo.Context) error {
-	return c.JSON(http.StatusOK, api.Health{Status: api.Ok})
+func health(c *echo.Context, deps Dependencies) error {
+	body := api.Health{Status: api.Ok}
+	if deps.DataVersion != "" {
+		body.DataVersion = &deps.DataVersion
+	}
+	return c.JSON(http.StatusOK, body)
 }
 
 func analyze(c *echo.Context, deps Dependencies) error {

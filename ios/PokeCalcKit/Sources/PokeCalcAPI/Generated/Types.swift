@@ -80,8 +80,9 @@ public protocol APIProtocol: Sendable {
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
-    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
-    /// (クライアントが `effect` の有無で絞る)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。各持ち物は計算での役割 `roles` とメガストーンかどうか
+    /// `isMegaStone` を常に伴う(ADR-0175)。役割で絞る検索条件は無い(クライアントが `roles` で絞る。
+    /// オフラインのキャッシュでも同じ式で絞れるようにするため)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
@@ -220,6 +221,44 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `DELETE /api/record/device-data`.
     /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)`.
     func deleteRecordDeviceData(_ input: Operations.DeleteRecordDeviceData.Input) async throws -> Operations.DeleteRecordDeviceData.Output
+    /// この端末のお気に入り(手動ピン留めした個体)を一覧する
+    ///
+    /// `X-Device-Id` の端末のお気に入りだけを、更新の新しい順(同時刻は `id` の新しい順)で返す
+    /// (requirements.md §2「お気に入り(手動ピン留め)」・ADR-0209 §3 #3・§6-1・§6-3・ADR-0227)。
+    /// 他端末のお気に入りは混ざらない。1件も無ければ空配列(404 にしない)。
+    ///
+    /// ページングは持たない(1端末が持てるお気に入りは **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0227 §3)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)`.
+    func listFavorites(_ input: Operations.ListFavorites.Input) async throws -> Operations.ListFavorites.Output
+    /// 個体を1つお気に入りにする(ピン留め)
+    ///
+    /// ピン留めした時点の個体を**スナップショットとして**保存する(計算イベントを参照しない。ADR-0209 §3 #3)。
+    /// `id` と `createdAt` / `updatedAt` はサーバーが決める(要求に含めたら 400 `unknown_field`)。
+    ///
+    /// - **冪等**: この端末に同じ内容(`label` と、既定値を補った `individual`)のお気に入りがすでにあれば、
+    ///   新しく作らずにそれを **200** で返す(`updatedAt` だけ現在時刻に進むので一覧の先頭に来る)。
+    ///   新しく作ったときは **201**。二重送信で同じピンが2つにならない(ADR-0227 §2)。
+    /// - 1端末が持てるお気に入りは **100件**まで。上限に達している端末からの(重複でない)作成は 400 `invalid_input`。
+    /// - `individual.speciesKey` などの ID はマスタと照合しない(record-svc は pokedex-svc に依存しない。
+    ///   存在しない ID でも保存できる。ADR-0227 §2・ADR-0213 §3 と同じ理由)。形式と範囲(SP・ランク・ラベルの長さ)は検証する。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)`.
+    func createFavorite(_ input: Operations.CreateFavorite.Input) async throws -> Operations.CreateFavorite.Output
+    /// お気に入りを1つ削除する(ピン留めを外す)
+    ///
+    /// 成功は 204(本文なし)。先に端末 ID で絞ってから `favoriteId` を照合する(ADR-0209 §6-2)。
+    /// この端末が持っていない `favoriteId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+    /// 同じお気に入りをもう一度削除しても 404(1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2 と同じ)。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/record/favorites/{favoriteId}`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)`.
+    func deleteFavorite(_ input: Operations.DeleteFavorite.Input) async throws -> Operations.DeleteFavorite.Output
     /// この端末の構築を一覧する
     ///
     /// `X-Device-Id` の端末の構築だけを、更新の新しい順(同時刻は `id` の昇順)で返す
@@ -405,8 +444,9 @@ extension APIProtocol {
     /// 持ち物を日本語名で前方一致検索
     ///
     /// 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
-    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
-    /// (クライアントが `effect` の有無で絞る)。
+    /// 各持ち物は効果を持てば `effect` を伴う(ADR-0218)。各持ち物は計算での役割 `roles` とメガストーンかどうか
+    /// `isMegaStone` を常に伴う(ADR-0175)。役割で絞る検索条件は無い(クライアントが `roles` で絞る。
+    /// オフラインのキャッシュでも同じ式で絞れるようにするため)。
     ///
     ///
     /// - Remark: HTTP `GET /api/pokedex/items`.
@@ -620,6 +660,62 @@ extension APIProtocol {
     /// - Remark: Generated from `#/paths//api/record/device-data/delete(deleteRecordDeviceData)`.
     public func deleteRecordDeviceData(headers: Operations.DeleteRecordDeviceData.Input.Headers) async throws -> Operations.DeleteRecordDeviceData.Output {
         try await deleteRecordDeviceData(Operations.DeleteRecordDeviceData.Input(headers: headers))
+    }
+    /// この端末のお気に入り(手動ピン留めした個体)を一覧する
+    ///
+    /// `X-Device-Id` の端末のお気に入りだけを、更新の新しい順(同時刻は `id` の新しい順)で返す
+    /// (requirements.md §2「お気に入り(手動ピン留め)」・ADR-0209 §3 #3・§6-1・§6-3・ADR-0227)。
+    /// 他端末のお気に入りは混ざらない。1件も無ければ空配列(404 にしない)。
+    ///
+    /// ページングは持たない(1端末が持てるお気に入りは **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0227 §3)。
+    ///
+    ///
+    /// - Remark: HTTP `GET /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/get(listFavorites)`.
+    public func listFavorites(headers: Operations.ListFavorites.Input.Headers) async throws -> Operations.ListFavorites.Output {
+        try await listFavorites(Operations.ListFavorites.Input(headers: headers))
+    }
+    /// 個体を1つお気に入りにする(ピン留め)
+    ///
+    /// ピン留めした時点の個体を**スナップショットとして**保存する(計算イベントを参照しない。ADR-0209 §3 #3)。
+    /// `id` と `createdAt` / `updatedAt` はサーバーが決める(要求に含めたら 400 `unknown_field`)。
+    ///
+    /// - **冪等**: この端末に同じ内容(`label` と、既定値を補った `individual`)のお気に入りがすでにあれば、
+    ///   新しく作らずにそれを **200** で返す(`updatedAt` だけ現在時刻に進むので一覧の先頭に来る)。
+    ///   新しく作ったときは **201**。二重送信で同じピンが2つにならない(ADR-0227 §2)。
+    /// - 1端末が持てるお気に入りは **100件**まで。上限に達している端末からの(重複でない)作成は 400 `invalid_input`。
+    /// - `individual.speciesKey` などの ID はマスタと照合しない(record-svc は pokedex-svc に依存しない。
+    ///   存在しない ID でも保存できる。ADR-0227 §2・ADR-0213 §3 と同じ理由)。形式と範囲(SP・ランク・ラベルの長さ)は検証する。
+    ///
+    ///
+    /// - Remark: HTTP `POST /api/record/favorites`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/post(createFavorite)`.
+    public func createFavorite(
+        headers: Operations.CreateFavorite.Input.Headers,
+        body: Operations.CreateFavorite.Input.Body
+    ) async throws -> Operations.CreateFavorite.Output {
+        try await createFavorite(Operations.CreateFavorite.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// お気に入りを1つ削除する(ピン留めを外す)
+    ///
+    /// 成功は 204(本文なし)。先に端末 ID で絞ってから `favoriteId` を照合する(ADR-0209 §6-2)。
+    /// この端末が持っていない `favoriteId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+    /// 同じお気に入りをもう一度削除しても 404(1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2 と同じ)。
+    ///
+    ///
+    /// - Remark: HTTP `DELETE /api/record/favorites/{favoriteId}`.
+    /// - Remark: Generated from `#/paths//api/record/favorites/{favoriteId}/delete(deleteFavorite)`.
+    public func deleteFavorite(
+        path: Operations.DeleteFavorite.Input.Path,
+        headers: Operations.DeleteFavorite.Input.Headers
+    ) async throws -> Operations.DeleteFavorite.Output {
+        try await deleteFavorite(Operations.DeleteFavorite.Input(
+            path: path,
+            headers: headers
+        ))
     }
     /// この端末の構築を一覧する
     ///

@@ -13,6 +13,7 @@ let package = Package(
         .library(name: "PokeCalcAPI", targets: ["PokeCalcAPI"]),
         .library(name: "PokeCalcSpeedAPI", targets: ["PokeCalcSpeedAPI"]),
         .library(name: "PokeCalcBalanceAPI", targets: ["PokeCalcBalanceAPI"]),
+        .library(name: "PokeCalcJudgeAPI", targets: ["PokeCalcJudgeAPI"]),
         .library(name: "PokeCalcCore", targets: ["PokeCalcCore"]),
         .library(name: "PokeCalcDesign", targets: ["PokeCalcDesign"]),
     ],
@@ -47,6 +48,14 @@ let package = Package(
                 .product(name: "HTTPTypes", package: "swift-http-types"),
             ]
         ),
+        // services/judge/api/openapi.yaml の生成物だけ(同じ扱い。ADR-0504)
+        .target(
+            name: "PokeCalcJudgeAPI",
+            dependencies: [
+                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
+            ]
+        ),
         // デザイントークン(docs/design.md と同じ名前・値)。SwiftUI だけに依存する
         .target(name: "PokeCalcDesign"),
         // ドメインの型・PokeCalcService・API 実装・モック(架空データは Resources/)
@@ -56,6 +65,7 @@ let package = Package(
                 "PokeCalcAPI",
                 "PokeCalcSpeedAPI",
                 "PokeCalcBalanceAPI",
+                "PokeCalcJudgeAPI",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
             ],
@@ -69,6 +79,7 @@ let package = Package(
                 "PokeCalcAPI",
                 "PokeCalcSpeedAPI",
                 "PokeCalcBalanceAPI",
+                "PokeCalcJudgeAPI",
                 // PokeType の全ケースにタイプ色があることの同期テストに使う
                 "PokeCalcDesign",
                 .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),

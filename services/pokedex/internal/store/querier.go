@@ -100,6 +100,8 @@ type Querier interface {
 	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
+	// is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
+	// species.required_item_id の外部キーの索引を使う)。
 	SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error)
 	SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error)
 	// ---------------------------------------------------------------------------------------------

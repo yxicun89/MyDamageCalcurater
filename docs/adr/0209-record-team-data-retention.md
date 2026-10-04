@@ -460,11 +460,14 @@ openapi.yaml に移した時点で §5.3 を「移動済み(正は `api/openapi.
   403 を返さない。応答本文に A の情報(名前・存在の有無・件数)を含まない。
   (2026-09-25 追記: P5-3 時点の record の契約にはリソース ID をパスで受ける操作が無い〈集計と全削除だけ〉ため、
   record 側にこの AC を直接試せる操作が無い。代わりに「record の操作にパスパラメータが無い」ことを契約から
-  固定し〈`TestRecordOperationsHaveNoPathParameters`〉、増えたときに落ちるようにしてある。
+  固定し〈`TestRecordPathParametersAreAllowlisted`〉、増えたときに落ちるようにしてある。
   実操作での検証は team-svc〈P5-4〉と、record にお気に入りの CRUD を足すときに行う。
   **2026-09-25 追記(P5-4)**: team-svc の `/api/team/teams/{teamId}` が実操作での検証を持つ
   〈`services/team/internal/httpapi/isolation_test.go` の `TestOtherDevicesTeamIsNotFound`〉。
-  ADR-0213 §2 のとおり、持っていない ID は他端末のものか実在しないかを区別せず 404 にする。)
+  ADR-0213 §2 のとおり、持っていない ID は他端末のものか実在しないかを区別せず 404 にする。
+  **2026-10-03 追記(P5-3c)**: record も `DELETE /api/record/favorites/{favoriteId}` で実操作の検証を持つ
+  〈`services/record/internal/httpapi/favorites_test.go` の `TestOtherDevicesFavoriteIsNotFound`。ADR-0227〉。
+  `TestRecordPathParametersAreAllowlisted` は「AC-D2 の実テストを持つパスパラメータだけを許す」形に改めた。)
 - **AC-D3** ボディ・クエリに `deviceId` を入れた要求は 400 `unknown_field`。ヘッダの端末 ID を上書きできない。
 - **AC-D4** ヘッダの欠落・不正は gateway で 400 `missing_header` / `invalid_header`(ADR-0202 §4 の再確認)。
 - **AC-D5** 「よく使う相手」の集計に他端末のイベントが混ざらない(A で 10 件、B で 1 件作り、B の集計が 1 件分だけを反映)。

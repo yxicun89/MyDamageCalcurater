@@ -54,6 +54,7 @@
 | judge | `JUDGE_POKEDEX_BASE_URL` | `config.go:16` | 任意 | pokedex-svc の基底 URL。未設定 → judge API は 503 |
 | judge | `JUDGE_CALC_BASE_URL` | `config.go:17` | 任意 | calc-svc の基底 URL。同上 |
 | judge | `JUDGE_UPSTREAM_TIMEOUT` | `config.go:18-19` | 任意(既定 `3s`) | 上流呼び出しのタイムアウト(正の duration) |
+| judge | `JUDGE_SPEED_EFFECTS_TTL` | `config.go` | 任意(既定 `10m`) | 素早さ効果の表の更新間隔(30 秒超の duration。ADR-0714) |
 | judge | `JUDGE_CHOICE_SCARF_ITEM_ID` | `config.go:21` | 任意 | こだわりスカーフの持ち物 ID の上書き(空なら `judge.DefaultChoiceScarfItemID`。ADR-0701 §3) |
 
 ### Web(ビルド・開発)
@@ -158,7 +159,7 @@
 |---|---|---|
 | サービス実装が読む環境変数(名前の異なるもの) | gateway 7・calc 4(廃止 1 含む)・pokedex 3(`POKEDEX_ADDR`・`POKEDEX_DATABASE_DSN`・`POKEDEX_TEST_DSN`)・balance 4(`PORT` 含む)・speed 2・judge 5 | 各 `main.go`/`config.go` の定数と一致 |
 | 上記のうちマニフェストが注入する名前 | `GATEWAY_CALC_URL`・`GATEWAY_POKEDEX_URL`・`GATEWAY_CORS_ALLOWED_ORIGINS`・`GATEWAY_WEB_URL`・`CALC_MASTER_URL`・`POKEDEX_DATABASE_DSN`・`PORT`・`BALANCE_*_PATH`×3・`SPEED_POKEMON_PATH`・`JUDGE_POKEDEX_BASE_URL`・`JUDGE_CALC_BASE_URL`(+ `GOMEMLIMIT`・`HOME`・`npm_config_cache`・`MYSQL_*`) | §2 |
-| 未注入(既定値で動く) | `GATEWAY_ADDR`・`GATEWAY_METRICS_ADDR`・`GATEWAY_ASSETS_URL`・`GATEWAY_UPSTREAM_TIMEOUT`・`CALC_ADDR`・`CALC_MASTER_PATH`・`POKEDEX_ADDR`・`JUDGE_UPSTREAM_TIMEOUT`・`JUDGE_CHOICE_SCARF_ITEM_ID` | — |
+| 未注入(既定値で動く) | `GATEWAY_ADDR`・`GATEWAY_METRICS_ADDR`・`GATEWAY_ASSETS_URL`・`GATEWAY_UPSTREAM_TIMEOUT`・`CALC_ADDR`・`CALC_MASTER_PATH`・`POKEDEX_ADDR`・`JUDGE_UPSTREAM_TIMEOUT`・`JUDGE_CHOICE_SCARF_ITEM_ID`・`JUDGE_SPEED_EFFECTS_TTL` | — |
 | ConfigMap | 6 種(生成 3+1 を含めると名前 8) | §3。実クラスタの存在確認は未実施 |
 | Secret | 実体 1(`mysql-auth`)+ 例 1 | `grep '^kind: Secret'` は 0 件(`up.sh` が作成) |
 

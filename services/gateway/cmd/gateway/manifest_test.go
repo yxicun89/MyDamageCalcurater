@@ -194,6 +194,55 @@ func TestManifestGatewayWebURLOnlyInLocal(t *testing.T) {
 	}
 }
 
+// ADR-0807(k3d への画像配線): hostPath は local overlay だけ。base には無く、local では読み取り専用で
+// GATEWAY_IMAGES_DIR と volumeMount の mountPath が一致し、DirectoryOrCreate(空でも起動)。
+func TestManifestGatewayImagesHostPathOnlyInLocal(t *testing.T) {
+	b := deploytest.BaseDeployment(t, gatewayService)
+	if _, ok := b.Container(t, gatewayService).EnvMap(t)[envImagesDir]; ok {
+		t.Errorf("base に %s がある(local overlay だけに置く)", envImagesDir)
+	}
+	for _, v := range b.Spec.Template.Spec.Volumes {
+		if v.HostPath != nil {
+			t.Errorf("base に hostPath の volume %q がある", v.Name)
+		}
+	}
+
+	d := deploytest.LocalDeployment(t, gatewayService)
+	c := d.Container(t, gatewayService)
+	dir := c.EnvMap(t)[envImagesDir]
+	if dir == "" {
+		t.Fatalf("local overlay に %s が無い", envImagesDir)
+	}
+	var hostPaths []deploytest.Volume
+	for _, v := range d.Spec.Template.Spec.Volumes {
+		if v.HostPath != nil {
+			hostPaths = append(hostPaths, v)
+		}
+	}
+	if len(hostPaths) != 1 {
+		t.Fatalf("local overlay の hostPath volume = %d 個, want 1", len(hostPaths))
+	}
+	if got := hostPaths[0].HostPath.Type; got != "DirectoryOrCreate" {
+		t.Errorf("hostPath の type = %q, want DirectoryOrCreate(画像が無くても起動する)", got)
+	}
+	found := false
+	for _, m := range c.VolumeMounts {
+		if m.Name != hostPaths[0].Name {
+			continue
+		}
+		found = true
+		if m.MountPath != dir {
+			t.Errorf("mountPath = %q, want %s(%q)", m.MountPath, envImagesDir, dir)
+		}
+		if !m.ReadOnly {
+			t.Errorf("画像の volumeMount が readOnly ではない")
+		}
+	}
+	if !found {
+		t.Errorf("hostPath volume %q の volumeMount が無い", hostPaths[0].Name)
+	}
+}
+
 // AC-S4: local overlay で使うイメージは api-docker-build が作る pokecalc/gateway:local。
 func TestManifestGatewayLocalImage(t *testing.T) {
 	deploytest.AssertLocalImage(t, gatewayService, gatewayImageRepo)

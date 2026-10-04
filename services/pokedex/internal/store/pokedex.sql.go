@@ -1766,7 +1766,8 @@ func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 }
 
 const searchItems = `-- name: SearchItems :many
-SELECT i.id, i.name_ja, ie.effect
+SELECT i.id, i.name_ja, ie.effect,
+       EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id) AS is_mega_stone
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
 LEFT JOIN item_effects ie ON ie.item_id = i.id
@@ -1782,11 +1783,14 @@ type SearchItemsParams struct {
 }
 
 type SearchItemsRow struct {
-	ID     string
-	NameJa string
-	Effect *json.RawMessage
+	ID          string
+	NameJa      string
+	Effect      *json.RawMessage
+	IsMegaStone bool
 }
 
+// is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
+// species.required_item_id の外部キーの索引を使う)。
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchItems, arg.RegulationID, arg.Pattern, arg.Limit)
 	if err != nil {
@@ -1796,7 +1800,12 @@ func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]Sea
 	var items []SearchItemsRow
 	for rows.Next() {
 		var i SearchItemsRow
-		if err := rows.Scan(&i.ID, &i.NameJa, &i.Effect); err != nil {
+		if err := rows.Scan(
+			&i.ID,
+			&i.NameJa,
+			&i.Effect,
+			&i.IsMegaStone,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -8,10 +8,17 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import type { Move, Ranks } from "../engine/types";
+import { unsupportedMarkName } from "../domain/unsupportedLabels";
 import { formatMoveCategory } from "../domain/format";
-import { megaItemLock, megaStoneItemIds, selectableItems } from "../domain/mega";
+import {
+  JUDGE_ITEM_ROLE_FILTER,
+  itemsForRole,
+  itemsWithStoneLabels,
+  megaStoneLabel,
+} from "../domain/itemRoles";
+import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { MAX_SP_PER_STAT } from "../domain/requests";
-import { calcScreenText, judgeErrorText, judgeScreenText } from "../i18n/ja";
+import { calcScreenText, judgeErrorText, judgeScreenText, unsupportedText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { MegaItemReason } from "../screens/MegaItemReason";
@@ -153,6 +160,8 @@ type SubmitState =
       readonly value: Schemas["OutspeedAndKoResponse"];
       /** 送信時点の候補(結果の行に種族名を添えるため。応答の届く前に入力が変わっても使わない)。 */
       readonly defenders: readonly IndividualFormState[];
+      /** 送信時点の自分側の技(印の技名の解決用。結果のあとに種族を変えても名前が変わらないように)。 */
+      readonly attackerMoves: readonly Move[];
     }
   | { readonly status: "error"; readonly error: { readonly code: string; readonly message: string } };
 
@@ -318,7 +327,7 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
     }
     setSubmitState(
       result.ok
-        ? { status: "success", value: result.value, defenders: candidates }
+        ? { status: "success", value: result.value, defenders: candidates, attackerMoves: attacker.moves }
         : { status: "error", error: result.error },
     );
   }
@@ -442,7 +451,12 @@ export function JudgeScreen({ judgeClient, master, masterSearch }: JudgeScreenPr
 
       <section aria-label={judgeScreenText.resultRegionLabel} className="judge-screen__region">
         {submitState.status === "success" ? (
-          <ResultList defenders={submitState.defenders} matchups={submitState.value.matchups} />
+          <ResultList
+            defenders={submitState.defenders}
+            matchups={submitState.value.matchups}
+            master={master}
+            attackerMoves={submitState.attackerMoves}
+          />
         ) : submitState.status === "loading" ? (
           <p className="judge-screen__notice">{judgeScreenText.loadingNotice}</p>
         ) : (
@@ -503,8 +517,9 @@ function IndividualFields({
   // issue 515・ADR-0320: メガ種族の持ち物はメガストーンに固定する(固定は選んだ種族から毎回導く)。
   // メガストーンは単独の選択肢に出さない(判別集合は、全件の一覧 + この体で選んだ種族から導く)。
   const itemLock = megaItemLock(value.species, master.items);
-  const pickableItems = selectableItems(
+  const pickableItems = itemsForRole(
     master.items,
+    JUDGE_ITEM_ROLE_FILTER,
     megaStoneItemIds(value.species === null ? master.species : [...master.species, value.species]),
   );
   const itemReasonId = `${uid}-item-reason`;
@@ -631,11 +646,15 @@ function IndividualFields({
           }}
         >
           <option value="">{judgeScreenText.unselectedOption}</option>
-          {(itemLock.kind === "locked" ? [itemLock.item] : pickableItems).map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nameJa}
-            </option>
-          ))}
+          {itemLock.kind === "locked" && value.species !== null ? (
+            <option value={itemLock.item.id}>{megaStoneLabel(value.species)}</option>
+          ) : (
+            pickableItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nameJa}
+              </option>
+            ))
+          )}
         </select>
       </label>
       <MegaItemReason id={itemReasonId} lock={itemLock} className="judge-individual__reason" />
@@ -774,13 +793,42 @@ interface ResultListProps {
   /** 送信時点の候補(defenders と同じ順)。judge は種族名を返さないので、ここから引く。ADR-0705 §8。 */
   readonly defenders: readonly IndividualFormState[];
   readonly matchups: readonly Schemas["Matchup"][];
+  /** 印の ID を表示名に解決するマスタ(issue 271)。 */
+  readonly master: MasterData;
+  /** 自分側の技(種族検索で解決した learnset の実体。マスタに無い技の名前解決用)。 */
+  readonly attackerMoves: readonly Move[];
+}
+
+type KoDirection = "attackerKo" | "defenderKo";
+
+/** 確定数の直下に出す「未対応」の注意文(issue 271。印が空なら null)。 */
+function koUnsupportedNote(
+  direction: KoDirection,
+  marks: readonly Schemas["UnsupportedMark"][],
+  moves: readonly Move[],
+  master: MasterData,
+): string | null {
+  if (marks.length === 0) {
+    return null;
+  }
+  // メガストーンの英語名を出さない(ADR-0326 §4)。
+  const items = itemsWithStoneLabels(master.items, master.species, megaStoneItemIds(master.species));
+  const labels = marks.map((mark) => {
+    const name = unsupportedMarkName(mark, moves, items, master.abilities);
+    const reason =
+      mark.reason === "unsupported_effect"
+        ? ""
+        : `(${Object.hasOwn(unsupportedText.reason, mark.reason) ? unsupportedText.reason[mark.reason as keyof typeof unsupportedText.reason] : unsupportedText.unknownReason})`;
+    return `${judgeScreenText.koUnsupportedTargetLabel(direction, mark.target)}「${name === "" ? mark.id : name}」${reason}`;
+  });
+  return judgeScreenText.koUnsupportedNote(direction, labels);
 }
 
 /**
  * 判定結果の一覧(defenders と同じ順・同じ件数で出す。ADR-0705 §8)。行は defenderIndex で対応づけ、
  * 応答の並びは信用しない(取り違えを検出するテストがある。ADR-0703 §2)。
  */
-function ResultList({ defenders, matchups }: ResultListProps) {
+function ResultList({ defenders, matchups, master, attackerMoves }: ResultListProps) {
   const byDefenderIndex = new Map(matchups.map((matchup) => [matchup.defenderIndex, matchup]));
   return (
     <ul className="judge-screen__matchups">
@@ -789,6 +837,9 @@ function ResultList({ defenders, matchups }: ResultListProps) {
         if (matchup === undefined) {
           return null;
         }
+        const moves = [...master.moves, ...attackerMoves, ...defender.moves];
+        const attackerNote = koUnsupportedNote("attackerKo", matchup.attackerKoUnsupported, moves, master);
+        const defenderNote = koUnsupportedNote("defenderKo", matchup.defenderKoUnsupported, moves, master);
         return (
           <li
             key={index}
@@ -809,9 +860,27 @@ function ResultList({ defenders, matchups }: ResultListProps) {
             <p>
               {judgeScreenText.attackerKoLabel} {koText(matchup.attackerKo)}
             </p>
+            {attackerNote !== null && (
+              <div
+                role="note"
+                className="judge-screen__ko-unsupported"
+                data-testid="judge-unsupported-attacker-ko"
+              >
+                {attackerNote}
+              </div>
+            )}
             <p>
               {judgeScreenText.defenderKoLabel} {koText(matchup.defenderKo)}
             </p>
+            {defenderNote !== null && (
+              <div
+                role="note"
+                className="judge-screen__ko-unsupported"
+                data-testid="judge-unsupported-defender-ko"
+              >
+                {defenderNote}
+              </div>
+            )}
           </li>
         );
       })}

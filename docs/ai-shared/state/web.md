@@ -179,7 +179,10 @@ create/update/removeのレースコンディションで作成直後の構築が
 **critic 2回目PASS**。`npx vitest run`1745/1745・`make web-e2e`37/37・typecheck/lint無回帰。
 判定レーンがShowdown形式インポート/エクスポートをブランチ`feat/web-team-showdown-format`(`web/src/team/`
 配下)で並行して進めている(分担合意済み。member editorとファイルが重ならないよう次のPR着手前に確認)。
-Next: **Web レーンの実装は完了**(2026-10-03。#451・#459・#462・#481・#486・#489・#525 を ADR-0803 の手順〈CI 全件成功+`--match-head-commit`〉でマージ済み)。
+Next(P5-3c お気に入り Web 分): 実装済み・コミット前(ADR-0327 採用)。残りは PR 化のみ。タブが1つ増えた(8タブ。order 650、構築と調整の間)ので、タブ数・並びを固定した既存テストと e2e/a11y.spec.ts を更新済み。「お気に入りを計算に入れる」は P5-3d 候補。iOS 分は未着手。
+Next(P8-1c 画像表示 Web 分): 実装済み・コミット前(ADR-0325 採用)。残りは PR 化のみ。判定画面の画像は判定レーンが `PokemonImage` を使えば足せる(`web/src/judge/` は未編集)。
+Next: **P5-5(構築ビルダー・Showdown 形式の入出力を含む)は全子項目が完了**(P5-5e = ADR-0321。履歴一覧は record-svc に API が無く対象外)。
+**Web レーンの実装は完了**(2026-10-03。#451・#459・#462・#481・#486・#489・#525 を ADR-0803 の手順〈CI 全件成功+`--match-head-commit`〉でマージ済み)。
 2026-10-01〜03 に消化した issue/タスク(1 issue = 1 PR): #218(PR #407)・#219(#420・ADR-0310。nginx のセキュリティヘッダ)・#272 Web 分(#430・ADR-0311。特性セレクト)・
 #274 Web 分(#433・ADR-0312「詳細」、#462・ADR-0315 防御側ランク)・#210(#451・ADR-0313。**既定の計算モードをオンラインに変更**+IndexedDB キャッシュのオフライン)・
 #332 Web 分(#454)・#328 Web 分(#459・ADR-0314。情報ページ)・P5-5b(#481・ADR-0316。メンバー編集)・P5-5c(#486・ADR-0317。よく計算する相手)・
@@ -198,3 +201,7 @@ docs/verify-m1.md §6(ブラウザ確認)を Safari で確認(P4-5。issue #333�
 **画面レジストリ化(2026-10-03。ADR-0323。ブランチ feat/web-screen-registry)**: 画面・タブは各レーンのディレクトリの登録ファイル
 `*.screen.tsx`(`defineScreen`)で足す。`App.tsx`・`app/screens.tsx`・`app/routes.ts`・`i18n/ja.ts` は画面の追加では触らない。
 App.tsx・app/screens.tsx・app/routes.ts・i18n/ja.ts を編集している未マージの Web の PR などは、main を merge して変更を登録ファイル・`i18n/<レーン>.ts` に移す(ADR-0323 §5)。
+
+**持ち物の役割とメガストーン表示(2026-10-03。ADR-0326。ブランチ feat/web-item-roles)**: ユーザーの実使用の不具合報告(メガストーンの英語表記・攻撃側に意味のない持ち物)の修正。
+持ち物欄は `web/src/domain/itemRoles.ts` の `itemsForRole` で絞る(`roles` が無い持ち物は絞らない・メガストーンはどの欄にも出さない)。
+固定中の表示は「{基本種名}のメガストーン」。文言は `web/src/i18n/items.ts`。マスタのキャッシュ版は 3。iOS の同じ語での追従は iOS レーンに残る。

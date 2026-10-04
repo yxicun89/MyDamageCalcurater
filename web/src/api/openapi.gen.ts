@@ -153,8 +153,9 @@ export interface paths {
     /**
      * 持ち物を日本語名で前方一致検索
      * @description 既定のレギュレーションの使用可能集合だけを返す(並びは日本語名の照合順序の昇順・同順位は ID 昇順。ADR-0105 §3)。
-     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。効果を持つ持ち物だけに絞る検索条件は無い
-     *     (クライアントが `effect` の有無で絞る)。
+     *     各持ち物は効果を持てば `effect` を伴う(ADR-0218)。各持ち物は計算での役割 `roles` とメガストーンかどうか
+     *     `isMegaStone` を常に伴う(ADR-0175)。役割で絞る検索条件は無い(クライアントが `roles` で絞る。
+     *     オフラインのキャッシュでも同じ式で絞れるようにするため)。
      */
     get: operations["searchItems"];
     put?: never;
@@ -419,6 +420,64 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  "/api/record/favorites": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * この端末のお気に入り(手動ピン留めした個体)を一覧する
+     * @description `X-Device-Id` の端末のお気に入りだけを、更新の新しい順(同時刻は `id` の新しい順)で返す
+     *     (requirements.md §2「お気に入り(手動ピン留め)」・ADR-0209 §3 #3・§6-1・§6-3・ADR-0227)。
+     *     他端末のお気に入りは混ざらない。1件も無ければ空配列(404 にしない)。
+     *
+     *     ページングは持たない(1端末が持てるお気に入りは **100件**で頭打ちなので、一覧は常に有限で小さい。ADR-0227 §3)。
+     */
+    get: operations["listFavorites"];
+    put?: never;
+    /**
+     * 個体を1つお気に入りにする(ピン留め)
+     * @description ピン留めした時点の個体を**スナップショットとして**保存する(計算イベントを参照しない。ADR-0209 §3 #3)。
+     *     `id` と `createdAt` / `updatedAt` はサーバーが決める(要求に含めたら 400 `unknown_field`)。
+     *
+     *     - **冪等**: この端末に同じ内容(`label` と、既定値を補った `individual`)のお気に入りがすでにあれば、
+     *       新しく作らずにそれを **200** で返す(`updatedAt` だけ現在時刻に進むので一覧の先頭に来る)。
+     *       新しく作ったときは **201**。二重送信で同じピンが2つにならない(ADR-0227 §2)。
+     *     - 1端末が持てるお気に入りは **100件**まで。上限に達している端末からの(重複でない)作成は 400 `invalid_input`。
+     *     - `individual.speciesKey` などの ID はマスタと照合しない(record-svc は pokedex-svc に依存しない。
+     *       存在しない ID でも保存できる。ADR-0227 §2・ADR-0213 §3 と同じ理由)。形式と範囲(SP・ランク・ラベルの長さ)は検証する。
+     */
+    post: operations["createFavorite"];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  "/api/record/favorites/{favoriteId}": {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * お気に入りを1つ削除する(ピン留めを外す)
+     * @description 成功は 204(本文なし)。先に端末 ID で絞ってから `favoriteId` を照合する(ADR-0209 §6-2)。
+     *     この端末が持っていない `favoriteId`(他端末のもの・実在しないもの・形式が違うものを区別しない)は 404 `not_found`。
+     *     同じお気に入りをもう一度削除しても 404(1件の削除は「消した」と「もともと無い」を区別する。ADR-0213 §2 と同じ)。
+     */
+    delete: operations["deleteFavorite"];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   "/api/team/teams": {
     parameters: {
       query?: never;
@@ -552,7 +611,7 @@ export interface components {
      *     | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
      *     | unknown_field | 契約にないフィールド | 400 |
      *     | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+     *     | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
      *     | unknown_preset | 未知の防御側プリセット | 400 |
      *     | duplicate_preset | 防御側プリセットの重複 | 400 |
      *     | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -677,6 +736,17 @@ export interface components {
       /** @description 覚える技の ID 一覧 */
       learnset?: string[];
       /**
+       * @description メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+       *     (`requiredItemId` と同じ扱い)。古いサーバーは返さないため、クライアントは省略も null も「不明」と読む。
+       */
+      baseSpeciesKey?: string | null;
+      /**
+       * @description メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
+       *     メガ種族の持ち物を固定したときの表示「<基本種名>のメガストーン」に使う(メガストーンの日本語名は生成しない。ADR-0324 §2)。
+       *     null・省略のときクライアントは名前を推測せず、基本種名を含まない文言にする。
+       */
+      baseSpeciesNameJa?: string | null;
+      /**
        * @description メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
        *     古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
        */
@@ -753,7 +823,26 @@ export interface components {
        *     検証を通らない効果を含む応答は返さない(503 `master_unavailable`)。
        */
       effect?: components["schemas"]["MasterEffect"];
+      /**
+       * @description ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+       *     `defender` は防御側で持つとダメージが変わる持ち物。両方なら両方(並びは attacker → defender)。
+       *     効果を持たない持ち物とメガストーンは空配列。pokedex-svc は効果データから導いて常に返す(空配列可)。
+       *     クライアントはその側の役割を含む持ち物だけを選択肢にする(効果データから再導出しない)。
+       *     古いサーバー・古いキャッシュは返さないため、省略は「役割が不明(絞らない)」と読む。
+       */
+      roles?: components["schemas"]["ItemRole"][];
+      /**
+       * @description メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
+       *     使用可能集合で絞らずに判定する。pokedex-svc は常に返す。メガストーンの `roles` は常に空配列。
+       *     古いサーバーは返さないため、省略は「不明」と読む。
+       */
+      isMegaStone?: boolean;
     };
+    /**
+     * @description 持ち物のダメージ計算での役割(ADR-0175)
+     * @enum {string}
+     */
+    ItemRole: "attacker" | "defender";
     Nature: {
       /** @example adamant */
       id: string;
@@ -1548,6 +1637,45 @@ export interface components {
       };
     };
     /**
+     * @description お気に入りの ID(サーバーが発行する正の整数の10進表記)。JSON の数値にしないのは、JavaScript の数値で
+     *     精度を落とさないためと、形式違いを「持っていない ID」と同じ 404 に揃えるため(ADR-0227 §2)。
+     * @example 42
+     */
+    FavoriteId: string;
+    /**
+     * @description お気に入りの作成(`createFavorite`)で送る内容。`id` / `createdAt` / `updatedAt` はサーバーが決めるので送らない
+     *     (送ったら 400 `unknown_field`)。契約に無いキーは、`individual` の中も含めて 400 `unknown_field`(ADR-0227 §2)。
+     *
+     *     `individual` はピン留めする個体で、計算 API の `Individual` と同じ形(そのまま計算の攻撃側・防御側に使える。
+     *     生成型でも同じ型になるよう `$ref` だけで参照する)。SP(各 0..32・合計 66 以下)・ランク(-6..+6)・
+     *     レベル(50)の範囲外と `speciesKey` の形式違いは 400 `invalid_input`。ID がマスタに実在するかは照合しない(ADR-0227 §2)。
+     */
+    FavoriteInput: {
+      /**
+       * @description 任意の名前(例: 「HB特化」。文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+       *     利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+       */
+      label?: string | null;
+      individual: components["schemas"]["Individual"];
+    };
+    /**
+     * @description 保存済みのお気に入り(ADR-0227)。`individual` は保存時に既定値を補った形(`level` は 50、`ranks` は6値すべて、
+     *     `status` は `none`。`abilityId` / `itemId` / `teraType` は未指定〈null・省略〉ならキーごと省く)で返す。
+     */
+    Favorite: {
+      id: components["schemas"]["FavoriteId"];
+      label: string | null;
+      individual: components["schemas"]["Individual"];
+      /** Format: date-time */
+      createdAt: string;
+      /**
+       * Format: date-time
+       * @description 最終更新(作成時と、同じ内容の再ピン留め〈`createFavorite` の 200〉で進む)。一覧の並びと失効の判定に使う
+       *     (`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+       */
+      updatedAt: string;
+    };
+    /**
      * @description 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)
      * @example 11111111-2222-4333-8444-555555555555
      */
@@ -1653,6 +1781,11 @@ export interface components {
      *     この端末が持っていない ID は、他端末のものか実在しないかを区別せず 404 `not_found`(§6-2)。
      */
     TeamId: components["schemas"]["TeamId"];
+    /**
+     * @description お気に入りの ID(作成時にサーバーが発行する。ADR-0227 §2)。端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+     *     この端末が持っていない ID は、他端末のもの・実在しないもの・形式が違うものを区別せず 404 `not_found`(§6-2)。
+     */
+    FavoriteId: components["schemas"]["FavoriteId"];
   };
   requestBodies: never;
   headers: never;
@@ -2606,6 +2739,175 @@ export interface operations {
       };
       400: components["responses"]["Error"];
       500: components["responses"]["Error"];
+      /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  listFavorites: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description この端末のお気に入り(更新の新しい順)。無ければ空配列 */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Favorite"][];
+        };
+      };
+      400: components["responses"]["Error"];
+      /**
+       * @description record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+       *     (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+       */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  createFavorite: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        "application/json": components["schemas"]["FavoriteInput"];
+      };
+    };
+    responses: {
+      /** @description 同じ内容のお気に入りがすでにあった(新しく作らず、`updatedAt` を進めた既存のものを返す) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Favorite"];
+        };
+      };
+      /** @description 作ったお気に入り(サーバーが決めた `id` と時刻を含む) */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Favorite"];
+        };
+      };
+      400: components["responses"]["Error"];
+      500: components["responses"]["Error"];
+      /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          "application/json": components["schemas"]["Error"];
+        };
+      };
+      default: components["responses"]["Error"];
+    };
+  };
+  deleteFavorite: {
+    parameters: {
+      query?: never;
+      header: {
+        /**
+         * @description クライアント生成の端末 UUID(正準形 8-4-4-4-12 の16進。大文字小文字・版は問わない)。
+         *     gateway が検証する(ADR-0202): 欠落・空は 400 `missing_header`、UUID でない値・同名ヘッダの重複は 400 `invalid_header`。
+         *     下流のサービスは UUID 形式を検証しない(生成型は string のまま。x-go-type)。
+         *
+         *     保存データ(record / team。M2)では、この値を**データの分割キー**として使う。秘密ではなく所有権の証明でもない
+         *     (**認証ではない**)ので、v1 の公開範囲は個人利用 + Tailscale 内に限る。端末 ID が変わると前のデータには戻れない。
+         *     公開範囲・保持期間・端末単位の全削除は ADR-0209。
+         */
+        "X-Device-Id": components["parameters"]["DeviceId"];
+        /**
+         * @description セッション UUID(形式と gateway の検証は X-Device-Id と同じ。ADR-0202)。
+         *
+         *     保存データでは、計算イベントに「どの一連の操作か」として記録するだけで、**分割キーにはしない**
+         *     (データの分離・削除・保持期間の判定は端末 ID だけで行う。ADR-0209 §2)。
+         */
+        "X-Session-Id": components["parameters"]["SessionId"];
+      };
+      path: {
+        /**
+         * @description お気に入りの ID(作成時にサーバーが発行する。ADR-0227 §2)。端末 ID は**パスに含めない**(ヘッダだけが正。ADR-0209 §2・§6-4)。
+         *     この端末が持っていない ID は、他端末のもの・実在しないもの・形式が違うものを区別せず 404 `not_found`(§6-2)。
+         */
+        favoriteId: components["parameters"]["FavoriteId"];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description 削除した(本文なし) */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components["responses"]["Error"];
+      404: components["responses"]["Error"];
       /** @description record-svc が DB に届かない(`store_unavailable`)、または gateway から届かない(`upstream_unavailable`) */
       503: {
         headers: {

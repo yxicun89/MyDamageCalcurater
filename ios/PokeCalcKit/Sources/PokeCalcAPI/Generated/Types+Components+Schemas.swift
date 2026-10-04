@@ -48,7 +48,7 @@ extension Components {
         /// | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         /// | unknown_field | 契約にないフィールド | 400 |
         /// | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む | 400 |
+        /// | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
         /// | unknown_preset | 未知の防御側プリセット | 400 |
         /// | duplicate_preset | 防御側プリセットの重複 | 400 |
         /// | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -242,6 +242,19 @@ extension Components {
                 ///
                 /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/learnset`.
                 public var learnset: [Swift.String]?
+                /// メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                /// (`requiredItemId` と同じ扱い)。古いサーバーは返さないため、クライアントは省略も null も「不明」と読む。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/baseSpeciesKey`.
+                public var baseSpeciesKey: Swift.String?
+                /// メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
+                /// メガ種族の持ち物を固定したときの表示「<基本種名>のメガストーン」に使う(メガストーンの日本語名は生成しない。ADR-0324 §2)。
+                /// null・省略のときクライアントは名前を推測せず、基本種名を含まない文言にする。
+                ///
+                ///
+                /// - Remark: Generated from `#/components/schemas/SpeciesDetail/value2/baseSpeciesNameJa`.
+                public var baseSpeciesNameJa: Swift.String?
                 /// メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
                 /// 古いサーバーは返さないため、省略は「メガではない」と同じ扱い(クライアントの互換のため required にしていない)。
                 ///
@@ -261,18 +274,24 @@ extension Components {
                 ///   - baseStats:
                 ///   - abilities:
                 ///   - learnset: 覚える技の ID 一覧
+                ///   - baseSpeciesKey: メガシンカ前の種族キー(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す
+                ///   - baseSpeciesNameJa: メガシンカ前の種族の日本語名(ADR-0175)。メガでなければ null。pokedex-svc は null でもキーを常に返す。
                 ///   - isMega: メガシンカ後の種族か(docs/mega-evolution-spec.md。issue 515)。pokedex-svc は常に返す。
                 ///   - requiredItemId: メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 public init(
                     baseStats: Components.Schemas.StatBlock,
                     abilities: [Components.Schemas.Ability],
                     learnset: [Swift.String]? = nil,
+                    baseSpeciesKey: Swift.String? = nil,
+                    baseSpeciesNameJa: Swift.String? = nil,
                     isMega: Swift.Bool? = nil,
                     requiredItemId: Swift.String? = nil
                 ) {
                     self.baseStats = baseStats
                     self.abilities = abilities
                     self.learnset = learnset
+                    self.baseSpeciesKey = baseSpeciesKey
+                    self.baseSpeciesNameJa = baseSpeciesNameJa
                     self.isMega = isMega
                     self.requiredItemId = requiredItemId
                 }
@@ -280,6 +299,8 @@ extension Components {
                     case baseStats
                     case abilities
                     case learnset
+                    case baseSpeciesKey
+                    case baseSpeciesNameJa
                     case isMega
                     case requiredItemId
                 }
@@ -576,26 +597,57 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Item/effect`.
             public var effect: Components.Schemas.Item.EffectPayload?
+            /// ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+            /// `defender` は防御側で持つとダメージが変わる持ち物。両方なら両方(並びは attacker → defender)。
+            /// 効果を持たない持ち物とメガストーンは空配列。pokedex-svc は効果データから導いて常に返す(空配列可)。
+            /// クライアントはその側の役割を含む持ち物だけを選択肢にする(効果データから再導出しない)。
+            /// 古いサーバー・古いキャッシュは返さないため、省略は「役割が不明(絞らない)」と読む。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/roles`.
+            public var roles: [Components.Schemas.ItemRole]?
+            /// メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
+            /// 使用可能集合で絞らずに判定する。pokedex-svc は常に返す。メガストーンの `roles` は常に空配列。
+            /// 古いサーバーは返さないため、省略は「不明」と読む。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/isMegaStone`.
+            public var isMegaStone: Swift.Bool?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - nameJa:
             ///   - effect: 持ち物の効果定義(item_effects の JSON。`getMasterExport` の `MasterItem.effect` と同じ値・同じ形。
+            ///   - roles: ダメージ計算での役割(ADR-0175 §1)。`attacker` は攻撃側で持つとダメージが変わる(または未対応の印が付く)持ち物、
+            ///   - isMegaStone: メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
             public init(
                 id: Swift.String,
                 nameJa: Swift.String,
-                effect: Components.Schemas.Item.EffectPayload? = nil
+                effect: Components.Schemas.Item.EffectPayload? = nil,
+                roles: [Components.Schemas.ItemRole]? = nil,
+                isMegaStone: Swift.Bool? = nil
             ) {
                 self.id = id
                 self.nameJa = nameJa
                 self.effect = effect
+                self.roles = roles
+                self.isMegaStone = isMegaStone
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case nameJa
                 case effect
+                case roles
+                case isMegaStone
             }
+        }
+        /// 持ち物のダメージ計算での役割(ADR-0175)
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemRole`.
+        @frozen public enum ItemRole: String, Codable, Hashable, Sendable, CaseIterable {
+            case attacker = "attacker"
+            case defender = "defender"
         }
         /// - Remark: Generated from `#/components/schemas/Nature`.
         public struct Nature: Codable, Hashable, Sendable {
@@ -3181,6 +3233,96 @@ extension Components {
                 case status
                 case purgedAt
                 case deleted
+            }
+        }
+        /// お気に入りの ID(サーバーが発行する正の整数の10進表記)。JSON の数値にしないのは、JavaScript の数値で
+        /// 精度を落とさないためと、形式違いを「持っていない ID」と同じ 404 に揃えるため(ADR-0227 §2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FavoriteId`.
+        public typealias FavoriteId = Swift.String
+        /// お気に入りの作成(`createFavorite`)で送る内容。`id` / `createdAt` / `updatedAt` はサーバーが決めるので送らない
+        /// (送ったら 400 `unknown_field`)。契約に無いキーは、`individual` の中も含めて 400 `unknown_field`(ADR-0227 §2)。
+        ///
+        /// `individual` はピン留めする個体で、計算 API の `Individual` と同じ形(そのまま計算の攻撃側・防御側に使える。
+        /// 生成型でも同じ型になるよう `$ref` だけで参照する)。SP(各 0..32・合計 66 以下)・ランク(-6..+6)・
+        /// レベル(50)の範囲外と `speciesKey` の形式違いは 400 `invalid_input`。ID がマスタに実在するかは照合しない(ADR-0227 §2)。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/FavoriteInput`.
+        public struct FavoriteInput: Codable, Hashable, Sendable {
+            /// 任意の名前(例: 「HB特化」。文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            /// 利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/FavoriteInput/label`.
+            public var label: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/FavoriteInput/individual`.
+            public var individual: Components.Schemas.Individual
+            /// Creates a new `FavoriteInput`.
+            ///
+            /// - Parameters:
+            ///   - label: 任意の名前(例: 「HB特化」。文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
+            ///   - individual:
+            public init(
+                label: Swift.String? = nil,
+                individual: Components.Schemas.Individual
+            ) {
+                self.label = label
+                self.individual = individual
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case individual
+            }
+        }
+        /// 保存済みのお気に入り(ADR-0227)。`individual` は保存時に既定値を補った形(`level` は 50、`ranks` は6値すべて、
+        /// `status` は `none`。`abilityId` / `itemId` / `teraType` は未指定〈null・省略〉ならキーごと省く)で返す。
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/Favorite`.
+        public struct Favorite: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/Favorite/id`.
+            public var id: Components.Schemas.FavoriteId
+            /// - Remark: Generated from `#/components/schemas/Favorite/label`.
+            public var label: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/Favorite/individual`.
+            public var individual: Components.Schemas.Individual
+            /// - Remark: Generated from `#/components/schemas/Favorite/createdAt`.
+            public var createdAt: Foundation.Date
+            /// 最終更新(作成時と、同じ内容の再ピン留め〈`createFavorite` の 200〉で進む)。一覧の並びと失効の判定に使う
+            /// (`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Favorite/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// Creates a new `Favorite`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - label:
+            ///   - individual:
+            ///   - createdAt:
+            ///   - updatedAt: 最終更新(作成時と、同じ内容の再ピン留め〈`createFavorite` の 200〉で進む)。一覧の並びと失効の判定に使う
+            public init(
+                id: Components.Schemas.FavoriteId,
+                label: Swift.String? = nil,
+                individual: Components.Schemas.Individual,
+                createdAt: Foundation.Date,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.label = label
+                self.individual = individual
+                self.createdAt = createdAt
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case label
+                case individual
+                case createdAt
+                case updatedAt
             }
         }
         /// 構築の ID(サーバーが発行する UUID。正準形 8-4-4-4-12 の16進)

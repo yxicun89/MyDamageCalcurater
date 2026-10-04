@@ -1,0 +1,25 @@
+# M2(record・team・NATS)だけを k3d に載せるための overlay(ADR-0226。local-api と同じ考え方)。
+#
+# `deploy/k8s/overlays/local`(共有)を丸ごと apply すると、他レーンの Deployment の image が
+# base の固定タグ(0.1.0)に戻ってしまう(deploy-latest が入れたコミットのタグを上書きする)。
+# ここは record・team(Deployment・Service・失効 CronJob・保持日数 ConfigMap)・NATS・NetworkPolicy
+# だけを描画する。record-migrate・team-migrate の Job は TidbInitializer の完了後に
+# scripts/k3d-m2-deploy.sh が個別に apply する(ADR-0211 §3.2)ので含めない。
+# image は `:local` に置き換える。scripts/k3d-deploy-tagged.sh が、これをコミット識別のタグへ付け替えて apply する。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: pokecalc
+resources:
+  - ../local/nats
+  - ../../base/record
+  - ../../base/team
+  - ../../base/networkpolicy
+images:
+  - name: pokecalc/record
+    newName: pokecalc/record
+    newTag: local
+  - name: pokecalc/team
+    newName: pokecalc/team
+    newTag: local
+patches:
+  - path: cronjob-expire-suspend-patch.yaml

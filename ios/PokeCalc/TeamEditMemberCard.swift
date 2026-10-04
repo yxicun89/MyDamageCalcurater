@@ -120,19 +120,38 @@ struct MemberCardView: View {
 
     private var itemPicker: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            let lock = viewModel.itemLock(forMember: member.id)
             Menu {
-                Button(BulkRowDisplay.itemLabel(itemId: nil, items: viewModel.itemOptions)) {
+                Button(ItemDisplayName.noItemLabel) {
                     viewModel.setMemberItem(id: member.id, itemId: nil)
                 }
-                ForEach(viewModel.itemOptions, id: \.id) { item in
+                ForEach(viewModel.itemOptions(forMember: member.id), id: \.id) { item in
                     Button(item.nameJa) {
                         viewModel.setMemberItem(id: member.id, itemId: item.id)
                     }
                 }
             } label: {
-                MenuLabelChip(text: "持ち物: " + BulkRowDisplay.itemLabel(itemId: member.itemId, items: viewModel.itemOptions))
+                MenuLabelChip(text: MegaItemText.fixedItemName(viewModel.itemLabel(for: member.itemId)))
             }
+            // メガ種族は持ち物がメガストーンに固定される(操作不可。ADR-0509 §8)。
+            .disabled(lock.disablesItemField)
+            .accessibilityHint(lockReason(for: lock) ?? "")
             .accessibilityIdentifier("memberItemPicker-\(member.id)")
+            if let reason = lockReason(for: lock) {
+                Text(reason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("memberItemLockReason-\(member.id)")
+            }
+            // 保存データを直したときの通知(保存すると反映される。ADR-0509 §4)。
+            if let notice = viewModel.itemNotice(forMember: member.id) {
+                Text(notice)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("memberItemNotice-\(member.id)")
+            }
             // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
             if viewModel.itemOptionsReachedLimit {
                 Text(MasterSearchLabels.itemsTruncated)
