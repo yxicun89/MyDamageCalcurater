@@ -57,7 +57,7 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
 素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
-判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks`、
+判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks|speed-notes`(`speed-notes` は素早さの反映/無視の文と、状態異常まひの付与を固定値で返す。ADR-0512)、
 起動時に開くのは `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1`(ADR-0504)。
 
 計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。

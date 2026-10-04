@@ -9,6 +9,19 @@
 
 import Foundation
 
+/// 状態異常(openapi `Individual.status`。ルート契約の StatusCondition と同じ7値・同じ順)。
+/// `none` は「状態異常なし」の選択で、**要求には載せない**(省略と none は契約上同じ。ranks と同じ省略の流儀。ADR-0512)。
+/// judge は `paralysis` だけ素早さに反映し(×0.5。ADR-0712)、calc-svc には全部転送する。
+public enum JudgeStatus: String, CaseIterable, Sendable {
+    case none
+    case burn
+    case paralysis
+    case poison
+    case badlyPoison = "badly_poison"
+    case sleep
+    case freeze
+}
+
 /// 判定の要求の自分・相手候補の1体(openapi `Individual` / `DefenderCandidate` の技を除いた部分)。
 /// 「送らないものは nil」にしてあり、API 実装はこの値をそのまま写す(省略の規則は `JudgeViewModel` が決める。ADR-0504 §5)。
 public struct JudgeIndividual: Equatable, Sendable {
@@ -20,10 +33,12 @@ public struct JudgeIndividual: Equatable, Sendable {
     /// nil なら欄ごと送らない(`null` を明示的に送らない)。
     public var abilityId: String?
     public var itemId: String?
+    /// nil なら欄ごと送らない(`none` は nil に畳む。`JudgeViewModel` が決める。ADR-0512)。非 nil なら契約の値をそのまま送る。
+    public var status: JudgeStatus?
 
     public init(
         speciesKey: String, natureId: String, sp: StatBlock, ranks: RankBlock? = nil,
-        abilityId: String? = nil, itemId: String? = nil
+        abilityId: String? = nil, itemId: String? = nil, status: JudgeStatus? = nil
     ) {
         self.speciesKey = speciesKey
         self.natureId = natureId
@@ -31,6 +46,7 @@ public struct JudgeIndividual: Equatable, Sendable {
         self.ranks = ranks
         self.abilityId = abilityId
         self.itemId = itemId
+        self.status = status
     }
 }
 
@@ -126,10 +142,10 @@ public struct JudgeMatchup: Equatable, Sendable {
     public var attackerKoUnsupported: [UnsupportedMark]
     /// `defenderKo` に付いた印(逆方向。印が無ければ空)。**役割が入れ替わる**: `target` の attacker_* はこの候補・defender_* は自分(ADR-0708 §5)。
     public var defenderKoUnsupported: [UnsupportedMark]
-    /// `attackerSpeed` に実際に効かせた補正(契約 `SpeedFactor` の値のまま。契約 v0.2.0・ADR-0710)。画面にはまだ出さない。
+    /// `attackerSpeed` に実際に効かせた補正(契約 `SpeedFactor` の値のまま。**未知の値も文字列のまま運ぶ**=落ちない。契約 v0.3.0・ADR-0710・ADR-0512)。画面は `JudgeLabels` で文言にする。
     public var attackerSpeedApplied: [String]
     public var defenderSpeedApplied: [String]
-    /// 素早さに影響しうるのに反映しなかった入力(契約 `SpeedIgnoredInput` の値のまま)。画面にはまだ出さない。
+    /// 素早さに影響しうるのに反映しなかった入力(契約 `SpeedIgnoredInput` の値のまま。未知の値も運ぶ)。画面は「素早さに反映していない」旨を出す。
     public var attackerSpeedIgnored: [String]
     public var defenderSpeedIgnored: [String]
 

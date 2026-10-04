@@ -14,13 +14,16 @@ public enum MockJudgeScenario: Equatable, Sendable {
     case candidateError
     /// 未対応の印を返す(順方向は全行に共通、逆方向は 2 番目の候補だけ)。方向ごとの出し分けの確認用。
     case marks
+    /// 素早さの反映/無視を返す(ADR-0512。値は `MockJudgeServiceTests` と ADR-0501 の章が固定。要求の状態異常がまひなら、その側の Applied の末尾に paralysis を足す)。
+    case speedNotes
 
-    /// 環境変数の値: `error` / `candidate-error` / `marks`。nil・未知の値は `.normal`。
+    /// 環境変数の値: `error` / `candidate-error` / `marks` / `speed-notes`。nil・未知の値は `.normal`。
     public init(environmentValue: String?) {
         switch environmentValue {
         case "error": self = .error
         case "candidate-error": self = .candidateError
         case "marks": self = .marks
+        case "speed-notes": self = .speedNotes
         default: self = .normal
         }
     }
@@ -84,11 +87,25 @@ public struct MockJudgeService: JudgeService {
                 defenderMarks = [UnsupportedMark(target: .move, reason: .variablePower, id: request.defenders[index].moveId)]
             }
         }
+        var attackerApplied: [String] = []
+        var defenderApplied: [String] = []
+        var attackerIgnored: [String] = []
+        var defenderIgnored: [String] = []
+        if scenario == .speedNotes {
+            attackerApplied = ["rank", "tailwind"]
+            if index == 1 { attackerIgnored = ["abilityId"] }
+            if index == 0 { defenderApplied = ["choiceScarf"] }
+            if index == 1 { defenderIgnored = ["itemId", "fieldWeather"] }
+            if request.attacker.status == .paralysis { attackerApplied.append("paralysis") }
+            if request.defenders[index].individual.status == .paralysis { defenderApplied.append("paralysis") }
+        }
         return JudgeMatchup(
             defenderIndex: index, outspeeds: outspeeds, speedTie: tie, attackerSpeed: attackerSpeed,
             defenderSpeed: defenderSpeed, attackerMovePriority: 0, defenderMovePriority: defenderPriority,
             attackerMovesFirst: attackerMovesFirst, turnOrderTie: turnOrderTie, attackerKo: attackerKo(index),
-            defenderKo: defenderKo(index), attackerKoUnsupported: attackerMarks, defenderKoUnsupported: defenderMarks)
+            defenderKo: defenderKo(index), attackerKoUnsupported: attackerMarks, defenderKoUnsupported: defenderMarks,
+            attackerSpeedApplied: attackerApplied, defenderSpeedApplied: defenderApplied,
+            attackerSpeedIgnored: attackerIgnored, defenderSpeedIgnored: defenderIgnored)
     }
 
     private func attackerKo(_ index: Int) -> JudgeKOChance {

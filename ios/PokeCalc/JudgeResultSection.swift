@@ -72,6 +72,10 @@ private struct JudgeRowView: View {
             line(row.speedText, id: "judgeRowSpeed-\(index)")
             line(row.priorityText, id: "judgeRowPriority-\(index)")
             line(row.speedComparisonText, id: "judgeRowSpeedComparison-\(index)")
+            speedNote(row.attackerSpeedAppliedText, id: "judgeRowAttackerSpeedApplied-\(index)")
+            speedNote(row.defenderSpeedAppliedText, id: "judgeRowDefenderSpeedApplied-\(index)")
+            speedNote(row.attackerSpeedIgnoredText, id: "judgeRowAttackerSpeedIgnored-\(index)")
+            speedNote(row.defenderSpeedIgnoredText, id: "judgeRowDefenderSpeedIgnored-\(index)")
             line(row.turnOrderText, id: "judgeRowTurnOrder-\(index)")
             direction(
                 ko: row.attackerKoText, unreliable: row.attackerKoUnreliableText, note: row.attackerUnsupportedNote,
@@ -85,6 +89,14 @@ private struct JudgeRowView: View {
         .glassCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("judgeRow-\(index)")
+    }
+
+    /// 素早さに反映した補正・反映していない入力の文(空なら出さない。識別子も付けない。ADR-0512)。
+    @ViewBuilder
+    private func speedNote(_ text: String?, id: String) -> some View {
+        if let text {
+            line(text, style: .caption, id: id)
+        }
     }
 
     /// 1 方向の確定数と、その方向だけの添え書き・注記(もう片方の方向には影響しない)。
