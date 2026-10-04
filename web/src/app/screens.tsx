@@ -14,7 +14,7 @@ const SEGMENT_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
 /**
  * 登録ファイルの既定エクスポートが defineScreen の結果の形か(id・segment・label が文字列、order が数値、
- * usesMaster が真偽値、instantiate が関数)。React コンポーネントをそのまま既定エクスポートにした誤りなどを弾く。
+ * usesMaster が真偽値、instantiate が関数。hidden は省略可で、あるなら真偽値)。React コンポーネントをそのまま既定エクスポートにした誤りなどを弾く。
  */
 function isRegisteredScreen(value: unknown): value is RegisteredScreen {
   if (typeof value !== "object" || value === null) {
@@ -31,6 +31,7 @@ function isRegisteredScreen(value: unknown): value is RegisteredScreen {
     typeof value.order === "number" &&
     "usesMaster" in value &&
     typeof value.usesMaster === "boolean" &&
+    (!("hidden" in value) || typeof value.hidden === "boolean") &&
     "instantiate" in value &&
     typeof value.instantiate === "function"
   );
@@ -102,10 +103,18 @@ const registeredModules = import.meta.glob<unknown>(["../**/*.screen.tsx", "!../
 /** 登録された画面(タブの並び順)。 */
 export const SCREENS: readonly RegisteredScreen[] = buildScreenRegistry(registeredModules);
 
-/** 全画面のクライアントを作り、描画の口を並び順で返す(App のマウント時に1回だけ呼ぶ)。 */
+/** 非表示(hidden。ADR-0330)でない画面だけを、順序を保って返す。タブ・URL・マウントの対象はこの画面だけ。 */
+export function visibleScreens(screens: readonly RegisteredScreen[]): readonly RegisteredScreen[] {
+  return screens.filter((screen) => !screen.hidden);
+}
+
+/**
+ * 表示する画面(hidden を除く)のクライアントを作り、描画の口を並び順で返す(App のマウント時に1回だけ呼ぶ)。
+ * hidden の画面は createClient も呼ばず、描画の口も返さない。
+ */
 export function instantiateScreens(
   screens: readonly RegisteredScreen[],
   deps: ScreenClientDeps,
 ): readonly ScreenInstance[] {
-  return screens.map((screen) => screen.instantiate(deps));
+  return visibleScreens(screens).map((screen) => screen.instantiate(deps));
 }
