@@ -31,7 +31,7 @@ if ! printf '%s\n' "$repo_url" | grep -Eq '^https://[A-Za-z0-9._~/-]+$'; then
   exit 1
 fi
 
-env "SERVICE=$SERVICE" "$repo_url_var=$repo_url" "$script_dir/check-gitops.sh" ready
+env "SERVICE=$SERVICE" "$repo_url_var=$repo_url" "$script_dir/check-gitops.sh" ready --no-live
 
 project_rendered=$(mktemp)
 app_rendered=$(mktemp)
