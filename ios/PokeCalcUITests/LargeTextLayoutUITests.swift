@@ -788,6 +788,8 @@ final class LargeTextLayoutUITests: XCTestCase {
     private func launchJudgeWithMock(scenario: String? = nil, contentSizeCategory: String) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        // 判定の入口は既定で非表示(F-07)。画面のテストは環境変数で出す。
+        app.launchEnvironment["POKECALC_SHOW_JUDGE"] = "1"
         if let scenario { app.launchEnvironment["POKECALC_MOCK_JUDGE"] = scenario }
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         app.launch()

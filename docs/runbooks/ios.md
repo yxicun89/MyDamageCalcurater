@@ -58,6 +58,8 @@ make ios-sim-run IOS_SCREEN=speed
 
 ## 7. 判定画面を開く
 
+**判定の入口はルート画面に出ません**(ユーザー決定 2026-10-04: 判定は目的を作り直す。F-07)。コード・サービス・テストは残してあり、環境変数 `POKECALC_SHOW_JUDGE=1` を渡すと入口が出ます。下の `IOS_SCREEN=judge` は、この環境変数を付けて起動します。
+
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make ios-sim-run IOS_SCREEN=judge
