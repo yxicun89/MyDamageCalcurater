@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `OpponentHistoryViewModel`(よく計算する相手の一覧画面。ADR-0509)と `OpponentHistoryLabels`。
+/// `OpponentHistoryViewModel`(よく計算する相手の一覧画面。ADR-0511)と `OpponentHistoryLabels`。
 /// データ源は P6-23 の `FrequentOpponentsService`(新しい API は足さない)。
 @MainActor
 final class OpponentHistoryViewModelTests: XCTestCase {

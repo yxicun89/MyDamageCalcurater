@@ -63,7 +63,7 @@ Xcode 27 が要る(`xcode-select` が CommandLineTools のままでも、スク�
 計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。
 `GET /api/record/frequent-opponents`)を出す。取得に失敗しても何も出さず、検索と計算は塞がない。
 モックの挙動は `POKECALC_MOCK_FREQUENT_OPPONENTS=empty|fail` で切り替える(ADR-0501「P6-23」)。
-お気に入り・計算履歴の画面(ADR-0509。ルートの「お気に入り・履歴」)は、お気に入りの一覧と外す操作、「よく計算する相手」(件数・最後に計算した日)を出す。
+お気に入り・計算履歴の画面(ADR-0511。ルートの「お気に入り・履歴」)は、お気に入りの一覧と外す操作、「よく計算する相手」(件数・最後に計算した日)を出す。
 計算画面の「攻撃側/防御側をお気に入りに追加」から追加する。取得・保存に失敗しても計算は使える。
 モックの挙動は `POKECALC_MOCK_FAVORITES=list|fail|unavailable|full` で切り替える(未設定は空のストアで、追加・外すが動く)。
 起動時に開くのは `POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH=1`。

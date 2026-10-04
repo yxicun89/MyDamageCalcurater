@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `FavoritePinViewModel`(計算画面の「お気に入りに追加」。ADR-0509)。
+/// `FavoritePinViewModel`(計算画面の「お気に入りに追加」。ADR-0511)。
 @MainActor
 final class FavoritePinViewModelTests: XCTestCase {
     private let individual = Individual(

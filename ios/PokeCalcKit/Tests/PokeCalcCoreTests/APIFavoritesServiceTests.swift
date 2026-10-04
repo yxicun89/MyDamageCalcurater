@@ -5,7 +5,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// お気に入り API(`listFavorites` / `createFavorite` / `deleteFavorite`。ADR-0227・ADR-0509)の写像。
+/// お気に入り API(`listFavorites` / `createFavorite` / `deleteFavorite`。ADR-0227・ADR-0511)の写像。
 /// パス・ヘッダー・本文・ステータス(200/201/204/400/404/503)・順序保持・通信失敗を契約どおりに確かめる。
 final class APIFavoritesServiceTests: XCTestCase {
     private let deviceID = "0B7A2D2E-5C1F-4E43-9D0A-3F7E1B6C2A11"

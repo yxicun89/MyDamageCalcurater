@@ -3,7 +3,7 @@ import XCTest
 @testable import PokeCalcCore
 
 /// `RecordScreenError`(code → 日本語。サーバーの英語 `message` と `code` を画面に出さない)と
-/// `FavoriteLabel.normalize`・文言。ADR-0509。
+/// `FavoriteLabel.normalize`・文言。ADR-0511。
 final class RecordScreenErrorTests: XCTestCase {
     private func error(_ code: String, message: String = "English server message") -> RecordScreenError {
         RecordScreenError(PokeCalcError(code: code, message: message))

@@ -1,6 +1,6 @@
 import Foundation
 
-// MockFavoritesService: `FavoritesService` のモック(XCUITest 用。ADR-0509)。
+// MockFavoritesService: `FavoritesService` のモック(XCUITest 用。ADR-0511)。
 // 起動時の環境変数 `POKECALC_MOCK_FAVORITES` で初期状態を切り替える(`POKECALC_MOCK_FREQUENT_OPPONENTS` と同じ流儀)。
 // 既定(未設定・未知の値)は「空のストアで、追加・削除が実際に動く」(既存のテストに影響しない)。
 // 架空の speciesKey(9001〜9004)と `test-nature-*` だけを使う。

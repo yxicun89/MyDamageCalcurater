@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// `FavoritesViewModel`(一覧・外す。ADR-0509)。名前の解決先は `StubPokeCalcService.species(key:)`。
+/// `FavoritesViewModel`(一覧・外す。ADR-0511)。名前の解決先は `StubPokeCalcService.species(key:)`。
 @MainActor
 final class FavoritesViewModelTests: XCTestCase {
     private func resolver(count: Int = 6) -> StubPokeCalcService {
