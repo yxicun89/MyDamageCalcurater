@@ -82,18 +82,22 @@ async function openReverseScreen(page: Page): Promise<void> {
 
 /** 計算画面の主要な操作部品(すべて表示領域の中で操作できること)。 */
 function calcControls(page: Page): { name: string; locator: Locator }[] {
-  const named = (role: "combobox" | "button" | "checkbox" | "radiogroup", name: string) => ({
+  const named = (role: "combobox" | "button" | "checkbox" | "radiogroup" | "textbox", name: string) => ({
     name,
     locator: page.getByRole(role, { name, exact: true }),
   });
   return [
     named("combobox", "攻撃側のポケモン"),
     named("combobox", "攻撃側の持ち物"),
-    named("radiogroup", "攻撃側の調整"),
     named("button", "攻守入れ替え"),
     named("combobox", "防御側のポケモン"),
     named("combobox", "防御側の持ち物"),
     named("combobox", "技"),
+    // ADR-0329: 技の直後の「攻撃」「特攻」の2ブロック(プリセット・SP の数値入力)。
+    named("radiogroup", "攻撃の調整"),
+    named("textbox", "攻撃のSP"),
+    named("radiogroup", "特攻の調整"),
+    named("textbox", "特攻のSP"),
     named("checkbox", "持ち物の候補も比較"),
     { name: "計算結果", locator: page.getByRole("list", { name: "計算結果", exact: true }) },
   ];
@@ -307,7 +311,7 @@ for (const width of NARROW_WIDTHS) {
     test("計算画面: 攻守入れ替えと調整のラジオが操作できる", async ({ page }) => {
       await openCalcScreen(page);
 
-      await chooseRadio(page, "攻撃側の調整", "A特化");
+      await chooseRadio(page, "攻撃の調整", "A特化");
 
       await page.getByRole("button", { name: "攻守入れ替え", exact: true }).click();
       // issue #304: カードの見出し階層が h2(領域名「攻撃側」固定)→ h3(種族名)になった(calc.spec.ts と同じ形)。

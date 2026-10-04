@@ -5,7 +5,8 @@
 //   - 攻撃側・防御側・ダメージ技が揃ったら calcBulk を1回呼び、そのリクエストの中身(ADR-0300 §2・§6、ADR-0009)
 //   - 返ってきた行を加工せずに表示(調整名・%幅・ダメージバー・確定数)
 //   - 持ち物の候補の比較、攻守入れ替え、エラー表示、古い応答で新しい表示を上書きしないこと
-// 攻撃側の既定は無振り・無補正。攻撃側プリセットの選択(P4-3、ADR-0300 §5)は末尾の describe で確かめる。
+// 攻撃側の既定は無振り・無補正。攻撃側プリセットの選択(P4-3、ADR-0300 §5)は末尾の describe で確かめる
+// (ADR-0329 で「攻撃」「特攻」の2ブロックになった。SP の数値入力・性格補正は CalcScreen.attackerStats.test.tsx)。
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -643,15 +644,24 @@ describe("攻守入れ替え", () => {
 
 // P4-3: 攻撃側(自分側)のプリセット(ADR-0300 §5、requirements.md「自分側のプリセット」)。
 // 決めたこと:
-//   - 選択は攻撃側カードの中のラジオグループ(名前「攻撃側の調整」)。design.md「入力はタップで選ぶ」のピル型を想定し、
-//     select ではなく radio にする。既定は無振り。
-//   - 選んでいるのは Key(none / x_full / x)。技の分類が変わっても Key は保ち、表示名(A特化 ⇄ C特化 など)と
-//     リクエストの SP・性格が分類に合わせて変わる。
-//   - 攻守入れ替えでは Key を保つ(攻撃側の調整は「自分側」の設定で、入れ替え後も自分が攻撃側のため)。
+//   - 選択は「攻撃」「特攻」の2ブロックそれぞれのラジオグループ(名前「攻撃の調整」「特攻の調整」。ADR-0329 §1)。
+//     design.md「入力はタップで選ぶ」のピル型を想定し、select ではなく radio にする。既定は無振り。
+//   - 技の分類が変わっても両ブロックの値は保ち(A特化 のまま特殊技に替えても攻撃ブロックは A特化)、
+//     リクエストの性格だけが ADR-0329 §4 の規則で技の分類に合わせて解決される。
+//   - 攻守入れ替えでも値を保つ(攻撃側の調整は「自分側」の設定で、入れ替え後も自分が攻撃側のため)。
 //   - 変化技を選んでいるときの表示名は物理と同じ(domain/attackerPresets.test.ts)。
 describe("攻撃側のプリセット(P4-3)", () => {
-  const presetGroup = () => within(attackerCard()).getByRole("radiogroup", { name: "攻撃側の調整" });
-  const presetRadio = (name: string) => within(presetGroup()).getByRole("radio", { name });
+  type Block = "atk" | "spa";
+  const blockName: Record<Block, { group: RegExp; preset: string }> = {
+    atk: { group: /^攻撃(\(この技で使用\))?$/, preset: "攻撃の調整" },
+    spa: { group: /^特攻(\(この技で使用\))?$/, preset: "特攻の調整" },
+  };
+  const presetGroup = (block: Block = "atk") =>
+    within(screen.getByRole("group", { name: blockName[block].group })).getByRole("radiogroup", {
+      name: blockName[block].preset,
+    });
+  const presetRadio = (name: string, block: Block = "atk") =>
+    within(presetGroup(block)).getByRole("radio", { name });
 
   /** 物理と特殊の両方のダメージ技を覚える種族と、その2つの技。 */
   function mixedAttacker(): { species: MasterSpecies; physical: Move; special: Move } {
@@ -678,7 +688,7 @@ describe("攻撃側のプリセット(P4-3)", () => {
     return found;
   }
 
-  test("攻撃側カードに3つの選択肢(物理: 無振り・A特化・A振り(無補正))がこの順で並び、既定は無振り", async () => {
+  test("攻撃ブロックに3つの選択肢(無振り・A特化・A振り(無補正))がこの順で並び、既定は無振り", async () => {
     const { user } = renderScreen();
     const attacker = speciesWithFirstMove("physical");
     await choosePair(user, attacker, speciesWithFirstMove("special", attacker.key));
@@ -694,15 +704,15 @@ describe("攻撃側のプリセット(P4-3)", () => {
     expect(radios.indexOf(presetRadio("A振り(無補正)"))).toBe(2);
   });
 
-  test("特殊技を選んでいるときは C 表記(無振り・C特化・C振り(無補正))になる", async () => {
+  test("特攻ブロックは常に C 表記(無振り・C特化・C振り(無補正))で、攻撃ブロックの A特化 も常にある(特殊技でも)", async () => {
     const { user } = renderScreen();
     const attacker = speciesWithFirstMove("special");
     await choosePair(user, attacker, speciesWithFirstMove("physical", attacker.key));
 
-    expect(presetRadio("無振り")).toBeChecked();
-    expect(presetRadio("C特化")).toBeInTheDocument();
-    expect(presetRadio("C振り(無補正)")).toBeInTheDocument();
-    expect(within(presetGroup()).queryByRole("radio", { name: "A特化" })).toBeNull();
+    expect(presetRadio("無振り", "spa")).toBeChecked();
+    expect(presetRadio("C特化", "spa")).toBeInTheDocument();
+    expect(presetRadio("C振り(無補正)", "spa")).toBeInTheDocument();
+    expect(presetRadio("A特化", "atk")).toBeInTheDocument();
   });
 
   test("A特化を選ぶと計算し直し、攻撃側は A:32・他 0、性格は +atk / −spa", async () => {
@@ -745,7 +755,7 @@ describe("攻撃側のプリセット(P4-3)", () => {
     expect(lastRequest(engine).attacker.nature).toEqual({ plus: "", minus: "" });
   });
 
-  test("A特化のまま特殊技に替えると、Key を保って表示は C特化、リクエストは C:32・+spa / −atk", async () => {
+  test("A特化のまま特殊技に替えても攻撃ブロックは A特化、特攻ブロックは無振りのまま。リクエストは A:32・C:0・性格は技が使う C が補正なしなので無補正", async () => {
     const { user, engine } = renderScreen();
     const { species, physical, special } = mixedAttacker();
     const defender = master.species.find((candidate) => candidate.key !== species.key);
@@ -761,14 +771,14 @@ describe("攻撃側のプリセット(P4-3)", () => {
 
     await user.selectOptions(moveSelect(), special.id);
 
-    expect(presetRadio("C特化")).toBeChecked();
-    expect(within(presetGroup()).queryByRole("radio", { name: "A特化" })).toBeNull();
+    expect(presetRadio("A特化", "atk")).toBeChecked();
+    expect(presetRadio("無振り", "spa")).toBeChecked();
     await waitFor(() => {
       expect(lastRequest(engine).move).toEqual(special);
     });
     expect(lastRequest(engine).attacker).toMatchObject({
-      sp: { hp: 0, atk: 0, def: 0, spa: 32, spd: 0, spe: 0 },
-      nature: { plus: "spa", minus: "atk" },
+      sp: { hp: 0, atk: 32, def: 0, spa: 0, spd: 0, spe: 0 },
+      nature: { plus: "", minus: "" },
     });
   });
 
@@ -805,7 +815,7 @@ describe("攻撃側のプリセット(P4-3)", () => {
     expect(await screen.findByText("A特化の結果")).toBeInTheDocument();
   });
 
-  test("攻守入れ替えでも調整の Key を保つ(物理の A特化 → 入れ替え後の特殊技では C特化)", async () => {
+  test("攻守入れ替えでも調整を保つ(物理の A特化 → 入れ替え後も攻撃ブロックは A特化。特殊技なので性格は無補正)", async () => {
     const { user, engine } = renderScreen();
     const attacker = speciesWithFirstMove("physical");
     const defender = speciesWithFirstMove("special", attacker.key);
@@ -817,13 +827,13 @@ describe("攻撃側のプリセット(P4-3)", () => {
 
     await user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
 
-    expect(presetRadio("C特化")).toBeChecked();
+    expect(presetRadio("A特化", "atk")).toBeChecked();
     await waitFor(() => {
       expect(lastRequest(engine).attacker.species).toEqual(toEngineSpecies(defender));
     });
     expect(lastRequest(engine).attacker).toMatchObject({
-      sp: { hp: 0, atk: 0, def: 0, spa: 32, spd: 0, spe: 0 },
-      nature: { plus: "spa", minus: "atk" },
+      sp: { hp: 0, atk: 32, def: 0, spa: 0, spd: 0, spe: 0 },
+      nature: { plus: "", minus: "" },
     });
   });
 });
