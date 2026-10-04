@@ -15,7 +15,9 @@ final class CalcViewModelSearchTests: XCTestCase {
 
     /// デバウンスを実際に働かせる必要があるテストだけが使う待ち時間(値そのものに意味は無い。
     /// 「打ち直しが前の検索を追い越す」のを確実にするために0より大きければよい)。
-    private let observableDebounce: Duration = .milliseconds(50)
+    /// デバウンスの待ち時間(テスト用)。短すぎると、シミュレータ上で CPU が混んだとき打ち直し(2回目の入力)が待ち時間を
+    /// 過ぎてしまい「最後の1回だけ要求が飛ぶ」の検証が不安定になる(ゲートで1度落ちた)。十分長くする(検証は変えない)。
+    private let observableDebounce: Duration = .milliseconds(500)
 
     // MARK: - 補助
 
