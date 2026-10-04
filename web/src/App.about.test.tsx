@@ -72,7 +72,7 @@ describe("フッターの入口", () => {
       const link = footerLink();
       expect(link).toHaveAttribute("href", "/about");
       expect(screen.getByRole("main")).not.toContainElement(screen.getByRole("contentinfo"));
-      expect(screen.getAllByRole("tab")).toHaveLength(8);
+      expect(screen.getAllByRole("tab")).toHaveLength(7);
       expect(screen.queryByRole("tab", { name: "このアプリについて" })).toBeNull();
     },
   );

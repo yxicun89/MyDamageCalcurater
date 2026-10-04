@@ -14,7 +14,8 @@ Status(追記): 2026-10-03 issue #288(ダブル)は、データレーン(PR #534
 Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・反映していない入力を応答と判定画面に出す。ADR-0710)を実装。
 第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Status(追記): 2026-10-03 issue #235 追加分: 判定に `status`(状態異常)を足し、まひを素早さに反映(ADR-0712。連結・丸めのあと floor(x×50/100)、`*SpeedApplied` の末尾に `paralysis`、全 status を calc-svc へ転送)。Web に「状態異常」select。
-Next: issue 235 第2段(ADR-0714)の critic と PR。iOS の判定応答は SpeedFactor が @frozen の厳格な enum なので ability・item を受けると復号に失敗する(iOS レーンで ios 側の生成物を再生成)。issue 271 判定画面の未対応の印(ADR-0713)の critic と PR。issue #235 追加分の critic と PR。issue 309 の critic レビューと PR(共通部品化〈MoveSelect・プリセット選択〉と SpeciesSearchField の aria-invalid 対応は別タスク提案。ADR-0711)。以降は新規要望待ち。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
+Status(追記): 2026-10-04 判定の画面は非表示(目的の作り直し待ち。ユーザー決定。docs/usability-round2.md F-07)。サービス・契約(0.3.0)・コード・単体テストは残す。Web のタブは Web レーン、iOS の入口は iOS レーンが登録を外す。
+Next: 判定の目的の再設計は、ユーザーの指示待ち(候補: 調整の画面で一度に確認できる形。docs/usability-round2.md F-11)。それまで画面は非表示で、サービス・契約・コードは残す。デプロイ順(ADR-0714 §6): calc-svc・Web → master-release の再取り込み → judge。過去の経緯: issue 235 第2段(ADR-0714)・issue 271 判定画面の未対応の印(ADR-0713)・issue 235 追加分(ADR-0712)は main 統合済み。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):
 名前付きスキーマ `MoveId`/`NatureId`(pattern `^[a-z0-9]+(-[a-z0-9]+)*$`・maxLength 64)を契約に追加し、
