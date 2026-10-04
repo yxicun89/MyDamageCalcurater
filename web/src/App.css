@@ -116,20 +116,29 @@
   font-size: var(--font-size-heading);
 }
 
+.about__section {
+  margin-bottom: var(--space-3);
+  padding: var(--space-4);
+}
+
 .about__section h3 {
-  margin: var(--space-4) 0 var(--space-2);
+  margin: 0 0 var(--space-2);
   font-size: var(--font-size-body);
 }
 
-.about__section p,
+:where(.about__section) p,
 .about__sources {
   margin: 0;
   font-size: var(--font-size-body);
   color: var(--text-secondary);
 }
 
+.about__status--error p {
+  color: inherit;
+}
+
 .about__sources {
-  padding-left: var(--space-5);
+  padding: 0;
 }
 
 .about__source-title {
@@ -147,34 +156,8 @@
   margin-top: var(--space-3);
 }
 
-.about__button {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  padding: var(--space-2) var(--space-4);
-  cursor: pointer;
-}
-
-.about__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.about__button--danger {
-  color: var(--danger);
-}
-
 .about__status {
   margin-top: var(--space-3);
-  color: var(--text-secondary);
-}
-
-.about__status--error {
-  color: var(--danger);
 }
 
 .about__scrim {
@@ -192,10 +175,6 @@
 .about__dialog {
   max-width: 24rem;
   padding: var(--space-4);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-base);
-  color: var(--text-primary);
 }
 
 .about__dialog-title {
@@ -204,7 +183,6 @@
 }
 
 .about__back {
-  display: inline-block;
-  margin-top: var(--space-5);
-  color: var(--text-primary);
+  margin-top: var(--space-4);
+  text-decoration: none;
 }

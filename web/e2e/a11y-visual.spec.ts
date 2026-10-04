@@ -1,5 +1,7 @@
-// F-12(I-web-6、ADR-0334): ポップ・カラフルな見た目の基盤を当てた画面の a11y と「動き」の回帰。
-// - axe(WCAG 2.x A/AA。色のコントラストを含む)で、計算・素早さ・構築をライト/ダークの両方で 0 件にする
+// F-12(I-web-6、ADR-0334。I-web-12 = PR-2、ADR-0336 で逆算・タイプバランス・お気に入り・調整・このアプリについてを追加):
+// ポップ・カラフルな見た目の基盤を当てた画面の a11y と「動き」の回帰。
+// - axe(WCAG 2.x A/AA。色のコントラストを含む)で、計算・素早さ・構築・逆算・タイプバランス・お気に入り・調整・/about を
+//   ライト/ダークの両方で 0 件にする
 //   (計算はタイプ色のカード〈種族を選んだ状態〉も見る)。
 // - 常時動くアニメーションが無い(無限に繰り返す Animation が document に無い)。
 // - 「視差効果を減らす」(prefers-reduced-motion: reduce)では、ボタン・タブの transition が 0 秒になる。
@@ -8,7 +10,7 @@
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
-import { SPECIES, openApp, selectMatchup } from "./support/calcPage.ts";
+import { SPECIES, openApp, selectMatchup, selectReverseMatchup } from "./support/calcPage.ts";
 
 const WCAG_TAGS = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"];
 
@@ -17,6 +19,11 @@ const SCREENS = [
   { path: "/calc", tab: "計算" },
   { path: "/speed", tab: "素早さ" },
   { path: "/team", tab: "構築" },
+  // I-web-12(ADR-0336)で追加。
+  { path: "/reverse", tab: "逆算" },
+  { path: "/balance", tab: "タイプバランス" },
+  { path: "/favorites", tab: "お気に入り" },
+  { path: "/adjust", tab: "調整" },
 ] as const;
 
 async function openScreen(page: Page, path: string, tab: string): Promise<void> {
@@ -42,6 +49,20 @@ for (const scheme of ["light", "dark"] as const) {
       });
     }
 
+    test("/about(出典リスト・データの扱い・ボタン)に axe の違反が無い", async ({ page }) => {
+      await page.goto("/about");
+      await expect(
+        page.getByRole("heading", { level: 2, name: "このアプリについて", exact: true }),
+      ).toBeVisible();
+      await expectNoAxeViolations(page);
+    });
+
+    test("タイプ色のカード(種族を選んだ逆算画面)に axe の違反が無い", async ({ page }) => {
+      await page.goto("/reverse");
+      await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+      await expectNoAxeViolations(page);
+    });
+
     test("タイプ色のカード(種族を選んだ計算画面)に axe の違反が無い", async ({ page }) => {
       await openApp(page);
       await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
@@ -52,6 +73,19 @@ for (const scheme of ["light", "dark"] as const) {
     });
   });
 }
+
+test("タイプ色のカード: 逆算の自分のカードも、選んだ種族で --card-type が変わる(I-web-12)", async ({
+  page,
+}) => {
+  await page.goto("/reverse");
+  const card = page.getByRole("region", { name: "自分のポケモン" });
+  await expect(card).toHaveClass(/\bui-card--typed\b/);
+  await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const value = await card.evaluate((element) =>
+    (element as HTMLElement).style.getPropertyValue("--card-type"),
+  );
+  expect(value).toMatch(/^var\(--type-[a-z0-9-]+, var\(--brand-primary\)\)$/);
+});
 
 test("タイプ色のカード: 選んだ種族で攻撃側カードの --card-type が変わる", async ({ page }) => {
   await openApp(page);

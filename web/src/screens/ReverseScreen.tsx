@@ -105,6 +105,7 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { typeAccentStyle } from "../ui/typeAccent";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
@@ -805,15 +806,23 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         onChange={selectMove}
         disabled={!movesAvailable}
       />
-      {!movesAvailable && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      {!movesAvailable && (
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {masterOnlineText.movesUnavailable}
+        </p>
+      )}
       {moveSourceSpecies !== null && capabilities.moves && moveOptions.length === 0 && (
-        <p className="reverse-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {calcScreenText.noDamagingMovesNotice}
+        </p>
       )}
       {!capabilities.effects && (
-        <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {masterOnlineText.itemCandidatesUnavailable}
+        </p>
       )}
       {itemCandidatesResult.truncated && (
-        <p className="reverse-screen__notice">
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
           {requestLimitText.itemCandidatesTruncated(MAX_ITEM_CANDIDATES)}
         </p>
       )}
@@ -840,7 +849,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         ))}
         <button
           type="button"
-          className="reverse-observations__add"
+          className="ui-button ui-button--secondary reverse-observations__add"
           onClick={addObservation}
           disabled={!canAddObservation(observations.length)}
           aria-describedby={canAddObservation(observations.length) ? undefined : observationLimitReasonId}
@@ -848,7 +857,11 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           {reverseScreenText.addObservationLabel}
         </button>
         {!canAddObservation(observations.length) && (
-          <p id={observationLimitReasonId} role="status" className="reverse-screen__notice">
+          <p
+            id={observationLimitReasonId}
+            role="status"
+            className="ui-notice ui-notice--info reverse-screen__notice"
+          >
             {requestLimitText.observationLimitReached(MAX_OBSERVATIONS)}
           </p>
         )}
@@ -929,7 +942,11 @@ function ReverseCard({
   return (
     // section の accessible name は今までどおり aria-label(cardLabel、「自分のポケモン」等。変えない)。
     // h2 は見える見出し(regionLabel、「自分」「相手」)を足すためだけに置く(issue 304)。
-    <section className="reverse-card" aria-label={cardLabel}>
+    <section
+      className="ui-card ui-card--typed reverse-card"
+      aria-label={cardLabel}
+      style={typeAccentStyle(species?.types[0])}
+    >
       <h2 className="reverse-card__region">{regionLabel}</h2>
       {speciesListAvailable ? (
         <>
@@ -1027,7 +1044,7 @@ function SideSelector({ side, onChange }: SideSelectorProps) {
   const groupName = useId();
   return (
     <div role="radiogroup" aria-label={reverseScreenText.sideGroupLabel} className="reverse-side">
-      <label className="reverse-side__option">
+      <label className={`ui-chip${side === "defender" ? " ui-chip--selected" : ""} reverse-side__option`}>
         <input
           type="radio"
           name={groupName}
@@ -1038,7 +1055,7 @@ function SideSelector({ side, onChange }: SideSelectorProps) {
         />
         {reverseScreenText.sideDefenderLabel}
       </label>
-      <label className="reverse-side__option">
+      <label className={`ui-chip${side === "attacker" ? " ui-chip--selected" : ""} reverse-side__option`}>
         <input
           type="radio"
           name={groupName}
@@ -1069,7 +1086,7 @@ function MyPresetSelector({ category, value, onChange }: MyPresetSelectorProps) 
         return (
           <label
             key={key}
-            className={`reverse-preset__option${selected ? " reverse-preset__option--selected" : ""}`}
+            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
           >
             <input
               type="radio"
@@ -1107,7 +1124,7 @@ function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPrese
         return (
           <label
             key={key}
-            className={`reverse-preset__option${selected ? " reverse-preset__option--selected" : ""}`}
+            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
           >
             <input
               type="radio"
@@ -1219,7 +1236,9 @@ function ObservationRowView({
         aria-label={reverseScreenText.observationUnitGroupLabel(n)}
         className="reverse-observation__unit"
       >
-        <label className="reverse-observation__unit-option">
+        <label
+          className={`ui-chip${row.unit === "percent" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
+        >
           <input
             type="radio"
             name={groupName}
@@ -1230,7 +1249,9 @@ function ObservationRowView({
           />
           {reverseScreenText.percentUnitLabel}
         </label>
-        <label className="reverse-observation__unit-option">
+        <label
+          className={`ui-chip${row.unit === "damage" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
+        >
           <input
             type="radio"
             name={groupName}
@@ -1254,7 +1275,11 @@ function ObservationRowView({
         </p>
       )}
       {removable && (
-        <button type="button" className="reverse-observation__remove" onClick={onRemove}>
+        <button
+          type="button"
+          className="ui-button ui-button--secondary reverse-observation__remove"
+          onClick={onRemove}
+        >
           {reverseScreenText.removeObservationLabel(n)}
         </button>
       )}
@@ -1292,14 +1317,18 @@ function ResultsSection({
     case "loading":
       return (
         <div className="reverse-results" aria-busy="true">
-          <p className="reverse-screen__notice">{calcScreenText.loadingNotice}</p>
+          <p className="ui-notice ui-notice--loading reverse-screen__notice">
+            {calcScreenText.loadingNotice}
+          </p>
         </div>
       );
     case "status-move":
-      return <p className="reverse-screen__notice">{calcScreenText.statusMoveNotice}</p>;
+      return (
+        <p className="ui-notice ui-notice--info reverse-screen__notice">{calcScreenText.statusMoveNotice}</p>
+      );
     case "error":
       return (
-        <p role="alert" className="reverse-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error reverse-screen__error">
           {outcome.error.message}
         </p>
       );
@@ -1344,7 +1373,7 @@ function ReverseResultsList({
   onNarrowingAnimationEnd,
 }: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
-  const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
+  const listClassName = `ui-rows reverse-results__list${narrowing ? " is-narrowing" : ""}`;
   // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
   // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
   const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;

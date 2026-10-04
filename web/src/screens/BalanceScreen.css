@@ -24,10 +24,6 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
   padding: var(--space-4);
 }
 
@@ -59,10 +55,8 @@
   margin-left: auto;
 }
 
-.balance-screen__notice,
-.balance-screen__error {
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
+.balance-screen__add {
+  align-self: flex-start;
 }
 
 /* 仮想敵1体分の結果(表と人数の集計)のまとまり。節の区切りを分かりやすくする。 */
@@ -70,8 +64,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  border-top: 1px solid var(--border-hairline);
-  padding-top: var(--space-4);
+  padding: var(--space-4);
 }
 
 .balance-screen__threat > p {
@@ -86,8 +79,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  border-top: 1px solid var(--border-hairline);
-  padding-top: var(--space-4);
+  padding: var(--space-4);
 }
 
 .balance-screen__recommendations > p {
@@ -97,13 +89,20 @@
   margin: 0;
 }
 
-.balance-screen__error {
-  color: var(--danger);
+/* 幅の狭い画面で表がページを横に溢れさせないよう、表は包みの中でスクロールする。 */
+.balance-screen__table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.balance-screen__table-scroll:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .balance-screen table {
   width: 100%;
-  border-collapse: collapse;
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   color: var(--text-primary);
