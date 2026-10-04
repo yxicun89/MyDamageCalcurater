@@ -183,7 +183,7 @@ ID 列は `ascii_bin`、日本語名は `utf8mb4_ja_0900_as_cs`(ADR-0100 §2)。
 |---|---|---|
 | クエリ | `services/pokedex/db/query/pokedex.sql` に集約(`-- name:` の件数は `grep -c -- '-- name:' services/pokedex/db/query/pokedex.sql`)。手書きの SQL 文字列はコードに持たない | `importer/apply.go` の冒頭コメント |
 | 生成 | `make gen-sql` → sqlc(`engine: mysql`、`schema: migrations`、`out: ../internal/store`、`emit_interface: true`) | `db/sqlc.yaml`、ルート `Makefile`(`gen-sql`) |
-| 生成物 | `internal/store/{db,models,pokedex.sql,querier}.go`(コミットする。`make gen` の差分検査対象) | `db/sqlc.yaml` のコメント |
+| 生成物 | `internal/store/{db,models,pokedex.sql,querier}.go`(Git に置かない。`make gen`(`gen-sql`)が作る。ADR-0807) | `db/sqlc.yaml` のコメント |
 | 読み取り側の利用 | `internal/httpapi`(検索・master)、`internal/readmodel`(export) | `cmd/pokedex/main.go` |
 
 ## 8. DB を使うテスト

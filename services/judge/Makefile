@@ -16,17 +16,21 @@ test: judge-test
 lint: judge-lint
 build: judge-build
 
+# 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 judge-gen:
-	@cd services && $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml
+	@if $(GEN_STALE) services/judge/internal/api/openapi.gen.go -- services/judge/api/openapi.yaml services/judge/internal/api/cfg.yaml services/go.mod; then \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml) && \
+		echo "judge-gen: services/judge/internal/api/openapi.gen.go を生成"; \
+	fi
 
-judge-test:
+judge-test: judge-gen
 	@cd $(JUDGE_DIR) && GOWORK=off $(GO) test ./...
 
-judge-lint:
+judge-lint: judge-gen
 	@test -z "$$(gofmt -l $(JUDGE_DIR))" || { gofmt -l $(JUDGE_DIR); exit 1; }
 	@cd $(JUDGE_DIR) && GOWORK=off $(GO) vet ./...
 
-judge-build:
+judge-build: judge-gen
 	@cd $(JUDGE_DIR) && GOWORK=off $(GO) build ./...
 
 judge-kustomize:
@@ -41,18 +45,22 @@ judge-gitops-template-check: judge-kustomize
 judge-gitops-check: judge-kustomize
 	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/check-gitops.sh ready
 
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 judge-docker-push:
+	@$(MAKE) --no-print-directory judge-gen GEN_FORCE=1
 	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/publish-image.sh
 
 # balance レーンのクラスタ内レジストリを共有する(ADR-0709 §1)。専用の registry-apply は持たない。
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 judge-registry-push:
+	@$(MAKE) --no-print-directory judge-gen GEN_FORCE=1
 	@JUDGE_DIR=$(JUDGE_DIR) JUDGE_REGISTRY_PORT=$(JUDGE_REGISTRY_PORT) $(JUDGE_DIR)/scripts/local-registry-push.sh
 
 judge-argocd-app:
 	@JUDGE_DIR=$(JUDGE_DIR) $(JUDGE_DIR)/scripts/argocd-local-app.sh
 
 # engine を含むため、ビルドコンテキストはリポジトリのルート(ADR-0700 §1。speed と同じ形)。
-judge-docker-build:
+judge-docker-build: judge-gen
 	@docker build -f $(JUDGE_DIR)/Dockerfile -t $(JUDGE_IMAGE) .
 
 judge-k3d-deploy: judge-docker-build ## k3d へ judge を直接デプロイ(local overlay)

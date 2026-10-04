@@ -41,7 +41,7 @@
 | レーン | 作業ディレクトリ | ブランチ | 範囲 |
 |---|---|---|---|
 | **データ**(damage calc: engine・マスタ) | `~/MyDamageCalcurater-calc`(同じリポジトリの git worktree。`~/MyDamageCalcurater` は確認用で使わない) | `feat/calc-<phase名>`(既存の `feat/claude-p1-engine` はマージまでそのまま使う) | `engine/`、`tools/golden/`・`testdata/golden/`、Phase 2(`services/pokedex/`・`tools/importer/`・`services/internal/master/`・MySQL の k8s 定義)、および他のレーンに属さない M1〜M4 のタスク。**M4(監視・SLO・GitOps・バックアップ)と、Tailscale 等の到達経路・運用(deploy・scripts・runbook・up.sh・k8s)の持ち主はこのレーン**(ユーザー決定 2026-10-03・issue #285。「運用レーン」は作らない) |
-| **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)と **M2(`services/record/`・`services/team/`・TiDB・NATS。画面は Web レーン)**(ユーザー決定 2026-10-03)。**`api/openapi.yaml` と生成物(`services/internal/api/`)を変更できるのはこのレーンだけ** |
+| **API**(damage calc: サービス) | `~/MyDamageCalcurater-api` | `feat/api-<phase名>` | Phase 3(`services/calc/`・`services/gateway/`・契約テスト・k3d のスモーク)と **M2(`services/record/`・`services/team/`・TiDB・NATS。画面は Web レーン)**(ユーザー決定 2026-10-03)。**`api/openapi.yaml` を変更できるのはこのレーンだけ**(生成物 `services/internal/api/openapi.gen.go` は Git に置かない。ADR-0807) |
 | **Web**(damage calc: 画面) | `~/MyDamageCalcurater-web` | `feat/web-<phase名>` | Phase 4(`web/`・Playwright)。`make wasm` の成果物を使う |
 | **タイプバランス**(type balance) | `~/MyDamageCalcurater-tb`(同じリポジトリの git worktree) | `feat/tb-<stage名>`(既存の `feat/codex-tb0-foundation` はマージまでそのまま使う) | `services/balance/` とその Kustomize / Argo CD 定義。設計の正は `docs/type-balance-design.md` |
 | **iOS**(damage calc: iOS アプリ) | `~/MyDamageCalcurater-ios` | `feat/ios-<phase名>` | M3 の Phase 6(`ios/`)。API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない。署名・実機インストールは人間(CLAUDE.md) |
@@ -170,6 +170,31 @@ scripts/pr-merge.sh <番号>         # 推奨: 上の3つに加えてローカ�
   それ以外のファイルで別レーンの変更と競合したら、**推測で解決しない**。PR を作らず、`DECISIONS.md` に内容と既定案を書いて、自分の作業を続ける。
 - マージしたら `DECISIONS.md` に「何を統合したか(PR 番号)」を1行追記し、レーン欄を更新する(次の PR に含める)。
 - Phase/ステージが完了してマージしたブランチは削除する。途中の区切りで PR を出したブランチは、そのまま続けて使ってよい。
+
+## 生成物を追跡から外したあとの取り込み(2026-10-03 ユーザー決定。ADR-0807)
+
+API 契約・SQL から作る生成物(Go・TypeScript・iOS。一覧は `scripts/ensure-gen.sh list`)は Git に置かない。
+
+この変更より前に分かれたブランチで main を取り込むと、生成物が「main では削除・こちらでは変更」の衝突になる。
+次の順で解く(生成物の中身は手で直さない。仕様から作り直す):
+
+```
+cd <レーンの作業ディレクトリ>
+git fetch origin
+git merge origin/main
+git rm -r --cached --ignore-unmatch $(./scripts/ensure-gen.sh list)
+make gen GEN_FORCE=1
+make build
+make ios-gen GEN_FORCE=1           # macOS で iOS を触るときだけ
+git status --short                 # 生成物が一覧に出ないこと(.gitignore 済み)
+git commit
+```
+
+- 仕様(`openapi.yaml`・`services/pokedex/db`)の衝突は、上の `git rm --cached` の前に通常どおり解く。
+- `GEN_FORCE=1` は、マージで残った main 側の生成物(更新時刻が新しく、再生成が省かれうる)を確実に作り直すため。
+- 新しい Go・TS の生成物を足すときは `scripts/ensure-gen.sh` の一覧・`.gitignore`・Makefile の `gen` を揃える
+  (`scripts/ensure-gen_test.sh` が一覧と `.gitignore` の一致を検査する)。iOS の生成対象は
+  `ios/scripts/openapi-targets.sh` に1行足せば一覧・`.gitignore` に入る(ターゲットに `GenRequired.swift` も置く)。
 
 ## 共有ファイルの編集
 

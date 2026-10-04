@@ -22,6 +22,10 @@ make web-install
 make web-dev
 ```
 
+API 契約・SQL から作る生成物(Go・TypeScript・iOS)は Git に置きません。`make` の各ターゲットと Web の
+`npm run dev`・`build`・`test` 等が先に生成します(ADR-0807)。生成器の初回ビルドは数分かかり、以降は
+Go・SwiftPM のビルドキャッシュが効きます。
+
 表示された URL をブラウザで開きます。k3d(`make up` → `http://localhost:8080`)・iOS・DB を使う手順は
 [docs/verify-m1.md](docs/verify-m1.md) と [docs/runbooks/](docs/runbooks/) を上から実行してください。
 
@@ -77,6 +81,7 @@ make build
 モジュールごとに調べる場合は次を使います。
 
 ```sh
+make gen                                          # 生成物は Git に置かない。go を直接使う前に1回(ADR-0807)
 (cd engine && go vet ./... && go build ./...)
 (cd services && go vet ./... && go build ./...)   # balance・speed・judge は別モジュール。make lint / make build が検査する
 (cd tools && go vet ./... && go build ./...)
@@ -84,6 +89,8 @@ make build
 
 変更した Go ファイルは `gofmt` します。`make fmt` は広い範囲を変更するため、既存差分がある場合は
 変更ファイルに絞ってください。API 変更は `api/openapi.yaml` が先で、その後 `make gen` です。
+`gen_required.go` で `undefined: …` のコンパイルエラーが出たら生成物がありません(`scripts/ensure-gen.sh check` が欠けている
+ファイルを一覧にします)。iOS も同じで、Xcode で直接開く前に `make ios-gen` を1回実行します。
 
 `make e2e` は常時3件(`web-e2e`・`web-e2e-online`・`web-e2e-balance`。k3d クラスタ不要)の Playwright を必ず実行し、
 kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存クラスタが要る3件(`api-smoke`・`web-k3d-smoke`・`web-k3d-e2e`)
