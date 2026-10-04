@@ -1,6 +1,6 @@
 # tools/assets
 
-手元のポケモン画像を WebP 2サイズと `manifest.json` に変換する(ADR-0807)。取得ツールは作らない(権利。ADR-0002)。
+手元のポケモン画像を WebP 2サイズと `manifest.json` に変換する(ADR-0808)。取得ツールは作らない(権利。ADR-0002)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

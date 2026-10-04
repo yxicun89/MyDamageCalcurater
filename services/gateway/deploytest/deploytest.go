@@ -288,7 +288,7 @@ type VolumeMount struct {
 	ReadOnly  bool   `yaml:"readOnly"`
 }
 
-// Volume は Pod のボリューム(configMap と、local overlay の画像用 hostPath だけを扱う。ADR-0807)。
+// Volume は Pod のボリューム(configMap と、local overlay の画像用 hostPath だけを扱う。ADR-0808)。
 type Volume struct {
 	Name     string `yaml:"name"`
 	HostPath *struct {

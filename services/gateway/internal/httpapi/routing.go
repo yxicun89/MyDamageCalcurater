@@ -119,7 +119,7 @@ func matchRoute(method, path string) (routeKind, bool) {
 		}
 		return routeAssets, true
 	case strings.HasPrefix(path, prefixImages):
-		// ローカル画像の配信(ADR-0807)。/images そのもの(末尾スラッシュ無し)は一致しない → 404。
+		// ローカル画像の配信(ADR-0808)。/images そのもの(末尾スラッシュ無し)は一致しない → 404。
 		if method != http.MethodGet && method != http.MethodHead {
 			return routeNone, false
 		}

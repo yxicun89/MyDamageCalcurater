@@ -12,7 +12,7 @@
 //	GATEWAY_SPEED_URL             speed-svc の基底 URL。任意(未設定なら /api/speed/* は 503。issue #284)
 //	GATEWAY_JUDGE_URL             judge-svc の基底 URL。任意(未設定なら /api/judge/* は 503。issue #284)
 //	GATEWAY_ASSETS_URL            画像配信の基底 URL。任意(未設定なら /assets/* は 404)
-//	GATEWAY_IMAGES_DIR            ローカル画像(tools/assets の出力)のディレクトリ。任意(未設定なら /images/* は 404。ADR-0807)
+//	GATEWAY_IMAGES_DIR            ローカル画像(tools/assets の出力)のディレクトリ。任意(未設定なら /images/* は 404。ADR-0808)
 //	GATEWAY_WEB_URL               Web の静的配信の基底 URL。任意(設定時は予約パス以外の GET / HEAD を転送。ADR-0205)
 //	GATEWAY_CORS_ALLOWED_ORIGINS  カンマ区切りの許可オリジン(完全一致)。任意。"*" は起動エラー
 //	GATEWAY_UPSTREAM_TIMEOUT      上流の応答ヘッダを待つ上限(Go の duration)。既定 10s
@@ -52,7 +52,7 @@ const (
 	envUpstreamTimeout    = "GATEWAY_UPSTREAM_TIMEOUT"
 	// envWebURL は Web の静的配信の基底 URL(任意。ADR-0205)。
 	envWebURL = "GATEWAY_WEB_URL"
-	// envImagesDir はローカル画像のディレクトリ(任意。ADR-0807)。未設定なら /images/* は 404(画像なし = エンブレム)。
+	// envImagesDir はローカル画像のディレクトリ(任意。ADR-0808)。未設定なら /images/* は 404(画像なし = エンブレム)。
 	envImagesDir = "GATEWAY_IMAGES_DIR"
 
 	// defaultAddr は GATEWAY_ADDR が未設定・空のときの待ち受けアドレス。

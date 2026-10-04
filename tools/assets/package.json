@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "手元のポケモン画像を WebP 2サイズ + manifest.json に変換する(ADR-0807)",
+  "description": "手元のポケモン画像を WebP 2サイズ + manifest.json に変換する(ADR-0808)",
   "engines": {
     "node": "26.10.0"
   },

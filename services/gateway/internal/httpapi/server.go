@@ -1,5 +1,5 @@
 // Package httpapi は gateway の HTTP 境界(ADR-0202)。クライアントの唯一の入口として、
-// /api/calc・/api/pokedex・/assets を各上流へ転送し(/images はローカルのディレクトリから自前で配信。ADR-0807)、/api/* の X-Device-Id / X-Session-Id を検証し、
+// /api/calc・/api/pokedex・/assets を各上流へ転送し(/images はローカルのディレクトリから自前で配信。ADR-0808)、/api/* の X-Device-Id / X-Session-Id を検証し、
 // CORS に答える。gateway 自身は計算もマスタ参照もしない(サービスは自分のデータだけに触る。CLAUDE.md 絶対ルール4)。
 //
 // 1リクエストの判定順序(ADR-0202 §3): CORS(プリフライトはここで204)→ ドットセグメント拒否 →
@@ -47,7 +47,7 @@ type Config struct {
 	JudgeURL *url.URL
 	// AssetsURL は画像配信(MinIO)の基底 URL。nil なら /assets/* は 404 not_found。
 	AssetsURL *url.URL
-	// ImagesDir はローカル画像(tools/assets の出力)のディレクトリ(ADR-0807)。空なら /images/* は 404 not_found。
+	// ImagesDir はローカル画像(tools/assets の出力)のディレクトリ(ADR-0808)。空なら /images/* は 404 not_found。
 	ImagesDir string
 	// WebURL は Web の静的配信(nginx)の基底 URL(ADR-0205)。設定されていれば /api・/assets/*・/healthz・
 	// /internal のどれにも当たらない GET / HEAD を転送する。nil なら従来どおり(それらのパスは 404 not_found)。
