@@ -15,13 +15,12 @@ describe("ルート表", () => {
   // 共有ファイルへの追記はこの1件・screens.tsx の1件・ja.ts の文言・App.tsx の client の受け渡しに限る。
   // P5-5 PR-A1(ADR-0309 §1): 構築(/team)を判定の後ろ(末尾)に足す。持ち物は web/src/team/ の中だけ。
   // AJ6(ADR-0319 §1): 調整(/adjust)を構築の後ろ(末尾)に足す。持ち物は web/src/adjust/ の中だけ。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、判定 → judge、構築 → team、お気に入り → favorites、調整 → adjust の順に並び、表示名は appText の語", () => {
+  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、構築 → team、お気に入り → favorites、調整 → adjust の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
       ["balance", "balance", appText.balanceTabLabel],
       ["speed", "speed", appText.speedTabLabel],
-      ["judge", "judge", appText.judgeTabLabel],
       ["team", "team", appText.teamTabLabel],
       ["favorites", "favorites", favoritesScreenText.tabLabel],
       ["adjust", "adjust", appText.adjustTabLabel],
@@ -66,10 +65,6 @@ describe("パス → 画面(screenFromPath)", () => {
     ["/app/calc", "/app/", "calc"],
     ["/balance", "/", "balance"],
     ["/app/balance", "/app/", "balance"],
-    // JD5(ADR-0705 §1): 判定の画面。
-    ["/judge", "/", "judge"],
-    ["/judge/", "/", "judge"],
-    ["/app/judge", "/app/", "judge"],
     // AJ6(ADR-0319 §1): 調整の画面。
     ["/adjust", "/", "adjust"],
     ["/adjust/", "/", "adjust"],
@@ -86,6 +81,10 @@ describe("パス → 画面(screenFromPath)", () => {
     ["/calc/extra", "/"],
     ["/Reverse", "/"],
     ["/app/", "/app/"],
+    // ADR-0330: 非表示の画面(判定)の URL は未知のパスと同じ(呼び出し側が既定の画面へ置き換える)。
+    ["/judge", "/"],
+    ["/judge/", "/"],
+    ["/app/judge", "/app/"],
     ["/reverse", "/app/"],
     ["/application/reverse", "/app/"],
   ] as const)("%s(base %s)は null", (pathname, base) => {

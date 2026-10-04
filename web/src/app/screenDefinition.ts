@@ -59,6 +59,11 @@ interface ScreenDefinitionBase<C> {
   readonly order: number;
   /** 画面のクライアントを作る(App のマウント時に1回だけ呼ぶ。ここで通信しない)。 */
   readonly createClient: (deps: ScreenClientDeps) => C;
+  /**
+   * 真ならタブ・URL・マウントのすべてから外す(登録と検証だけ受ける。ADR-0330)。既定は false。
+   * 再表示は、この行を消すだけでよい。
+   */
+  readonly hidden?: boolean;
 }
 
 /** マスタを使う画面の定義。 */
@@ -94,6 +99,8 @@ export interface RegisteredScreen {
   readonly label: string;
   readonly order: number;
   readonly usesMaster: boolean;
+  /** 非表示の画面か(ADR-0330)。真の画面はタブにも URL にも出ず、クライアントも作らない。 */
+  readonly hidden: boolean;
   /** クライアントを作り、描画の口を返す。 */
   readonly instantiate: (deps: ScreenClientDeps) => ScreenInstance;
 }
@@ -102,13 +109,14 @@ export interface RegisteredScreen {
 export function defineScreen<C>(
   definition: MasterScreenDefinition<C> | MasterlessScreenDefinition<C>,
 ): RegisteredScreen {
-  const { id, segment, label, order, usesMaster } = definition;
+  const { id, segment, label, order, usesMaster, hidden = false } = definition;
   return {
     id,
     segment,
     label,
     order,
     usesMaster,
+    hidden,
     instantiate: (deps) => {
       const client = definition.createClient(deps);
       if (definition.usesMaster) {

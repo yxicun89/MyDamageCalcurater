@@ -152,7 +152,6 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), defenderKey);
     await user.click(tabButton("素早さ"));
     await screen.findByRole("region", { name: "自分のポケモン" });
-    await user.click(tabButton("判定"));
     await user.click(tabButton("計算"));
 
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attackerKey);

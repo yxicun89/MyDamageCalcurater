@@ -26,6 +26,12 @@ export interface SpeciesResolutions {
    * capabilities.speciesList が true のマスタでは常に空(master.species に全件ある)。
    */
   readonly resolvedSpecies: readonly MasterSpecies[];
+  /**
+   * 検索で解決した全種族の特性・技(重複あり)。未対応の印の名前引き用(オンラインのマスタは
+   * abilities・moves が空で、名前は解決結果にだけある)。speciesList が true なら常に空。
+   */
+  readonly resolvedAbilities: readonly Ability[];
+  readonly resolvedMoves: readonly Move[];
   /** resolveSpecies の結果を覚える。 */
   readonly register: (resolution: MasterSpeciesResolution) => void;
 }
@@ -69,5 +75,14 @@ export function useSpeciesResolutions(): SpeciesResolutions {
     [resolved],
   );
 
-  return { speciesFor, abilitiesFor, movesFor, resolvedSpecies, register };
+  const resolvedAbilities = useMemo(
+    () => [...resolved.values()].flatMap((resolution) => resolution.abilities),
+    [resolved],
+  );
+  const resolvedMoves = useMemo(
+    () => [...resolved.values()].flatMap((resolution) => resolution.moves),
+    [resolved],
+  );
+
+  return { speciesFor, abilitiesFor, movesFor, resolvedSpecies, resolvedAbilities, resolvedMoves, register };
 }
