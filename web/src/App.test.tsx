@@ -226,11 +226,10 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・判定・素早さ・タイプバランスは End からそれぞれ
-    // 1・2・3・4つ手前(P5-5 PR-A1 の時点では構築、JD5 の時点では判定が末尾だった)。
+    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・素早さ・タイプバランスは End からそれぞれ
+    // 2・3・4つ手前(判定は ADR-0330 で非表示になり巡回の対象外)。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
-    const judgeTab = screen.getByRole("tab", { name: "判定" });
     const teamTab = screen.getByRole("tab", { name: "構築" });
     // P5-3c(ADR-0327): お気に入りは構築と調整の間(order 650)。
     const favoritesTab = screen.getByRole("tab", { name: "お気に入り" });
@@ -247,10 +246,6 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     await user.keyboard("{ArrowLeft}");
     expect(teamTab).toHaveAttribute("aria-selected", "true");
     expect(teamTab).toHaveFocus();
-
-    await user.keyboard("{ArrowLeft}");
-    expect(judgeTab).toHaveAttribute("aria-selected", "true");
-    expect(judgeTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
     expect(speedTab).toHaveAttribute("aria-selected", "true");
