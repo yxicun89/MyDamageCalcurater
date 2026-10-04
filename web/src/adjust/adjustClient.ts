@@ -8,6 +8,7 @@
 //   POST api/calc/adjust/min-sp-to-ko       adjustMinSpToKo
 //   POST api/calc/adjust/min-sp-to-survive  adjustMinSpToSurvive
 //   POST api/calc/adjust/allocation         adjustAllocation
+//   POST api/calc/adjust/goals              adjustGoals(ADR-0331。段階 A はスタブ)
 //   GET  api/pokedex/moves/{key}/learners   listMoveLearners(?limit=&offset=)
 //
 // 失敗の写像(ADR-0319 §3):
@@ -66,6 +67,11 @@ export interface AdjustClient {
     request: Schemas["AdjustAllocationRequest"],
     signal?: AbortSignal,
   ): Promise<AdjustResult<Schemas["AdjustAllocationResult"]>>;
+  /** 相手ごとの目標をすべて満たす最小の振り方(ADR-0331)。 */
+  goals(
+    request: Schemas["AdjustGoalsRequest"],
+    signal?: AbortSignal,
+  ): Promise<AdjustResult<Schemas["AdjustGoalsResult"]>>;
   /** 技 moveId を覚えるポケモンの1ページ(図鑑番号・フォルム番号の昇順。返った件数が limit 未満なら最後)。 */
   moveLearners(
     moveId: string,
@@ -81,6 +87,9 @@ export const ADJUST_PATHS = {
   minSpToSurvive: "api/calc/adjust/min-sp-to-survive",
   allocation: "api/calc/adjust/allocation",
 } as const;
+
+/** adjustGoals のパス(ADR-0331。ADJUST_PATHS とは別に置き、既存の4操作の表を変えない)。 */
+export const ADJUST_GOALS_PATH = "api/calc/adjust/goals";
 
 /** 通信できない・応答が読めない・エラー本文の形が不正なときの Web 側のコード(ADR-0319 §3)。 */
 export const ADJUST_UNAVAILABLE_CODE = "adjust_unavailable";
@@ -169,6 +178,8 @@ export function createAdjustClient(input: CreateAdjustClientInput): AdjustClient
     minSpToKo: (request, signal) => post(ADJUST_PATHS.minSpToKo, request, signal),
     minSpToSurvive: (request, signal) => post(ADJUST_PATHS.minSpToSurvive, request, signal),
     allocation: (request, signal) => post(ADJUST_PATHS.allocation, request, signal),
+    // スタブ(ADR-0331 段階 A で post(ADJUST_GOALS_PATH, ...) にする。テストは adjustClient.goals.test.ts)。
+    goals: () => Promise.resolve(unavailableResult()),
     moveLearners: (moveId, page, signal) => send(moveLearnersPath(moveId, page), { method: "GET" }, signal),
   };
 }

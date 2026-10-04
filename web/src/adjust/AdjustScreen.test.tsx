@@ -74,6 +74,7 @@ function createFakeAdjustClient(): FakeAdjustClient {
     minSpToKo: (request, signal) => record("minSpToKo", [request], signal),
     minSpToSurvive: (request, signal) => record("minSpToSurvive", [request], signal),
     allocation: (request, signal) => record("allocation", [request], signal),
+    goals: (request, signal) => record("goals", [request], signal),
     moveLearners: (moveId: string, page: LearnersPage, signal?: AbortSignal) =>
       record("moveLearners", [moveId, page], signal),
   };

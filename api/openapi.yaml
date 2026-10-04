@@ -641,6 +641,52 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/calc/adjust/goals:
+    post:
+      tags: [calc]
+      operationId: adjustGoals
+      summary: 相手ごとの目標(素早さを上回る・この技を耐える・この技で倒す)をすべて満たす最小の振り方
+      description: |
+        `goals` の目標を**すべて**満たす SP の組のうち、合計 SP が最小の組を返す(ADR-0331。F-11)。
+        `self.sp` は各能力の下限、`ceiling` は各能力の上限(省略した能力は 32。allocation と同じ。ADR-0150 §8)。
+        - `outspeed`: 自分の素早さが `opponent` の素早さを**上回る**(同速は満たさない)。相手の素早さは
+          `opponent` の種族・性格・SP・`ranks` からサーバー(engine の RealStats・EffectiveStat)が求める。
+          持ち物・特性・場による素早さの補正は含めない。`moveId`(任意)は自分が先に使う技で、その技の
+          「必ず起きる自分の素早さのランク変化」(マスタの技の追加効果、確率 100%。ADR-0107)を掛けた素早さで比べる。
+          そのような効果の無い技ならランク 0 で比べる(エラーにしない。応答の `selfSpeedRank` が 0)。
+        - `survive`: `opponent` の技 `moveId` を `hits` 発受けて耐える確率 ≥ `thresholdPercent`(min-sp-to-survive と同じ判定)。
+        - `ko`: 自分の技 `moveId` で `opponent` を `hits` 発で倒す確率 ≥ `thresholdPercent`(min-sp-to-ko と同じ判定)。
+        - すべては満たせないときも 200 で `feasible: false` を返し、`plan` は最も近い組(選び方は engine の ADR)、
+          目標ごとの可否は `goals[i].met`。
+        - 未実装(ADR-0331 の段階 B。engine の拡張が先に要る)。calc-svc は実装まで 404 `not_found` を返す。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AdjustGoalsRequest' }
+      responses:
+        '200':
+          description: 目標をすべて満たす最小の振り方(満たせなければ最も近い振り方)と、目標ごとの結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdjustGoalsResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない(`upstream_unavailable`。ADR-0202)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /api/record/frequent-opponents:
     get:
       tags: [record]
@@ -2096,6 +2142,103 @@ components:
         unsupported:
           type: array
           description: goal の計算に付いた「未対応」の印(ADR-0123)。goal を省略したら空配列
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
+
+    AdjustGoalKind:
+      type: string
+      description: 目標の種類(outspeed = 素早さを上回る、survive = 相手の技を耐える、ko = 自分の技で倒す。ADR-0331)
+      enum: [outspeed, survive, ko]
+      # 汎用の名前(Ko など)が将来の列挙と衝突して既存の定数名を変えないよう、型名を前に付ける(AllocMode と同じ)
+      x-enum-varnames: [AdjustGoalKindOutspeed, AdjustGoalKindSurvive, AdjustGoalKindKo]
+
+    AdjustGoal:
+      type: object
+      description: |
+        1つの目標(ADR-0331)。種類ごとに使う項目が違う(oneOf にしない。ADR-0250 §1 と同じく生成型を扱いやすくするため)。
+        - outspeed: `opponent` だけ必須。`moveId` は任意(自分が先に使う技。素早さのランク変化を掛ける)。`hits`・`thresholdPercent` は読まない
+        - survive: `moveId`(相手の技)・`hits` が必須
+        - ko: `moveId`(自分の技)・`hits` が必須
+        種類に必須の項目の欠落・変化技は 400 `invalid_input`。
+      required: [kind, opponent]
+      properties:
+        kind: { $ref: '#/components/schemas/AdjustGoalKind' }
+        opponent:
+          allOf: [ { $ref: '#/components/schemas/Individual' } ]
+          description: 相手の個体(振り方はクライアントがプリセットから組み立てる)
+        moveId: { type: string }
+        hits: { $ref: '#/components/schemas/AdjustHits' }
+        thresholdPercent: { $ref: '#/components/schemas/AdjustThresholdPercent' }
+
+    AdjustGoalsRequest:
+      type: object
+      required: [format, self, goals]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        self:
+          allOf: [ { $ref: '#/components/schemas/Individual' } ]
+          description: 自分の個体。sp は各能力の下限(結果の SP は各能力でこれ以上)
+        ceiling: { $ref: '#/components/schemas/AdjustCeiling' }
+        goals:
+          type: array
+          minItems: 1
+          maxItems: 6
+          description: |
+            満たしたい目標(1〜6 件。順序は応答の goals と同じ)。件数の範囲外は ID の解決より前に 400 `invalid_input`
+            (ADR-0108 決定3・ADR-0208 §3 の検査順)。
+          items: { $ref: '#/components/schemas/AdjustGoal' }
+
+    AdjustGoalsPlan:
+      type: object
+      required: [sp, totalSp, stats]
+      properties:
+        sp:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 全6能力の SP(目標に関わらない能力は下限のまま)
+        totalSp: { type: integer }
+        stats:
+          allOf: [ { $ref: '#/components/schemas/StatBlock' } ]
+          description: 実数値(ランク補正なし)
+
+    AdjustGoalOutcome:
+      type: object
+      description: 目標1件の結果(リクエストの goals と同じ順)
+      required: [kind, met, chancePercent, selfSpeed, opponentSpeed, selfSpeedRank]
+      properties:
+        kind: { $ref: '#/components/schemas/AdjustGoalKind' }
+        met: { type: boolean, description: plan でこの目標を満たすか }
+        chancePercent:
+          type: number
+          format: double
+          nullable: true
+          description: survive は耐える、ko は倒す確率(%。engine の生値)。outspeed は null
+        selfSpeed:
+          type: integer
+          nullable: true
+          description: outspeed で比べた自分の素早さ(plan の実数値に selfSpeedRank を掛けた値)。それ以外は null
+        opponentSpeed:
+          type: integer
+          nullable: true
+          description: outspeed で比べた相手の素早さ(実数値に opponent.ranks を掛けた値)。それ以外は null
+        selfSpeedRank:
+          type: integer
+          nullable: true
+          minimum: -6
+          maximum: 6
+          description: outspeed で自分に掛けたランク(moveId の追加効果。技なし・効果なしは 0)。それ以外は null
+
+    AdjustGoalsResult:
+      type: object
+      required: [feasible, remaining, plan, goals, unsupported]
+      properties:
+        feasible: { type: boolean, description: すべての目標を満たすか }
+        remaining: { type: integer, description: 'plan の後に残る SP = 66 − plan.totalSp' }
+        plan: { $ref: '#/components/schemas/AdjustGoalsPlan' }
+        goals:
+          type: array
+          items: { $ref: '#/components/schemas/AdjustGoalOutcome' }
+        unsupported:
+          type: array
+          description: 目標の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列
           items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     MasterExport:

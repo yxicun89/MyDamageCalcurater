@@ -71,6 +71,11 @@ export interface AdjustScreenProps {
   readonly master: MasterData;
   /** 種族を都度引く口(`master.capabilities.speciesList` が false のとき SpeciesSearchField で使う)。 */
   readonly masterSearch?: MasterSpeciesSearch;
+  /**
+   * 「目標から振り方を決める」モードを出すか(ADR-0331 §2)。省略時は adjustGoals.ts の ADJUST_GOALS_ENABLED。
+   * スタブ: 段階 A の実装で読む。
+   */
+  readonly goalsEnabled?: boolean;
 }
 
 /** モードの表示順(radio の並び)。 */
@@ -443,6 +448,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
         ...base,
         operation: { kind: "survive", request: searchRequest(attacker, individual, opponentMove.id) },
       };
+    }
+
+    if (mode === "goals") {
+      // スタブ: ADR-0331 段階 A で goals の要求を組み立てる(今は指数だけ)。
+      return { ...base, operation: { kind: "none" } };
     }
 
     // bulk / offense(配分)。
