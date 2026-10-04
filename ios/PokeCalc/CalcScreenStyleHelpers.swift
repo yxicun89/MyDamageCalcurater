@@ -20,6 +20,8 @@ enum CalcScreenMetrics {
     /// 「詳細」の攻撃側のランク表示(「A +1」等)の最小幅。値が変わって桁数が増減しても
     /// ±ボタンの位置がずれないようにする(issue #274。ADR-0501「issue #274」)。
     static let rankValueMinWidth: CGFloat = 48
+    /// 攻撃側の「攻撃」「特攻」ブロックの入力・選択肢の最小の高さ(design.md のタップ範囲 36pt 以上。ADR-0518)。
+    static let minimumTapSide: CGFloat = 36
 }
 
 /// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0500 §1

@@ -4511,3 +4511,80 @@ XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので
   4 配列が文字列の配列でない行は触らず従来どおり decode エラー)。`APIJudgeService` の `init(serverURL:transport:identity:)` と `init(baseURL:identity:)` が同じ経路でミドルウェア付きの `Client` を作る(`init(client:identity:)` は不変)。
   `Package.swift` は変更なし(`HTTPTypes` は OpenAPIRuntime 経由で参照できる)。
 - 既存の `scrollUntilHittable` が状態異常ボタンの追加で通り越す問題は起きなかった(テストの操作変更なし)。
+
+## 攻撃側の SP・性格・技の絞り込みの受け入れ条件(F-01 / I-ios-1・I-ios-5。2026-10-05。判断は ADR-0518)
+
+Web(ADR-0329・ADR-0328)に揃える。受け入れ条件とテストが先で、実装は後続。engine・API 契約・services は変えない。
+
+### 受け入れ条件
+
+1. **2 ブロックの入力**: 計算画面の「技セレクタ」と「詳細」の間に「攻撃」「特攻」の 2 ブロックが常に出る。各ブロックは SP の数値欄(既定 `0`)・性格補正の 3 択(上昇・補正なし・下降。既定は補正なし)を持つ。
+   選んだ技が使う側(物理・変化 = 攻撃、特殊 = 特攻)の見出しに「(この技で使用)」を文字で足す(技が無ければどちらにも付けない)。タップ範囲は 36pt 以上。
+2. **要求の組み立て**: 攻撃と特攻の SP を**両方**要求に載せる(技が使わない側もそのまま。H・B・D・S は 0。合計は最大 64 で 66 を超えない)。既定のままの要求は従来と同一(無補正・SP 0)。
+   性格はマスタの性格一覧から Web と同じ規則で解決する(両方補正なし → 一覧の最初の無補正 / 使う側が上昇でもう一方が補正なしなら +A/−C・+C/−A の代表性格を優先 / 両方に合う性格を ID 昇順で最初 / 無ければ使う側だけ / 無ければ失敗)。
+3. **プリセットとの連動**: プリセット(ピルの行。識別子・位置は不変)を選ぶと使う側のブロックに値が入る(無振り = 0・補正なし、特化 = 32・上昇、振り = 32・補正なし)。もう一方は変えない。
+   ピルの選択状態は使う側のブロックの値から導く(数値で比較。一致しなければ選択なしで「カスタム」の印)。数値を変えても補正は変わらず、補正を変えても数値は変わらない。
+   プリセットの値は `AttackerPreset.build` の要求と一致する(物理・特殊とも)。
+4. **同じ向きにできない**: もう一方が上昇なら、こちらの「上昇」と「特化」のピルを選べない(下降・補正なしは選べる)。下降も同様。理由の一文を添え、もう一方の値を黙って書き換えない。選べない操作は計算しない。
+5. **不正入力は丸めず、計算しない**: SP は 10 進整数 0〜32 のみ(前後の空白は無視・先頭の 0 は可・空欄は 0。符号・小数点・指数・全角・33 以上は不正)。不正な欄は文字列を保ち、入力の近くに「攻撃のSPは0〜32の整数で入力してください」(特攻も同様)を出す。
+   計算要求を送らず、古い行も出さず、待っている古い応答も捨てる(`error` は立てない)。技が使わない側が不正でも同じ。直せば計算し直す。性格が解決できないときも計算せず `natureUnavailable` のエラーに「この性格補正の組み合わせに当たる性格が、データにありません」を出す。
+6. **値の寿命と回数**: 値が変わる操作は calcBulk をちょうど 1 回(変わらない操作・選べない操作は 0 回)。技・攻撃側/防御側の種族・攻守入れ替えで両ブロックの値(不正な文字列も)を消さない。古い応答は新しい入力の結果を上書きしない。
+7. **構築・お気に入りとの関係**: 構築の個体を呼んでいる間はその個体の SP・性格で計算し、入力欄の値は使わず書き換えず、不正でも止めない。入力欄・補正・ピルのどれを操作しても構築の選択は外れ(特性も外れる)、入力欄の値で計算する。
+   お気に入りに入れる攻撃側は入力から解決した個体(SP は両方。不正・性格なしは `attackerSPInvalid`・`natureUnavailable` で作れない)。
+8. **技の選択肢はダメージ技だけ**: 計算画面の `moveOptions` に変化技が出ない(検索語に変化技の名前を入れても出ない)。`selectMove(id:)` は変化技を無視して計算しない。種族を替えても変化技を選ばない。
+   構築から呼んだ個体の技が変化技だけでも、既定のダメージ技にする。ダメージ技を 1 つも覚えない種族は技欄を空にして案内(`noDamagingMovesNotice`)を出し、計算せず、エラーにもしない(替えれば計算が走る)。
+   status-move の安全網(`isStatusMoveSelected` のとき計算せず `statusMoveNotice`)は `CalcMoveRules.isStatusMove` で固定する。逆算・調整は変更なし、判定と構築編集の 4 技は絞らない。
+9. **文言・識別子・見た目**: 文言は Core の `AttackerStatLabels`(Web の `ja.ts` と同じ語)。識別子は追加のみ(ADR-0518 §5)。トークンのみ・`lineLimit` なし・`Menu` 禁止・常時アニメ無し。AX5 では性格補正の 3 択を縦に積み、横にはみ出さない。
+   `.contain` のコンテナは子を 2 つ以上にする。数値キーボードのツールバーに「完了」(`calcKeyboardDone`)を置く。
+
+### 追加したテスト(足場。いまは失敗する)
+
+- **単体(65 件追加)**: `AttackerStatInputTests` 24 件(`parseSP`・プリセット ⇔ ブロック・`AttackerPreset.build` との一致・同じ向きの無効化・性格の解決〈代表性格の優先・ID 昇順・フォールバック・解決失敗〉・要求の組み立て・技の絞り込み関数)/
+  `AttackerStatLabelsTests` 6 件(文言を Web と固定)/ `CalcViewModelAttackerStatsTests` 35 件(既定・SP 入力・補正・プリセット連動・同じ向き・不正入力・古い応答の破棄・値の寿命・構築との関係・お気に入り・技の絞り込み・技なし種族・モック)。
+- **XCUITest(9 件追加。実行していない。`xcodebuild build-for-testing` でコンパイルだけ確認済み)**: `CalcAttackerStatsUITests` 8 件(ブロックの出方と強調・特殊技で強調が移り値が残る・SP 入力でカスタム/戻す・特化ピルが 32・上昇を入れる・同じ向きの無効化と理由・不正入力の理由と行の出し入れ・使わない側の不正・技シートに変化技が出ない)と
+  `LargeTextLayoutUITests.testCalcScreenAttackerStatBlocksNoHorizontalOverflowAtAX5`(AX5 で横はみ出しなし・3 択が縦積み・タップできる)。
+- **実行結果(足場の時点。2026-10-05)**: 追加した単体 65 件のうち失敗 52・成功 13(成功は文言・既定値・「変わらなければ計算しない」など足場でも成り立つもの)。既存 1395 件は成功のまま(スイート全体 1460 件、失敗は追加分だけ)。
+  XCUITest は View 未実装のため実行すれば全件失敗する見込み(コンパイルのみ確認)。
+
+### 実装者への注意
+
+- 足場は `TODO(implementer` を検索: `AttackerStatInput.swift`(型は完成、`AttackerStatRules`・`CalcMoveRules` の本体が空)、`CalcViewModel+AttackerStats.swift`(公開 API の形だけ。本体が空)、
+  `CalcViewModel.attackerStatInputs`(保持だけ追加済み)、`AttackerStatLabels`(文言は確定済み)、`PokeCalcError.Code.attackerSPInvalid`(追加済み)。
+- 実装箇所: ① `AttackerStatRules` の本体(Web の `web/src/domain/attackerStatInputs.ts`・`spInput.ts` と同じ規則。一覧の最初の無補正は `AttackerPreset.build` と同じ「一覧の順」)。
+  ② `CalcViewModel.buildRequest` を `.preset` のとき `AttackerStatRules.resolve` に切り替える(`.team` は従来どおり個体の値)。要求を作れない・変化技・技なしのときは `calcBulk` を呼ばない(`recalculate` の入口で判定)。
+  ③ 入力操作は `beginInput()` → 更新 → `recalculate(token:)`。不正でも `beginInput()` で世代を進め、`rows`・`unsupportedNotice` を空に・`isLoading` を解く(`error` は nil。性格の失敗だけ `natureUnavailable`)。
+  ④ `moveOptions` を `CalcMoveRules.damagingMoves` で絞る。`reselectMove` は変化技を選ばない(優先する技が変化技なら既定へ。ダメージ技が無ければ `moveId` を空にして throw しない)。`selectMove` は選択肢に無い技を無視(既存のまま)。
+  ⑤ `attackerPreset` は「構築でなければ、使う側のブロックの値に一致するプリセット」(技が無ければ攻撃)。`attackerBuildSource` の `.preset` の中身は要求に使わない(`.team` の有無の判定だけに使う)。
+  ⑥ View: `CalcAttackerStatBlocksView`(新規)を `moveSelector` の次・`CalcConditionsSection` の前に置く。SP 欄は `TextField`(数値キーボード、`onChange` で `scheduleLatest`)、キーボードのツールバーに「完了」。
+  Web に「入力途中の文字を保つ」ため、欄の表示はこちらが持つ文字列(`attackerStatInputs`)と同じ値にする(丸めて書き戻さない)。
+- 既存 XCUITest への注意: ブロックが技セレクタと「詳細」の間に入るので「詳細」が下がる。`CalcConditionsUITests` は前方 → 戻るの `scrollUntilHittable` を持つ。**ほかの XCUITest(`CalcDefenderRanksUITests`・`AbilityPickerUITests`・`MegaItemLockUITests`・`FavoritesScreenUITests` など)が前方スクロールだけだと通り越す**ので、
+  View を足したあと iPhone 17e・iPhone 18 Pro・iPhone 17 で通し、通り越したら操作だけ直す(検証は変えない)。ピルの行・種族カード・技セレクタの位置は動かさない。
+- 既存テストの期待値更新(ADR-0518「既存テストへの影響」)は理由をコミットメッセージに書く。`make test-golden`・engine・API は触らない。
+- 完了条件: `swift test`・`make ios-test`(3 機種の XCUITest を含む)・`make ios-gen-check`・`make ios-lint`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### 実装結果(F-01 / I-ios-5。2026-10-05)
+
+- 実装: `AttackerStatRules`・`CalcMoveRules`・`CalcViewModel+AttackerStats`・`CalcViewModel`(要求は `attackerStatInputs` から。`moveOptions` を変化技除外。`reselectMove` が変化技を選ばない)・
+  View `CalcAttackerStatBlocksView`(新規)・`CalcScreenView`(ブロック・「完了」ツールバー・ピルの無効化)。`design.md` に iOS の記述を追記。
+- 判断: ①`selectAttackerPreset(_:)` は同じ値のプリセットを押し直しても計算し直す(従来のピルと同じ。既存テストが依存)。値が変わらない操作で計算しないのは SP 欄・補正の操作だけ。
+  ②`reselectMove` で learnset の解決が `maxMoveLookupsPerSelection` で打ち切られ、ダメージ技が見つからなかったときは従来どおり「解決できた最初の技」(変化技のことがある)を選ぶ。
+  上限の先にダメージ技があるかもしれず「覚えない」と言い切れないため(`CalcViewModelMoveLookupTests` の既存テストを変えない)。変化技のときは安全網(`isStatusMoveSelected`)が計算を止めて案内する。
+  全部調べ終えて無かったときだけ `noDamagingMoves`(技欄が空・案内)。③SP 欄は View 側の `draft` を同期で書き換え、VM へは `scheduleLatest` で反映。自分が送った値の戻りで巻き戻さないよう、送った値を覚える。
+- 既存テストの期待値を変えた箇所(検証の強さは落としていない):
+
+| テスト | 変更前 → 後 | 理由 |
+|---|---|---|
+| `CalcViewModelTests.testMoveOptionsAreAttackerLearnsetOnlyInLearnsetOrder` | [変化, アルファ専用, 特殊] → [アルファ専用, 特殊] | 変化技を出さない |
+| 同 `testAttackerWithOnlyStatusMovesFallsBackToFirstLearnsetMove` → `...HasNoMoveAndDoesNotCalculate` | 先頭の変化技を選び A特化の SP を確認 → moveId 空・`hasNoDamagingMoves`・計算 0 回・入力は受け付ける | 変化技へフォールバックしない。「変化技は atk」は `AttackerPresetTests` が持つ |
+| 同 `testEachInputChangeCallsCalcBulkExactlyOnceWithTheRightShape` | 特殊技へ替えると SP が spa のみ・spaUp → 攻撃の 32 が残り無補正。以降は使う側(特攻)のブロックへ入れる(件数は不変) | 値は技で消えない(両方の SP を載せる) |
+| 同 `testSwapSidesSwapsSpeciesAndReselectsMoveWithOneCalc` | 入れ替え前に `selectAttackerPreset(.aFull)` → `selectAttackerPreset(.aFull, for: .spa)`、moveOptions から変化技を除く(他の期待値は不変) | 値は技で消えない。入れ替え後の使う側は特攻 |
+| 同 `testStaleSpeciesDetailDoesNotOverwriteNewerAttackerSelection` | moveOptions から変化技を除く | 変化技を出さない(ADR 表に無かった同じ理由の追随) |
+| `CalcViewModelDefenderRanksTests.testStatusMoveEditsDef` → `testPhysicalMoveEditsDefAndStatusMoveCannotBeSelected` | 変化技で def・「B ±0」 → 物理技で同じ確認+変化技が選べない | 変化技を選べない |
+| `CalcViewModelConditionsTests.testStatusMoveEditsAttackRank` | 変化技を選ぶ(実は無視され物理のまま通っていた) → `relevantStat(for: .status) == .atk` を直接確認+選べないことの確認 | 同上 |
+| `CalcViewModelTeamIndividualTests.testMemberWithStatusMoveKeepsItOnCalcScreen` → `...GetsTheDefaultDamagingMoveOnCalcScreen` | 変化技が選ばれる → 既定のダメージ技(個体の SP・性格は使う) | 計算画面は変化技を選ばない |
+
+- XCUITest(`ios/scripts/run-xcode-tests.sh`。排他ロック付き): 件数は下の実行結果を参照。既存 XCUITest の操作の直しは不要だった。
+- `swift test`: 1460 件・失敗 0。`make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing` 成功。
+- XCUITest の結果: iPhone 17e で 新規 9 件(`CalcAttackerStatsUITests` 8 + AX5 追加 1)成功 9・既存 33 件(CalcScreen・CalcConditions・CalcDefenderRanks・AbilityPicker・MegaItemLock・FavoritesScreen)成功 33。
+  iPhone 18 Pro で新規 9 件成功 9。初回の 18 Pro で `testTypingSP...` が失敗(速く打つと VM からの古い値の戻りで `draft` が巻き戻る競合)したため、送った値を覚える対策を入れて再実行し全件成功。
+  `FavoriteLoadUITests` はこのブランチに無い(別ブランチ)ため未実行。iPhone 17 は未実行。

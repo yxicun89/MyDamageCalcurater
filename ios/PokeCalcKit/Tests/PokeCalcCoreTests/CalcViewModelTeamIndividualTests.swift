@@ -237,13 +237,14 @@ final class CalcViewModelTeamIndividualTests: XCTestCase {
         XCTAssertEqual(request.attacker.sp, StubTeams.customSP)
     }
 
-    func testMemberWithStatusMoveKeepsItOnCalcScreen() async {
-        // 計算画面の技の選択肢は変化技も含む(P6-2a 規則4)ので、変化技の個体はそのまま選ばれる。
+    func testMemberWithStatusMoveGetsTheDefaultDamagingMoveOnCalcScreen() async {
+        // 計算画面は変化技を選ばない(ADR-0518 §3)ので、変化技だけの個体は既定のダメージ技になる。
         let viewModel = await loadedViewModel(StubMaster.makeService(), store: StubTeams.makeStore())
         await viewModel.selectTeamIndividual(
             teamID: StubTeams.teamBeta.id, memberID: StubTeams.statusMoveMember.id
         )
-        XCTAssertEqual(viewModel.moveId, StubMaster.statusMove.id)
+        XCTAssertEqual(viewModel.moveId, StubMaster.alphaOnlyMove.id, "learnset の最初のダメージ技")
+        XCTAssertNotNil(viewModel.attackerBuildSource.teamSelection, "個体の SP・性格は使う")
     }
 
     // MARK: - 呼び出したあとの操作
