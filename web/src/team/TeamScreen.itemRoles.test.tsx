@@ -111,18 +111,18 @@ describe("非メガの持ち物欄は役割で絞らない(メガストーンだ
 });
 
 describe("メガ種族の固定中の表示", () => {
-  test("「{基本種名}のメガストーン」(ストーンの nameJa ではない)、理由は aria-describedby", async () => {
+  test("ストーンの nameJa、理由は aria-describedby", async () => {
     const { first } = await openFirstMember([member(MEGA_FIRE.key, MEGA_FIRE_STONE.id)]);
 
     const item = itemSelect(first);
     expect(item).toBeDisabled();
     expect(item).toHaveValue(MEGA_FIRE_STONE.id);
     expect(item).toHaveDisplayValue(MEGA_FIRE_STONE_LABEL);
-    expect(optionLabels(item)).not.toContain(MEGA_FIRE_STONE.nameJa);
+    expect(optionLabels(item)).toContain(MEGA_FIRE_STONE_LABEL);
     expect(item).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
 
-  test("古い保存データを直した通知も「{基本種名}のメガストーン」で出す", async () => {
+  test("古い保存データを直した通知もストーンの nameJa で出す", async () => {
     const { first } = await openFirstMember([member(MEGA_FIRE.key, DEF_ITEM.id)]);
 
     await waitFor(() => {
@@ -130,7 +130,6 @@ describe("メガ種族の固定中の表示", () => {
     });
     const notice = within(first).getByText(megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
     expect(notice).toHaveAttribute("role", "status");
-    expect(within(first).queryByText(megaItemText.correctedNotice(MEGA_FIRE_STONE.nameJa))).toBeNull();
   });
 
   test("非メガがメガストーンを持つ古いデータは、値を保ったまま「メガストーン」と表示する", async () => {

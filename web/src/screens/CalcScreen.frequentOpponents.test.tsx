@@ -23,6 +23,9 @@ import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
 import { CalcScreen } from "./CalcScreen";
 
+// 全体を並列で流すと遅い環境で既定の 5 秒を超えることがあるため、このファイルだけ余裕を持たせる。
+vi.setConfig({ testTimeout: 15000 });
+
 type Opponent = components["schemas"]["FrequentOpponent"];
 
 let master: MasterData;

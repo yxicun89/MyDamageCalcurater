@@ -73,3 +73,4 @@
 - 変換結果の版(importer-output)と DB の items が変わる。種族の key は変わらない。read model(balance・speed)の種族の key・形は変わらない。
 - `M-Mega` のメガがメガとして扱われるので、Web・iOS ではメガ種族の選択でストーンが固定され、持ち物の選択肢から外れる(ADR-0175 §4 の既存の動作)。
 - engine・ゴールデン・計算 API・`api/openapi.yaml` は変わらない。
+- 既知の残り(後続): `meowsticfmega` は Showdown の `baseSpecies` が "Meowstic" のため、`base_species_key` がオスの姿(フォーム 0)になる見込み。正しい基本形はメスの姿で、ストーンの `megaStone` の対応(`{"Meowstic-F": "Meowstic-F-Mega"}`)から導ける。日本語の基本種名は同じなので表示には影響しない(影響はメガを基本種のキーで引く/戻す動作だけ)。`services/pokedex/importer/convert_species.go` の基本種のキーの解決で扱う。

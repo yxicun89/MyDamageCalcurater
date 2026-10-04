@@ -11,9 +11,9 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import { defaultAbility, defensiveItemCandidates, toEngineSpecies } from "../domain/requests";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import type { BulkRequest, Item, Move, UnsupportedMark } from "../engine/types";
-import { typeNameJa, unsupportedText, type TypeId } from "../i18n/ja";
+import { calcScreenText, typeNameJa, unsupportedText, type TypeId } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import {
@@ -178,7 +178,7 @@ describe("技セレクタ", () => {
     await user.selectOptions(attackerSpeciesSelect(), attacker.key);
 
     const options = within(moveSelect()).getAllByRole("option");
-    const moves = learnsetMoves(attacker, master.moves);
+    const moves = damagingLearnsetMoves(attacker, master.moves);
     const moveOptions = options.filter((option) => option.getAttribute("value") !== "");
     expect(moveOptions.map((option) => option.getAttribute("value"))).toEqual(moves.map((move) => move.id));
     const categoryLabel = { physical: "物理", special: "特殊", status: "変化" } as const;
@@ -304,7 +304,7 @@ describe("計算の呼び出し", () => {
     });
   });
 
-  test("変化技を選ぶと計算せず、その旨を出し、結果の行を消す", async () => {
+  test("変化技は選択肢に無く、変化技を覚える種族でも計算が続く(ADR-0328。status-move の判定は domain/moves.statusMove.test.ts)", async () => {
     const { user, engine } = renderScreen();
     const attacker = master.species.find((species) =>
       learnsetMoves(species, master.moves).some((move) => move.category === "status"),
@@ -323,10 +323,9 @@ describe("計算の呼び出し", () => {
     });
     await resultItems();
 
-    await user.selectOptions(moveSelect(), statusMove.id);
-    expect(await screen.findByText(/変化技/)).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();
-    expect(engine.bulkRequests).toHaveLength(1);
+    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(screen.queryByText(calcScreenText.statusMoveNotice)).toBeNull();
+    expect(screen.getByRole("list", { name: "計算結果" })).toBeInTheDocument();
   });
 });
 

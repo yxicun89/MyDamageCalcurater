@@ -23,25 +23,47 @@ doctor: ## 前提ツールの確認
 	@./scripts/doctor.sh
 
 ## --- コード生成 -------------------------------------------------------
+# 生成物は Git に置かず、使う前にここで作る(ADR-0807)。出力が無いか入力(仕様・設定・生成器の版を
+# 固定するファイル)が新しいときだけ生成器を呼ぶので、何度呼んでも速い。強制は GEN_FORCE=1。
+# Go のパッケージをビルドするターゲット(test・lint・build・docker-build 等)は、これを前提条件に持つ。
+# iOS の生成物は ios-gen(ios/Makefile。macOS だけで動くので gen には含めない)。
+# 生成器は GOWORK=off で、版を固定したモジュール(services・tools)単体の go.mod/go.sum から実行する。
+# ワークスペースのまま実行すると、go.work.sum がワークスペース全体の依存に合わせて書き換わることがあり、
+# 生成のたびに作業ツリーが汚れる(2026-10-03、PR #526 のマージで混入した。ADR-0807)。
+GEN_STALE := ./scripts/ensure-gen.sh stale
+export GEN_FORCE
+
 .PHONY: gen
-gen: gen-go gen-sql gen-ts ## OpenAPI / sqlc のコード生成
+gen: gen-go gen-sql gen-ts balance-gen speed-gen judge-gen ## OpenAPI / sqlc のコード生成(変更が無ければ何もしない。強制は GEN_FORCE=1)
 
 .PHONY: gen-go
-gen-go: ## Go サーバ/型を openapi.yaml から生成
-	@cd services && $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml
-	@echo "gen-go: services/internal/api/openapi.gen.go を生成"
+gen-go: ## Go サーバ/型を api/openapi.yaml から生成(services/internal/api/openapi.gen.go)
+	@if $(GEN_STALE) services/internal/api/openapi.gen.go -- api/openapi.yaml services/internal/api/cfg.yaml services/go.mod; then \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config internal/api/cfg.yaml ../api/openapi.yaml) && \
+		echo "gen-go: services/internal/api/openapi.gen.go を生成"; \
+	fi
 
 .PHONY: gen-sql
 gen-sql: ## pokedex の DB 行の型・クエリを sqlc から生成(ADR-0100 §1)
-	@cd tools && $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml
-	@echo "gen-sql: services/pokedex/internal/store を生成"
+	@if $(GEN_STALE) services/pokedex/internal/store/db.go services/pokedex/internal/store/models.go \
+		services/pokedex/internal/store/pokedex.sql.go services/pokedex/internal/store/querier.go \
+		-- services/pokedex/db/sqlc.yaml services/pokedex/db/migrations services/pokedex/db/query tools/go.mod; then \
+		(cd tools && GOWORK=off $(GO) tool sqlc generate -f ../services/pokedex/db/sqlc.yaml) && \
+		echo "gen-sql: services/pokedex/internal/store を生成"; \
+	fi
 
 .PHONY: gen-ts
-gen-ts: ## TypeScript 型を openapi.yaml から生成(web/src/api/openapi.gen.ts・balance.gen.ts。要 make web-install)
-	@test -x web/node_modules/.bin/openapi-typescript || { echo "gen-ts: web の依存が無い(先に make web-install)" >&2; exit 1; }
-	@cd web && npx --no-install openapi-typescript ../api/openapi.yaml -o src/api/openapi.gen.ts >/dev/null && npx --no-install prettier --write src/api/openapi.gen.ts >/dev/null
-	@cd web && npx --no-install openapi-typescript ../services/balance/api/openapi.yaml -o src/api/balance.gen.ts >/dev/null && npx --no-install prettier --write src/api/balance.gen.ts >/dev/null
-	@echo "gen-ts: web/src/api/openapi.gen.ts・web/src/api/balance.gen.ts を生成"
+gen-ts: web-deps ## TypeScript 型を各 openapi.yaml から生成(web/src の *.gen.ts。web の npm run gen と同じ)
+	@cd web && npm run --silent gen
+
+.PHONY: gen-clean
+gen-clean: ## Git に置かない生成物を消す(iOS も。次の make gen・make ios-gen で作り直す)
+	@rm -rf $$(./scripts/ensure-gen.sh list) ios/.gen-stamps
+	@echo "gen-clean: 生成物を削除"
+
+# Go の生成物だけ(Web の依存を入れずに Go をビルド・テストできるようにする)
+.PHONY: gen-go-all
+gen-go-all: gen-go gen-sql balance-gen speed-gen judge-gen
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
@@ -52,7 +74,7 @@ test-engine: ## engine のユニットテスト
 	@cd engine && $(GO) test ./...
 
 .PHONY: test-services
-test-services: ## services のユニットテスト
+test-services: gen-go-all ## services のユニットテスト
 	@cd services && $(GO) test ./...
 
 .PHONY: test-tools
@@ -82,13 +104,14 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/k3d-m2-deploy_test.sh
 	@./scripts/tidb-operator-bootstrap_test.sh
 	@./scripts/test-db-docker_test.sh
+	@./scripts/ensure-gen_test.sh
 	@./scripts/db-backup_test.sh
 	@./scripts/db-restore_test.sh
 	@./scripts/check-plan_test.sh
 	@./scripts/db-backup-k3d_test.sh
 
 .PHONY: lint
-lint: ## gofmt / go vet / shell・Node構文チェック
+lint: gen-go-all ## gofmt / go vet / shell・Node構文チェック
 	@test -z "$$(gofmt -l engine services tools)" || { gofmt -l engine services tools; exit 1; }
 	@cd engine && $(GO) vet ./...
 	@cd engine && $(GO) vet -tags golden ./...
@@ -116,14 +139,14 @@ lint: ## gofmt / go vet / shell・Node構文チェック
 # engine はタグ無しだと golden 専用の定数を未使用と誤検知するため、タグ付きだけ解析する。
 # 生成コードは staticcheck.conf の checks で外す(各モジュールのルートに置く)。
 .PHONY: staticcheck
-staticcheck: ## staticcheck(固定版)を全モジュール・全ビルドタグで実行
+staticcheck: gen-go-all ## staticcheck(固定版)を全モジュール・全ビルドタグで実行
 	@sc="$$(cd tools && $(GO) tool -n staticcheck)" && \
 	cd engine && "$$sc" -tags golden ./... && "$$sc" -tags allspecies ./... && cd ../services && \
 	"$$sc" ./... && "$$sc" -tags mysql ./pokedex/... && "$$sc" -tags tidb ./record/... ./team/... && "$$sc" -tags nats ./calc/... && cd ../tools && \
 	"$$sc" ./... && cd ../services/balance && GOWORK=off "$$sc" ./... && cd ../speed && GOWORK=off "$$sc" ./... && cd ../judge && GOWORK=off "$$sc" ./...
 
 .PHONY: build
-build: ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
+build: gen-go-all ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
 	@cd engine && $(GO) build ./...
 	@cd services && $(GO) build ./...
 	@cd tools && $(GO) build ./...
@@ -142,15 +165,15 @@ test-all-species: ## 全ポケモン網羅・性質テスト
 
 ## --- pokedex DB(migrate。ADR-0100 §5) ---------------------------------
 .PHONY: migrate-up
-migrate-up: ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
+migrate-up: gen-go-all ## pokedex の DB を最新版まで migrate する(POKEDEX_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./pokedex/cmd/migrate up
 
 .PHONY: migrate-version
-migrate-version: ## pokedex の migrate バージョンを表示する(POKEDEX_DATABASE_DSN が必須)
+migrate-version: gen-go-all ## pokedex の migrate バージョンを表示する(POKEDEX_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./pokedex/cmd/migrate version
 
 .PHONY: migrate-down
-migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+migrate-down: gen-go-all ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
 	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
 		echo "migrate-down: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
 		exit 1; \
@@ -158,7 +181,7 @@ migrate-down: ## pokedex の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB�
 	@cd services && $(GO) run ./pokedex/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
 .PHONY: migrate-force
-migrate-force: ## pokedex の dirty を解いて版を FORCE_VERSION にする(FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> が必須。人間の確認。docs/runbooks/data.md)
+migrate-force: gen-go-all ## pokedex の dirty を解いて版を FORCE_VERSION にする(FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> が必須。人間の確認。docs/runbooks/data.md)
 	@if [ -z "$(FORCE_VERSION)" ] || [ -z "$(CONFIRM_FORCE)" ]; then \
 		echo "migrate-force: FORCE_VERSION=<版> CONFIRM_FORCE=<DB名> を指定すること(migration の状態を書き換える操作)。手順は docs/runbooks/data.md。人間が確認すること" >&2; \
 		exit 1; \
@@ -167,15 +190,15 @@ migrate-force: ## pokedex の dirty を解いて版を FORCE_VERSION にする(F
 
 ## --- record/team DB(migrate。ADR-0211 §4・§5) ------------------------
 .PHONY: migrate-up-record
-migrate-up-record: ## record の DB を最新版まで migrate する(RECORD_DATABASE_DSN が必須)
+migrate-up-record: gen-go-all ## record の DB を最新版まで migrate する(RECORD_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./record/cmd/migrate up
 
 .PHONY: migrate-version-record
-migrate-version-record: ## record の migrate バージョンを表示する(RECORD_DATABASE_DSN が必須)
+migrate-version-record: gen-go-all ## record の migrate バージョンを表示する(RECORD_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./record/cmd/migrate version
 
 .PHONY: migrate-down-record
-migrate-down-record: ## record の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+migrate-down-record: gen-go-all ## record の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
 	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
 		echo "migrate-down-record: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
 		exit 1; \
@@ -183,15 +206,15 @@ migrate-down-record: ## record の DB を全て戻す(破壊的。CONFIRM_DESTRO
 	@cd services && $(GO) run ./record/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
 .PHONY: migrate-up-team
-migrate-up-team: ## team の DB を最新版まで migrate する(TEAM_DATABASE_DSN が必須)
+migrate-up-team: gen-go-all ## team の DB を最新版まで migrate する(TEAM_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./team/cmd/migrate up
 
 .PHONY: migrate-version-team
-migrate-version-team: ## team の migrate バージョンを表示する(TEAM_DATABASE_DSN が必須)
+migrate-version-team: gen-go-all ## team の migrate バージョンを表示する(TEAM_DATABASE_DSN が必須)
 	@cd services && $(GO) run ./team/cmd/migrate version
 
 .PHONY: migrate-down-team
-migrate-down-team: ## team の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
+migrate-down-team: gen-go-all ## team の DB を全て戻す(破壊的。CONFIRM_DESTROY=<DB名> が必須。人間の確認)
 	@if [ -z "$(CONFIRM_DESTROY)" ]; then \
 		echo "migrate-down-team: CONFIRM_DESTROY=<DB名> を指定すること(全テーブルを消す破壊的操作)。人間が確認すること" >&2; \
 		exit 1; \
@@ -199,7 +222,7 @@ migrate-down-team: ## team の DB を全て戻す(破壊的。CONFIRM_DESTROY=<D
 	@cd services && $(GO) run ./team/cmd/migrate down -confirm "$(CONFIRM_DESTROY)"
 
 .PHONY: test-db
-test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TEST_DSN・RECORD_TEST_DSN・TEAM_TEST_DSN が必須。make test には含めない。ADR-0211)
+test-db: gen-go-all ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TEST_DSN・RECORD_TEST_DSN・TEAM_TEST_DSN が必須。make test には含めない。ADR-0211)
 	@if [ -z "$(POKEDEX_TEST_DSN)" ]; then \
 		echo "test-db: POKEDEX_TEST_DSN が設定されていない(スキップせず失敗する)" >&2; \
 		exit 1; \
@@ -216,7 +239,7 @@ test-db: ## pokedex(MySQL)・record/team(TiDB)のDBを使うテスト(POKEDEX_TE
 	@cd services && $(GO) test -tags tidb -p 1 ./record/... ./team/...
 
 .PHONY: test-db-docker
-test-db-docker: ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
+test-db-docker: gen-go-all ## test-db を Docker の使い捨て MySQL・TiDB で流す(終了時に消す。Docker が無ければ失敗。make test には含めない。issue #223)
 	@./scripts/test-db-docker.sh
 
 .PHONY: db-backup
@@ -240,7 +263,7 @@ test-db-backup: ## バックアップ→復元の実 DB 往復テスト(Docker �
 	@./scripts/db-backup-restore_docker_test.sh
 
 .PHONY: test-nats
-test-nats: ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
+test-nats: gen-go-all ## calc-svcのイベント発行を実NATSで検査する(CALC_TEST_NATS_URL が必須。make test には含めない。ADR-0212)
 	@if [ -z "$(CALC_TEST_NATS_URL)" ]; then \
 		echo "test-nats: CALC_TEST_NATS_URL が設定されていない(スキップせず失敗する)" >&2; \
 		exit 1; \
@@ -261,11 +284,11 @@ nats-local-up: ## make dev 用に docker で NATS v2.15.0(JetStream 有効)を 1
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
-up: ## k3d クラスタ作成 + 全デプロイ
+up: gen-go-all ## k3d クラスタ作成 + 全デプロイ
 	@./scripts/up.sh
 
 .PHONY: deploy-latest
-deploy-latest: ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
+deploy-latest: gen-go-all ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
 	@./scripts/k3d-deploy-latest.sh
 
 .PHONY: down
@@ -273,12 +296,12 @@ down: ## k3d クラスタ削除
 	@k3d cluster delete $(CLUSTER) || true
 
 .PHONY: dev
-dev: ## k8s を使わずローカルで全サービス起動
+dev: gen-go-all ## k8s を使わずローカルで全サービス起動
 	@./scripts/dev.sh
 
 ## --- e2e / iOS --------------------------------------------------------
 .PHONY: e2e
-e2e: ## 常時3件のPlaywright(k3d不要)+ k3d-<CLUSTER>検出時にスモーク+Playwright3件を追加(ADR-0306)
+e2e: gen-go-all ## 常時3件のPlaywright(k3d不要)+ k3d-<CLUSTER>検出時にスモーク+Playwright3件を追加(ADR-0306)
 	@CLUSTER=$(CLUSTER) ./scripts/e2e.sh
 
 # ios-test などの iOS のターゲットは ios/Makefile(末尾で include)
@@ -293,11 +316,11 @@ test-wasm: wasm ## Go と WASM の結果一致テスト(Node。要 make wasm)
 	@node scripts/wasm-conformance.mjs
 
 .PHONY: import
-import: ## マスタデータの変換・投入(POKEDEX_DATABASE_DSN が必須。取得は import-fetch)
+import: gen-go-all ## マスタデータの変換・投入(POKEDEX_DATABASE_DSN が必須。取得は import-fetch)
 	@cd services && $(GO) run ./pokedex/cmd/import -data ../data
 
 .PHONY: import-dry-run
-import-dry-run: ## マスタデータの変換・報告だけ行う(DB には触らない)
+import-dry-run: gen-go-all ## マスタデータの変換・報告だけ行う(DB には触らない)
 	@cd services && $(GO) run ./pokedex/cmd/import -data ../data -dry-run
 
 .PHONY: import-fetch
@@ -321,7 +344,7 @@ pokedex-export-k3d: ## k3d の mysql から read model を data/generated/readmo
 	@./scripts/pokedex-export-local.sh
 
 .PHONY: pokedex-export
-pokedex-export: ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
+pokedex-export: gen-go-all ## balance/speed 向けの read model を6ファイル(4ファイル+type-chart.json・metadata.json)書く(POKEDEX_DATABASE_DSN が必須。出力先 data/generated/readmodel/)
 	@cd services && $(GO) run ./pokedex/cmd/pokedex export -out ../data/generated/readmodel
 
 .PHONY: import-k8s
@@ -331,6 +354,7 @@ import-k8s: ## k3d 上の CronJob pokedex-import を手動で1回流す(週1回�
 
 .PHONY: pokedex-registry-push
 pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有レジストリ balance-registry へ digest 固定で push する(タイプバランスレーン issue #237 の依頼。ADR-0018・ADR-0605 と同じ方式)
+	@$(MAKE) --no-print-directory gen-go-all GEN_FORCE=1
 	@./scripts/pokedex-registry-push.sh
 
 .PHONY: k8s-render
@@ -369,7 +393,7 @@ check-publishable: ## 公開前の検査(絶対パス・秘密・追跡禁止フ
 	@./scripts/check-publishable.sh
 
 .PHONY: check-publishable-full
-check-publishable-full: ## 上記 + Git 作者情報・make gen の差分(遅い)
+check-publishable-full: ## 上記 + Git 作者情報・make gen が成功し生成物が揃うこと(遅い)
 	@./scripts/check-publishable.sh --full
 
 .PHONY: check-publishable-selftest

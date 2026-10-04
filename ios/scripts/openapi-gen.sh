@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# api/openapi.yaml から Swift の API クライアントを生成する(ADR-0500 §2)。
+# 各 openapi.yaml から Swift の API クライアントを生成する(ADR-0500 §2・ADR-0415・ADR-0807)。
 #
-#   ios/scripts/openapi-gen.sh           生成物を ios/PokeCalcKit/Sources/PokeCalcAPI/Generated に書く
-#   ios/scripts/openapi-gen.sh --check   一時ディレクトリに生成し、コミット済みの生成物と差分が無いことを確かめる
+#   ios/scripts/openapi-gen.sh           出力が無いか入力が新しい対象だけ生成する(強制は GEN_FORCE=1)
+#   ios/scripts/openapi-gen.sh --check   一時ディレクトリに生成し、作業ツリーの生成物と差分が無いことを確かめる
+#
+# 生成物は Git に置かない(ADR-0807)。make ios-* の各ターゲットが前段で呼ぶ。
+# Xcode で直接開く前は、リポジトリのルートで make ios-gen を1回流す。
+# 生成対象の一覧は ios/scripts/openapi-targets.sh。
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -10,15 +14,12 @@ ios_dir="$(cd "$script_dir/.." && pwd)"
 repo_dir="$(cd "$ios_dir/.." && pwd)"
 # shellcheck source=ios/scripts/xcode-env.sh
 source "$script_dir/xcode-env.sh"
+# shellcheck source=ios/scripts/openapi-targets.sh
+source "$script_dir/openapi-targets.sh"
 
 readonly tool_dir="$ios_dir/tools/openapi-gen"
-# 生成対象は「名前|仕様|設定|出力先」の組(ADR-0415。balance は schema 名が衝突するので別モジュール。素早さ・判定も同様。ADR-0503・0504)。
-readonly targets=(
-  "PokeCalcAPI|$repo_dir/api/openapi.yaml|$tool_dir/openapi-generator-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcAPI/Generated"
-  "PokeCalcBalanceAPI|$repo_dir/services/balance/api/openapi.yaml|$tool_dir/openapi-generator-balance-config.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated"
-  "PokeCalcSpeedAPI|$repo_dir/services/speed/api/openapi.yaml|$tool_dir/openapi-generator-config.speed.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated"
-  "PokeCalcJudgeAPI|$repo_dir/services/judge/api/openapi.yaml|$tool_dir/openapi-generator-config.judge.yaml|$ios_dir/PokeCalcKit/Sources/PokeCalcJudgeAPI/Generated"
-)
+# 生成済みの印(入力より新しければ生成を省く)。Git 管理外。
+readonly stamp_dir="$ios_dir/.gen-stamps"
 
 mode="write"
 case "${1:-}" in
@@ -26,6 +27,27 @@ case "${1:-}" in
   --check) mode="check" ;;
   *) echo "usage: $0 [--check]" >&2; exit 2 ;;
 esac
+
+# is_stale 名前 仕様 設定 出力先 — 生成が要るなら 0。
+is_stale() {
+  local name="$1" spec="$2" config="$3" out="$4"
+  [ -n "$(find "$out" -name '*.swift' -print -quit 2>/dev/null)" ] || return 0
+  "$repo_dir/scripts/ensure-gen.sh" stale "$stamp_dir/$name" -- \
+    "$spec" "$config" "$tool_dir/Package.swift" "$tool_dir/Package.resolved" "$script_dir/openapi-targets.sh"
+}
+
+# 生成が要る対象を先に集め、無ければ生成器のビルドも省く。
+pending=()
+for target in "${IOS_OPENAPI_TARGETS[@]}"; do
+  IFS='|' read -r name spec config out <<<"$target"
+  spec="$repo_dir/$spec" config="$repo_dir/$config" out="$repo_dir/$out"
+  if [ "$mode" = "check" ] || is_stale "$name" "$spec" "$config" "$out"; then
+    pending+=("$name|$spec|$config|$out")
+  fi
+done
+if [ "${#pending[@]}" -eq 0 ]; then
+  exit 0
+fi
 
 swift build --package-path "$tool_dir" -c release --product swift-openapi-generator >/dev/null
 generator="$(swift build --package-path "$tool_dir" -c release --show-bin-path)/swift-openapi-generator"
@@ -42,22 +64,24 @@ generate_into() {
   rm -f "$log"
 }
 
-for target in "${targets[@]}"; do
+for target in "${pending[@]}"; do
   IFS='|' read -r name spec config generated_dir <<<"$target"
   if [ "$mode" = "write" ]; then
-    mkdir -p "$generated_dir"
+    rm -rf "$generated_dir"
+    mkdir -p "$generated_dir" "$stamp_dir"
     generate_into "$config" "$generated_dir" "$spec"
-    echo "ios-gen: $name: $generated_dir を生成"
+    touch "$stamp_dir/$name"
+    echo "ios-gen: $name: ${generated_dir#"$repo_dir"/} を生成"
     continue
   fi
   work_dir="$(mktemp -d)"
   generate_into "$config" "$work_dir" "$spec"
-  if ! diff -r "$work_dir" "$generated_dir" >/dev/null; then
-    echo "ios-gen-check: $name の生成物が $spec と一致しない。make ios-gen を実行してコミットする" >&2
-    diff -r "$work_dir" "$generated_dir" | head -40 >&2 || true
+  if ! diff -r "$work_dir" "$generated_dir" >/dev/null 2>&1; then
+    echo "ios-gen-check: $name の生成物が ${spec#"$repo_dir"/} と一致しない(または無い)。make ios-gen を実行する(ADR-0807)" >&2
+    diff -r "$work_dir" "$generated_dir" 2>&1 | head -40 >&2 || true
     rm -rf "$work_dir"
     exit 1
   fi
   rm -rf "$work_dir"
-  echo "ios-gen-check: $name の生成物は $spec と一致"
+  echo "ios-gen-check: $name の生成物は ${spec#"$repo_dir"/} と一致"
 done
