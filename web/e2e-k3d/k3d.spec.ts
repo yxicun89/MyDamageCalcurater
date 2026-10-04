@@ -1,4 +1,4 @@
-// 利用者がブラウザで開く入口(k3d の localhost:8080)で、オフライン(WASM)とオンライン(API・実マスタ)の計算が
+// 利用者がブラウザで開く入口(k3d の localhost:8080)で、この端末(オフライン)とオンライン(API・実マスタ)の計算が
 // 画面に結果を出すことを確かめる。バックエンドの疎通(api-smoke)だけでは画面の不具合(白画面 #268、
 // 古い pokedex による技の一括取得 404)を見逃したため、画面の操作で確かめる。
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
@@ -61,8 +61,8 @@ async function pickFirstCachedCandidate(page: Page, name: string, prefix: string
   await field.press("Enter");
 }
 
-// ADR-0313: 既定はオンライン。一度オンラインで引いた実マスタの種族を IndexedDB に保存し、オフライン(WASM)で計算する。
-test("オフライン(WASM): オンラインで引いた実マスタの種族で、キャッシュから計算結果が出る", async ({
+// ADR-0313: 既定はオンライン。一度オンラインで引いた実マスタの種族を IndexedDB に保存し、この端末(オフライン)で計算する。
+test("この端末(オフライン): オンラインで引いた実マスタの種族で、キャッシュから計算結果が出る", async ({
   page,
   request,
 }) => {
@@ -73,7 +73,7 @@ test("オフライン(WASM): オンラインで引いた実マスタの種族で
   await pickFirstCandidate(page, "防御側のポケモン", prefix);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
   await pickFirstCachedCandidate(page, "攻撃側のポケモン", prefix);
@@ -84,12 +84,12 @@ test("オフライン(WASM): オンラインで引いた実マスタの種族で
   expect(failures).toEqual([]);
 });
 
-test("オンライン(API): 実マスタのポケモンを選ぶと計算結果が出る", async ({ page, request }) => {
+test("サーバー(オンライン): 実マスタのポケモンを選ぶと計算結果が出る", async ({ page, request }) => {
   const prefix = await firstSpeciesPrefix(request);
 
   const failures = trackFailures(page);
   await openApp(page);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オンライン(API)");
+  await chooseRadio(page, "計算する場所", "サーバー(オンライン)");
   await pickFirstCandidate(page, "攻撃側のポケモン", prefix);
   await pickFirstCandidate(page, "防御側のポケモン", prefix);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);

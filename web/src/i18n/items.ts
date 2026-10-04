@@ -16,7 +16,7 @@ export const itemRoleText = {
    * メガ種族を選んで持ち物が固定されているときの、持ち物欄の表示(ADR-0175 §4)。ストーンの nameJa は使わない
    * (上流に日本語名の無いストーンは英語のため。名前は推測しない)。
    */
-  megaStoneOf: (baseSpeciesNameJa: string): string => `${baseSpeciesNameJa}のメガストーン`,
+  megaStoneOf: (baseSpeciesNameJa: string): string => `${baseSpeciesNameJa}専用のメガストーン`,
   /** 基本種名が分からない(baseSpeciesNameJa が null・省略)ときの固定の表示。 */
   megaStoneUnnamed: "メガストーン",
   /**

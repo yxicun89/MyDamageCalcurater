@@ -65,7 +65,7 @@ describe("オンライン相当のマスタでの逆算の未対応の印の名�
       });
       await user.click(await within(region).findByRole("option", { name: species.nameJa }));
     }
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
     act(() => {
       vi.advanceTimersByTime(OBSERVATION_INPUT_DEBOUNCE_MS);
     });

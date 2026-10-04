@@ -494,7 +494,7 @@ describe("範囲外・不正な入力(ADR-0316 §4 と同じ明示エラー)", (
     await flush();
 
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "この性格補正の組み合わせに当たる性格がマスタにありません",
+      "この性格補正の組み合わせに当たる性格が、データにありません",
     );
     expect(engine.bulkRequests).toHaveLength(before);
     expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();

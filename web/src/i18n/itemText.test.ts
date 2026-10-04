@@ -5,7 +5,7 @@ import { expect, test } from "vitest";
 import { itemRoleText } from "./items";
 
 test("固定中の表示は「{基本種名}のメガストーン」(ユーザー報告の例: ルカリオのメガストーン)", () => {
-  expect(itemRoleText.megaStoneOf("ルカリオ")).toBe("ルカリオのメガストーン");
+  expect(itemRoleText.megaStoneOf("ルカリオ")).toBe("ルカリオ専用のメガストーン");
 });
 
 test("基本種名が分からないときは「メガストーン」だけ", () => {
