@@ -1,6 +1,9 @@
 package engine
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 // ダメージ計算コア。第9世代の式を 4096基準の固定小数・五捨五超入(pokeRound)で実装する。
 // float 近似はしない(CLAUDE.md ドメイン規約)。
@@ -219,13 +222,53 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 			defStage = 0
 		}
 	}
+	// 相手のランクを無視する特性(てんねん。ADR-0176)。
+	if ae := in.Attacker.Ability.Effect; ae != nil && ae.IgnoresOpponentRanks {
+		defStage = 0
+	}
+	if de := in.Defender.Ability.Effect; de != nil && de.IgnoresOpponentRanks {
+		atkStage = 0
+	}
 	atk = applyStatStage(RealStats(in.Attacker).Get(atkKey), atkStage)
 	def = applyStatStage(RealStats(in.Defender).Get(defKey), defStage)
+	// ランクの直後に単独で丸める攻撃側の実数値補正(はりきり。ADR-0176)。他の補正と連鎖しない。
+	if ae := in.Attacker.Ability.Effect; ae != nil {
+		if m, ok := ae.SeparateStatMods[atkKey]; ok {
+			atk = pokeRound(atk, m)
+		}
+	}
 	// 天候の防御補正は持ち物より先に独立して丸める。
 	def = pokeRound(def, weatherDefenseMod(in, defKey))
 	atk = max(1, pokeRound(atk, offensiveStatMod(in, atkKey)))
 	def = max(1, pokeRound(def, defensiveStatMod(in, defKey)))
 	return atk, def
+}
+
+// applyAbilityPreconditions は、計算の前に決める特性の効果(ADR-0176)を入力に反映したコピーを返す。
+//   - かたやぶり: 攻撃側が IgnoresDefenderAbility を持ち、防御側の特性が Breakable なら防御側の特性の効果を nil にする
+//     (無効・浮遊・急所無効・ランク無視・未対応の印を含めて、特性が無いものとして計算する)。
+//   - タイプ変換: 攻撃側の TypeConvert の From タイプの攻撃技(type_change の機構を持たないもの)を To タイプにする。
+//     To が相性表に無ければ ErrUnknownType。converted は変換したか(威力の補正に使う)。
+//   - 急所の無効: 防御側が PreventsCritical なら急所の指定を外す。
+func applyAbilityPreconditions(in DamageInput) (out DamageInput, converted bool, err error) {
+	ae := in.Attacker.Ability.Effect
+	if ae != nil && ae.IgnoresDefenderAbility {
+		if de := in.Defender.Ability.Effect; de != nil && de.Breakable {
+			in.Defender.Ability.Effect = nil
+		}
+	}
+	if ae != nil && ae.TypeConvert != nil && in.Move.Category != CategoryStatus &&
+		in.Move.Type == ae.TypeConvert.From && !slices.Contains(in.Move.Mechanisms, MechanismTypeChange) {
+		if err := in.TypeChart.requireKnown("攻撃側の特性の変換後のタイプ", ae.TypeConvert.To); err != nil {
+			return DamageInput{}, false, err
+		}
+		in.Move.Type = ae.TypeConvert.To
+		converted = true
+	}
+	if de := in.Defender.Ability.Effect; de != nil && de.PreventsCritical {
+		in.Critical = false
+	}
+	return in, converted, nil
 }
 
 // validateAgainstTypeChart は入力の表が設定済みで、入力に現れるタイプ ID(技・両側の種族・
@@ -280,6 +323,13 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
 	}
 
+	// 特性の段階1(ADR-0176): 防御側の特性の無視・技のタイプの変換・急所の無効を、計算の最初に1回だけ決める。
+	// 以降は in.Move.Type が変換後のタイプ、in.Defender.Ability.Effect が無視した後の効果になる。
+	in, typeConverted, err := applyAbilityPreconditions(in)
+	if err != nil {
+		return DamageResult{}, false, err
+	}
+
 	res = DamageResult{
 		Category:    in.Move.Category,
 		DefenderHP:  RealStats(in.Defender).HP,
@@ -313,7 +363,7 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	atk, def := attackDefenseStats(in)
 
 	// 基礎ダメージ(すべて floor)
-	power := max(1, pokeRound(in.Move.Power, powerModifier(in)))
+	power := max(1, pokeRound(in.Move.Power, powerModifier(in, typeConverted)))
 	base := (((2*level/5+2)*power*atk)/def)/50 + 2
 
 	// ダブルの全体技(ADR-0222)。天候・急所より前。

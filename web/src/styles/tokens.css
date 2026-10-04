@@ -81,9 +81,19 @@
   /* 文字(docs/design.md「文字」)。Web の書体は SF Pro Rounded → M PLUS Rounded 1c → system-ui の順。 */
   --font-family: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui, sans-serif;
   --font-size-result: 28px;
+  --font-size-title: 22px;
   --font-size-heading: 17px;
   --font-size-body: 15px;
   --font-size-caption: 12px;
+  /* 太さ(docs/design.md「文字」)。 */
+  --font-weight-title: 800;
+  --font-weight-heading: 700;
+  --font-weight-strong: 700;
+  --font-weight-body: 400;
+
+  /* 影(docs/design.md「形・余白」)。色は shadow.color。 */
+  --shadow-card: 0 2px 8px var(--shadow-color);
+  --shadow-raised: 0 6px 16px var(--shadow-color);
 
   /* 動き(docs/design.md「動き」)。攻守入れ替えのカードアニメーションの秒数。 */
   --duration-swap: 0.35s;
@@ -93,6 +103,30 @@
   --duration-pulse: 0.4s;
   /* 逆算の候補一覧が絞り込まれる演出の秒数(design.md「動き」: 観測を追加すると候補が絞られるアニメーション)。 */
   --duration-narrow: 0.3s;
+  /* ボタン・タブ・チップの押下・選択の演出の秒数(design.md「動き」: 押下)。 */
+  --duration-press: 0.15s;
+
+  /* ポップ配色(docs/design.md「ポップ配色」、ADR-0334)。iOS と同じ名前・同じ値。 */
+  --brand-primary: #1f5fd6;
+  --on-primary: #ffffff;
+  --brand-accent: #ffcb05;
+  --on-accent: #14161a;
+  --success: #17743a;
+  --success-soft: #e2f5e8;
+  --warning: #9a5b00;
+  --warning-soft: #fff1d6;
+  --info: #0b6ba8;
+  --info-soft: #dceffb;
+  --danger-soft: #fde3e4;
+  --on-danger: #ffffff;
+  --surface-card: #ffffff;
+  --bg-gradient-start: #fff6e0;
+  --bg-gradient-end: #e8f1ff;
+  --table-header: #dce7fb;
+  --table-zebra: #eef2f8;
+  --table-hover: #e3ecfb;
+  --focus-ring: #1f5fd6;
+  --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
 /* OS がダーク設定のときのダーク値。data-theme="light" の明示指定はこの上書きより優先する
@@ -105,6 +139,27 @@
     --text-secondary: #a3a9b6;
     --border-hairline: rgba(255, 255, 255, 0.1);
     --danger: #ff6369;
+
+    --brand-primary: #7fa8ff;
+    --on-primary: #0e1015;
+    --brand-accent: #ffd84d;
+    --on-accent: #14161a;
+    --success: #5fd38a;
+    --success-soft: #12301f;
+    --warning: #ffb547;
+    --warning-soft: #33240b;
+    --info: #5ec2f2;
+    --info-soft: #0c2a3a;
+    --danger-soft: #3a1416;
+    --on-danger: #0e1015;
+    --surface-card: #1a1d24;
+    --bg-gradient-start: #14131c;
+    --bg-gradient-end: #0e1622;
+    --table-header: #1c2638;
+    --table-zebra: #151922;
+    --table-hover: #1d2535;
+    --focus-ring: #7fa8ff;
+    --shadow-color: rgba(0, 0, 0, 0.4);
   }
 }
 
@@ -116,6 +171,27 @@
   --text-secondary: #a3a9b6;
   --border-hairline: rgba(255, 255, 255, 0.1);
   --danger: #ff6369;
+
+  --brand-primary: #7fa8ff;
+  --on-primary: #0e1015;
+  --brand-accent: #ffd84d;
+  --on-accent: #14161a;
+  --success: #5fd38a;
+  --success-soft: #12301f;
+  --warning: #ffb547;
+  --warning-soft: #33240b;
+  --info: #5ec2f2;
+  --info-soft: #0c2a3a;
+  --danger-soft: #3a1416;
+  --on-danger: #0e1015;
+  --surface-card: #1a1d24;
+  --bg-gradient-start: #14131c;
+  --bg-gradient-end: #0e1622;
+  --table-header: #1c2638;
+  --table-zebra: #151922;
+  --table-hover: #1d2535;
+  --focus-ring: #7fa8ff;
+  --shadow-color: rgba(0, 0, 0, 0.4);
 }
 
 /* OS の「視差効果を減らす」設定では全演出を無効化する(docs/design.md「動き」)。
@@ -135,11 +211,14 @@
 
   :root {
     --duration-swap: 0s;
+    --duration-press: 0s;
   }
 }
 
 body {
   background-color: var(--bg-base);
+  background-image: linear-gradient(180deg, var(--bg-gradient-start), var(--bg-gradient-end));
+  background-attachment: fixed;
   color: var(--text-primary);
   font-family: var(--font-family);
   /* 数字を等幅にする(docs/design.md「文字」、iOS の .monospacedDigit() に対応)。 */

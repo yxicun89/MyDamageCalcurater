@@ -56,7 +56,7 @@
 - **タイプバランス**: 手持ちの防御相性・攻撃範囲からタイプの穴を診断し、ふさぐ候補を提案する → [type-balance-design.md](type-balance-design.md)(テストは [type-balance-test-strategy.md](type-balance-test-strategy.md))
 - **素早さ比較**: 使用可能な全ポケモンの素早さ表と、自分のポケモンの位置を見せる → [speed-design.md](speed-design.md)
 - **判定**: 道具・調整・技構成で、想定した相手を抜いて倒せるかを1回で確認する → [judge-design.md](judge-design.md)
-- 3機能のユーザー要望の原文は [plan.md](plan.md) の TB・SP・JD 節。実装状況の正も plan.md
+- 3機能のユーザー要望の原文は plan の TB・SP・JD 節([plan/tb.md](plan/tb.md)・[plan/speed.md](plan/speed.md)・[plan/judge.md](plan/judge.md))。実装状況の正も plan([plan.md](plan.md) の索引)
 
 ### あれば便利(マストではない)
 - 計算候補の推薦(機械学習)。まず統計ベース、MLは比較して勝てたら採用
@@ -138,7 +138,7 @@ team-svc:
 | 6 | iOSアプリ |
 | 7 | 構築ビルダー |
 | 8 | 監視・GitOps・SLO |
-| TB / SP / JD | タイプバランス・素早さ比較・判定(各レーン。計画は [plan.md](plan.md) の TB・SP・JD 節) |
+| TB / SP / JD | タイプバランス・素早さ比較・判定(各レーン。計画は [plan/tb.md](plan/tb.md)・[plan/speed.md](plan/speed.md)・[plan/judge.md](plan/judge.md)) |
 | +α | クラウドデプロイ、推薦ML、Android(Kotlin + Jetpack Compose) |
 
 ## 8. 決定事項(旧未決事項)

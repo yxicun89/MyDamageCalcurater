@@ -1,4 +1,4 @@
-// P8-1c(ADR-0325): ポケモン画像の manifest(ADR-0807)を読む純粋関数。
+// P8-1c(ADR-0325): ポケモン画像の manifest(ADR-0808)を読む純粋関数。
 // 契約: manifest は { version: 1, images: { "<種族キー>": { thumb, detail } } }。画像の URL は "/images/" + 相対パス。
 // manifest が取れない・不正・version 違い・キー無し・危険なパスは「画像なし」= タイプ色エンブレム(エラーにしない)。
 
@@ -118,7 +118,7 @@ describe("fetchPokemonImageManifest", () => {
     const manifest = await fetchPokemonImageManifest(fetchMock);
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/images/manifest.json");
-    // <img> と違い fetch は X-Device-Id を付けられるが、画像側が課さないので付けない(契約: ADR-0807)。
+    // <img> と違い fetch は X-Device-Id を付けられるが、画像側が課さないので付けない(契約: ADR-0808)。
     const init = fetchMock.mock.calls[0]?.[1];
     expect(JSON.stringify(init?.headers ?? {})).not.toMatch(/device/i);
     expect(pokemonImageUrl(manifest, "0445-000", "thumb")).toBe("/images/thumb/0445-000.ab12cd34.webp");

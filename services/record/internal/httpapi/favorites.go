@@ -16,16 +16,18 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/record/internal/store"
 )
 
+// SP・レベルの上限は engine の定数(calc-svc が使う正)を参照し、ここで二重に定義しない。
+// ランクの上限だけは engine に定数が無い(engine は ±6 をリテラルで持つ)ので、ここに置く(ADR-0228 §3)。
 const (
 	maxFavoriteLabelRunes = 30
-	favoriteLevel         = 50
-	maxSPPerStat          = 32
-	maxSPTotal            = 66
 	maxRank               = 6
+	// maxFavoriteSnapshotBytes は正規化後の snapshot の上限(ADR-0228 §3。正当な入力は 2KB に満たない)。
+	maxFavoriteSnapshotBytes = 4096
 )
 
 var (
@@ -38,6 +40,34 @@ var (
 type favoriteRequest struct {
 	Label      *string            `json:"label"`
 	Individual *individualRequest `json:"individual"`
+	Calc       *calcRequest       `json:"calc"`
+}
+
+// calcRequest は契約の CalcRequest の受け口(ADR-0228)。欠落を見分けるためポインタで受ける。
+type calcRequest struct {
+	Format   *string            `json:"format"`
+	Attacker *individualRequest `json:"attacker"`
+	Defender *individualRequest `json:"defender"`
+	MoveID   *string            `json:"moveId"`
+	Field    *fieldRequest      `json:"field"`
+	Options  *optionsRequest    `json:"options"`
+}
+
+type fieldRequest struct {
+	Weather         *string         `json:"weather"`
+	Terrain         *string         `json:"terrain"`
+	AttackerScreens *screensRequest `json:"attackerScreens"`
+	DefenderScreens *screensRequest `json:"defenderScreens"`
+}
+
+type screensRequest struct {
+	Reflect     *bool `json:"reflect"`
+	LightScreen *bool `json:"lightScreen"`
+	AuroraVeil  *bool `json:"auroraVeil"`
+}
+
+type optionsRequest struct {
+	Critical *bool `json:"critical"`
 }
 
 type individualRequest struct {
@@ -75,6 +105,35 @@ type rankSnapshot struct {
 type favoriteSnapshot struct {
 	Label      *string            `json:"label"`
 	Individual individualSnapshot `json:"individual"`
+	// Calc は計算の入力全体(ADR-0228)。無いときはキーごと出さない(既存行のバイト列・ハッシュを変えない)。
+	Calc *calcSnapshot `json:"calc,omitempty"`
+}
+
+// calcSnapshot は calc の正規化済みの形。フィールドの宣言順が契約のプロパティ順(= JSON のキー順)。
+type calcSnapshot struct {
+	Format   string             `json:"format"`
+	Attacker individualSnapshot `json:"attacker"`
+	Defender individualSnapshot `json:"defender"`
+	MoveID   string             `json:"moveId"`
+	Field    fieldSnapshot      `json:"field"`
+	Options  optionsSnapshot    `json:"options"`
+}
+
+type fieldSnapshot struct {
+	Weather         string          `json:"weather"`
+	Terrain         string          `json:"terrain"`
+	AttackerScreens screensSnapshot `json:"attackerScreens"`
+	DefenderScreens screensSnapshot `json:"defenderScreens"`
+}
+
+type screensSnapshot struct {
+	Reflect     bool `json:"reflect"`
+	LightScreen bool `json:"lightScreen"`
+	AuroraVeil  bool `json:"auroraVeil"`
+}
+
+type optionsSnapshot struct {
+	Critical bool `json:"critical"`
 }
 
 type individualSnapshot struct {
@@ -115,11 +174,27 @@ func normalizeFavorite(req favoriteRequest) (favoriteSnapshot, error) {
 		}
 		out.Label = req.Label
 	}
-	in := req.Individual
+	ind, err := normalizeIndividual(req.Individual)
+	if err != nil {
+		return out, err
+	}
+	out.Individual = ind
+	if req.Calc != nil {
+		calc, err := normalizeCalc(req.Calc)
+		if err != nil {
+			return out, err
+		}
+		out.Calc = &calc
+	}
+	return out, nil
+}
+
+// normalizeIndividual は individual と calc の attacker / defender に共通の検証・正規化(ADR-0228 §3)。
+func normalizeIndividual(in *individualRequest) (individualSnapshot, error) {
+	var out individualSnapshot
 	if in == nil {
 		return out, newError(api.InvalidInput, "individual が無い")
 	}
-
 	// 未知の列挙値は invalid_enum(範囲の検査より先に見る)。
 	status := string(api.StatusConditionNone)
 	if in.Status != nil {
@@ -142,12 +217,12 @@ func normalizeFavorite(req favoriteRequest) (favoriteSnapshot, error) {
 	if in.NatureID == nil || *in.NatureID == "" {
 		return out, newError(api.InvalidInput, "natureId が無い")
 	}
-	level := favoriteLevel
+	level := engine.DefaultLevel
 	if in.Level != nil {
 		level = *in.Level
 	}
-	if level != favoriteLevel {
-		return out, newError(api.InvalidInput, "level は%dでなければならない(%d)", favoriteLevel, level)
+	if level != engine.DefaultLevel {
+		return out, newError(api.InvalidInput, "level は%dでなければならない(%d)", engine.DefaultLevel, level)
 	}
 	sp, err := normalizeSP(in.Sp)
 	if err != nil {
@@ -158,13 +233,75 @@ func normalizeFavorite(req favoriteRequest) (favoriteSnapshot, error) {
 		return out, err
 	}
 
-	out.Individual = individualSnapshot{
+	out = individualSnapshot{
 		SpeciesKey: *in.SpeciesKey, Level: level, NatureID: *in.NatureID,
 		AbilityID: deref(in.AbilityID), ItemID: deref(in.ItemID),
 		Sp: sp, Ranks: ranks, TeraType: tera, Status: status,
 	}
 	return out, nil
 }
+
+// normalizeCalc は calc を検証し、既定値を補った形にする。マスタとは照合しない(ADR-0228 §3)。
+func normalizeCalc(in *calcRequest) (calcSnapshot, error) {
+	var out calcSnapshot
+	if in.Format == nil || !api.Format(*in.Format).Valid() {
+		return out, newError(api.InvalidEnum, "calc.format が無いか未知の値")
+	}
+	weather, terrain := string(api.WeatherNone), string(api.TerrainNone)
+	var fieldIn fieldRequest
+	if in.Field != nil {
+		fieldIn = *in.Field
+	}
+	if fieldIn.Weather != nil {
+		if !api.Weather(*fieldIn.Weather).Valid() {
+			return out, newError(api.InvalidEnum, "calc.field.weather が未知の値")
+		}
+		weather = *fieldIn.Weather
+	}
+	if fieldIn.Terrain != nil {
+		if !api.Terrain(*fieldIn.Terrain).Valid() {
+			return out, newError(api.InvalidEnum, "calc.field.terrain が未知の値")
+		}
+		terrain = *fieldIn.Terrain
+	}
+	if in.Attacker == nil || in.Defender == nil {
+		return out, newError(api.InvalidInput, "calc.attacker と calc.defender が必要")
+	}
+	if in.MoveID == nil || *in.MoveID == "" {
+		return out, newError(api.InvalidInput, "calc.moveId が無い")
+	}
+	attacker, err := normalizeIndividual(in.Attacker)
+	if err != nil {
+		return out, err
+	}
+	defender, err := normalizeIndividual(in.Defender)
+	if err != nil {
+		return out, err
+	}
+	out = calcSnapshot{
+		Format: *in.Format, Attacker: attacker, Defender: defender, MoveID: *in.MoveID,
+		Field: fieldSnapshot{
+			Weather: weather, Terrain: terrain,
+			AttackerScreens: normalizeScreens(fieldIn.AttackerScreens),
+			DefenderScreens: normalizeScreens(fieldIn.DefenderScreens),
+		},
+	}
+	if in.Options != nil && in.Options.Critical != nil {
+		out.Options.Critical = *in.Options.Critical
+	}
+	return out, nil
+}
+
+func normalizeScreens(in *screensRequest) screensSnapshot {
+	if in == nil {
+		return screensSnapshot{}
+	}
+	return screensSnapshot{
+		Reflect: derefBool(in.Reflect), LightScreen: derefBool(in.LightScreen), AuroraVeil: derefBool(in.AuroraVeil),
+	}
+}
+
+func derefBool(b *bool) bool { return b != nil && *b }
 
 func deref(s *string) string {
 	if s == nil {
@@ -180,13 +317,13 @@ func normalizeSP(in *spRequest) (spSnapshot, error) {
 	sp := spSnapshot{Hp: *in.Hp, Atk: *in.Atk, Def: *in.Def, Spa: *in.Spa, Spd: *in.Spd, Spe: *in.Spe}
 	total := 0
 	for _, v := range []int{sp.Hp, sp.Atk, sp.Def, sp.Spa, sp.Spd, sp.Spe} {
-		if v < 0 || v > maxSPPerStat {
-			return spSnapshot{}, newError(api.InvalidInput, "sp は各 0〜%d でなければならない", maxSPPerStat)
+		if v < 0 || v > engine.MaxSPPerStat {
+			return spSnapshot{}, newError(api.InvalidInput, "sp は各 0〜%d でなければならない", engine.MaxSPPerStat)
 		}
 		total += v
 	}
-	if total > maxSPTotal {
-		return spSnapshot{}, newError(api.InvalidInput, "sp の合計は%d以下でなければならない(%d)", maxSPTotal, total)
+	if total > engine.MaxSPTotal {
+		return spSnapshot{}, newError(api.InvalidInput, "sp の合計は%d以下でなければならない(%d)", engine.MaxSPTotal, total)
 	}
 	return sp, nil
 }
@@ -211,15 +348,10 @@ func normalizeRanks(in *rankSnapshot) (rankValues, error) {
 	return r, nil
 }
 
-// favoriteFrom は store の1行を契約の Favorite に写す。snapshot が読めなければエラー(呼び出し側が 500 にする)。
-func favoriteFrom(f store.Favorite) (api.Favorite, error) {
-	var snap favoriteSnapshot
-	if err := json.Unmarshal(f.Snapshot, &snap); err != nil {
-		return api.Favorite{}, err
-	}
-	in := snap.Individual
+// individualFrom は保存済みの個体を契約の Individual に写す。個体として読めなければエラー。
+func individualFrom(in individualSnapshot) (api.Individual, error) {
 	if !speciesKeyPattern.MatchString(in.SpeciesKey) || in.NatureID == "" {
-		return api.Favorite{}, errors.New("snapshot が個体として読めない")
+		return api.Individual{}, errors.New("snapshot が個体として読めない")
 	}
 	level := in.Level
 	status := api.StatusCondition(in.Status)
@@ -241,10 +373,64 @@ func favoriteFrom(f store.Favorite) (api.Favorite, error) {
 		tera := api.PokeType(in.TeraType)
 		ind.TeraType = &tera
 	}
+	return ind, nil
+}
+
+// calcFrom は保存済みの calc を契約の CalcRequest に写す。読めなければエラー。
+func calcFrom(c calcSnapshot) (*api.CalcRequest, error) {
+	if !api.Format(c.Format).Valid() || c.MoveID == "" ||
+		!api.Weather(c.Field.Weather).Valid() || !api.Terrain(c.Field.Terrain).Valid() {
+		return nil, errors.New("snapshot の calc が読めない")
+	}
+	attacker, err := individualFrom(c.Attacker)
+	if err != nil {
+		return nil, err
+	}
+	defender, err := individualFrom(c.Defender)
+	if err != nil {
+		return nil, err
+	}
+	weather, terrain := api.Weather(c.Field.Weather), api.Terrain(c.Field.Terrain)
+	critical := c.Options.Critical
+	return &api.CalcRequest{
+		Format:   api.Format(c.Format),
+		Attacker: attacker,
+		Defender: defender,
+		MoveId:   c.MoveID,
+		Field: &api.FieldState{
+			Weather: &weather, Terrain: &terrain,
+			AttackerScreens: screensFrom(c.Field.AttackerScreens),
+			DefenderScreens: screensFrom(c.Field.DefenderScreens),
+		},
+		Options: &api.CalcOptions{Critical: &critical},
+	}, nil
+}
+
+func screensFrom(s screensSnapshot) *api.Screens {
+	return &api.Screens{Reflect: &s.Reflect, LightScreen: &s.LightScreen, AuroraVeil: &s.AuroraVeil}
+}
+
+// favoriteFrom は store の1行を契約の Favorite に写す。snapshot が読めなければエラー(呼び出し側が 500 にする)。
+func favoriteFrom(f store.Favorite) (api.Favorite, error) {
+	var snap favoriteSnapshot
+	if err := json.Unmarshal(f.Snapshot, &snap); err != nil {
+		return api.Favorite{}, err
+	}
+	ind, err := individualFrom(snap.Individual)
+	if err != nil {
+		return api.Favorite{}, err
+	}
+	var calc *api.CalcRequest
+	if snap.Calc != nil {
+		if calc, err = calcFrom(*snap.Calc); err != nil {
+			return api.Favorite{}, err
+		}
+	}
 	return api.Favorite{
 		Id:         strconv.FormatInt(f.ID, 10),
 		Label:      snap.Label,
 		Individual: ind,
+		Calc:       calc,
 		CreatedAt:  f.CreatedAt,
 		UpdatedAt:  f.UpdatedAt,
 	}, nil
@@ -302,6 +488,9 @@ func (s *Server) CreateFavorite(ctx *echo.Context, params api.CreateFavoritePara
 	raw, err := json.Marshal(snap)
 	if err != nil {
 		return errFromStore(params.XDeviceId, err)
+	}
+	if len(raw) > maxFavoriteSnapshotBytes {
+		return newError(api.InvalidInput, "お気に入りの内容が大きすぎる(%dバイト以下)", maxFavoriteSnapshotBytes)
 	}
 
 	var result api.Favorite

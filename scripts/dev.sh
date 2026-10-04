@@ -12,7 +12,7 @@
 # 環境変数:
 #   DEV_CALC_PORT     calc-svc の待ち受けポート(既定 8081)
 #   DEV_GATEWAY_METRICS_PORT  gateway のメトリクス専用ポート(既定 9090。/metrics はここだけ。issue #216)
-#   DEV_IMAGES_DIR  ローカル画像の出力先(既定 data/generated/images/dist。manifest.json があるときだけ gateway に渡す。ADR-0807)
+#   DEV_IMAGES_DIR  ローカル画像の出力先(既定 data/generated/images/dist。manifest.json があるときだけ gateway に渡す。ADR-0808)
 #   DEV_GATEWAY_PORT  gateway の待ち受けポート(既定 8080。k3d の loadbalancer と同じポートなので、
 #                     k3d クラスタを動かしている間はどちらかのポートを変えること)
 #
@@ -23,6 +23,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 repo_root="$(pwd)"
+# API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)
+./scripts/ensure-gen.sh check
 
 calc_port="${DEV_CALC_PORT:-8081}"
 gateway_port="${DEV_GATEWAY_PORT:-8080}"
@@ -60,7 +62,7 @@ CALC_MASTER_PATH="$calc_master" \
 "$tmpdir/calc" &
 pids+=("$!")
 
-# ローカル画像(make assets の出力。ADR-0807)。manifest がある場合だけ渡す(無ければ画像なし = エンブレム)。
+# ローカル画像(make assets の出力。ADR-0808)。manifest がある場合だけ渡す(無ければ画像なし = エンブレム)。
 images_dir="${DEV_IMAGES_DIR:-$repo_root/data/generated/images/dist}"
 if [ ! -f "$images_dir/manifest.json" ]; then
   images_dir=""

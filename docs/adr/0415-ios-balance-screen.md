@@ -25,6 +25,7 @@ schema 名(`Error`・`TypeId`・`Health` など)が衝突するため、既存�
   `ios/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated/` に生成する(コミットする・手で編集しない)。
 - `ios/scripts/openapi-gen.sh` は「名前|仕様|設定|出力先」の組の配列を順に処理する(`--check` も同じ)。`make ios-gen` / `make ios-gen-check` はそのまま。
   **再生成手順**: `services/balance/api/openapi.yaml` を変えたら `make ios-gen` → 生成物をコミット。ずれは `make ios-gen-check`(`make ios-test` に含まれる)が検出する。
+  (2026-10-03 追記: **ADR-0807 で置き換え**。生成物は Git に置かず、使う前に `make gen` / `make ios-gen` で作る)
 - `Package.swift` に `PokeCalcBalanceAPI` ターゲット(`PokeCalcAPI` と同じ依存)を足し、`PokeCalcCore` とテストが依存する。View(`ios/PokeCalc`)は生成型に触れない。
 - 生成元の版: この ADR の時点の main は balance 0.7.0。0.8.0(ADR-0413。`missing_header`/`invalid_header` を追加し `missing_request_context` を廃止)が
   main に入ったら `make ios-gen` で再生成する(列挙に無いコードを受けると生成クライアントがデコード失敗にするため。実装者は 0.8.0 の取り込み後に再生成してから仕上げる)。

@@ -1,7 +1,7 @@
 // P4-2/P4-3: 計算画面(docs/design.md「画面: ダメージ計算」、ADR-0300 §2・§5・§6)。
 // engine には CalcEngine(差し替え口)、マスタには MasterData(いまは架空の例データ)を渡してもらう。
-// 攻撃側は攻撃側プリセット(domain/attackerPresets.ts、既定は無振り)の Key を選び、SP・性格は
-// 今の技の分類から導出する(P4-3、ADR-0300 §5)。
+// 攻撃側は「技」の直後の「攻撃」「特攻」の2ブロック(プリセット・SP の数値・性格補正。
+// domain/attackerStatInputs.ts、既定は無振り・補正なし)で決め、選んだ技が使う方を強調する(ADR-0329)。
 // 返ってきた値は加工せずに表示する(ADR-0300 §8)。技の相性・確定数の言葉も engine の値をそのまま使う。
 
 import {
@@ -18,13 +18,22 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { ATTACKER_PRESET_KEYS, attackerPresetLabel } from "../domain/attackerPresets";
 import {
-  ATTACKER_PRESET_KEYS,
-  DEFAULT_ATTACKER_PRESET,
-  attackerPresetLabel,
-  resolveAttackerPreset,
-  type AttackerPresetKey,
-} from "../domain/attackerPresets";
+  ATTACK_STATS,
+  DEFAULT_ATTACKER_STAT_INPUTS,
+  NATURE_MODIFIERS,
+  attackStatFor,
+  isModifierSelectable,
+  matchingPreset,
+  presetInput,
+  resolveAttackerStats,
+  type AttackerStatIssue,
+  type AttackStat,
+  type AttackStatInput,
+  type AttackerStatInputs,
+  type NatureModifier,
+} from "../domain/attackerStatInputs";
 import {
   DEFAULT_CALC_CONDITIONS,
   conditionRequestParts,
@@ -42,7 +51,7 @@ import {
   type MegaItemLock,
 } from "../domain/mega";
 import { itemAfterRoleChange, itemsForRole, itemsWithStoneLabels, megaStoneLabel } from "../domain/itemRoles";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
@@ -66,6 +75,7 @@ import type {
   MoveCategory,
 } from "../engine/types";
 import {
+  attackerStatText,
   calcScreenText,
   frequentOpponentsText,
   isTypeId,
@@ -95,6 +105,8 @@ import { useSpeciesResolutions } from "./speciesResolution";
 import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
+import { Icon } from "../ui/Icon";
+import { typeAccentStyle } from "../ui/typeAccent";
 import "./CalcScreen.css";
 
 /**
@@ -274,7 +286,7 @@ interface CompletedCalc {
   readonly attackerItem: Item | null;
   readonly defenderItem: Item | null;
   readonly compareItems: boolean;
-  readonly attackerPresetKey: AttackerPresetKey;
+  readonly attackerStatInputs: AttackerStatInputs;
   readonly attackerAbility: Ability;
   readonly defenderAbilities: readonly Ability[];
   readonly conditions: CalcConditions;
@@ -289,7 +301,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   if (species === null) {
     return "";
   }
-  if (learnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
+  if (damagingLearnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
     return currentMoveId;
   }
   return firstDamagingMove(species, moves)?.id ?? "";
@@ -305,6 +317,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     abilitiesFor,
     movesFor,
     resolvedSpecies,
+    resolvedAbilities,
+    resolvedMoves,
     register: registerSpeciesResolution,
   } = useSpeciesResolutions();
   const compareReasonId = useId();
@@ -324,9 +338,11 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   const [defenderAbilityId, setDefenderAbilityId] = useState("");
   // 「詳細」の条件(issue 274、ADR-0312)。攻守入れ替え・種族・技の変更では消さない。
   const [conditions, setConditions] = useState<CalcConditions>(DEFAULT_CALC_CONDITIONS);
-  // 攻撃側プリセットの Key だけを持ち、攻撃側・技・攻守入れ替えでは変えない(ADR-0300 §5、
-  // CalcScreen.test.tsx「攻撃側のプリセット(P4-3)」)。表示名・SP・性格は今の技の分類から毎レンダー導出する。
-  const [attackerPresetKey, setAttackerPresetKey] = useState<AttackerPresetKey>(DEFAULT_ATTACKER_PRESET);
+  // 攻撃側の「攻撃」「特攻」の入力(SP の文字列・性格補正)。技・種族・攻守入れ替えでは変えない
+  // (ADR-0329 §6、ADR-0312 §6 と同じ寿命)。プリセットの選択状態は持たず、値から毎レンダー導く。
+  const [attackerStatInputs, setAttackerStatInputs] = useState<AttackerStatInputs>(
+    DEFAULT_ATTACKER_STAT_INPUTS,
+  );
   // calcBulk の応答だけを state に持つ。idle・status-move・loading は入力から毎レンダー導出する
   // (effect の中で同期的に setState すると react-hooks/set-state-in-effect に引っかかるため)。
   const [completed, setCompleted] = useState<CompletedCalc | null>(null);
@@ -374,6 +390,12 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     [master.items, stoneIds],
   );
   // 結果の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  // 未対応の印の名前引き用。オンラインのマスタは moves・abilities が空なので、解決済みの分を足す。
+  const markMoves = useMemo(() => [...master.moves, ...resolvedMoves], [master.moves, resolvedMoves]);
+  const markAbilities = useMemo(
+    () => [...master.abilities, ...resolvedAbilities],
+    [master.abilities, resolvedAbilities],
+  );
   const displayItems = useMemo(
     () => itemsWithStoneLabels(master.items, [attackerSpecies, defenderSpecies], stoneIds),
     [master.items, attackerSpecies, defenderSpecies, stoneIds],
@@ -399,7 +421,9 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   const effectiveCompareItems = compareItems && !compareDisabledByMega;
   const attackerMoves = useMemo(
     () =>
-      attackerSpecies === null ? [] : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
+      attackerSpecies === null
+        ? []
+        : damagingLearnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)),
     [attackerSpecies, master.moves, attackerKey, movesFor],
   );
   // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または攻撃側の技の候補が
@@ -451,13 +475,19 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     [defenderSpecies, defenderAbilityOptions, defenderAbilityId],
   );
 
-  // P5-3c(ADR-0327 §2): お気に入りに入れる攻撃側(種族・性格・SP・持ち物)。技の分類が決まるまでは物理扱いのプリセット。
+  // ADR-0329 §3〜§5: 攻撃側の入力を要求の SP・性格にする(不正・性格が解決できないときは ok=false)。
+  // 技の分類が決まるまでは物理扱い。
+  const attackerStats = useMemo(
+    () => resolveAttackerStats(attackerStatInputs, master.natures, move?.category ?? DEFAULT_MOVE_CATEGORY),
+    [attackerStatInputs, master.natures, move],
+  );
+
+  // P5-3c(ADR-0327 §2): お気に入りに入れる攻撃側(種族・性格・SP・持ち物)。入力が不正なら入れない(ADR-0329 §7)。
   const favoriteInput = useMemo(() => {
-    if (attackerSpecies === null) {
+    if (attackerSpecies === null || !attackerStats.ok) {
       return null;
     }
-    const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move?.category ?? DEFAULT_MOVE_CATEGORY);
-    const natureId = resolveNatureId(master.natures, nature);
+    const natureId = resolveNatureId(master.natures, attackerStats.nature);
     if (natureId === undefined) {
       return null;
     }
@@ -465,10 +495,10 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
       label: attackerSpecies.nameJa,
       speciesKey: attackerSpecies.key,
       natureId,
-      sp,
+      sp: attackerStats.sp,
       itemId: attackerItem?.id ?? null,
     });
-  }, [attackerSpecies, attackerPresetKey, move, master.natures, attackerItem]);
+  }, [attackerSpecies, attackerStats, master.natures, attackerItem]);
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);
@@ -673,12 +703,18 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   // cleanup(依存が変わった・アンマウント)で abort する(古い計算に「もう要らない」を伝え、gateway 側の
   // 取り消し伝播〈issue 113〉を活かす。オンラインでないときは calcBulk 側が signal を無視するだけ)。
   useEffect(() => {
-    if (attackerSpecies === null || defenderSpecies === null || move === null || move.category === "status") {
+    if (
+      attackerSpecies === null ||
+      defenderSpecies === null ||
+      move === null ||
+      move.category === "status" ||
+      !attackerStats.ok
+    ) {
       return;
     }
     let cancelled = false;
     const controller = new AbortController();
-    const { sp, nature } = resolveAttackerPreset(attackerPresetKey, move.category);
+    const { sp, nature } = attackerStats;
     const parts = conditionRequestParts(conditions);
     const attackerIndividual = buildIndividual(attackerSpecies, {
       sp,
@@ -711,7 +747,7 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
           attackerItem,
           defenderItem,
           compareItems: effectiveCompareItems,
-          attackerPresetKey,
+          attackerStatInputs,
           attackerAbility,
           defenderAbilities,
           conditions,
@@ -732,7 +768,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     attackerItem,
     defenderItem,
     effectiveCompareItems,
-    attackerPresetKey,
+    attackerStats,
+    attackerStatInputs,
     attackerAbility,
     defenderAbilities,
     conditions,
@@ -744,8 +781,11 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
   let outcome: Outcome;
   if (attackerSpecies === null || defenderSpecies === null || move === null) {
     outcome = { status: "idle" };
-  } else if (move.category === "status") {
+  } else if (isStatusMove(move)) {
     outcome = { status: "status-move" };
+  } else if (!attackerStats.ok) {
+    // 攻撃側の入力が不正なときは計算せず、古い行も出さない(理由は攻撃側の入力のすぐ下に出す。ADR-0329 §5)。
+    outcome = { status: "idle" };
   } else if (
     completed === null ||
     completed.attackerSpecies !== attackerSpecies ||
@@ -754,7 +794,7 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     completed.attackerItem !== attackerItem ||
     completed.defenderItem !== defenderItem ||
     completed.compareItems !== effectiveCompareItems ||
-    completed.attackerPresetKey !== attackerPresetKey ||
+    completed.attackerStatInputs !== attackerStatInputs ||
     completed.attackerAbility !== attackerAbility ||
     completed.defenderAbilities !== defenderAbilities ||
     completed.conditions !== conditions
@@ -797,18 +837,12 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
           onSwapAnimationEnd={endSwapAnimation}
           activeHoloClearRef={activeHoloClearRef}
         >
-          {attackerSpecies !== null && (
-            <AttackerPresetSelector
-              category={move?.category ?? DEFAULT_MOVE_CATEGORY}
-              value={attackerPresetKey}
-              onChange={setAttackerPresetKey}
-            />
-          )}
           {recordClient !== undefined && (
             <AddFavoriteButton recordClient={recordClient} input={favoriteInput} onAdded={onFavoriteAdded} />
           )}
         </SpeciesCard>
-        <button type="button" className="calc-screen__swap" onClick={swap}>
+        <button type="button" className="ui-button ui-button--secondary calc-screen__swap" onClick={swap}>
+          <Icon name="swap" size={16} />
           {calcScreenText.swapButtonLabel}
         </button>
         <SpeciesCard
@@ -844,6 +878,18 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
 
       <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!movesAvailable} />
       {!movesAvailable && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      {attackerSpecies !== null && capabilities.moves && attackerMoves.length === 0 && (
+        <p className="calc-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
+      )}
+
+      {attackerSpecies !== null && (
+        <AttackerStatBlocks
+          inputs={attackerStatInputs}
+          usedStat={attackStatFor(move?.category ?? null)}
+          issues={attackerStats.ok ? [] : attackerStats.issues}
+          onChange={setAttackerStatInputs}
+        />
+      )}
 
       <label className="calc-screen__compare">
         <input
@@ -879,8 +925,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
       <ResultsSection
         outcome={outcome}
         items={displayItems}
-        moves={master.moves}
-        abilities={master.abilities}
+        moves={markMoves}
+        abilities={markAbilities}
         moveType={move?.type}
         defenderHasAbilityChoice={defenderAbilityOptions.length > 1}
         pulsingKeys={pulsingKeys}
@@ -970,7 +1016,13 @@ function SpeciesCard({
 }: SpeciesCardProps) {
   const primaryType = species?.types[0];
   const holo = useHoloCard(activeHoloClearRef);
-  const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
+  const className = [
+    "ui-card",
+    "ui-card--typed",
+    "calc-card",
+    isSwapping ? "is-swapping" : "",
+    holo.isHolo ? "is-holo" : "",
+  ]
     .filter((part) => part !== "")
     .join(" ");
   // 領域(カード)の見える見出し(h2)。accessible name はこの見出しの文字から作る(SC 2.5.3)。
@@ -986,7 +1038,7 @@ function SpeciesCard({
     <section
       className={className}
       aria-labelledby={regionHeadingId}
-      style={holo.style}
+      style={{ ...holo.style, ...typeAccentStyle(primaryType) }}
       onAnimationEnd={(event) => {
         // バブリングで子要素のアニメーション(バッジの弾み等)と混ざらないよう currentTarget と比べる。
         if (event.target === event.currentTarget) {
@@ -1049,7 +1101,7 @@ function SpeciesCard({
           >
             <option value="">{calcScreenText.noItemOption}</option>
             {itemLock.kind === "locked" && species !== null ? (
-              <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+              <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
             ) : (
               items.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -1086,7 +1138,7 @@ function SpeciesCard({
             {species.types.map((type) => (
               <li
                 key={type}
-                className="calc-card__type"
+                className="ui-badge calc-card__type"
                 style={{
                   backgroundColor: `var(--type-${type}, var(--border-hairline))`,
                   color: `var(--type-${type}-ink, var(--text-primary))`,
@@ -1105,43 +1157,177 @@ function SpeciesCard({
   );
 }
 
-interface AttackerPresetSelectorProps {
-  readonly category: MoveCategory;
-  readonly value: AttackerPresetKey;
-  readonly onChange: (key: AttackerPresetKey) => void;
+interface AttackerStatBlocksProps {
+  readonly inputs: AttackerStatInputs;
+  /** 選択中の技の分類が使うブロック(強調する)。技が未選択なら null。 */
+  readonly usedStat: AttackStat | null;
+  readonly issues: readonly AttackerStatIssue[];
+  readonly onChange: (next: AttackerStatInputs) => void;
 }
 
 /**
- * 攻撃側プリセットのピル型ラジオグループ(design.md「入力はタップで選ぶ」、ADR-0300 §5)。
- * 選んでいるのは Key で、表示名は今の技の分類(category)から導出する
- * (CalcScreen.test.tsx「A特化のまま特殊技に替えると…」)。
+ * 「攻撃」「特攻」の2ブロック(ADR-0329 §1)。常に両方出し、選んだ技が使う方の見出しに「(この技で使用)」と
+ * aria-current を付ける(色だけに頼らない)。値は親が持ち、ここでは変えた1ブロック分を返すだけ。
  */
-function AttackerPresetSelector({ category, value, onChange }: AttackerPresetSelectorProps) {
-  // ラジオの name は画面内で一意にする(同じ部品を複数置いてもグループが混ざらないように)。
-  const groupName = useId();
+function AttackerStatBlocks({ inputs, usedStat, issues, onChange }: AttackerStatBlocksProps) {
+  const spInvalid = (stat: AttackStat) => issues.some((issue) => issue.kind === "sp" && issue.stat === stat);
+  const natureInvalid = issues.some((issue) => issue.kind === "nature");
   return (
-    <div role="radiogroup" aria-label={calcScreenText.attackerPresetGroupLabel} className="calc-preset">
-      {ATTACKER_PRESET_KEYS.map((key) => {
-        const selected = key === value;
-        return (
-          <label
-            key={key}
-            className={`calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
-          >
-            <input
-              type="radio"
-              name={groupName}
-              className="calc-preset__input"
-              checked={selected}
-              onChange={() => {
-                onChange(key);
-              }}
-            />
-            {attackerPresetLabel(key, category)}
-          </label>
-        );
-      })}
+    <div className="calc-attack-stats">
+      {ATTACK_STATS.map((stat) => (
+        <AttackerStatBlock
+          key={stat}
+          stat={stat}
+          inputs={inputs}
+          used={usedStat === stat}
+          spInvalid={spInvalid(stat)}
+          onChange={(next) => {
+            onChange({ ...inputs, [stat]: next });
+          }}
+        />
+      ))}
+      {natureInvalid && (
+        <p role="alert" className="calc-screen__error">
+          {attackerStatText.natureUnresolved}
+        </p>
+      )}
     </div>
+  );
+}
+
+interface AttackerStatBlockProps {
+  readonly stat: AttackStat;
+  readonly inputs: AttackerStatInputs;
+  readonly used: boolean;
+  readonly spInvalid: boolean;
+  readonly onChange: (next: AttackStatInput) => void;
+}
+
+function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: AttackerStatBlockProps) {
+  // ラジオの name・説明の id は画面内で一意にする(同じ部品を複数置いてもグループが混ざらないように)。
+  const presetName = useId();
+  const natureName = useId();
+  const reasonId = useId();
+  const errorId = useId();
+  const input = inputs[stat];
+  const name = attackerStatText.statName[stat];
+  const selectedPreset = matchingPreset(input);
+  const presetCategory = stat === "spa" ? "special" : "physical";
+  const presetSelectable = (key: (typeof ATTACKER_PRESET_KEYS)[number]) =>
+    isModifierSelectable(inputs, stat, presetInput(key).modifier);
+  const anyDisabled =
+    ATTACKER_PRESET_KEYS.some((key) => !presetSelectable(key)) ||
+    NATURE_MODIFIERS.some((modifier) => !isModifierSelectable(inputs, stat, modifier));
+  return (
+    <fieldset
+      className={`calc-attack-stat${used ? " calc-attack-stat--used" : ""}`}
+      aria-current={used ? "true" : undefined}
+    >
+      <legend className="calc-attack-stat__legend">
+        {used ? `${name}${attackerStatText.usedSuffix}` : name}
+      </legend>
+      <div
+        role="radiogroup"
+        aria-label={attackerStatText.presetGroupLabel(name)}
+        aria-describedby={anyDisabled ? reasonId : undefined}
+        className="calc-preset"
+      >
+        {ATTACKER_PRESET_KEYS.map((key) => {
+          const selected = key === selectedPreset;
+          return (
+            <label
+              key={key}
+              className={`ui-chip${selected ? " ui-chip--selected" : ""} calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name={presetName}
+                className="calc-preset__input"
+                checked={selected}
+                disabled={!presetSelectable(key)}
+                onChange={() => {
+                  onChange(presetInput(key));
+                }}
+              />
+              {attackerPresetLabel(key, presetCategory)}
+            </label>
+          );
+        })}
+        {selectedPreset === null && (
+          <span className="calc-attack-stat__custom">{attackerStatText.custom}</span>
+        )}
+      </div>
+      <label className="calc-attack-stat__sp">
+        {attackerStatText.spLabel(name)}
+        <input
+          type="text"
+          inputMode="numeric"
+          className="calc-attack-stat__sp-input"
+          aria-invalid={spInvalid ? "true" : undefined}
+          aria-describedby={spInvalid ? errorId : undefined}
+          value={input.spText}
+          onChange={(event) => {
+            onChange({ ...input, spText: event.target.value });
+          }}
+        />
+      </label>
+      {spInvalid && (
+        <p id={errorId} role="alert" className="calc-screen__error">
+          {attackerStatText.spInvalid(name)}
+        </p>
+      )}
+      <div
+        role="radiogroup"
+        aria-label={attackerStatText.natureGroupLabel(name)}
+        aria-describedby={anyDisabled ? reasonId : undefined}
+        className="calc-preset"
+      >
+        {NATURE_MODIFIERS.map((modifier) => (
+          <NatureModifierOption
+            key={modifier}
+            name={natureName}
+            modifier={modifier}
+            checked={input.modifier === modifier}
+            disabled={!isModifierSelectable(inputs, stat, modifier)}
+            onSelect={() => {
+              onChange({ ...input, modifier });
+            }}
+          />
+        ))}
+      </div>
+      {anyDisabled && (
+        <p id={reasonId} className="calc-screen__notice">
+          {attackerStatText.sameDirectionReason}
+        </p>
+      )}
+    </fieldset>
+  );
+}
+
+interface NatureModifierOptionProps {
+  readonly name: string;
+  readonly modifier: NatureModifier;
+  readonly checked: boolean;
+  readonly disabled: boolean;
+  readonly onSelect: () => void;
+}
+
+/** 性格補正のピル(上昇・補正なし・下降)。 */
+function NatureModifierOption({ name, modifier, checked, disabled, onSelect }: NatureModifierOptionProps) {
+  return (
+    <label
+      className={`ui-chip${checked ? " ui-chip--selected" : ""} calc-preset__option${checked ? " calc-preset__option--selected" : ""}`}
+    >
+      <input
+        type="radio"
+        name={name}
+        className="calc-preset__input"
+        checked={checked}
+        disabled={disabled}
+        onChange={onSelect}
+      />
+      {attackerStatText.modifierLabel[modifier]}
+    </label>
   );
 }
 
@@ -1314,7 +1500,7 @@ function ResultsList({
           <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
         </p>
       )}
-      <ul aria-label={calcScreenText.resultsListLabel} className="calc-results__list">
+      <ul aria-label={calcScreenText.resultsListLabel} className="ui-rows calc-results__list">
         {result.rows.map((row, index) => {
           const itemLabel =
             row.itemId === ""
@@ -1323,7 +1509,7 @@ function ResultsList({
           const abilityLabel = abilityNamesLabel(row.abilityIds, abilities, defenderHasAbilityChoice);
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
           const koKey = koRowKey(row);
-          const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
+          const koClassName = `ui-badge calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
           // 全行に共通する印は先頭の案内が担うので、この行では残り(一部の行だけにある印)だけ出す。
           const rowMarkLabels = unsupportedMarkLabels(perRowMarks[index] ?? [], moves, items, abilities);
           return (

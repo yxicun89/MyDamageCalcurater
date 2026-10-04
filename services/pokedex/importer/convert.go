@@ -22,6 +22,8 @@ type NamedRow struct {
 	NameJa       string
 	NameJaSource string
 	NameEn       string
+	// IsMegaStone は持ち物の行だけが使う(メガストーンか。ADR-0140。特性の行では常に偽)。
+	IsMegaStone bool
 }
 
 // MoveRow は moves テーブルの行。Accuracy 0 は必中(NULL)。
@@ -198,6 +200,7 @@ func Convert(in Input) (Output, Report, error) {
 
 	itemRows, itemNameWarnings := buildNamedRows(itemIDs, itemNameEn, in.PokeAPI.Items, in.Overrides.Items, in.Config.NameJaLanguages, usedOverrideItems)
 	warnings = append(warnings, itemNameWarnings...)
+	warnings = append(warnings, markMegaStones(itemRows, in.Showdown.Items, speciesConv.Rows)...)
 
 	abilityRows, abilityNameWarnings := buildNamedRows(abilityIDs, speciesConv.AbilityNameEn, in.PokeAPI.Abilities, in.Overrides.Abilities, in.Config.NameJaLanguages, usedOverrideAbilities)
 	warnings = append(warnings, abilityNameWarnings...)

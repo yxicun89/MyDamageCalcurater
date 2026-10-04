@@ -1,35 +1,35 @@
-// P5-5 PR-A1: 構築ビルダーの画面(ADR-0309 §4)。
-// この段階で扱うのは **一覧・新規作成(名前だけ・メンバーは空)・名前変更・削除** まで。
-// メンバー(種族・技・持ち物・特性・性格・SP・テラスタイプ)の編集は PR-A2(TeamMemberEditor.tsx。ADR-0316)、
-// Showdown 形式の入出力は判定レーンの web/src/team/showdownFormat.ts(別担当)。
+// 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。一覧と編集の2つの表示を切り替える(URL は /team のまま)。
+// 一覧: 構築のカード・[新しい構築]・閉じた Showdown 取り込み。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
 //
 // 状態の作り(SpeedScreen.tsx・BalanceScreen.tsx と同じ考え方):
 //   - list() はマウント時に1回だけ呼び、cancelled フラグで古い応答を捨てる
 //   - create()/update()/remove() が成功したら、応答の Team で手元の一覧を書き換える(list を呼び直さない)
-//   - 一覧の読み込みに失敗しても、新規作成のフォームは先に使える(ADR-0309 §4)
+//   - 一覧の読み込みに失敗しても、[新しい構築]は先に使える(ADR-0309 §4)
+//   - 編集中の下書き・開いている構築・取り込みの入力と折りたたみの開閉はこの画面の state に持つ(ADR-0308)
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { teamMemberText, teamScreenText } from "../i18n/ja";
+import { teamShowdownText } from "../i18n/team";
+import { PokemonImage } from "../images/PokemonImage";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import { typeAccentStyle } from "../ui/typeAccent";
 import "./TeamScreen.css";
 import { TeamMemberEditor } from "./TeamMemberEditor";
 import type { TeamClient, TeamError } from "./teamClient";
-import { MAX_TEAM_NAME_LENGTH, teamNameNotice } from "./teamName";
-import { TeamShowdownExport } from "./TeamShowdownExport";
+import { teamDisplayNames } from "./teamName";
+import { TEAM_SLOT_COUNT, teamInputFromMembers } from "./teamSlots";
 import { TeamShowdownImport } from "./TeamShowdownImport";
 
 type Schemas = components["schemas"];
 
 /** パーティの上限(api/openapi.yaml の TeamInput.members の maxItems)。 */
-export const MAX_TEAM_MEMBERS = 6;
-
-export { MAX_TEAM_NAME_LENGTH };
+export const MAX_TEAM_MEMBERS = TEAM_SLOT_COUNT;
 
 /**
  * 画面の props(App.tsx が app/screens.tsx 経由で注入する。ADR-0309 §2)。
- * 一覧・作成・名前変更・削除は master を使わないが、メンバー編集(PR-A2。ADR-0316)が種族・技・持ち物などの
- * 選択肢をマスタから作る。種族の一覧が無いマスタ(オンライン)では masterSearch で都度引く。
+ * 一覧のアイコン列の種族の引き当てと、メンバー編集(ADR-0316)の種族・技・持ち物などの選択肢にマスタを使う。
+ * 種族の一覧が無いマスタ(オンライン)では、編集画面が masterSearch で都度引く。
  */
 export interface TeamScreenProps {
   readonly teamClient: TeamClient;
@@ -42,33 +42,15 @@ export interface TeamScreenProps {
   readonly masterSearch?: MasterSpeciesSearch;
 }
 
-/** list() 呼び出し1本の状態。読み込みに失敗しても新規作成のフォームは使える(ADR-0309 §4)。 */
+/** list() 呼び出し1本の状態。読み込みに失敗しても[新しい構築]は使える(ADR-0309 §4)。 */
 type ListState =
   | { readonly status: "loading" }
   | { readonly status: "error"; readonly error: TeamError }
   | { readonly status: "loaded"; readonly teams: readonly Schemas["Team"][] };
 
-/** 新規作成フォームの状態(notice = 送信前の検査で出す理由、error = create() が返した失敗)。 */
-interface CreateFormState {
-  readonly name: string;
+/** [新しい構築]の状態(error = create() が返した失敗)。 */
+interface CreateState {
   readonly submitting: boolean;
-  readonly notice: string | null;
-  readonly error: TeamError | null;
-}
-
-function initialCreateFormState(): CreateFormState {
-  return { name: "", submitting: false, notice: null, error: null };
-}
-
-/**
- * 名前変更フォームの状態(同時に1件だけ開く。開いている構築の id を持つ)。
- * notice = 送信前の検査で出す理由、error = update() が返した失敗(CreateFormState と同じ形)。
- */
-interface RenameState {
-  readonly teamId: string;
-  readonly name: string;
-  readonly submitting: boolean;
-  readonly notice: string | null;
   readonly error: TeamError | null;
 }
 
@@ -105,7 +87,7 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
 }
 
 /**
- * 構築ビルダーの画面(ADR-0309 §4)。
+ * 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。
  */
 export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
@@ -113,13 +95,33 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
   // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
   // (サーバーには存在するのに画面から消えて見える)。書き込み成功後に届いた list() 応答は捨てる。
   const hasWrittenRef = useRef(false);
+  // 編集画面で開いている構築の id(null は一覧の表示)。開く・戻るで API は呼ばない。
+  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
+  const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
+  // 編集画面から一覧に戻ったとき、フォーカスを戻す構築の id(ADR-0332 §7)。
+  const returnFocusRef = useRef<string | null>(null);
+  const screenRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const teamId = returnFocusRef.current;
+    if (editingTeamId !== null || teamId === null) {
+      return;
+    }
+    returnFocusRef.current = null;
+    const section = screenRef.current;
+    const target =
+      section?.querySelector<HTMLElement>(`[data-open-team="${teamId}"]`) ??
+      section?.querySelector<HTMLElement>("[data-create-team]");
+    target?.focus();
+  }, [editingTeamId]);
 
   // マウント時と reloadToken が変わったときに list() を呼ぶ(cancelled フラグで古い応答を捨てる。
-  // SpeedScreen.tsx と同じ形)。取り直しは「削除後の最新」なので、読み込み中に戻し、書き込み済みフラグも下ろす。
+  // SpeedScreen.tsx と同じ形)。取り直しは「削除後の最新」なので、読み込み中に戻し、編集画面も閉じ、書き込み済みフラグも下ろす。
   const [prevReloadToken, setPrevReloadToken] = useState(reloadToken);
   if (reloadToken !== prevReloadToken) {
     setPrevReloadToken(reloadToken);
     setList({ status: "loading" });
+    setEditingTeamId(null);
+    setDeleteState(null);
   }
   useEffect(() => {
     let cancelled = false;
@@ -137,66 +139,24 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
     };
   }, [teamClient, reloadToken]);
 
-  const [createState, setCreateState] = useState<CreateFormState>(initialCreateFormState);
+  const [createState, setCreateState] = useState<CreateState>({ submitting: false, error: null });
 
+  // 空の構築を作り、成功したらすぐ6枠の編集画面を開く。name は送らない(サーバーが既定名を入れる。ADR-0229)。
   async function handleCreate(): Promise<void> {
     if (createState.submitting) {
       return;
     }
-    const reason = teamNameNotice(createState.name);
-    if (reason !== null) {
-      setCreateState((current) => ({ ...current, notice: reason, error: null }));
-      return;
-    }
-    const trimmed = createState.name.trim();
-    setCreateState((current) => ({ ...current, submitting: true, notice: null, error: null }));
-    const result = await teamClient.create({ name: trimmed, members: [] });
+    setCreateState({ submitting: true, error: null });
+    const result = await teamClient.create(teamInputFromMembers([]));
     if (result.ok) {
       hasWrittenRef.current = true;
-      setCreateState(initialCreateFormState());
+      setCreateState({ submitting: false, error: null });
       setList((current) => addCreatedTeam(current, result.value));
+      setEditingTeamId(result.value.id);
     } else {
-      setCreateState((current) => ({ ...current, submitting: false, error: result.error }));
+      setCreateState({ submitting: false, error: result.error });
     }
   }
-
-  const [renameState, setRenameState] = useState<RenameState | null>(null);
-
-  function openRename(team: Schemas["Team"]): void {
-    setRenameState({ teamId: team.id, name: team.name, submitting: false, notice: null, error: null });
-  }
-
-  function cancelRename(): void {
-    setRenameState(null);
-  }
-
-  async function saveRename(team: Schemas["Team"]): Promise<void> {
-    if (renameState === null || renameState.teamId !== team.id || renameState.submitting || editorSaving) {
-      return;
-    }
-    // 送信前の検査は新規作成と同じ範囲(契約と同じ。ADR-0309 §4)。範囲外は update() を呼ばずに理由を出す。
-    const reason = teamNameNotice(renameState.name);
-    if (reason !== null) {
-      setRenameState((current) => (current === null ? current : { ...current, notice: reason, error: null }));
-      return;
-    }
-    const trimmed = renameState.name.trim();
-    setRenameState((current) =>
-      current === null ? current : { ...current, submitting: true, notice: null, error: null },
-    );
-    const result = await teamClient.update(team.id, { name: trimmed, members: team.members });
-    if (result.ok) {
-      hasWrittenRef.current = true;
-      setRenameState(null);
-      setList((current) => replaceTeam(current, result.value));
-    } else {
-      setRenameState((current) =>
-        current === null ? current : { ...current, submitting: false, error: result.error },
-      );
-    }
-  }
-
-  const [deleteState, setDeleteState] = useState<DeleteState | null>(null);
 
   function openDeleteConfirm(teamId: string): void {
     setDeleteState({ teamId, submitting: false, error: null });
@@ -223,29 +183,45 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
     }
   }
 
-  // メンバー編集の領域は同時に1つだけ(開いている構築の id)。開く・閉じるで API は呼ばない(ADR-0316 §1)。
-  const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
-  // メンバー保存の送信中(名前変更と同時に送ると、全置換の update の一方が失われる)。
-  const [editorSaving, setEditorSaving] = useState(false);
+  // Showdown 取り込みの入力と折りたたみの開閉(一覧と編集画面を行き来しても残す。ADR-0308)。
+  const [importText, setImportText] = useState("");
+  const [importOpen, setImportOpen] = useState(false);
+  const exampleLabelId = useId();
+
+  const teams = list.status === "loaded" ? list.teams : [];
+  const displayNames = teamDisplayNames(teams);
+  const editingTeam = editingTeamId === null ? undefined : teams.find((team) => team.id === editingTeamId);
+
+  if (editingTeam !== undefined) {
+    return (
+      <section ref={screenRef} aria-label={teamScreenText.regionLabel} className="team-screen">
+        <TeamMemberEditor
+          key={editingTeam.id}
+          team={editingTeam}
+          displayName={displayNames.get(editingTeam.id) ?? editingTeam.name}
+          master={master}
+          masterSearch={masterSearch}
+          teamClient={teamClient}
+          onSaved={(updated) => {
+            hasWrittenRef.current = true;
+            setList((current) => replaceTeam(current, updated));
+          }}
+          onClose={() => {
+            returnFocusRef.current = editingTeam.id;
+            setEditingTeamId(null);
+          }}
+        />
+      </section>
+    );
+  }
 
   return (
-    <section aria-label={teamScreenText.regionLabel} className="team-screen">
-      <div className="team-screen__create">
-        <h2>{teamScreenText.createHeading}</h2>
-        <div className="team-screen__field">
-          <span>{teamScreenText.nameLabel}</span>
-          <input
-            type="text"
-            aria-label={teamScreenText.nameLabel}
-            value={createState.name}
-            onChange={(event) => {
-              const { value } = event.target;
-              setCreateState((current) => ({ ...current, name: value }));
-            }}
-          />
-        </div>
+    <section ref={screenRef} aria-label={teamScreenText.regionLabel} className="team-screen">
+      <div className="ui-card team-screen__create">
         <button
+          data-create-team=""
           type="button"
+          className="ui-button ui-button--primary"
           disabled={createState.submitting}
           onClick={() => {
             void handleCreate();
@@ -253,206 +229,195 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         >
           {teamScreenText.createLabel}
         </button>
-        {createState.notice !== null && <p className="team-screen__notice">{createState.notice}</p>}
         {createState.error !== null && (
-          <div role="alert" className="team-screen__error">
+          <div role="alert" className="ui-notice ui-notice--error team-screen__error">
             <p>{teamScreenText.createErrorHeading}</p>
             <p>{createState.error.message}</p>
           </div>
         )}
       </div>
 
-      <TeamShowdownImport
-        teamClient={teamClient}
-        master={master}
-        masterSearch={masterSearch}
-        onCreated={(team) => {
-          hasWrittenRef.current = true;
-          setList((current) => addCreatedTeam(current, team));
-        }}
-      />
-
       <h2>{teamScreenText.listHeading}</h2>
-      {list.status === "loading" && <p className="team-screen__notice">{teamScreenText.loadingNotice}</p>}
+      {list.status === "loading" && (
+        <p className="ui-notice ui-notice--loading team-screen__notice">{teamScreenText.loadingNotice}</p>
+      )}
       {list.status === "error" && (
-        <div role="alert" className="team-screen__error">
+        <div role="alert" className="ui-notice ui-notice--error team-screen__error">
           <p>{teamScreenText.loadErrorHeading}</p>
           <p>{list.error.message}</p>
         </div>
       )}
       {list.status === "loaded" && list.teams.length === 0 && (
-        <p className="team-screen__notice">{teamScreenText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty team-screen__notice">{teamScreenText.emptyNotice}</p>
       )}
       {list.status === "loaded" && list.teams.length > 0 && (
         <ul aria-label={teamScreenText.listLabel} className="team-screen__list">
-          {list.teams.map((team) => (
-            <TeamRow
-              key={team.id}
-              team={team}
-              renameState={renameState !== null && renameState.teamId === team.id ? renameState : null}
-              deleteState={deleteState !== null && deleteState.teamId === team.id ? deleteState : null}
-              editor={
-                editingTeamId === team.id ? (
-                  <TeamMemberEditor
-                    team={team}
-                    maxMembers={MAX_TEAM_MEMBERS}
-                    master={master}
-                    masterSearch={masterSearch}
-                    teamClient={teamClient}
-                    onSaved={(updated) => {
-                      hasWrittenRef.current = true;
-                      setList((current) => replaceTeam(current, updated));
-                    }}
-                    onClose={() => {
-                      setEditingTeamId(null);
-                    }}
-                    onSavingChange={setEditorSaving}
-                    locked={renameState !== null && renameState.teamId === team.id && renameState.submitting}
-                  />
-                ) : null
-              }
-              onOpenEditor={() => {
-                setEditingTeamId(team.id);
-              }}
-              exporter={<TeamShowdownExport team={team} master={master} masterSearch={masterSearch} />}
-              renameLocked={editorSaving}
-              onOpenRename={() => {
-                openRename(team);
-              }}
-              onChangeRenameName={(name) => {
-                setRenameState((current) => (current === null ? current : { ...current, name }));
-              }}
-              onCancelRename={cancelRename}
-              onSaveRename={() => {
-                void saveRename(team);
-              }}
-              onOpenDelete={() => {
-                openDeleteConfirm(team.id);
-              }}
-              onCancelDelete={cancelDelete}
-              onConfirmDelete={() => {
-                void confirmDelete(team.id);
-              }}
-            />
-          ))}
+          {list.teams.map((team) => {
+            const displayName = displayNames.get(team.id) ?? team.name;
+            return (
+              <TeamCard
+                key={team.id}
+                team={team}
+                displayName={displayName}
+                master={master}
+                deleteState={deleteState !== null && deleteState.teamId === team.id ? deleteState : null}
+                onOpen={() => {
+                  setEditingTeamId(team.id);
+                }}
+                onOpenDelete={() => {
+                  openDeleteConfirm(team.id);
+                }}
+                onCancelDelete={cancelDelete}
+                onConfirmDelete={() => {
+                  void confirmDelete(team.id);
+                }}
+              />
+            );
+          })}
         </ul>
       )}
+
+      <details
+        className="ui-card team-fold"
+        open={importOpen}
+        onToggle={(event) => {
+          setImportOpen(event.currentTarget.open);
+        }}
+      >
+        <summary>{teamShowdownText.importFoldLabel}</summary>
+        <p className="team-fold__help">{teamShowdownText.importHelp}</p>
+        <p id={exampleLabelId} className="team-fold__help">
+          {teamShowdownText.importExampleLabel}
+        </p>
+        <pre role="region" aria-labelledby={exampleLabelId} tabIndex={0} className="team-fold__example">
+          {teamShowdownText.importExample}
+        </pre>
+        <TeamShowdownImport
+          teamClient={teamClient}
+          master={master}
+          masterSearch={masterSearch}
+          text={importText}
+          onTextChange={setImportText}
+          onCreated={(team) => {
+            hasWrittenRef.current = true;
+            setList((current) => addCreatedTeam(current, team));
+          }}
+        />
+      </details>
     </section>
   );
 }
 
-interface TeamRowProps {
+interface TeamCardProps {
   readonly team: Schemas["Team"];
-  readonly renameState: RenameState | null;
+  readonly displayName: string;
+  readonly master: MasterData;
   readonly deleteState: DeleteState | null;
-  /** メンバー編集の領域(開いているときだけ。null は閉じている)。 */
-  readonly editor: ReactNode;
-  readonly onOpenEditor: () => void;
-  /** Showdown 形式の書き出し(ボタンと、開いたときの領域)。 */
-  readonly exporter: ReactNode;
-  /** メンバー保存の送信中(true の間は名前変更を保存できない)。 */
-  readonly renameLocked: boolean;
-  readonly onOpenRename: () => void;
-  readonly onChangeRenameName: (name: string) => void;
-  readonly onCancelRename: () => void;
-  readonly onSaveRename: () => void;
+  readonly onOpen: () => void;
   readonly onOpenDelete: () => void;
   readonly onCancelDelete: () => void;
   readonly onConfirmDelete: () => void;
 }
 
-/** 構築1件の行(名前・メンバー数・最終更新、名前変更・削除)。 */
-function TeamRow({
+/** 構築1件のカード(名前・メンバーのアイコン列・n/6体・最終更新、[開く]・[削除])。 */
+function TeamCard({
   team,
-  renameState,
+  displayName,
+  master,
   deleteState,
-  editor,
-  onOpenEditor,
-  exporter,
-  renameLocked,
-  onOpenRename,
-  onChangeRenameName,
-  onCancelRename,
-  onSaveRename,
+  onOpen,
   onOpenDelete,
   onCancelDelete,
   onConfirmDelete,
-}: TeamRowProps) {
+}: TeamCardProps) {
   return (
-    <li className="team-screen__item">
-      <span className="team-screen__item-name">{team.name}</span>
-      <span className="team-screen__item-meta">
+    <li className="ui-card team-card">
+      <span className="team-card__name">{displayName}</span>
+      <div
+        role="group"
+        aria-label={teamScreenText.memberIconsLabel(displayName)}
+        className="team-card__icons"
+      >
+        {team.members.map((member, index) => {
+          // 一覧のためにオンラインの種族解決 API は呼ばない(構築の数×6回の通信を避ける。ADR-0332 §4)。
+          const species = master.species.find((candidate) => candidate.key === member.speciesKey);
+          return (
+            <span
+              key={index}
+              role="img"
+              aria-label={species?.nameJa ?? teamScreenText.unknownMemberIcon(index + 1)}
+              className="team-card__icon"
+            >
+              <PokemonImage
+                speciesKey={member.speciesKey}
+                size="thumb"
+                className="team-card__image"
+                fallback={
+                  <span
+                    className="team-card__emblem"
+                    data-testid="type-emblem"
+                    style={typeAccentStyle(species?.types[0])}
+                  />
+                }
+              />
+            </span>
+          );
+        })}
+      </div>
+      <span className="team-card__meta">
         {teamScreenText.memberCountLabel(team.members.length, MAX_TEAM_MEMBERS)}
       </span>
-      <span className="team-screen__item-meta">
-        {teamScreenText.updatedAtLabel(team.updatedAt.slice(0, 10))}
-      </span>
+      <span className="team-card__meta">{teamScreenText.updatedAtLabel(team.updatedAt.slice(0, 10))}</span>
 
-      {renameState === null ? (
-        <button type="button" onClick={onOpenRename}>
-          {teamScreenText.renameLabel(team.name)}
+      <div className="team-card__actions">
+        <button
+          type="button"
+          className="ui-button ui-button--primary"
+          aria-label={teamMemberText.editLabel(displayName)}
+          data-open-team={team.id}
+          onClick={onOpen}
+        >
+          {teamScreenText.openLabel}
         </button>
-      ) : (
-        <div className="team-screen__rename">
-          <div className="team-screen__field">
-            <span>{teamScreenText.renameFieldLabel(team.name)}</span>
-            <input
-              type="text"
-              aria-label={teamScreenText.renameFieldLabel(team.name)}
-              value={renameState.name}
-              disabled={renameState.submitting}
-              onChange={(event) => {
-                onChangeRenameName(event.target.value);
-              }}
-            />
-          </div>
-          <button type="button" disabled={renameState.submitting || renameLocked} onClick={onSaveRename}>
-            {teamScreenText.renameSaveLabel}
+        {deleteState === null && (
+          <button
+            type="button"
+            className="ui-button ui-button--danger"
+            aria-label={teamScreenText.deleteLabel(displayName)}
+            onClick={onOpenDelete}
+          >
+            {teamScreenText.deleteShortLabel}
           </button>
-          <button type="button" disabled={renameState.submitting} onClick={onCancelRename}>
-            {teamScreenText.renameCancelLabel}
-          </button>
-          {renameState.notice !== null && <p className="team-screen__notice">{renameState.notice}</p>}
-          {renameState.error !== null && (
-            <div role="alert" className="team-screen__error">
-              <p>{teamScreenText.renameErrorHeading}</p>
-              <p>{renameState.error.message}</p>
-            </div>
-          )}
-        </div>
-      )}
+        )}
+      </div>
 
-      {editor === null && (
-        <button type="button" onClick={onOpenEditor}>
-          {teamMemberText.editLabel(team.name)}
-        </button>
-      )}
-
-      {exporter}
-
-      {deleteState === null ? (
-        <button type="button" onClick={onOpenDelete}>
-          {teamScreenText.deleteLabel(team.name)}
-        </button>
-      ) : (
+      {deleteState !== null && (
         <div className="team-screen__delete-confirm">
-          <p>{teamScreenText.deleteConfirmNotice(team.name)}</p>
-          <button type="button" disabled={deleteState.submitting} onClick={onConfirmDelete}>
-            {teamScreenText.deleteConfirmLabel(team.name)}
+          <p>{teamScreenText.deleteConfirmNotice(displayName)}</p>
+          <button
+            type="button"
+            className="ui-button ui-button--danger"
+            disabled={deleteState.submitting}
+            onClick={onConfirmDelete}
+          >
+            {teamScreenText.deleteConfirmLabel(displayName)}
           </button>
-          <button type="button" disabled={deleteState.submitting} onClick={onCancelDelete}>
-            {teamScreenText.deleteCancelLabel(team.name)}
+          <button
+            type="button"
+            className="ui-button ui-button--secondary"
+            disabled={deleteState.submitting}
+            onClick={onCancelDelete}
+          >
+            {teamScreenText.deleteCancelLabel(displayName)}
           </button>
           {deleteState.error !== null && (
-            <div role="alert" className="team-screen__error">
+            <div role="alert" className="ui-notice ui-notice--error team-screen__error">
               <p>{teamScreenText.deleteErrorHeading}</p>
               <p>{deleteState.error.message}</p>
             </div>
           )}
         </div>
       )}
-
-      {editor}
     </li>
   );
 }

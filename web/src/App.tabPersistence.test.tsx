@@ -18,7 +18,6 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
-import { teamScreenText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
@@ -152,7 +151,6 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), defenderKey);
     await user.click(tabButton("素早さ"));
     await screen.findByRole("region", { name: "自分のポケモン" });
-    await user.click(tabButton("判定"));
     await user.click(tabButton("計算"));
 
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attackerKey);
@@ -199,29 +197,6 @@ describe("issue #218 構築のタブも同じ決まりに乗る(P5-5 PR-A1)", ()
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
     expect(teamCallCount(fetchMock.mock.calls)).toBe(0);
-  });
-
-  test("構築名の入力は、計算タブへ行って戻っても残り、構築 API を呼び直さない", async () => {
-    // team-svc は居ないので一覧は失敗するが、新規作成の入力は先に使える(ADR-0309 §4)。
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
-    const user = userEvent.setup();
-    render(<App engine={createFakeEngine()} />);
-    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-
-    await user.click(tabButton("構築"));
-    const nameField = await screen.findByRole("textbox", { name: teamScreenText.nameLabel });
-    await user.type(nameField, "テスト構築C");
-    await waitFor(() => {
-      expect(teamCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
-    });
-    const callsAfterFirstVisit = teamCallCount(fetchMock.mock.calls);
-
-    await user.click(tabButton("計算"));
-    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(tabButton("構築"));
-
-    expect(await screen.findByRole("textbox", { name: teamScreenText.nameLabel })).toHaveValue("テスト構築C");
-    expect(teamCallCount(fetchMock.mock.calls)).toBe(callsAfterFirstVisit);
   });
 });
 

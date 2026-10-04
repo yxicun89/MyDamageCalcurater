@@ -49,6 +49,15 @@
   transform: rotate(180deg);
 }
 
+/* 共通部品 .ui-button の押下(scale)と同じ詳細度の :active を、入れ替えの回転と合成して保つ(ADR-0334 §7)。 */
+.calc-screen__swap.ui-button {
+  transition: transform var(--duration-swap) ease;
+}
+
+.calc-screen__swap.ui-button:active {
+  transform: rotate(180deg) scale(0.96);
+}
+
 .calc-card {
   display: flex;
   flex-direction: column;
@@ -486,4 +495,72 @@
 
 .calc-screen__favorite-error p {
   margin: 0;
+}
+
+/* 攻撃側の「攻撃」「特攻」の2ブロック(I-web-1・I-web-3、ADR-0329)。技が使う側は太い枠と見出しの語で強調する
+   (色だけに頼らない)。トークンだけを使う。 */
+.calc-attack-stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.calc-attack-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  padding: var(--space-2) var(--space-3);
+}
+
+.calc-attack-stat--used {
+  border: 2px solid var(--text-primary);
+}
+
+.calc-attack-stat__legend {
+  padding: 0 var(--space-1);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.calc-attack-stat--used .calc-attack-stat__legend {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.calc-attack-stat__custom {
+  align-self: center;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.calc-attack-stat__sp {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.calc-attack-stat__sp-input {
+  width: 5em;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-1) var(--space-2);
+}
+
+.calc-attack-stat__sp-input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+/* 無効にした選択肢(攻撃と特攻を同じ向きにできない)は薄くし、操作できないことをカーソルでも示す。 */
+.calc-preset__option:has(.calc-preset__input:disabled) {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

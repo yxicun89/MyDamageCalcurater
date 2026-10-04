@@ -13,7 +13,7 @@
 //   - preset/custom はポケモンを選ぶまで、raw は値を入れるまで呼ばない(mode に要らない項目は送らない。
 //     契約上 400 invalid_request になるため)。
 
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
@@ -21,6 +21,18 @@ import { PokemonImage } from "../images/PokemonImage";
 import "./SpeedScreen.css";
 import type { components } from "./speed.gen";
 import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
+import {
+  DEFAULT_VIEWPORT_HEIGHT,
+  ENTRY_HEIGHT,
+  OVERSCAN_ROWS,
+  ROW_GAP,
+  buildTableLayout,
+  markerPlacement,
+  scrollTopToReveal,
+  visibleRange,
+  type BoundaryItem,
+  type TierItem,
+} from "./speedWindow";
 
 type Schemas = components["schemas"];
 
@@ -49,6 +61,13 @@ interface Completed<T> {
 }
 
 /** key が今の入力(currentKey)と一致する応答が届いていれば成功/失敗、まだなら loading にする。 */
+/** チップの見た目(ADR-0334)。選択・チェック中は ui-chip--selected を足す。 */
+function chipClass(selected: boolean, extra?: string): string {
+  return ["ui-chip", selected ? "ui-chip--selected" : "", extra ?? ""]
+    .filter((part) => part !== "")
+    .join(" ");
+}
+
 function deriveRequestState<T>(currentKey: string, completed: Completed<T> | null): RequestState<T> {
   if (completed === null || completed.key !== currentKey) {
     return { status: "loading" };
@@ -217,31 +236,6 @@ function parseIntOr(raw: string, fallback: number): number {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-/** 段の間の境界。afterSpeed が無ければ表の先頭、beforeSpeed が無ければ表の末尾。 */
-interface Boundary {
-  readonly afterSpeed?: number;
-  readonly beforeSpeed?: number;
-}
-
-/**
- * 境界は、表示中の段(絞り込み後の tiers)の実数値と自分の実数値を直接比べて決める。
- * `faster`/`slower`/`tie` は契約上つねに全6行の表を基準にした値(ADR-0602 §3)なので、絞り込みで表示行数が
- * 減ると基準が合わなくなる。絞り込みの有無によらず正しく引けるよう、tiers の speed だけを見る
- * (Web で自分の素早さを計算し直さない方針は保つ。2026-09-22 critic 指摘で computeBoundary から差し替え)。
- */
-function computeBoundary(
-  tiers: readonly Schemas["SpeedTier"][],
-  ownSpeed: number,
-  trickRoom: boolean,
-): Boundary {
-  // トリックルーム中の表は昇順(遅い順)なので、自分より速い最初の段の前に引く(ADR-0607 §4)。
-  const index = tiers.findIndex((tier) => (trickRoom ? tier.speed > ownSpeed : tier.speed < ownSpeed));
-  if (index === -1) {
-    return { afterSpeed: tiers.at(-1)?.speed };
-  }
-  return { afterSpeed: tiers[index - 1]?.speed, beforeSpeed: tiers[index]?.speed };
-}
-
 /**
  * 素早さ比較の画面(ADR-0604 §4)。
  */
@@ -368,7 +362,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
 
   return (
     <div className="speed-screen">
-      <section className="speed-table" aria-label={speedScreenText.tableRegionLabel}>
+      <section className="ui-card speed-table" aria-label={speedScreenText.tableRegionLabel}>
         <div
           role="group"
           aria-label={speedScreenText.filterGroupLabel}
@@ -379,7 +373,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             const checked = selectedPresets.has(id);
             const lastOne = checked && selectedPresets.size === 1;
             return (
-              <label key={id} className="speed-table__filter-option">
+              <label key={id} className={chipClass(checked, "speed-table__filter-option")}>
                 <input
                   type="checkbox"
                   checked={checked}
@@ -403,7 +397,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         </div>
 
         <div role="group" aria-label={speedScreenText.fieldGroupLabel} className="speed-table__filter">
-          <label className="speed-table__filter-option">
+          <label className={chipClass(tableTailwind, "speed-table__filter-option")}>
             <input
               type="checkbox"
               checked={tableTailwind}
@@ -413,7 +407,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             />
             {speedScreenText.tableTailwindLabel}
           </label>
-          <label className="speed-table__filter-option">
+          <label className={chipClass(trickRoom, "speed-table__filter-option")}>
             <input
               type="checkbox"
               checked={trickRoom}
@@ -426,23 +420,21 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         </div>
 
         {tableState.status === "loading" && (
-          <p className="speed-screen__notice">{speedScreenText.loadingNotice}</p>
+          <p className="ui-notice ui-notice--loading speed-screen__notice">{speedScreenText.loadingNotice}</p>
         )}
         {tableState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(tableState.error)}
           </p>
         )}
         {tableState.status === "success" && (
-          <ul className="speed-table__tiers">
-            {renderTierRows(tableState.value.tiers, positionState, trickRoom)}
-          </ul>
+          <TierViewport tiers={tableState.value.tiers} positionState={positionState} trickRoom={trickRoom} />
         )}
       </section>
 
-      <section className="speed-self" aria-label={speedScreenText.selfRegionLabel}>
+      <section className="ui-card speed-self" aria-label={speedScreenText.selfRegionLabel}>
         {pokemonState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(pokemonState.error)}
           </p>
         )}
@@ -453,7 +445,10 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             return (
               <label
                 key={mode}
-                className={selected ? "speed-self__mode speed-self__mode--selected" : "speed-self__mode"}
+                className={chipClass(
+                  selected,
+                  selected ? "speed-self__mode speed-self__mode--selected" : "speed-self__mode",
+                )}
               >
                 <input
                   type="radio"
@@ -498,7 +493,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               {MINIMAL_PRESET_IDS.map((preset) => {
                 const selected = self.preset === preset;
                 return (
-                  <label key={preset}>
+                  <label key={preset} className={chipClass(selected)}>
                     <input
                       type="radio"
                       name={presetGroupName}
@@ -543,7 +538,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 }}
               />
               {fieldErrors.sp !== undefined && (
-                <p id={spErrorId} role="alert" className="speed-screen__error">
+                <p id={spErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                   {fieldErrors.sp}
                 </p>
               )}
@@ -556,7 +551,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               {NATURE_IDS.map((nature) => {
                 const selected = self.nature === nature;
                 return (
-                  <label key={nature}>
+                  <label key={nature} className={chipClass(selected)}>
                     <input
                       type="radio"
                       name={natureGroupName}
@@ -585,7 +580,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 }}
               />
               {fieldErrors.rank !== undefined && (
-                <p id={rankErrorId} role="alert" className="speed-screen__error">
+                <p id={rankErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                   {fieldErrors.rank}
                 </p>
               )}
@@ -619,7 +614,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               }}
             />
             {fieldErrors.raw !== undefined && (
-              <p id={rawErrorId} role="alert" className="speed-screen__error">
+              <p id={rawErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                 {fieldErrors.raw}
               </p>
             )}
@@ -627,10 +622,12 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
 
         {positionState.status === "loading" && (
-          <p className="speed-screen__notice">{speedScreenText.positionLoadingNotice}</p>
+          <p className="ui-notice ui-notice--loading speed-screen__notice">
+            {speedScreenText.positionLoadingNotice}
+          </p>
         )}
         {positionState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(positionState.error)}
           </p>
         )}
@@ -642,63 +639,147 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   );
 }
 
-/**
- * 左の表の行(段 + 境界の印)。強調・境界は表示中(絞り込み後)の tiers の実数値と自分の実数値を直接比べて
- * 決める(`positionState.value.tie`・`faster` は全6行基準なので、絞り込みで表示行数が変わると使えない。
- * 2026-09-22 critic 指摘で修正)。同じ実数値の段が表示されていればそれを強調し、無ければ境界を引く。
- */
-function renderTierRows(
-  tiers: readonly Schemas["SpeedTier"][],
-  positionState: RequestState<Schemas["PositionResponse"]>,
-  trickRoom: boolean,
-): ReactNode[] {
-  const ownSpeed: number | null = positionState.status === "success" ? positionState.value.speed : null;
-  const selfTieSpeed: number | null =
-    ownSpeed !== null && tiers.some((tier) => tier.speed === ownSpeed) ? ownSpeed : null;
-  const boundary: Boundary | null =
-    ownSpeed !== null && selfTieSpeed === null ? computeBoundary(tiers, ownSpeed, trickRoom) : null;
+interface TierViewportProps {
+  readonly tiers: readonly Schemas["SpeedTier"][];
+  readonly positionState: RequestState<Schemas["PositionResponse"]>;
+  readonly trickRoom: boolean;
+}
 
-  const rows: ReactNode[] = [];
-  if (boundary !== null && boundary.afterSpeed === undefined) {
-    rows.push(<BoundaryRow key="speed-boundary" boundary={boundary} />);
-  }
-  for (const tier of tiers) {
-    rows.push(<TierRow key={tier.speed} tier={tier} selfTie={tier.speed === selfTieSpeed} />);
-    if (boundary !== null && boundary.afterSpeed === tier.speed) {
-      rows.push(<BoundaryRow key="speed-boundary" boundary={boundary} />);
+/**
+ * 左の表(仮想スクロール。F-06・ADR-0608)。全段の高さを先に計算し(speedWindow.ts)、スクロール位置の周辺だけを
+ * DOM に出す。強調・境界は表示中(絞り込み後)の tiers の実数値と自分の実数値を直接比べて決める
+ * (`faster`/`tie` は全6行基準なので使わない。2026-09-22 critic 指摘)。右の位置マーカーは、
+ * 自分の行(同速の段か境界)の offset からスクロール量を引いた高さに置くので、左の行と同じ高さに揃う。
+ */
+function TierViewport({ tiers, positionState, trickRoom }: TierViewportProps) {
+  const ownSpeed: number | null = positionState.status === "success" ? positionState.value.speed : null;
+  const layout = useMemo(() => buildTableLayout(tiers, ownSpeed, trickRoom), [tiers, ownSpeed, trickRoom]);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  // 実測できるまで(初回描画前・テスト環境)は仮の高さ。実測は ResizeObserver の通知でだけ更新する。
+  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
+  const viewportHeight = measuredHeight ?? DEFAULT_VIEWPORT_HEIGHT;
+
+  useEffect(() => {
+    const element = viewportRef.current;
+    if (element === null || typeof ResizeObserver === "undefined") {
+      return;
     }
+    const observer = new ResizeObserver(() => {
+      if (element.clientHeight > 0) {
+        setMeasuredHeight(element.clientHeight);
+      }
+    });
+    observer.observe(element);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
+  const range = visibleRange(layout.items, scrollTop, viewportHeight, OVERSCAN_ROWS);
+  const anchor = layout.anchorIndex === null ? undefined : layout.items[layout.anchorIndex];
+  const placement = markerPlacement(anchor, scrollTop, viewportHeight);
+
+  function jumpToSelf(): void {
+    if (anchor === undefined) {
+      return;
+    }
+    const target = scrollTopToReveal(anchor, viewportHeight, layout.totalHeight);
+    if (viewportRef.current !== null) {
+      viewportRef.current.scrollTop = target;
+    }
+    setScrollTop(target);
   }
-  return rows;
+
+  return (
+    <>
+      {anchor !== undefined && (
+        <button type="button" className="speed-table__jump" onClick={jumpToSelf}>
+          {speedScreenText.jumpToSelfLabel}
+        </button>
+      )}
+      <div className="speed-table__body">
+        <div
+          ref={viewportRef}
+          role="group"
+          tabIndex={0}
+          aria-label={speedScreenText.viewportLabel}
+          className="speed-table__viewport"
+          data-testid="speed-viewport"
+          onScroll={(event) => {
+            setScrollTop(event.currentTarget.scrollTop);
+          }}
+        >
+          <ul
+            className="ui-rows speed-table__tiers"
+            aria-label={speedScreenText.tiersListLabel}
+            style={{ height: layout.totalHeight }}
+          >
+            {layout.items
+              .slice(range.start, range.end)
+              .map((item) =>
+                item.kind === "boundary" ? (
+                  <BoundaryRow key="speed-boundary" item={item} />
+                ) : (
+                  <TierRow key={item.tier.speed} item={item} setSize={tiers.length} />
+                ),
+              )}
+          </ul>
+        </div>
+        <div className="speed-table__track">
+          {placement !== null && ownSpeed !== null && (
+            <div
+              className="speed-marker"
+              data-testid="speed-marker"
+              data-state={placement.state}
+              aria-hidden="true"
+              style={{ top: placement.top, height: placement.height }}
+            >
+              {placement.state === "above" && speedScreenText.markerAboveHint}
+              {speedScreenText.markerLabel(ownSpeed)}
+              {placement.state === "below" && speedScreenText.markerBelowHint}
+            </div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** 行の位置(絶対配置。高さは枠から隙間を引いた値)。 */
+function rowStyle(item: { readonly top: number; readonly height: number }): CSSProperties {
+  return { top: item.top, height: item.height - ROW_GAP };
 }
 
 interface BoundaryRowProps {
-  readonly boundary: Boundary;
+  readonly item: BoundaryItem;
 }
 
 /** 自分の行が挟まる境界の印(同速が無いとき。ADR-0604 §4)。 */
-function BoundaryRow({ boundary }: BoundaryRowProps) {
+function BoundaryRow({ item }: BoundaryRowProps) {
   const extraProps: Record<string, string> = {};
-  if (boundary.afterSpeed !== undefined) {
-    extraProps["data-after-speed"] = String(boundary.afterSpeed);
+  if (item.afterSpeed !== undefined) {
+    extraProps["data-after-speed"] = String(item.afterSpeed);
   }
-  if (boundary.beforeSpeed !== undefined) {
-    extraProps["data-before-speed"] = String(boundary.beforeSpeed);
+  if (item.beforeSpeed !== undefined) {
+    extraProps["data-before-speed"] = String(item.beforeSpeed);
   }
   return (
-    <li className="speed-boundary" data-testid="speed-boundary" {...extraProps}>
+    <li className="speed-boundary" data-testid="speed-boundary" style={rowStyle(item)} {...extraProps}>
       {speedScreenText.selfBoundaryLabel}
     </li>
   );
 }
 
 interface TierRowProps {
-  readonly tier: Schemas["SpeedTier"];
-  /** 自分と同じ実数値の段(position の tie に対応)かどうか。強調のためだけに使う。 */
-  readonly selfTie: boolean;
+  readonly item: TierItem<Schemas["SpeedTier"]>;
+  /** 段の総数(境界を数えない)。画面外の段を描画しないので、aria-setsize で支援技術に伝える。 */
+  readonly setSize: number;
 }
 
 /** 段1つ(速い順の表の1行)。2行以上の段には「同速」を出す(Web で並べ替え直さない。ADR-0601 §3)。 */
-function TierRow({ tier, selfTie }: TierRowProps) {
+function TierRow({ item, setSize }: TierRowProps) {
+  const { tier, selfTie } = item;
   const extraProps: Record<string, string> = {};
   if (selfTie) {
     extraProps["data-self"] = "tie";
@@ -708,17 +789,24 @@ function TierRow({ tier, selfTie }: TierRowProps) {
       className={selfTie ? "speed-tier speed-tier--self" : "speed-tier"}
       data-testid="speed-tier"
       data-speed={tier.speed}
+      aria-setsize={setSize}
+      aria-posinset={item.tierIndex + 1}
+      style={rowStyle(item)}
       {...extraProps}
     >
-      {selfTie && <span className="speed-tier__self-label">{speedScreenText.selfTierLabel}</span>}
-      <span className="speed-tier__speed">{speedScreenText.tierSpeedLabel(tier.speed)}</span>
-      {tier.entries.length > 1 && <span className="speed-tier__tie">{speedScreenText.tieLabel}</span>}
+      <span className="speed-tier__head">
+        {selfTie && <span className="speed-tier__self-label">{speedScreenText.selfTierLabel}</span>}
+        <span className="speed-tier__speed">{speedScreenText.tierSpeedLabel(tier.speed)}</span>
+        {tier.entries.length > 1 && <span className="speed-tier__tie">{speedScreenText.tieLabel}</span>}
+      </span>
       <ul className="speed-tier__entries">
         {tier.entries.map((entry, index) => (
           <li
             key={`${entry.pokemonId}-${entry.preset}-${String(index)}`}
             className="speed-entry"
             data-testid="speed-entry"
+            title={`${entry.nameJa}${speedScreenText.entrySeparator}${speedPresetText[entry.preset]}`}
+            style={{ height: ENTRY_HEIGHT }}
           >
             <PokemonImage
               speciesKey={entry.pokemonId}
@@ -732,7 +820,7 @@ function TierRow({ tier, selfTie }: TierRowProps) {
                 />
               }
             />
-            <span>{entry.nameJa}</span>
+            <span className="speed-entry__name">{entry.nameJa}</span>
             <span className="speed-entry__preset">
               {speedScreenText.entrySeparator}
               {speedPresetText[entry.preset]}

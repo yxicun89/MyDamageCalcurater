@@ -35,7 +35,7 @@
 | `GATEWAY_CALC_URL` | はい | なし | 絶対 URL・スキームは http/https・ホストあり。無い・空・不正は起動エラー |
 | `GATEWAY_POKEDEX_URL` | いいえ | 未設定 | 同上(空は未設定)。未設定なら `/api/pokedex/*` は 503 `upstream_unavailable` |
 | `GATEWAY_ASSETS_URL` | いいえ | 未設定 | 同上(空は未設定)。未設定なら `/assets/*` は 404 `not_found` |
-| `GATEWAY_IMAGES_DIR` | いいえ | 未設定 | (2026-10-03 追記。ADR-0807)ローカル画像のディレクトリ。空は未設定。未設定・ディレクトリ無しなら `/images/*` は 404 `not_found` |
+| `GATEWAY_IMAGES_DIR` | いいえ | 未設定 | (2026-10-03 追記。ADR-0808)ローカル画像のディレクトリ。空は未設定。未設定・ディレクトリ無しなら `/images/*` は 404 `not_found` |
 | `GATEWAY_CORS_ALLOWED_ORIGINS` | いいえ | 空 | カンマ区切り(前後の空白は除く)。各要素は `scheme://host[:port]` のオリジン(パス・末尾スラッシュなし)。`*` は起動エラー。空なら CORS ヘッダを付けない |
 | `GATEWAY_UPSTREAM_TIMEOUT` | いいえ | `10s` | Go の duration。0 以下・解析できない値は起動エラー |
 
@@ -51,7 +51,7 @@
 | `/api/speed/*` | speed-svc | `/api/speed` そのもの・`/api/speedx` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_SPEED_URL`)未設定なら 503 `upstream_unavailable`。`/api/speed/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
 | `/api/judge/*` | judge-svc | `/api/judge` そのもの・`/api/judgex` は 404(2026-09-25 追記。issue #284)。上流(`GATEWAY_JUDGE_URL`)未設定なら 503 `upstream_unavailable`。`/api/judge/healthz`(完全一致のみ)はヘッダ検証を課さない(§4 追記) |
 | `/assets/*`(GET / HEAD のみ) | assets の上流(MinIO) | それ以外のメソッドは 404 `not_found` |
-| `/images/*`(GET / HEAD のみ) | gateway 自身(ADR-0807。2026-10-03 追記) | `GATEWAY_IMAGES_DIR` の `manifest.json` と `.webp` だけを配信(他の拡張子・ドットファイル・一覧・ディレクトリ外のシンボリックリンクは 404)。`images` は予約セグメント。ヘッダ検証なし。`/assets/*` の転送は変えない |
+| `/images/*`(GET / HEAD のみ) | gateway 自身(ADR-0808。2026-10-03 追記) | `GATEWAY_IMAGES_DIR` の `manifest.json` と `.webp` だけを配信(他の拡張子・ドットファイル・一覧・ディレクトリ外のシンボリックリンクは 404)。`images` は予約セグメント。ヘッダ検証なし。`/assets/*` の転送は変えない |
 | `GET /healthz` | gateway 自身 | 200 `{"status":"ok"}`。openapi に載せない(ADR-0200 と同じ)。上流の `/healthz` は外に出さない |
 | それ以外 | なし | 404 `not_found`(Error 形式) |
 

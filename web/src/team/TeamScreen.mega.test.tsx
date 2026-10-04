@@ -133,7 +133,8 @@ async function save(
   await flush(() => {
     call.resolve({
       ok: true,
-      value: { ...team([]), id: call.args.teamId, name: call.args.input.name, members },
+      // 名前の省略はサーバーが既定名を補う(ADR-0229)。
+      value: { ...team([]), id: call.args.teamId, name: call.args.input.name ?? "名称未設定", members },
     });
   });
   return members;
@@ -143,7 +144,6 @@ describe("AC-1・AC-2・AC-3 メガ種族の選択と固定", () => {
   test("メガ種族を選ぶと持ち物がストーンに固定され、理由が見える文言と aria-describedby で伝わる", async () => {
     const { user } = await renderScreen([team([])]);
     const editor = await openEditor(user, "テストメガ構築");
-    await user.click(within(editor).getByRole("button", { name: teamMemberText.addLabel }));
     const first = group(editor, 1);
 
     await user.selectOptions(select(first, teamMemberText.speciesLabel), MEGA_FIRE.key);
@@ -189,7 +189,6 @@ describe("AC-1・AC-2・AC-3 メガ種族の選択と固定", () => {
   test("保存の PUT: メガのメンバーの itemId はストーン。非メガは持ち物を保つ", async () => {
     const { client, user } = await renderScreen([team([member(NORMAL_KEY, OTHER_ITEM_ID)])]);
     const editor = await openEditor(user, "テストメガ構築");
-    await user.click(within(editor).getByRole("button", { name: teamMemberText.addLabel }));
     await user.selectOptions(select(group(editor, 2), teamMemberText.speciesLabel), MEGA_FIRE.key);
 
     const members = await save(user, client, editor);
@@ -256,10 +255,12 @@ describe("AC-4 古い保存データの補正(別の持ち物を持つメガ種�
     expect(within(first).queryByText(megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL))).toBeNull();
   });
 
-  test("閉じて開き直すと、下書きは捨てられ保存済みの値から再び補正される", async () => {
+  test("[保存せずに戻る]で閉じて開き直すと、下書きは捨てられ保存済みの値から再び補正される", async () => {
     const { user } = await renderScreen([team([member(MEGA_FIRE.key, OTHER_ITEM_ID)])]);
     let editor = await openEditor(user, "テストメガ構築");
+    // 補正で下書きが保存済みと違う(未保存)ので、戻るときに確認が出る。[保存せずに戻る]で捨てる。
     await user.click(within(editor).getByRole("button", { name: teamMemberText.closeLabel }));
+    await user.click(screen.getByRole("button", { name: teamMemberText.leaveDiscardLabel }));
     editor = await openEditor(user, "テストメガ構築");
 
     notice(group(editor, 1), megaItemText.correctedNotice(MEGA_FIRE_STONE_LABEL));
@@ -341,7 +342,6 @@ describe("AC-7 種族の一覧が無いマスタ(オンライン・キャッシ�
     const fixture = onlineFixture();
     const { user } = await renderScreen([team([])], { master: fixture.master, masterSearch: fixture.search });
     const editor = await openEditor(user, "テストメガ構築");
-    await user.click(within(editor).getByRole("button", { name: teamMemberText.addLabel }));
     const first = group(editor, 1);
 
     await user.type(
@@ -384,5 +384,24 @@ describe("AC-8 非メガのメンバーは変わらない", () => {
     expect(itemSelect(first)).toBeEnabled();
     await user.selectOptions(itemSelect(first), "");
     expect(itemSelect(first)).toHaveValue("");
+  });
+});
+
+// ADR-0326 §4(ADR-0328 でも保つ): ストーンの nameJa が英語なら、持ち物欄・補正の通知のどちらにも英語名を出さない。
+describe("英語名のメガストーンを画面に出さない", () => {
+  test("古いデータを直した通知と持ち物欄は「{基本種名}のメガストーン」で、英語名はどこにも出ない", async () => {
+    const english: MasterData = {
+      ...master,
+      items: master.items.map((item) =>
+        item.id === MEGA_FIRE_STONE.id ? { ...item, nameJa: "Barbaracite" } : item,
+      ),
+    };
+    const { user } = await renderScreen([team([member(MEGA_FIRE.key, OTHER_ITEM_ID)])], { master: english });
+    const first = group(await openEditor(user, "テストメガ構築"), 1);
+
+    const fallback = "テストほのおのメガストーン";
+    expect(itemSelect(first)).toHaveDisplayValue(fallback);
+    notice(first, megaItemText.correctedNotice(fallback));
+    expect(document.body).not.toHaveTextContent("Barbaracite");
   });
 });

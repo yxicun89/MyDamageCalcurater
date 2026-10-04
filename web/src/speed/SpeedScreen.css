@@ -19,6 +19,7 @@
 .speed-table {
   flex: 2 1 320px;
   min-width: 0;
+  padding: var(--space-4);
 }
 
 /* 左の表の絞り込み(道具・ランク。ユーザー確定仕様)。 */
@@ -38,26 +39,77 @@
   gap: var(--space-1);
 }
 
-.speed-table__tiers {
+/* F-06: 左の表の仮想スクロール。段の高さは speedWindow.ts の定数で決まる(同速の1行 = 24px。折り返さない)ので、
+ * 行は絶対配置(top・height はインライン)。右に位置マーカーの列(speed-table__track)を並べ、同じ高さに揃える。 */
+.speed-table__body {
   display: flex;
-  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
+}
+
+.speed-table__viewport {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: min(70vh, 640px);
+  overflow-y: auto;
+}
+
+.speed-table__track {
+  position: relative;
+  flex: 0 0 7rem;
+}
+
+.speed-table__tiers {
+  position: relative;
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
-.speed-tier {
-  position: relative;
+.speed-table__jump {
+  margin-bottom: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+}
+
+/* 右の位置マーカー。top・height はインライン(左の該当行と同じ高さ)。見た目は F-12 で整える。 */
+.speed-marker {
+  position: absolute;
+  left: 0;
+  right: 0;
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  justify-content: center;
+  box-sizing: border-box;
+  border: 2px solid var(--text-secondary);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.speed-tier {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  overflow: hidden;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
   background: var(--bg-glass);
   backdrop-filter: blur(var(--bg-glass-blur));
-  padding: var(--space-2) var(--space-3);
+  padding: 0 var(--space-3);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   color: var(--text-primary);
@@ -67,6 +119,13 @@
 .speed-tier--self {
   border-width: 2px;
   border-color: var(--text-secondary);
+}
+
+.speed-tier__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--space-2);
 }
 
 .speed-tier__speed {
@@ -83,8 +142,8 @@
 
 .speed-tier__entries {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-3);
+  flex-direction: column;
+  min-width: 0;
   list-style: none;
   margin: 0;
   padding: 0;
@@ -94,6 +153,9 @@
   display: flex;
   align-items: center;
   gap: var(--space-1);
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 /* タイプ色のエンブレム(画像は必須にしない。CLAUDE.md ドメイン規約・CalcScreen.css と同じ形)。 */
@@ -112,18 +174,29 @@
   object-fit: contain;
 }
 
+/* 1行固定(ADR-0608)。長い名前は省略記号で切り、全文は li の title で出す。 */
+.speed-entry__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .speed-entry__preset {
+  flex: 0 0 auto;
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
 }
 
 /* 自分の行が挟まる境界(同速が無いとき)。 */
 .speed-boundary {
+  position: absolute;
+  left: 0;
+  right: 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   gap: var(--space-2);
   border-top: 2px solid var(--text-secondary);
-  padding-top: var(--space-1);
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
@@ -136,6 +209,7 @@
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  padding: var(--space-4);
 }
 
 .speed-self__modes {

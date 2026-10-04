@@ -3,7 +3,7 @@
 - 更新日: 2026-10-01
 - 状態: TB0〜TB6 すべて完了(main 統合済み)。メトリクス・GitOps(Argo CD、手動 sync)・recommendations の同時実行上限まで実装済み。
   設計の正は **`services/balance/api/openapi.yaml`(契約)**・この文書・`docs/adr/0014〜0018`・`0400〜0409`(balance の帯)
-- ユーザーの仕様: `docs/plan.md` の「TB」と `docs/ai-shared/DECISIONS.md`(2026-09-21〜22)
+- ユーザーの仕様: `docs/plan/tb.md` の「TB」と `docs/ai-shared/DECISIONS.md`(2026-09-21〜22)
 - この文書は旧版(2026-09-21 の設計レビュー依頼文書)を、実装済みの現在の設計に書き換えたもの。役割分担・レビュー依頼・AI 間の共有ルール・
   旧版の未決事項の決着は履歴として `docs/adr/0410-type-balance-design-history.md` に移した(旧版の節番号との対応もそこ)
 

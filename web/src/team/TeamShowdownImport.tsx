@@ -1,5 +1,5 @@
-// P5-5e(ADR-0321 §2): Showdown 形式から新しい構築を取り込む領域(2段階: 内容を確認 → この内容で作成)。
-// 入力・プレビューはこの部品の useState(TeamScreen は訪れたタブでも mount し続けるので、タブを往復しても残る。ADR-0308)。
+// P5-5e(ADR-0321 §2・ADR-0332 §3): Showdown 形式から新しい構築を取り込む領域(2段階: 内容を確認 → この内容で作成)。
+// 構築名の欄は無い(name を送らない)。テキストは TeamScreen が持つ(タブ・画面の往復で残す。ADR-0308)。プレビューはこの部品の useState。
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
@@ -8,8 +8,8 @@ import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { parseShowdownTeam } from "./showdownFormat";
 import { planShowdownImport, type ImportPlan } from "./showdownImportPlan";
 import { resolveMasterForImport } from "./showdownMaster";
+import { teamInputFromMembers } from "./teamSlots";
 import type { TeamClient, TeamError } from "./teamClient";
-import { teamNameNotice } from "./teamName";
 
 type Schemas = components["schemas"];
 
@@ -23,6 +23,9 @@ export interface TeamShowdownImportProps {
   readonly teamClient: TeamClient;
   readonly master: MasterData;
   readonly masterSearch?: MasterSpeciesSearch;
+  /** 入力中のテキスト(TeamScreen が持つ。一覧と編集画面を行き来しても残す。ADR-0308)。 */
+  readonly text: string;
+  readonly onTextChange: (text: string) => void;
   /** create() が成功したときの応答(TeamScreen が一覧の先頭に足す)。 */
   readonly onCreated: (team: Schemas["Team"]) => void;
 }
@@ -31,10 +34,10 @@ export function TeamShowdownImport({
   teamClient,
   master,
   masterSearch,
+  text,
+  onTextChange,
   onCreated,
 }: TeamShowdownImportProps): ReactNode {
-  const [text, setText] = useState("");
-  const [name, setName] = useState("");
   const [preview, setPreview] = useState<PreviewState>({ status: "idle" });
   const [submitting, setSubmitting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -82,25 +85,17 @@ export function TeamShowdownImport({
     if (submitting || preview.status !== "ready" || !preview.plan.canCreate) {
       return;
     }
-    const reason = teamNameNotice(name);
-    if (reason !== null) {
-      setNotice(reason);
-      setError(null);
-      return;
-    }
-    const trimmed = name.trim();
     const { members } = preview.plan;
     setSubmitting(true);
     setNotice(null);
     setError(null);
-    const result = await teamClient.create({ name: trimmed, members });
+    const result = await teamClient.create(teamInputFromMembers(members));
     setSubmitting(false);
     if (result.ok) {
       generationRef.current += 1;
-      setText("");
-      setName("");
+      onTextChange("");
       setPreview({ status: "idle" });
-      setCreated(teamShowdownText.importCreated(trimmed, members.length));
+      setCreated(teamShowdownText.importCreated(members.length));
       onCreated(result.value);
     } else {
       setError(result.error);
@@ -112,25 +107,13 @@ export function TeamShowdownImport({
 
   return (
     <section aria-label={teamShowdownText.importRegionLabel} className="team-showdown">
-      <h2>{teamShowdownText.importRegionLabel}</h2>
       <label className="team-screen__field">
         <span>{teamShowdownText.importTextLabel}</span>
         <textarea
           rows={8}
           value={text}
           onChange={(event) => {
-            setText(event.target.value);
-            discardPreview();
-          }}
-        />
-      </label>
-      <label className="team-screen__field">
-        <span>{teamShowdownText.importNameLabel}</span>
-        <input
-          type="text"
-          value={name}
-          onChange={(event) => {
-            setName(event.target.value);
+            onTextChange(event.target.value);
             discardPreview();
           }}
         />
@@ -138,6 +121,7 @@ export function TeamShowdownImport({
       <div className="team-showdown__actions">
         <button
           type="button"
+          className="ui-button ui-button--secondary"
           disabled={resolving || submitting}
           onClick={() => {
             void handlePreview();
@@ -147,6 +131,7 @@ export function TeamShowdownImport({
         </button>
         <button
           type="button"
+          className="ui-button ui-button--primary"
           disabled={!canCreate}
           onClick={() => {
             void handleCreate();

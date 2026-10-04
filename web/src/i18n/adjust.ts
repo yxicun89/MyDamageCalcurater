@@ -43,7 +43,27 @@ export const adjustErrorText = {
 } as const;
 
 /** AJ6: 調整のモード(ADR-0319 §2)。画面の state と文言のキー。 */
-export type AdjustModeKey = "indices" | "bulk" | "offense" | "minKo" | "minSurvive";
+export type AdjustModeKey = "goals" | "indices" | "bulk" | "offense" | "minKo" | "minSurvive";
+
+/** F-11(ADR-0331): 目標の種類(api/openapi.yaml の AdjustGoalKind と同じ値)。 */
+export type AdjustGoalKindKey = "outspeed" | "survive" | "ko";
+
+/** F-11(ADR-0331 §5): 素早さのプリセット(adjust/adjustGoals.ts の SpeedPresetKey と同じ値)。 */
+type AdjustSpeedPresetKey = "fastest" | "neutral_max" | "none";
+
+/** 「先に使う技」で自分の素早さのランクが変わったときの文の前置き(ADR-0331 §7)。 */
+function speedBoostPrefix(boost: { readonly moveName: string; readonly rank: number } | null): string {
+  if (boost === null) {
+    return "";
+  }
+  if (boost.rank > 0) {
+    return `${boost.moveName}で素早さが${boost.rank}段階上がったあと、`;
+  }
+  if (boost.rank < 0) {
+    return `${boost.moveName}で素早さが${-boost.rank}段階下がったあと、`;
+  }
+  return `${boost.moveName}では素早さは上がりません。`;
+}
 
 /** AJ6: HP のライン(api/openapi.yaml の HPLineKind と同じ値)。 */
 type AdjustHpLineKind = "none" | "16n" | "16n-1";
@@ -94,6 +114,7 @@ export const adjustScreenText = {
   // ---- モード(ADR-0319 §2) ----
   modeGroupLabel: "調整の内容",
   modeLabel: {
+    goals: "目標から振り方を決める",
     indices: "指数と 16n を見る",
     bulk: "耐久に振る",
     offense: "攻撃と素早さに振る",
@@ -176,6 +197,76 @@ export const adjustScreenText = {
   goalNotMet: (chance: string): string => `目標に届きません(確率 ${chance})`,
   speedMet: "素早さの目標を満たします",
   speedNotMet: "素早さの目標に届きません",
+  // ---- 目標から振り方を決める(F-11・ADR-0331 §5〜§7)。領域の見出しは goalRegionLabel(「目標」) ----
+  goalCardLegend: (n: number): string => `目標 ${n}`,
+  /** 目標のカードの欄の accessible name(「目標 n の<見えるラベル>」。SC 2.5.3)。 */
+  goalFieldName: (n: number, visibleLabel: string): string => `目標 ${n} の${visibleLabel}`,
+  addGoalLabel: "目標を追加",
+  goalLimitHint: (max: number): string => `目標は ${max} つまでです`,
+  noGoalsNotice: "目標を追加してください",
+  removeGoalLabel: "外す",
+  removeGoalName: (n: number): string => `目標 ${n} を外す`,
+  goalKindFieldLabel: "種類",
+  goalKindOption: {
+    outspeed: "素早さを上回る",
+    survive: "この技を耐える",
+    ko: "この技で倒す",
+  } satisfies Record<AdjustGoalKindKey, string>,
+  goalOpponentSpeciesFieldLabel: "相手のポケモン",
+  goalPresetFieldLabel: "相手の振り方",
+  goalOpponentMoveFieldLabel: "相手の技",
+  goalSelfMoveFieldLabel: "自分の技",
+  goalBoostMoveFieldLabel: "先に使う技",
+  goalBoostMoveNone: "使わない",
+  goalBoostMoveHint: "ニトロチャージのように自分の素早さが上がる技を選ぶと、上がったあとの素早さで比べます",
+  speedPresetOption: {
+    fastest: "最速",
+    neutral_max: "準速",
+    none: "無振り",
+  } satisfies Record<AdjustSpeedPresetKey, string>,
+  // 送信前の検査(ADR-0331 §6)
+  goalsRequiredMessage: "目標を追加してください",
+  goalOpponentRequiredMessage: (n: number): string => `目標 ${n}: 相手のポケモンを選んでください`,
+  goalOpponentMoveRequiredMessage: (n: number): string => `目標 ${n}: 相手の技を選んでください`,
+  goalSelfMoveRequiredMessage: (n: number): string => `目標 ${n}: 自分の技を選んでください`,
+  goalNatureNotFoundMessage: (n: number): string => `目標 ${n}: 相手の振り方に合う性格がマスタにありません`,
+  // 結果(ADR-0331 §7)。chance は formatChancePercent 済みの文字
+  goalsPlanHeading: "目標をすべて満たす振り方",
+  goalsNearestHeading: "目標に一番近い振り方",
+  goalsInfeasibleNotice: "すべての目標は満たせませんでした",
+  goalOutcomesLabel: "目標ごとの結果",
+  goalOpponentName: (speciesName: string, presetLabel: string): string => `${speciesName}(${presetLabel})`,
+  outspeedOutcome: (
+    n: number,
+    opponent: string,
+    met: boolean,
+    selfSpeed: number,
+    opponentSpeed: number,
+    boost: { readonly moveName: string; readonly rank: number } | null,
+  ): string =>
+    `目標 ${n}: ${speedBoostPrefix(boost)}${opponent}より先に${met ? "動けます" : "は動けません"}(自分 ${selfSpeed} / 相手 ${opponentSpeed})`,
+  surviveOutcome: (
+    n: number,
+    opponent: string,
+    moveName: string,
+    hits: number,
+    met: boolean,
+    chance: string,
+  ): string =>
+    met
+      ? `目標 ${n}: ${opponent}の${moveName}を${hits}発耐えます(耐える確率 ${chance})`
+      : `目標 ${n}: ${opponent}の${moveName}を${hits}発は耐えられません(耐える確率 ${chance})`,
+  koOutcome: (
+    n: number,
+    opponent: string,
+    moveName: string,
+    hits: number,
+    met: boolean,
+    chance: string,
+  ): string =>
+    met
+      ? `目標 ${n}: ${moveName}で${opponent}を${hits}発で倒せます(倒す確率 ${chance})`
+      : `目標 ${n}: ${moveName}で${opponent}を${hits}発では倒せません(倒す確率 ${chance})`,
   // ---- 技を覚えるポケモン(listMoveLearners。ADR-0319 §7) ----
   /** ボタンの見える文字(accessible name はどちらの技かを前に足す。SC 2.5.3)。 */
   learnersButtonLabel: "覚えるポケモン",

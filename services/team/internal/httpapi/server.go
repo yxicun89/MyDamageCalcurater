@@ -29,8 +29,9 @@ import (
 // 構築名・ニックネームの文字数、メンバー・技の件数、SP の範囲と合計(契約の maxItems/maxLength と
 // 同じ値。requirements.md §2・ADR-0213 §2・§3)。
 const (
-	minTeamNameRunes = 1
 	maxTeamNameRunes = 50
+	// unsetTeamName は名前を省略・空にした構築に補う既定名(ADR-0229)。
+	unsetTeamName    = "名称未設定"
 	maxNicknameRunes = 24
 	maxMembers       = store.MaxMembersPerTeam
 	maxMoveIDs       = store.MaxMovesPerMember
@@ -411,9 +412,14 @@ func deletionResultFrom(res store.PurgeResult) api.TeamDeletionResult {
 // validateTeamInput は「マスタを引かなくても判断できる」検証だけを行う(ADR-0213 §3)。
 // 通れば store.Member のスライスと正規化した名前(前後の空白を除いたもの)を返す。
 func validateTeamInput(in api.TeamInput) (name string, members []store.Member, err error) {
-	name = strings.TrimSpace(in.Name)
-	if n := utf8.RuneCountInString(name); n < minTeamNameRunes || n > maxTeamNameRunes {
-		return "", nil, newError(api.InvalidInput, "構築名は%d〜%d文字であること", minTeamNameRunes, maxTeamNameRunes)
+	if in.Name != nil {
+		name = strings.TrimSpace(*in.Name)
+	}
+	if name == "" {
+		name = unsetTeamName
+	}
+	if n := utf8.RuneCountInString(name); n > maxTeamNameRunes {
+		return "", nil, newError(api.InvalidInput, "構築名は%d文字まで(%d文字)", maxTeamNameRunes, n)
 	}
 
 	var raw []api.TeamMember

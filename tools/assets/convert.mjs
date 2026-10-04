@@ -1,4 +1,4 @@
-// 手元のポケモン画像を WebP 2サイズ(thumb 長辺128・detail 長辺512)と manifest.json に変換する(ADR-0807)。
+// 手元のポケモン画像を WebP 2サイズ(thumb 長辺128・detail 長辺512)と manifest.json に変換する(ADR-0808)。
 //
 //   node tools/assets/convert.mjs        環境変数 ASSETS_SRC(入力)・ASSETS_OUT(出力)で場所を変えられる
 //

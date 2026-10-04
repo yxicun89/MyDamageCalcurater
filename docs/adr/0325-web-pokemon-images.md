@@ -1,7 +1,7 @@
 # ADR-0325: Web のポケモン画像表示(P8-1c。manifest があれば <img>、無ければタイプ色エンブレム)
 
 - 状態: 採用(2026-10-03。P8-1c Web 分を実装)
-- 関連: ADR-0807(画像は gateway の `/images/*` で配信・manifest 契約)、ADR-0310(CSP)、ADR-0313(オフライン)、CLAUDE.md「画像は必須にしない」
+- 関連: ADR-0808(画像は gateway の `/images/*` で配信・manifest 契約)、ADR-0310(CSP)、ADR-0313(オフライン)、CLAUDE.md「画像は必須にしない」
 - 番号: 0322 は ADR-0322-web-online-effects-enabled が使用済みのため 0325 とした。
 
 ## 決定(案)
@@ -43,6 +43,6 @@
   e2e/images.spec.ts の HTML フォールバックのテストは、暖機の `/api/calc` の 404 コンソールログを数えないよう除外した。
 
 ## 追記(2026-10-04): k3d の e2e は /images/manifest.json の 404 を失敗に数えない
-k3d(画像なしが既定)の gateway は `/images/manifest.json` に JSON の 404 を返す。ADR-0807 はこれを正常(エンブレムにフォールバック)としているので、
+k3d(画像なしが既定)の gateway は `/images/manifest.json` に JSON の 404 を返す。ADR-0808 はこれを正常(エンブレムにフォールバック)としているので、
 `web/e2e-k3d/k3d.spec.ts` の失敗収集は、**404 かつパスが `/images/manifest.json` と完全一致**のものだけ許容する(`web/e2e/support/expectedFailures.ts`。
 単体テストで、ほかの 4xx/5xx・画像本体の 404・別パスは従来どおり失敗に数えることを固定)。k3d で空の manifest を配信する案は採らない(画像なしが既定)。

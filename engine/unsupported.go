@@ -170,8 +170,8 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 }
 
 // mechanismHandled は、機構 m を持つ技がこの入力では通常の式と同じ結果になるかを返す。
-//   - 必ず急所: 入力が急所ありなら同じ。
-//   - 防御側のランク無視: 使う側(物理は防御・特殊は特防)のランクが 0 なら同じ。
+//   - 必ず急所: 入力が急所ありか、防御側が急所に当たらない特性なら同じ。
+//   - 防御側のランク無視: 使う側(物理は防御・特殊は特防)のランクが 0 か、攻撃側が相手のランクを無視する特性なら同じ。
 //   - 条件で優先度が変わる: engine が優先度を使うのはサイコフィールドの判定だけ(ADR-0123)。
 //     防御側が浮いていて判定に関係しないときも印を付ける(安全側の過検出)。
 //   - 天候・フィールドが名指しする技: engine が持つ場の状態は天候とフィールドだけで、どちらも無ければ
@@ -179,8 +179,14 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 func mechanismHandled(in DamageInput, m MoveMechanism) bool {
 	switch m {
 	case MechanismAlwaysCrit:
-		return in.Critical
+		// 急所に当たらない防御側(ADR-0176)には、急所の指定が無くても通常の式で正しい。
+		de := in.Defender.Ability.Effect
+		return in.Critical || (de != nil && de.PreventsCritical)
 	case MechanismIgnoreDefenseRanks:
+		// 攻撃側が相手のランクを無視する(ADR-0176)なら、防御側のランクは計算に入らない。
+		if ae := in.Attacker.Ability.Effect; ae != nil && ae.IgnoresOpponentRanks {
+			return true
+		}
 		defKey := StatDef
 		if in.Move.Category == CategorySpecial {
 			defKey = StatSpD

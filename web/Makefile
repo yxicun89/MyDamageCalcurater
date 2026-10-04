@@ -49,11 +49,11 @@ web-e2e: wasm web-deps ## Web の E2E(Playwright・chromium。オフライン = 
 	@cd $(WEB_DIR) && npm run e2e
 
 .PHONY: web-e2e-online
-web-e2e-online: wasm web-deps ## Web の E2E(オンライン = API。例データで calc-svc も起動する。要 Go)
+web-e2e-online: wasm web-deps gen-go-all ## Web の E2E(オンライン = API。例データで calc-svc も起動する。要 Go)
 	@cd $(WEB_DIR) && npm run e2e:online
 
 .PHONY: web-e2e-balance
-web-e2e-balance: wasm web-deps ## Web の E2E(タイプバランス = balance API。例データで balance-svc も起動する。要 Go)
+web-e2e-balance: wasm web-deps gen-go-all ## Web の E2E(タイプバランス = balance API。例データで balance-svc も起動する。要 Go)
 	@cd $(WEB_DIR) && npm run e2e:balance
 
 # --- P4-11: コンテナ(k3d)---

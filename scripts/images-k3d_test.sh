@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 画像の k3d 配線(ADR-0807 追記)の静的検査。make test-scripts から流す。クラスタ・ネットワークには触らない。
+# 画像の k3d 配線(ADR-0808 追記)の静的検査。make test-scripts から流す。クラスタ・ネットワークには触らない。
 #   - kustomize の描画: local 系(local・local-api)の gateway に hostPath が1つだけ・readOnly・
 #     GATEWAY_IMAGES_DIR が volumeMount の mountPath と一致。base・cloud の描画に hostPath が無い
 #   - scripts/images-k3d.sh: manifest が無ければ 0(docker に触らない)・あれば dist の中身だけを docker cp

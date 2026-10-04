@@ -766,6 +766,14 @@ test_manual_overlay_guard() {
     run_isolated "$dir" env FAKE_LIVE_DEPLOY_ANNOTATIONS='{"pokecalc.example/readmodel-hash":"abc"}' SERVICE="$svc" "${upper}_GITOPS_REPO_URL=$FAKE_ORIGIN" ./scripts/gitops/check-gitops.sh ready
     rc=$?
     if [ "$rc" -ne 0 ] && grep -q 'readmodel-hash' "$WORK/log/out" && grep -qE 'sync' "$WORK/log/out"; then ok; else ng "local-readmodel の annotation が残っていても ready 検査が通った(rc=$rc)"; fi
+
+    # (3b) --no-live(Application を最初に作るとき)は、手動 overlay の注釈が残っていても通る(でないと Application を作れず sync で戻せない)。
+    reset_log
+    run_isolated "$dir" env FAKE_LIVE_DEPLOY_ANNOTATIONS='{"pokecalc.example/readmodel-hash":"abc"}' SERVICE="$svc" "${upper}_GITOPS_REPO_URL=$FAKE_ORIGIN" ./scripts/gitops/check-gitops.sh ready --no-live
+    rc=$?
+    if [ "$rc" -eq 0 ]; then ok; else ng "--no-live でも注釈で失敗した(rc=$rc): $(cat "$WORK/log/out")"; fi
+    # --no-live は live の注釈検査だけを省く。pokedex の placeholder など他の検査は省かない(placeholder 検査は引き続き効く)。
+    if grep -q -- 'check-gitops.sh" ready --no-live' scripts/gitops/argocd-local-app.sh; then ok; else ng "argocd-local-app.sh が --no-live を渡していない"; fi
   done
 }
 
@@ -780,7 +788,7 @@ test_runbooks_no_manual_apply_with_argocd() {
   done
 }
 
-# 文書: ADR-0412(方式 a・speed の digest の扱い・取り合い対策)と、plan.md・speed の未配備表記(#237)。
+# 文書: ADR-0412(方式 a・speed の digest の扱い・取り合い対策)と、plan(docs/plan/)・speed の未配備表記(#237)。
 test_issue237_docs() {
   local adr f
   begin "ドキュメント: ADR-0412 と ADR-0018/0403/0605 の追記、plan.md の行、speed の digest の扱い(#237)"
@@ -792,7 +800,8 @@ test_issue237_docs() {
   for f in initContainer emptyDir pokedex-reader-dsn NetworkPolicy ConfigMap '#237'; do
     if grep -q -- "$f" "$adr"; then ok; else ng "ADR-0412 に「$f」の記述が無い"; fi
   done
-  if grep -q '#237' "$ROOT/docs/plan.md"; then ok; else ng "docs/plan.md に issue #237 の行が無い"; fi
+  # plan は区画ごとのファイルに分けた(ADR-0172)。索引と区画のファイルのどこかに行があればよい。
+  if grep -rq '#237' "$ROOT/docs/plan.md" "$ROOT/docs/plan"; then ok; else ng "docs/plan.md・docs/plan/ に issue #237 の行が無い"; fi
   # speed の digest: 実 digest か、placeholder のままなら「未配備」と speed-design・runbook・ADR に明示。
   if grep -q 'digest: sha256:0\{64\}' "$ROOT/services/speed/deploy/k8s/overlays/gitops/kustomization.yaml"; then
     for f in docs/speed-design.md docs/runbooks/speed.md "docs/adr/$(basename "$adr")"; do

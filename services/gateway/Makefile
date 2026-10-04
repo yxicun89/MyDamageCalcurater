@@ -13,7 +13,7 @@ API_VERSION ?= $(shell ./scripts/image-tag.sh services engine 2>/dev/null || ech
 
 .PHONY: api-docker-build api-k3d-deploy api-smoke api-kustomize
 
-api-docker-build: ## calc・gateway のイメージを local タグでビルドする
+api-docker-build: gen-go-all ## calc・gateway のイメージを local タグでビルドする
 	@docker build -f services/calc/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/calc:local .
 	@docker build -f services/gateway/Dockerfile --build-arg VERSION=$(API_VERSION) -t pokecalc/gateway:local .
 

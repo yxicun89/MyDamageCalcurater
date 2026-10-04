@@ -302,8 +302,129 @@ function effectCase(label, t, pred, options, expectChange) {
   assert.equal(changed, expectChange, `${label}: 効果の有無で oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
   championsFixed.push(v);
 }
+// --- 特性の段階1(ADR-0176) -----------------------------------------------------------------
+// effectPair は options と baseOptions(効果を外した、または比べる相手の条件)の oracle のダメージを比べ、
+// 変わる/変わらないが想定どおりであることを確かめてから、options のベクタだけを fixed.json に足す。
+const sameExpectedRolls = (x, y) => JSON.stringify(x.expected.rolls) === JSON.stringify(y.expected.rolls);
+function effectPair(label, a, d, moveName, options, baseOptions, expectChange) {
+  const v = vector(genC, label, a, d, moveName, options);
+  const base = vector(genC, `${label}/base`, a, d, moveName, baseOptions);
+  assert(v.expected.rolls.some(r => r > 0), `${label}: ダメージが0(相性で無効な組を選んだ)`);
+  assert.equal(!sameExpectedRolls(v, base), expectChange,
+    `${label}: 比べた条件と oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
+  championsFixed.push(v);
+}
+const stripKey = (side, key) => side && Object.fromEntries(Object.entries(side).filter(([k]) => k !== key));
+// 防御側の特性を無視する特性(IgnoresDefenderAbility)。効果データから引く(名前を書かない)。
+const defenderAbilityIgnorers = Object.keys(effects.abilities).filter(n => effects.abilities[n].IgnoresDefenderAbility);
+assert.equal(defenderAbilityIgnorers.length, 1, 'IgnoresDefenderAbility を持つ特性がちょうど1つでない(ベクタの作り方を見直す)');
+const ignorer = defenderAbilityIgnorers[0];
+// breakableCase は、防御側の Breakable な特性 name が効くケース(options)で、攻撃側に ignorer を持たせると
+// 「防御側の特性なし」と同じダメージになることを確かめる。
+function breakableCase(label, a, d, moveName, options) {
+  const withIgnorer = {...options, a:{...(options.a || {}), ability:ignorer}};
+  effectPair(label, a, d, moveName, withIgnorer, {...withIgnorer, d:stripKey(options.d, 'ability')}, false);
+}
+const normalPhysical = physical.find(m => m.type === 'Normal');
+const normalSpecial = special.find(m => m.type === 'Normal');
+assert(normalPhysical && normalSpecial, '代表技にノーマルの物理・特殊が無い');
+// 威力の条件の境界を調べる技(威力固定・単発・優先度 0・反動なし)。
+const fixedPowerMoves = probeMoveCandidates();
+function probeMoveCandidates() {
+  const names = ['Water Pulse','Thunder Fang','Fire Fang','Leaf Blade','Psycho Cut'];
+  return [...moves, ...names.map(n => genC.moves.get(id(n)))].filter(m => m && m.basePower > 0 && !m.multihit &&
+    !m.priority && !m.recoil && !m.willCrit);
+}
+const stage1AbilityCases = (name, def) => {
+  const slug = `effects/${id(name)}`;
+  const nd = defenderFor('normal', neutral, slug);
+  if (def.TypeConvert) {
+    const {From, To} = def.TypeConvert;
+    assert.equal(From, 'normal', `${slug}: ノーマル以外からの変換はベクタの作り方を見直す`);
+    const d = defenderFor(To, neutral, slug);
+    effectPair(`${slug}/convert/physical/apply`, effectAttacker, d, normalPhysical.name, {a:{ability:name}}, {}, true);
+    effectPair(`${slug}/convert/special/apply`, effectAttacker, d, normalSpecial.name, {a:{ability:name}}, {}, true);
+    // 変換後のタイプで一致する攻撃側(元のタイプの一致を失わない)。
+    const stabAttacker = species.find(s => s.types.includes(typeNameById[To]) && !s.types.includes('Normal'));
+    assert(stabAttacker, `${slug}: ${To} タイプの攻撃側が種族集合に無い`);
+    effectPair(`${slug}/convert/stab/apply`, stabAttacker.name, d, normalPhysical.name, {a:{ability:name}}, {}, true);
+    // ノーマルのままなら当たらない相手(ゴースト)にも当たる。
+    const ghost = species.find(s => effectiveness('Normal', s) === 0 && effectiveness(typeNameById[To], s) > 0);
+    if (ghost) effectPair(`${slug}/convert/ghost/apply`, effectAttacker, ghost.name, normalPhysical.name, {a:{ability:name}}, {}, true);
+    const c = otherType(From);
+    effectPair(`${slug}/convert/${c}/control`, effectAttacker, defenderFor(c, neutral, slug), physicalMoveOfType(c), {a:{ability:name}}, {}, false);
+  }
+  for (const [field, label] of [['StatMods','stat'], ['SeparateStatMods','separate']]) {
+    if (!def[field]) continue;
+    for (const k of Object.keys(def[field]).sort()) {
+      const offensive = k === 'atk' || k === 'spa';
+      const usesPhysical = k === 'atk' || k === 'def';
+      const side = offensive ? 'a' : 'd';
+      const m = usesPhysical ? normalPhysical : normalSpecial;
+      const cm = usesPhysical ? normalSpecial : normalPhysical;
+      effectPair(`${slug}/${label}/${k}/apply`, effectAttacker, nd, m.name, {[side]:{ability:name}}, {}, true);
+      effectPair(`${slug}/${label}/${k}/control`, effectAttacker, nd, cm.name, {[side]:{ability:name}}, {}, false);
+      if (!offensive && def.Breakable) breakableCase(`${slug}/${label}/${k}/breakable`, effectAttacker, nd, m.name, {d:{ability:name}});
+    }
+  }
+  for (const pm of def.PowerMods || []) {
+    if (pm.Condition === 'max_base_power') {
+      const under = fixedPowerMoves.filter(m => m.basePower <= pm.MaxPower).sort((x, y) => y.basePower - x.basePower)[0];
+      const over = fixedPowerMoves.filter(m => m.basePower > pm.MaxPower).sort((x, y) => x.basePower - y.basePower)[0];
+      assert(under && over, `${slug}: 威力 ${pm.MaxPower} の境界の技が無い`);
+      effectPair(`${slug}/power/max${pm.MaxPower}/apply`, effectAttacker, defenderFor(id(under.type), neutral, slug), under.name, {a:{ability:name}}, {}, true);
+      effectPair(`${slug}/power/max${pm.MaxPower}/control`, effectAttacker, defenderFor(id(over.type), neutral, slug), over.name, {a:{ability:name}}, {}, false);
+    } else if (pm.Condition === 'move_type') {
+      const t = pm.MoveType, c = otherType(t);
+      effectPair(`${slug}/power/${t}/apply`, effectAttacker, defenderFor(t, neutral, slug), physicalMoveOfType(t), {a:{ability:name}}, {}, true);
+      effectPair(`${slug}/power/${c}/control`, effectAttacker, defenderFor(c, neutral, slug), physicalMoveOfType(c), {a:{ability:name}}, {}, false);
+    } else {
+      assert.fail(`${slug}: 未知の威力の条件 ${pm.Condition}`);
+    }
+  }
+  if (def.AuraType) {
+    const t = def.AuraType, c = otherType(t), d = defenderFor(t, neutral, slug), m = physicalMoveOfType(t);
+    effectPair(`${slug}/aura/${t}/attacker/apply`, effectAttacker, d, m, {a:{ability:name}}, {}, true);
+    effectPair(`${slug}/aura/${t}/defender/apply`, effectAttacker, d, m, {d:{ability:name}}, {}, true);
+    // 両側が持っても1回だけ(片側だけと同じ)。
+    effectPair(`${slug}/aura/${t}/both/apply`, effectAttacker, d, m, {a:{ability:name}, d:{ability:name}}, {a:{ability:name}}, false);
+    effectPair(`${slug}/aura/${c}/control`, effectAttacker, defenderFor(c, neutral, slug), physicalMoveOfType(c), {a:{ability:name}, d:{ability:name}}, {}, false);
+  }
+  if (def.CritDamageMod) {
+    effectPair(`${slug}/crit/apply`, effectAttacker, nd, normalPhysical.name, {critical:true, a:{ability:name}}, {critical:true}, true);
+    effectPair(`${slug}/crit/control`, effectAttacker, nd, normalPhysical.name, {a:{ability:name}}, {}, false);
+  }
+  if (def.PreventsCritical) {
+    effectPair(`${slug}/nocrit/apply`, effectAttacker, nd, normalPhysical.name, {critical:true, d:{ability:name}}, {critical:true}, true);
+    effectPair(`${slug}/nocrit/control`, effectAttacker, nd, normalPhysical.name, {d:{ability:name}}, {}, false);
+    if (def.Breakable) breakableCase(`${slug}/nocrit/breakable`, effectAttacker, nd, normalPhysical.name, {critical:true, d:{ability:name}});
+  }
+  if (def.IgnoresOpponentRanks) {
+    effectPair(`${slug}/ranks/attacker/apply`, effectAttacker, nd, normalPhysical.name, {a:{ability:name}, d:{ranks:{def:2}}}, {d:{ranks:{def:2}}}, true);
+    effectPair(`${slug}/ranks/defender/apply`, effectAttacker, nd, normalPhysical.name, {a:{ranks:{atk:2}}, d:{ability:name}}, {a:{ranks:{atk:2}}}, true);
+    effectPair(`${slug}/ranks/control`, effectAttacker, nd, normalPhysical.name, {a:{ability:name}}, {}, false);
+    if (def.Breakable) breakableCase(`${slug}/ranks/breakable`, effectAttacker, nd, normalPhysical.name, {a:{ranks:{atk:2}}, d:{ability:name}});
+  }
+  if (def.IgnoresDefenderAbility) {
+    // 防御側の Breakable な特性(タイプで効く半減)を無視する。Breakable でない特性(オーラ)は無視しない。
+    const breakable = Object.keys(effects.abilities).sort().find(n => effects.abilities[n].Breakable && effects.abilities[n].DefResistType);
+    assert(breakable, `${slug}: 比べる Breakable な半減の特性が無い`);
+    const t = Object.keys(effects.abilities[breakable].DefResistType).sort()[0];
+    const d = defenderFor(t, neutral, slug), m = physicalMoveOfType(t);
+    effectPair(`${slug}/ignore/${id(breakable)}/apply`, effectAttacker, d, m, {a:{ability:name}, d:{ability:breakable}}, {d:{ability:breakable}}, true);
+    const unbreakable = Object.keys(effects.abilities).sort().find(n => effects.abilities[n].AuraType && !effects.abilities[n].Breakable);
+    if (unbreakable) {
+      const at = effects.abilities[unbreakable].AuraType;
+      effectPair(`${slug}/ignore/${id(unbreakable)}/control`, effectAttacker, defenderFor(at, neutral, slug), physicalMoveOfType(at),
+        {a:{ability:name}, d:{ability:unbreakable}}, {d:{ability:unbreakable}}, false);
+    }
+    effectPair(`${slug}/ignore/control`, effectAttacker, nd, normalPhysical.name, {a:{ability:name}}, {}, false);
+  }
+};
+
 const typedEffectCases = (kind, name, def) => {
   const slug = `effects/${id(name)}`;
+  if (kind === 'abilities') stage1AbilityCases(name, def);
   if (kind === 'items' && def.BoostType) {
     const t = def.BoostType;
     effectCase(`${slug}/boost/${t}/apply`, t, neutral, {a:{item:name}}, true);
@@ -324,6 +445,10 @@ const typedEffectCases = (kind, name, def) => {
   if (kind === 'abilities' && def.DefResistType) {
     const types = Object.keys(def.DefResistType).sort();
     for (const t of types) effectCase(`${slug}/defresist/${t}/apply`, t, neutral, {d:{ability:name}}, true);
+    if (def.Breakable) {
+      const t = types[0];
+      breakableCase(`${slug}/defresist/${t}/breakable`, effectAttacker, defenderFor(t, neutral, slug), physicalMoveOfType(t), {d:{ability:name}});
+    }
     const c = types.includes('normal') ? 'fighting' : 'normal';
     assert(!types.includes(c), `${slug}: 対照のタイプ ${c} も軽減の対象になっている`);
     effectCase(`${slug}/defresist/${c}/control`, c, neutral, {d:{ability:name}}, false);
@@ -331,8 +456,15 @@ const typedEffectCases = (kind, name, def) => {
   if (kind === 'abilities' && def.ReduceSuperEffective) {
     effectCase(`${slug}/reduce/fighting/apply`, 'fighting', superEffective, {d:{ability:name}}, true);
     effectCase(`${slug}/reduce/fighting/control`, 'fighting', neutral, {d:{ability:name}}, false);
+    if (def.Breakable) breakableCase(`${slug}/reduce/fighting/breakable`, effectAttacker,
+      defenderFor('fighting', superEffective, slug), physicalMoveOfType('fighting'), {d:{ability:name}});
   }
 };
+// 特性による無効・吸収(ADR-0106)のうち Breakable なものは、防御側の特性を無視する攻撃側には効かない。
+for (const c of immunityCases) {
+  if (!effects.abilities[c.ability].Breakable) continue;
+  breakableCase(`${c.slug}/breakable`, c.attacker, c.defender, c.blockedMove, {d:{ability:c.ability}});
+}
 for (const kind of ['items','abilities']) {
   for (const name of Object.keys(effects[kind]).sort()) {
     if (kind === 'items' ? legacyItems.has(name) : legacyAbilities.has(name)) continue;
@@ -381,30 +513,43 @@ const probeConditions = [
   {field:{weather:'Sun', terrain:'Grassy'}, a:{status:'par'}, d:{status:'par'}},
   // サイコフィールド: 優先度を上げる特性(先制技にした技が接地した相手に防がれる)・シード系の持ち物を拾う。
   {field:{weather:'Rain', terrain:'Psychic'}, a:{}, d:{}},
+  // ADR-0176: 相手の状態に掛かる特性を拾う。ランク(相手のランクを無視する特性)・毒の相手(急所になる特性)。
+  {field:{}, a:{boosts:{atk:2, spa:2}}, d:{boosts:{def:2, spd:2}}},
+  {field:{}, a:{boosts:{atk:-2, spa:-2}}, d:{status:'psn', boosts:{def:-2, spd:-2}}},
+  // ADR-0176: 防御側の特性と組み合わさって効く攻撃側の特性(防御側の特性を無視する・接触の半減を受けない等)を拾う。
+  // 防御側に特性を持たせる条件なので、持ち主が防御側の調査(holder = 'd')では使わない(attackerOnly)。
+  ...['Thick Fat','Fur Coat','Fluffy','Multiscale','Levitate'].map(ability => ({field:{}, attackerOnly:true, a:{}, d:{ability}})),
+  {field:{}, crit:true, attackerOnly:true, a:{}, d:{ability:'Shell Armor'}},
 ];
 function probePokemon(name, side, ability, item) {
   const p = new Pokemon(genC, name, {level:50, ivs:stats(31), evs:stats(), nature:'Serious', ability, item,
-    status:side.status || '', overrides:{abilities:{0:''}}});
+    status:side.status || '', boosts:side.boosts || {}, overrides:{abilities:{0:''}}});
   if (side.hpFraction) p.originalCurHP = Math.floor(p.maxHP() / side.hpFraction);
   return p;
 }
-function probeSignature(holder, ability, item) {
+// probeSignature は holder 側に ability / item を持たせた全条件のダメージを並べる。other は持ち主でない側の特性
+// (Breakable の導出で攻撃側に防御側の特性を無視する特性を持たせる)。持ち主でない側は、条件が特性を指定していればそれを使う。
+function probeSignature(holder, ability, item, other = '') {
   const out = [];
-  for (const cond of probeConditions) for (const a of probeAttackers) for (const d of probeDefenders) for (const m of probeMoves) {
-    const A = probePokemon(a, cond.a, holder === 'a' ? ability : '', holder === 'a' ? item : '');
-    const D = probePokemon(d, cond.d, holder === 'd' ? ability : '', holder === 'd' ? item : '');
-    const r = calculate(genC, A, D, new Move(genC, m.name, {isCrit:!!cond.crit}), new Field({gameType:'Singles', ...cond.field}));
-    out.push(JSON.stringify(r.damage));
+  for (const cond of probeConditions) {
+    if (cond.attackerOnly && holder === 'd') continue;
+    for (const a of probeAttackers) for (const d of probeDefenders) for (const m of probeMoves) {
+      const A = probePokemon(a, cond.a, holder === 'a' ? ability : (other || cond.a.ability || ''), holder === 'a' ? item : '');
+      const D = probePokemon(d, cond.d, holder === 'd' ? ability : (other || cond.d.ability || ''), holder === 'd' ? item : '');
+      const r = calculate(genC, A, D, new Move(genC, m.name, {isCrit:!!cond.crit}), new Field({gameType:'Singles', ...cond.field}));
+      out.push(JSON.stringify(r.damage));
+    }
   }
   return out.join('|');
 }
-const probeBaseline = probeSignature('a', '', '');
+// 持ち主の側ごとの基準(attackerOnly の条件があるので、攻撃側の調査と防御側の調査で条件の集合が違う)。
+const probeBaselines = {a: probeSignature('a', '', ''), d: probeSignature('d', '', '')};
 const damageChanging = {items:[], abilities:[]};
 // changingSides は、持たせるとダメージが変わった側(a: 攻撃側 / d: 防御側。issue #270 案 B / ADR-0123)。
 const changingSides = {items:{}, abilities:{}};
 const probeSides = (kind, list, probe) => {
   for (const x of list) {
-    const sides = {a: probe('a', x.name) !== probeBaseline, d: probe('d', x.name) !== probeBaseline};
+    const sides = {a: probe('a', x.name) !== probeBaselines.a, d: probe('d', x.name) !== probeBaselines.d};
     if (sides.a || sides.d) {
       damageChanging[kind].push(x.id);
       changingSides[kind][x.id] = sides;
@@ -438,6 +583,28 @@ for (const kind of ['items','abilities']) {
   const deadDefinitions = [...defined].filter(x => !changing.has(x)).sort();
   assert.deepEqual(deadDefinitions, [], `${kind}: 効果定義があるのに oracle のダメージが変わらない(定義の誤りか調査条件の不足)`);
   effectCoverage[kind] = {damageChanging:changing.size, defined:defined.size, unsupported:undefinedChanging.length};
+}
+
+// --- Breakable の導出(ADR-0176) ------------------------------------------------------------
+// 防御側でダメージを変える特性のうち、攻撃側に防御側の特性を無視する特性(effects.json の IgnoresDefenderAbility)を
+// 持たせると「防御側の特性なし」と同じダメージになるものが Breakable。手で列挙せず oracle から導き、
+// effects.json の Breakable と両方向で一致させる。段階1では未対応の印の定義には Breakable を付けない
+// (印の定義は印だけを持つ。上の検査)。Breakable は防御側でダメージを変える特性にだけ付ける。
+const breakableCoverage = {derived:[], defined:[]};
+{
+  const ignorerId = id(ignorer);
+  const withIgnorerNone = probeSignature('d', '', '', ignorer);
+  for (const ab of [...genC.abilities]) {
+    const sides = changingSides.abilities[ab.id];
+    if (!sides || !sides.d || ab.id === ignorerId) continue;
+    if (probeSignature('d', ab.name, '', ignorer) === withIgnorerNone) breakableCoverage.derived.push(ab.id);
+  }
+  breakableCoverage.derived.sort();
+  const names = Object.keys(effects.abilities).filter(n => !legacyAbilities.has(n));
+  breakableCoverage.defined = names.filter(n => effects.abilities[n].Breakable).map(id).sort();
+  const derivedDefined = breakableCoverage.derived.filter(x => names.some(n => id(n) === x && !isUnsupportedEffect(effects.abilities[n])));
+  assert.deepEqual(breakableCoverage.defined, derivedDefined,
+    'abilities: effects.json の Breakable が oracle(防御側の特性を無視する攻撃側に効かない特性)と一致しない');
 }
 
 // --- legacy-effects の固定部分(gen9。元の種族のまま) --------------------------
@@ -843,7 +1010,7 @@ const metadata={
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
     {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
-    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect has an apply/control pair (effects/<id>/...; issue #270 / ADR-0120). Champions items/abilities that change damage but are not representable by the effect schema are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors'},
+    {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect (issue #270 / ADR-0120) or a stage-1 ability field (TypeConvert, PowerMods, AuraType/AuraMod, StatMods, SeparateStatMods, CritDamageMod, PreventsCritical, IgnoresOpponentRanks, IgnoresDefenderAbility; ADR-0176) has an apply/control pair (effects/<id>/...), and every Breakable definition has a breakable vector showing that an IgnoresDefenderAbility attacker (Mold Breaker) gets the same damage as against no ability (ADR-0176). The coverage survey also uses both-side +/-2 ranks, a poisoned defender and attacker-only probes against a defender ability (Thick Fat, Fur Coat, Fluffy, Multiscale, Levitate, critical hit x Shell Armor), so abilities that change damage only in combination (Mold Breaker, Unaware, Merciless, Long Reach) must be either defined or marked; Breakable is checked against the oracle in both directions, not listed by hand (ADR-0176). Champions items/abilities that change damage but are not representable by the effect schema (move-flag and HP-dependent abilities are later stages) are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors; unsupported-mark definitions carry no Breakable in stage 1, so Mold Breaker against a marked defender ability keeps the mark (ADR-0176)'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
     {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
@@ -865,4 +1032,4 @@ const metadata={
   files,
 };
 writeFileSync(`${out}/metadata.json`,JSON.stringify(metadata,null,2)+'\n');
-console.log(JSON.stringify({species:species.length,effectCoverage,championsKoCrossChecks,legacyKoCrossChecks,legacyRandomCount:legacyRandomCases.length,files},null,2));
+console.log(JSON.stringify({species:species.length,effectCoverage,breakableCoverage,championsKoCrossChecks,legacyKoCrossChecks,legacyRandomCount:legacyRandomCases.length,files},null,2));

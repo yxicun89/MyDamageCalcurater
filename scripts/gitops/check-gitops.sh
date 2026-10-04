@@ -13,6 +13,12 @@ case "${SERVICE:-}" in
 esac
 
 mode=${1:-ready}
+# --no-live: live の Deployment の注釈検査を省く。Application を最初に作るときだけ(scripts/gitops/argocd-local-app.sh)。
+# 作成前は手動 overlay の上書きが残っているのが普通で、そのまま止めると Application を作れず sync で戻せない(鶏と卵)。
+live_check=1
+if [ "${2:-}" = "--no-live" ]; then
+  live_check=0
+fi
 svc_dir="services/$SERVICE"
 svc_upper=$(printf '%s' "$SERVICE" | tr '[:lower:]' '[:upper:]')
 application_file="$svc_dir/deploy/argocd/application.yaml"
@@ -91,7 +97,10 @@ fi
 
 # 手動 overlay(local-readmodel)が生きている Deployment に残っていたら Argo CD と取り合う(ADR-0412 §5)。
 # クラスタに届かないときは検査しない。
-live_annotations=$(kubectl --context "k3d-${CLUSTER:-pokecalc}" -n pokecalc get deployment "$SERVICE" -o jsonpath='{.spec.template.metadata.annotations}' 2>/dev/null || true)
+live_annotations=""
+if [ "$live_check" = 1 ]; then
+  live_annotations=$(kubectl --context "k3d-${CLUSTER:-pokecalc}" -n pokecalc get deployment "$SERVICE" -o jsonpath='{.spec.template.metadata.annotations}' 2>/dev/null || true)
+fi
 case "$live_annotations" in
   *readmodel-hash*) fail "live Deployment has the local-readmodel annotation pokecalc.example/readmodel-hash (手動 overlay の上書きが残っている。argocd app sync pokecalc-$SERVICE で gitops overlay に戻す)" ;;
 esac
