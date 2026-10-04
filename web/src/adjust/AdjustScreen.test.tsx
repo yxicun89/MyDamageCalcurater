@@ -1083,6 +1083,49 @@ describe("S5 結果の表示", () => {
     expect(within(resultRegion()).getByText(T.koFeasible("atk", 12, 2, "100%"))).toBeInTheDocument();
   });
 
+  test("オンライン相当のマスタ(技・特性の一覧が空)でも、特性名・技名を解決済みの一覧から日本語で出す", async () => {
+    const search = createFakeSpeciesSearch({
+      species: [BIRD, FISH],
+      abilities: [ABILITY],
+      moves: [MOVE_FIRE, MOVE_WATER, MOVE_TACKLE, MOVE_STATUS],
+    });
+    const { user, client } = renderScreen({
+      master: {
+        ...master,
+        species: [],
+        moves: [],
+        abilities: [],
+        capabilities: { speciesList: false, moves: true, effects: true },
+      },
+      masterSearch: search,
+    });
+    await user.type(screen.getByRole("combobox", { name: T.selfSpeciesLabel }), BIRD.nameJa);
+    await user.click(await within(selfRegion()).findByRole("option", { name: BIRD.nameJa }));
+    await user.selectOptions(screen.getByRole("combobox", { name: T.selfNatureLabel }), NATURE_NEUTRAL.id);
+    await user.selectOptions(screen.getByRole("combobox", { name: T.selfMoveLabel }), MOVE_FIRE.id);
+    await chooseMode(user, "minKo");
+    await user.type(screen.getByRole("combobox", { name: T.opponentSpeciesLabel }), FISH.nameJa);
+    await user.click(await screen.findByRole("option", { name: FISH.nameJa }));
+    await user.selectOptions(screen.getByRole("combobox", { name: T.opponentPresetLabel }), "hb");
+    await setGoal(user, 2);
+    await user.click(submitButton());
+    await respond(lastCallOf(client, "indices"), { ok: true, value: indicesResult });
+    const marks: Schemas["UnsupportedMark"][] = [
+      { target: "move", reason: "unsupported_effect", id: MOVE_FIRE.id },
+      { target: "attacker_ability", reason: "unsupported_effect", id: ABILITY.id },
+    ];
+    await respond(lastCallOf(client, "minSpToKo"), {
+      ok: true,
+      value: { stat: "atk", searchLimit: 32, feasible: true, sp: 12, chancePercent: 100, unsupported: marks },
+    } satisfies AdjustResult<Schemas["AdjustKOResult"]>);
+
+    const notice = within(resultRegion()).getByText(/未対応/);
+    expect(notice).toHaveTextContent(MOVE_FIRE.nameJa);
+    expect(notice).toHaveTextContent(ABILITY.nameJa);
+    expect(notice).not.toHaveTextContent(MOVE_FIRE.id);
+    expect(notice).not.toHaveTextContent(ABILITY.id);
+  });
+
   test("未対応の印が無ければ注意を出さない", async () => {
     const { client } = await submitMinKo();
     await respond(lastCallOf(client, "minSpToKo"), {

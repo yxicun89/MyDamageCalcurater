@@ -208,9 +208,12 @@ describe("P4-10 文書のタイトル", () => {
 // P4-12a: タイプバランスの画面(ADR-0303 §2)。ルート表に1件足し、タブ「タイプバランス」と /balance で開く。
 // 画面はメンバーを選ぶまで balance API を呼ばない(ここでは fetch が呼ばれないことも確かめる)。
 /** ポケモン画像の manifest の取得(P8-1c)か。 */
+function requestUrlOf(input: RequestInfo | URL): string {
+  return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+}
+
 function isImagesRequest(input: RequestInfo | URL): boolean {
-  const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-  return url.includes("/images/");
+  return requestUrlOf(input).includes("/images/");
 }
 
 describe("P4-12a タイプバランスのタブ", () => {
@@ -282,33 +285,46 @@ describe("SP3 素早さのタブ", () => {
   });
 });
 
-// JD5(ADR-0705 §1): 判定の画面。ルート表に1件足し、タブ「判定」と /judge で開く。
-// 画面は「判定する」を押すまで judge API を呼ばない(ADR-0705 §7)ので、ここでは fetch が呼ばれないことを確かめる。
-describe("JD5 判定のタブ", () => {
-  test("タブ「判定」があり、/judge を直接開くと選択され、自分のポケモンの領域を出す(judge はまだ呼ばない)", async () => {
-    const fetchSpy = vi.spyOn(globalThis, "fetch");
-    setPath("/judge");
+// ADR-0330(F-07): 判定は Web で非表示(登録ファイルの hidden: true)。タブに出ず、URL /judge は未知のパスと同じく
+// 既定の画面(計算)へ置き換わり、judge API を呼ばない。判定のコードと単体テスト(web/src/judge/)は残してある。
+describe("ADR-0330 判定の非表示", () => {
+  test("タブ「判定」は出ない", async () => {
     render(<App engine={createFakeEngine()} />);
-
-    expect(await screen.findByRole("tab", { name: "判定" })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "false");
-    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
-    expect(window.location.pathname).toBe("/judge");
-    expect(document.title).toBe("判定 | pokecalc");
-    // 画像の manifest(/images/manifest.json。P8-1c)は起動時に1回取る。それ以外の fetch が無いことを確かめる。
-    expect(fetchSpy.mock.calls.filter(([input]) => !isImagesRequest(input))).toEqual([]);
+    await screen.findByRole("tablist", { name: "画面の切り替え" });
+    expect(screen.queryByRole("tab", { name: "判定" })).toBeNull();
   });
 
-  test("判定のタブのクリックで /judge を pushState し、画面を切り替える", async () => {
+  test.each(["/judge", "/judge/"])(
+    "%s を直接開くと /calc に置き換わり(replaceState)、計算タブが選ばれて judge を呼ばない",
+    async (path) => {
+      const fetchSpy = vi.spyOn(globalThis, "fetch");
+      setPath(path);
+      const pushSpy = vi.spyOn(window.history, "pushState");
+      render(<App engine={createFakeEngine()} />);
+
+      expect(await screen.findByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "true");
+      expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
+      expect(window.location.pathname).toBe("/calc");
+      expect(document.title).toBe("計算 | pokecalc");
+      expect(pushSpy).not.toHaveBeenCalled();
+      expect(screen.queryByRole("region", { name: "自分のポケモン" })).toBeNull();
+      // 判定の API は呼ばれない(置き換え先の計算画面の /api/record・画像 manifest の取得は別。判定サービスへの通信が無いことだけを見る)。
+      expect(fetchSpy.mock.calls.filter(([input]) => requestUrlOf(input).includes("/api/judge"))).toEqual([]);
+    },
+  );
+
+  test("popstate で /judge に戻ったときも計算を出し、/calc に置き換える", async () => {
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    const pushSpy = vi.spyOn(window.history, "pushState");
+    await user.click(screen.getByRole("tab", { name: "逆算" }));
 
-    await user.click(screen.getByRole("tab", { name: "判定" }));
-    expect(window.location.pathname).toBe("/judge");
-    expect(pushSpy).toHaveBeenCalledTimes(1);
-    expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
+    simulatePopState("/judge");
+
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/calc");
+    });
+    expect(screen.getByRole("tab", { name: "計算" })).toHaveAttribute("aria-selected", "true");
   });
 });
 
