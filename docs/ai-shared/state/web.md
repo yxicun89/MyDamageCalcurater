@@ -205,3 +205,5 @@ App.tsx・app/screens.tsx・app/routes.ts・i18n/ja.ts を編集している未�
 **持ち物の役割とメガストーン表示(2026-10-03。ADR-0326。ブランチ feat/web-item-roles)**: ユーザーの実使用の不具合報告(メガストーンの英語表記・攻撃側に意味のない持ち物)の修正。
 持ち物欄は `web/src/domain/itemRoles.ts` の `itemsForRole` で絞る(`roles` が無い持ち物は絞らない・メガストーンはどの欄にも出さない)。
 固定中の表示は「{基本種名}のメガストーン」。文言は `web/src/i18n/items.ts`。マスタのキャッシュ版は 3。iOS の同じ語での追従は iOS レーンに残る。
+Next(F-12 ビジュアルの基盤 / I-web-6): 実装済み・コミット前(ADR-0331 採用)。残りは PR 化のみ。逆算・タイプバランス・判定・お気に入り・このアプリについては共通クラス(`.ui-*`)を当てるだけで済む次の PR。調整(`web/src/adjust/`)は ec レーンが main 取り込み後に同じクラスを当てる。
+iOS はトークン一覧を `decisions/2026-10-04-web-visual-base-pop-tokens.md` から取り込む。

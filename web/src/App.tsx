@@ -9,6 +9,8 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
+import { screenIconName } from "./app/screenIcons";
+import { Icon } from "./ui/Icon";
 import { createApiEngine } from "./api/apiEngine";
 import { apiBaseUrl } from "./api/config";
 import { createClientIds, type ClientIds } from "./api/clientIds";
@@ -394,7 +396,7 @@ export function App({
           {currentMasterLoad === null && <p>{appText.loading}</p>}
           {currentMasterLoad !== null && (
             <div className="app-tabs">
-              <div role="tablist" aria-label={appText.tabsLabel} className="app-tabs__list">
+              <div role="tablist" aria-label={appText.tabsLabel} className="ui-tabs app-tabs__list">
                 {TAB_ORDER.map((id, index) => {
                   const selected = tab === id;
                   return (
@@ -411,7 +413,7 @@ export function App({
                       ref={(element) => {
                         tabRefs.current[id] = element ?? undefined;
                       }}
-                      className="app-tabs__tab"
+                      className="ui-tab app-tabs__tab"
                       onClick={() => {
                         navigateToTab(id);
                       }}
@@ -419,6 +421,7 @@ export function App({
                         handleTabKeyDown(event, index);
                       }}
                     >
+                      <Icon name={screenIconName(id)} />
                       {screenLabel(id)}
                     </button>
                   );
@@ -475,6 +478,7 @@ export function App({
             openAbout();
           }}
         >
+          <Icon name="about" size={14} />
           {aboutText.footerLinkLabel}
         </a>
       </footer>
@@ -658,7 +662,10 @@ function CalcModeSelector({ value, onChange }: CalcModeSelectorProps) {
       {CALC_MODE_ORDER.map((mode) => {
         const selected = mode === value;
         return (
-          <label key={mode} className={`app-mode__option${selected ? " app-mode__option--selected" : ""}`}>
+          <label
+            key={mode}
+            className={`ui-chip${selected ? " ui-chip--selected" : ""} app-mode__option${selected ? " app-mode__option--selected" : ""}`}
+          >
             <input
               type="radio"
               name={groupName}

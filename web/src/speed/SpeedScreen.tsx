@@ -49,6 +49,13 @@ interface Completed<T> {
 }
 
 /** key が今の入力(currentKey)と一致する応答が届いていれば成功/失敗、まだなら loading にする。 */
+/** チップの見た目(ADR-0331)。選択・チェック中は ui-chip--selected を足す。 */
+function chipClass(selected: boolean, extra?: string): string {
+  return ["ui-chip", selected ? "ui-chip--selected" : "", extra ?? ""]
+    .filter((part) => part !== "")
+    .join(" ");
+}
+
 function deriveRequestState<T>(currentKey: string, completed: Completed<T> | null): RequestState<T> {
   if (completed === null || completed.key !== currentKey) {
     return { status: "loading" };
@@ -368,7 +375,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
 
   return (
     <div className="speed-screen">
-      <section className="speed-table" aria-label={speedScreenText.tableRegionLabel}>
+      <section className="ui-card speed-table" aria-label={speedScreenText.tableRegionLabel}>
         <div
           role="group"
           aria-label={speedScreenText.filterGroupLabel}
@@ -379,7 +386,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             const checked = selectedPresets.has(id);
             const lastOne = checked && selectedPresets.size === 1;
             return (
-              <label key={id} className="speed-table__filter-option">
+              <label key={id} className={chipClass(checked, "speed-table__filter-option")}>
                 <input
                   type="checkbox"
                   checked={checked}
@@ -403,7 +410,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         </div>
 
         <div role="group" aria-label={speedScreenText.fieldGroupLabel} className="speed-table__filter">
-          <label className="speed-table__filter-option">
+          <label className={chipClass(tableTailwind, "speed-table__filter-option")}>
             <input
               type="checkbox"
               checked={tableTailwind}
@@ -413,7 +420,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             />
             {speedScreenText.tableTailwindLabel}
           </label>
-          <label className="speed-table__filter-option">
+          <label className={chipClass(trickRoom, "speed-table__filter-option")}>
             <input
               type="checkbox"
               checked={trickRoom}
@@ -426,23 +433,23 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         </div>
 
         {tableState.status === "loading" && (
-          <p className="speed-screen__notice">{speedScreenText.loadingNotice}</p>
+          <p className="ui-notice ui-notice--loading speed-screen__notice">{speedScreenText.loadingNotice}</p>
         )}
         {tableState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(tableState.error)}
           </p>
         )}
         {tableState.status === "success" && (
-          <ul className="speed-table__tiers">
+          <ul className="ui-rows speed-table__tiers">
             {renderTierRows(tableState.value.tiers, positionState, trickRoom)}
           </ul>
         )}
       </section>
 
-      <section className="speed-self" aria-label={speedScreenText.selfRegionLabel}>
+      <section className="ui-card speed-self" aria-label={speedScreenText.selfRegionLabel}>
         {pokemonState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(pokemonState.error)}
           </p>
         )}
@@ -453,7 +460,10 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             return (
               <label
                 key={mode}
-                className={selected ? "speed-self__mode speed-self__mode--selected" : "speed-self__mode"}
+                className={chipClass(
+                  selected,
+                  selected ? "speed-self__mode speed-self__mode--selected" : "speed-self__mode",
+                )}
               >
                 <input
                   type="radio"
@@ -498,7 +508,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               {MINIMAL_PRESET_IDS.map((preset) => {
                 const selected = self.preset === preset;
                 return (
-                  <label key={preset}>
+                  <label key={preset} className={chipClass(selected)}>
                     <input
                       type="radio"
                       name={presetGroupName}
@@ -543,7 +553,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 }}
               />
               {fieldErrors.sp !== undefined && (
-                <p id={spErrorId} role="alert" className="speed-screen__error">
+                <p id={spErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                   {fieldErrors.sp}
                 </p>
               )}
@@ -556,7 +566,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               {NATURE_IDS.map((nature) => {
                 const selected = self.nature === nature;
                 return (
-                  <label key={nature}>
+                  <label key={nature} className={chipClass(selected)}>
                     <input
                       type="radio"
                       name={natureGroupName}
@@ -585,7 +595,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 }}
               />
               {fieldErrors.rank !== undefined && (
-                <p id={rankErrorId} role="alert" className="speed-screen__error">
+                <p id={rankErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                   {fieldErrors.rank}
                 </p>
               )}
@@ -619,7 +629,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
               }}
             />
             {fieldErrors.raw !== undefined && (
-              <p id={rawErrorId} role="alert" className="speed-screen__error">
+              <p id={rawErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
                 {fieldErrors.raw}
               </p>
             )}
@@ -627,10 +637,12 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
 
         {positionState.status === "loading" && (
-          <p className="speed-screen__notice">{speedScreenText.positionLoadingNotice}</p>
+          <p className="ui-notice ui-notice--loading speed-screen__notice">
+            {speedScreenText.positionLoadingNotice}
+          </p>
         )}
         {positionState.status === "error" && (
-          <p role="alert" className="speed-screen__error">
+          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(positionState.error)}
           </p>
         )}

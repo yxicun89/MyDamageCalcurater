@@ -230,9 +230,9 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
 
   return (
     <section aria-label={teamScreenText.regionLabel} className="team-screen">
-      <div className="team-screen__create">
+      <div className="ui-card team-screen__create">
         <h2>{teamScreenText.createHeading}</h2>
-        <div className="team-screen__field">
+        <div className="ui-field team-screen__field">
           <span>{teamScreenText.nameLabel}</span>
           <input
             type="text"
@@ -246,6 +246,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         </div>
         <button
           type="button"
+          className="ui-button ui-button--primary"
           disabled={createState.submitting}
           onClick={() => {
             void handleCreate();
@@ -255,7 +256,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         </button>
         {createState.notice !== null && <p className="team-screen__notice">{createState.notice}</p>}
         {createState.error !== null && (
-          <div role="alert" className="team-screen__error">
+          <div role="alert" className="ui-notice ui-notice--error team-screen__error">
             <p>{teamScreenText.createErrorHeading}</p>
             <p>{createState.error.message}</p>
           </div>
@@ -273,18 +274,20 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
       />
 
       <h2>{teamScreenText.listHeading}</h2>
-      {list.status === "loading" && <p className="team-screen__notice">{teamScreenText.loadingNotice}</p>}
+      {list.status === "loading" && (
+        <p className="ui-notice ui-notice--loading team-screen__notice">{teamScreenText.loadingNotice}</p>
+      )}
       {list.status === "error" && (
-        <div role="alert" className="team-screen__error">
+        <div role="alert" className="ui-notice ui-notice--error team-screen__error">
           <p>{teamScreenText.loadErrorHeading}</p>
           <p>{list.error.message}</p>
         </div>
       )}
       {list.status === "loaded" && list.teams.length === 0 && (
-        <p className="team-screen__notice">{teamScreenText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty team-screen__notice">{teamScreenText.emptyNotice}</p>
       )}
       {list.status === "loaded" && list.teams.length > 0 && (
-        <ul aria-label={teamScreenText.listLabel} className="team-screen__list">
+        <ul aria-label={teamScreenText.listLabel} className="ui-rows team-screen__list">
           {list.teams.map((team) => (
             <TeamRow
               key={team.id}
@@ -389,12 +392,12 @@ function TeamRow({
       </span>
 
       {renameState === null ? (
-        <button type="button" onClick={onOpenRename}>
+        <button type="button" className="ui-button ui-button--secondary" onClick={onOpenRename}>
           {teamScreenText.renameLabel(team.name)}
         </button>
       ) : (
         <div className="team-screen__rename">
-          <div className="team-screen__field">
+          <div className="ui-field team-screen__field">
             <span>{teamScreenText.renameFieldLabel(team.name)}</span>
             <input
               type="text"
@@ -406,15 +409,25 @@ function TeamRow({
               }}
             />
           </div>
-          <button type="button" disabled={renameState.submitting || renameLocked} onClick={onSaveRename}>
+          <button
+            type="button"
+            className="ui-button ui-button--primary"
+            disabled={renameState.submitting || renameLocked}
+            onClick={onSaveRename}
+          >
             {teamScreenText.renameSaveLabel}
           </button>
-          <button type="button" disabled={renameState.submitting} onClick={onCancelRename}>
+          <button
+            type="button"
+            className="ui-button ui-button--secondary"
+            disabled={renameState.submitting}
+            onClick={onCancelRename}
+          >
             {teamScreenText.renameCancelLabel}
           </button>
           {renameState.notice !== null && <p className="team-screen__notice">{renameState.notice}</p>}
           {renameState.error !== null && (
-            <div role="alert" className="team-screen__error">
+            <div role="alert" className="ui-notice ui-notice--error team-screen__error">
               <p>{teamScreenText.renameErrorHeading}</p>
               <p>{renameState.error.message}</p>
             </div>
@@ -423,7 +436,7 @@ function TeamRow({
       )}
 
       {editor === null && (
-        <button type="button" onClick={onOpenEditor}>
+        <button type="button" className="ui-button ui-button--secondary" onClick={onOpenEditor}>
           {teamMemberText.editLabel(team.name)}
         </button>
       )}
@@ -431,20 +444,30 @@ function TeamRow({
       {exporter}
 
       {deleteState === null ? (
-        <button type="button" onClick={onOpenDelete}>
+        <button type="button" className="ui-button ui-button--danger" onClick={onOpenDelete}>
           {teamScreenText.deleteLabel(team.name)}
         </button>
       ) : (
         <div className="team-screen__delete-confirm">
           <p>{teamScreenText.deleteConfirmNotice(team.name)}</p>
-          <button type="button" disabled={deleteState.submitting} onClick={onConfirmDelete}>
+          <button
+            type="button"
+            className="ui-button ui-button--danger"
+            disabled={deleteState.submitting}
+            onClick={onConfirmDelete}
+          >
             {teamScreenText.deleteConfirmLabel(team.name)}
           </button>
-          <button type="button" disabled={deleteState.submitting} onClick={onCancelDelete}>
+          <button
+            type="button"
+            className="ui-button ui-button--secondary"
+            disabled={deleteState.submitting}
+            onClick={onCancelDelete}
+          >
             {teamScreenText.deleteCancelLabel(team.name)}
           </button>
           {deleteState.error !== null && (
-            <div role="alert" className="team-screen__error">
+            <div role="alert" className="ui-notice ui-notice--error team-screen__error">
               <p>{teamScreenText.deleteErrorHeading}</p>
               <p>{deleteState.error.message}</p>
             </div>
