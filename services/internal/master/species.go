@@ -40,12 +40,20 @@ const megaFormePrefix = "Mega"
 
 // MegaNameJa は基本種の日本語名とメガのフォーム名から、メガ種族の日本語名を機械的に作る
 // (メガ + 基本種名 + フォーム識別子)。フォーム名が "Mega" だけなら識別子なし(メガルカリオ)、
-// "Mega-X" なら末尾に X(メガリザードンX)。基本種名が空なら "" を返す(生成しない)。
+// "Mega-X" なら末尾に X(メガリザードンX)。基本種名が空、またはフォーム名がその形でないときは "" を返す(生成しない)。
 func MegaNameJa(baseNameJa, forme string) string {
 	if strings.TrimSpace(baseNameJa) == "" {
 		return ""
 	}
-	suffix := strings.TrimPrefix(strings.TrimPrefix(forme, megaFormePrefix), "-")
+	// 規則に合うのは "Mega" か "Mega-<識別子>" だけ。M-Mega・地方の姿などは推測しない(ADR-0140 §3)。
+	suffix := ""
+	if forme != megaFormePrefix {
+		rest, ok := strings.CutPrefix(forme, megaFormePrefix+"-")
+		if !ok || rest == "" {
+			return ""
+		}
+		suffix = rest
+	}
 	return MegaNamePrefix + baseNameJa + suffix
 }
 

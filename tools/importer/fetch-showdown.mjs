@@ -170,6 +170,8 @@ const items = [...dex.items.all()].map((i) => ({
   name: i.name,
   isNonstandard: toNonstandard(i),
   hooks: hooks(i),
+  // メガストーンなら基本種名 → メガ種族名。そうでなければ {}(キーは必ず出す。ADR-0140)。
+  megaStone: i.megaStone ?? {},
 }));
 const abilities = [...dex.abilities.all()].map((a) => ({
   id: a.id,
