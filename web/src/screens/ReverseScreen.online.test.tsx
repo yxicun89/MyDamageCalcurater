@@ -52,7 +52,7 @@ function speciesAt(index: number): MasterSpecies {
 const myCard = () => screen.getByRole("region", { name: "自分のポケモン" });
 const theirCard = () => screen.getByRole("region", { name: "相手のポケモン" });
 const moveSelect = () => screen.getByRole("combobox", { name: "技" });
-const observationInput = () => screen.getByRole("textbox", { name: "観測1" });
+const observationInput = () => screen.getByRole("textbox", { name: "ダメージ1" });
 
 interface RenderResult {
   readonly user: UserEvent;
@@ -101,7 +101,7 @@ describe("技が使えないマスタ(capabilities.moves === false)", () => {
     expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
   });
 
-  test("自分・相手・観測を入れても逆算しない(壊れた結果を出さない。ADR-0304 §4)", async () => {
+  test("自分・相手・ダメージを入れても逆算しない(壊れた結果を出さない。ADR-0304 §4)", async () => {
     const rendered = renderScreen(limitedMaster(example, NO_MOVES));
     await rendered.user.selectOptions(
       within(myCard()).getByRole("combobox", { name: "自分のポケモン" }),
@@ -112,11 +112,11 @@ describe("技が使えないマスタ(capabilities.moves === false)", () => {
       speciesAt(1).key,
     );
     await rendered.user.type(observationInput(), "50");
-    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    // P4-18(issue 113): ダメージの数値入力は 200ms 待ってから計算する。
     rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     expect(rendered.engine.reverseRequests).toHaveLength(0);
-    expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "考えられる振り方" })).toBeNull();
   });
 });
 
@@ -137,7 +137,7 @@ describe("効果データが無いマスタ(capabilities.effects === false。ADR
       speciesAt(1).key,
     );
     await rendered.user.type(observationInput(), "50");
-    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    // P4-18(issue 113): ダメージの数値入力は 200ms 待ってから計算する。
     rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     await waitFor(() => {
@@ -172,7 +172,7 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false)"
     expect(within(moveSelect()).getAllByRole("option").length).toBeGreaterThan(0);
 
     await rendered.user.type(observationInput(), "50");
-    // P4-18(issue 113): 観測の数値入力は 200ms 待ってから計算する。
+    // P4-18(issue 113): ダメージの数値入力は 200ms 待ってから計算する。
     rendered.advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 
     await waitFor(() => {
@@ -210,7 +210,7 @@ describe("capabilities を省いたマスタ(オフライン相当)は今まで�
 
 // ---- P4-17: オンラインのマスタでも技を選べる(ADR-0304 §3 の解消・A-13) ----
 
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 
 /** 実際のオンライン(種族一覧・技一覧・効果データのどれも無い)マスタ。 */
 function onlineMaster(): MasterData {
@@ -339,7 +339,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
   );
 });
 
-describe("種族の解決待ちの間に観測を入力したとき(ADR-0313 の回帰)", () => {
+describe("種族の解決待ちの間にダメージを入力したとき(ADR-0313 の回帰)", () => {
   test("解決が届いた後に逆算が走り、「計算中」のまま止まらない", async () => {
     const attacker = speciesAt(0);
     const defender = speciesAt(1);
@@ -389,7 +389,7 @@ describe("種族の解決待ちの間に観測を入力したとき(ADR-0313 の
     await rendered.user.click(await within(theirCard()).findByRole("option", { name: defender.nameJa }));
     expect(search.resolveCalls).toHaveLength(2);
 
-    // 解決待ちの間に観測を打ち、観測のデバウンス(200ms)が明ける前に解決が届く。
+    // 解決待ちの間にダメージを打ち、ダメージのデバウンス(200ms)が明ける前に解決が届く。
     await rendered.user.type(observationInput(), "50");
     await act(async () => {
       search.resolveCalls[1]?.resolve(resolutionOf(defender));

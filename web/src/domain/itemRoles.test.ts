@@ -209,7 +209,7 @@ describe("itemAfterRoleChange: 欄の役割が変わったときの持ち物", (
 describe("megaStoneLabel: 固定中の表示", () => {
   test("ストーンの nameJa が日本語ならそのまま、英語名などのときは「{基本種名}のメガストーン」", () => {
     expect(megaStoneLabel(MEGA_FIRE, MEGA_FIRE_STONE.nameJa)).toBe(MEGA_FIRE_STONE_LABEL);
-    expect(megaStoneLabel(MEGA_FIRE, "Examplite F")).toBe(`${MEGA_FIRE.baseSpeciesNameJa}のメガストーン`);
+    expect(megaStoneLabel(MEGA_FIRE, "Examplite F")).toBe(`${MEGA_FIRE.baseSpeciesNameJa}専用のメガストーン`);
   });
 
   test.each<[string, MasterSpecies]>([
@@ -221,7 +221,9 @@ describe("megaStoneLabel: 固定中の表示", () => {
   });
 
   test("ユーザー報告の例: ルカリオのメガストーン", () => {
-    expect(megaStoneLabel({ ...MEGA_FIRE, baseSpeciesNameJa: "ルカリオ" })).toBe("ルカリオのメガストーン");
+    expect(megaStoneLabel({ ...MEGA_FIRE, baseSpeciesNameJa: "ルカリオ" })).toBe(
+      "ルカリオ専用のメガストーン",
+    );
   });
 });
 

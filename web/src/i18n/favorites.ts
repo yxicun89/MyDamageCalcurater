@@ -12,8 +12,9 @@ export const favoritesScreenText = {
   listLabel: "お気に入り一覧",
   loadingNotice: "読み込み中…",
   emptyNotice: "お気に入りはまだありません。計算画面で攻撃側を選んで追加できます。",
-  /** オフライン(計算モード)のとき。API には触れない。 */
-  offlineNotice: "お気に入りはオンラインモードで使えます。ヘッダーの計算モードをオンラインにしてください。",
+  /** オフライン(計算する場所がこの端末)のとき。サーバーには触れない。 */
+  offlineNotice:
+    "お気に入りはオンラインで使えます。画面上の「計算する場所」を「サーバー(オンライン)」にしてください。",
   countLabel: (count: number, max: number): string => `${String(count)}/${String(max)}件`,
   listErrorHeading: "お気に入りを読み込めませんでした",
   deleteLabel: (title: string): string => `「${title}」を削除`,

@@ -8,7 +8,7 @@
 //   - どの select・数値入力にも、label で結び付いた見えるラベルがある(aria-label だけの欄が無い)
 //   - 見えるラベルの文字は、その欄の accessible name に必ず含まれる(SC 2.5.3)
 //   - 未選択の select の表示が空にならない(先頭に文言つきの option がある。一覧には出さない hidden)
-//   - 逆算の観測欄に、単位(%/HP)と観測した側(与えた/受けた)に応じた意味の説明が見える文字である
+//   - 逆算のダメージ欄に、単位(%/HP)とダメージした側(与えた/受けた)に応じた意味の説明が見える文字である
 //
 // 回帰: accessible name(既存テストが getByRole の name で引いている文字列)は変えない。
 // このファイルは name を直接書いて、既存テストと同じ引き方で引けることも同時に確かめる。
@@ -154,14 +154,14 @@ describe("逆算画面(issue #304)", () => {
     expect(accessibleNameOf(theirCard())).toBe("相手のポケモン");
   });
 
-  test("ポケモン・持ち物・技・観測のすべての欄に、見えるラベルがあり accessible name に含まれる", () => {
+  test("ポケモン・持ち物・技・ダメージのすべての欄に、見えるラベルがあり accessible name に含まれる", () => {
     renderReverse();
     expectVisibleLabelsInNames(document.body);
     expect(visibleLabelOf(screen.getByRole("combobox", { name: "自分のポケモン" }))).toBe("ポケモン");
     expect(visibleLabelOf(screen.getByRole("combobox", { name: "相手のポケモン" }))).toBe("ポケモン");
     expect(visibleLabelOf(screen.getByRole("combobox", { name: "自分の持ち物" }))).toBe("持ち物");
     expect(visibleLabelOf(screen.getByRole("combobox", { name: "技" }))).toBe("技");
-    expect(visibleLabelOf(screen.getByRole("textbox", { name: "観測1" }))).toBe("観測1");
+    expect(visibleLabelOf(screen.getByRole("textbox", { name: "ダメージ1" }))).toBe("ダメージ1");
   });
 
   test("ポケモンの select は、未選択のとき何を選ぶか分かる文言を表示する", () => {
@@ -173,9 +173,9 @@ describe("逆算画面(issue #304)", () => {
     }
   });
 
-  test("観測欄に、何を入れる数値なのかを説明する見える文字がある(単位に応じて変わる)", async () => {
+  test("ダメージ欄に、何を入れる数値なのかを説明する見える文字がある(単位に応じて変わる)", async () => {
     const { user } = renderReverse();
-    const input = () => screen.getByRole("textbox", { name: "観測1" });
+    const input = () => screen.getByRole("textbox", { name: "ダメージ1" });
 
     // 既定(与えたダメージ・%): 相手の HP が減った割合。
     expect(screen.getByText("相手の HP が減った割合(%)")).toBeVisible();
@@ -183,14 +183,14 @@ describe("逆算画面(issue #304)", () => {
 
     // 単位を HP にすると、実数値であることが分かる文に変わる。
     await user.click(
-      within(screen.getByRole("radiogroup", { name: "観測1の単位" })).getByRole("radio", { name: "HP" }),
+      within(screen.getByRole("radiogroup", { name: "ダメージ1の単位" })).getByRole("radio", { name: "HP" }),
     );
     expect(screen.getByText("相手の HP が減った実数値(HP)")).toBeVisible();
     expect(describedByTextsOf(input())).toContain("相手の HP が減った実数値(HP)");
 
-    // 観測した側を「受けたダメージ」にすると、減るのは自分の HP になる。
+    // ダメージした側を「受けたダメージ」にすると、減るのは自分の HP になる。
     await user.click(
-      within(screen.getByRole("radiogroup", { name: "観測したダメージ" })).getByRole("radio", {
+      within(screen.getByRole("radiogroup", { name: "どちらのダメージ" })).getByRole("radio", {
         name: "受けたダメージ",
       }),
     );

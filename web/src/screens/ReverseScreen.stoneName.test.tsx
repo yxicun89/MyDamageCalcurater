@@ -45,9 +45,9 @@ describe("メガ種族の固定表示", () => {
 
   test("英語名ならフォールバック(自分の持ち物欄・相手の「持ち物: …」)", async () => {
     const select = await pickMega(withStone("Barbaracite"));
-    expect(select).toHaveDisplayValue("テストほのおのメガストーン");
+    expect(select).toHaveDisplayValue("テストほのお専用のメガストーン");
     expect(
-      within(theirCard()).getByText(megaItemText.fixedItemName("テストほのおのメガストーン")),
+      within(theirCard()).getByText(megaItemText.fixedItemName("テストほのお専用のメガストーン")),
     ).toBeVisible();
     expect(screen.queryByText(/Barbaracite/)).toBeNull();
   });
@@ -65,7 +65,7 @@ describe("英語名のメガストーンを画面に出さない", () => {
     render(<ReverseScreen engine={createFakeEngine()} master={withStone("Barbaracite")} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "自分のポケモン" }), "9001-000");
     await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), MEGA_FIRE.key);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
     act(() => {
       vi.advanceTimersByTime(OBSERVATION_INPUT_DEBOUNCE_MS);
     });
@@ -74,7 +74,7 @@ describe("英語名のメガストーンを画面に出さない", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
-      expect(within(row).getByText("テストほのおのメガストーン")).toBeVisible();
+      expect(within(row).getByText("テストほのお専用のメガストーン")).toBeVisible();
     }
     expect(document.body).not.toHaveTextContent("Barbaracite");
   });

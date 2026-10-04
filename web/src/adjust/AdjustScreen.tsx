@@ -58,6 +58,7 @@ import type {
 } from "../master/types";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
+import { typeAccentStyle } from "../ui/typeAccent";
 import "./AdjustScreen.css";
 import type { AdjustClient, AdjustResult } from "./adjustClient";
 import { adjustErrorMessage, formatChancePercent } from "./adjustFormat";
@@ -958,7 +959,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
 
   return (
     <div className="adjust-screen">
-      <section aria-labelledby={selfHeadingId} className="adjust-screen__region">
+      <section
+        aria-labelledby={selfHeadingId}
+        className="ui-card ui-card--typed adjust-screen__region"
+        style={typeAccentStyle(self.choice?.types[0])}
+      >
         <h2 id={selfHeadingId}>{T.selfRegionLabel}</h2>
         <div className="adjust-screen__fields">
           <SpeciesField
@@ -1065,7 +1070,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
         <h2 id={modeHeadingId}>{T.modeRegionLabel}</h2>
         <div role="radiogroup" aria-label={T.modeGroupLabel} className="adjust-screen__modes">
           {(goalsOn ? MODES_WITH_GOALS : MODES).map((candidate) => (
-            <label key={candidate} className="adjust-screen__choice">
+            <label
+              key={candidate}
+              className={`ui-chip${mode === candidate ? " ui-chip--selected" : ""} adjust-screen__choice`}
+            >
               <input
                 type="radio"
                 name="adjust-mode"
@@ -1155,7 +1163,9 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
           }}
         >
           <h2 id={goalHeadingId}>{T.goalRegionLabel}</h2>
-          {goals.length === 0 && <p className="adjust-screen__notice">{T.noGoalsNotice}</p>}
+          {goals.length === 0 && (
+            <p className="ui-notice ui-notice--empty adjust-screen__notice">{T.noGoalsNotice}</p>
+          )}
           {goals.map((goal, index) => (
             <GoalCard
               key={goal.id}
@@ -1183,6 +1193,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
           ))}
           <button
             type="button"
+            className="ui-button ui-button--secondary"
             ref={addGoalButtonRef}
             disabled={goals.length >= MAX_ADJUST_GOALS}
             aria-describedby={goals.length >= MAX_ADJUST_GOALS ? goalLimitHintId : undefined}
@@ -1199,7 +1210,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
       )}
 
       {needsOpponent && (
-        <section aria-labelledby={opponentHeadingId} className="adjust-screen__region">
+        <section
+          aria-labelledby={opponentHeadingId}
+          className="ui-card ui-card--typed adjust-screen__region"
+          style={typeAccentStyle(opponent.choice?.types[0])}
+        >
           <h2 id={opponentHeadingId}>{T.opponentRegionLabel}</h2>
           <div className="adjust-screen__fields">
             <SpeciesField
@@ -1300,14 +1315,14 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
       )}
 
       {errorMessage !== null && (
-        <p role="alert" className="adjust-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error adjust-screen__error">
           {errorMessage}
         </p>
       )}
 
       <button
         type="button"
-        className="adjust-screen__submit"
+        className="ui-button ui-button--primary adjust-screen__submit"
         onClick={() => {
           void handleSubmit();
         }}
@@ -1320,9 +1335,9 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
         {result.status === "success" ? (
           <ResultBody view={result.view} />
         ) : loading ? (
-          <p className="adjust-screen__notice">{T.loadingNotice}</p>
+          <p className="ui-notice ui-notice--loading adjust-screen__notice">{T.loadingNotice}</p>
         ) : result.status === "idle" ? (
-          <p className="adjust-screen__notice">{T.emptyResultNotice}</p>
+          <p className="ui-notice ui-notice--empty adjust-screen__notice">{T.emptyResultNotice}</p>
         ) : null}
       </section>
 
@@ -1330,7 +1345,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
         <section aria-label={T.learnersRegionLabel} className="adjust-screen__region">
           <h2>{T.learnersHeading(learners.moveName)}</h2>
           {learners.errorMessage !== null && (
-            <p role="alert" className="adjust-screen__error">
+            <p role="alert" className="ui-notice ui-notice--error adjust-screen__error">
               {learners.errorMessage}
             </p>
           )}
@@ -1341,13 +1356,16 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
               ))}
             </ul>
           )}
-          {learners.loading && <p className="adjust-screen__notice">{T.learnersLoading}</p>}
+          {learners.loading && (
+            <p className="ui-notice ui-notice--loading adjust-screen__notice">{T.learnersLoading}</p>
+          )}
           {!learners.loading && learners.errorMessage === null && learners.items.length === 0 && (
-            <p className="adjust-screen__notice">{T.learnersEmpty}</p>
+            <p className="ui-notice ui-notice--empty adjust-screen__notice">{T.learnersEmpty}</p>
           )}
           {learners.hasMore && !learners.loading && (
             <button
               type="button"
+              className="ui-button ui-button--secondary"
               onClick={() => {
                 void loadLearners(learners.moveId, learners.moveName, learners.items);
               }}
@@ -1387,7 +1405,7 @@ function LabeledSelect({
 }: LabeledSelectProps) {
   const id = useId();
   return (
-    <div className="adjust-screen__field">
+    <div className="ui-field adjust-screen__field">
       <label htmlFor={id}>{visibleLabel}</label>
       <select
         id={id}
@@ -1416,7 +1434,7 @@ interface NumberFieldProps {
 function NumberField({ label, value, describedBy, onChange }: NumberFieldProps) {
   const id = useId();
   return (
-    <div className="adjust-screen__field">
+    <div className="ui-field adjust-screen__field">
       <label htmlFor={id}>{label}</label>
       <input
         id={id}
@@ -1534,7 +1552,13 @@ function MoveField({
           </option>
         ))}
       </LabeledSelect>
-      <button type="button" aria-label={learnersButtonName} disabled={moveId === ""} onClick={onOpenLearners}>
+      <button
+        type="button"
+        className="ui-button ui-button--secondary"
+        aria-label={learnersButtonName}
+        disabled={moveId === ""}
+        onClick={onOpenLearners}
+      >
         {T.learnersButtonLabel}
       </button>
     </div>
@@ -1582,7 +1606,7 @@ function GoalCard({
         ? T.goalSelfMoveFieldLabel
         : T.goalBoostMoveFieldLabel;
   return (
-    <fieldset className="adjust-screen__goal" data-goal-id={goal.id}>
+    <fieldset className="ui-card adjust-screen__goal" data-goal-id={goal.id}>
       <legend>{T.goalCardLegend(n)}</legend>
       <div className="adjust-screen__fields">
         <LabeledSelect
@@ -1678,7 +1702,12 @@ function GoalCard({
           </>
         )}
       </div>
-      <button type="button" aria-label={T.removeGoalName(n)} onClick={onRemove}>
+      <button
+        type="button"
+        className="ui-button ui-button--secondary"
+        aria-label={T.removeGoalName(n)}
+        onClick={onRemove}
+      >
         {T.removeGoalLabel}
       </button>
     </fieldset>
@@ -1692,14 +1721,16 @@ function ResultBody({ view }: { readonly view: ResultView }) {
   return (
     <>
       {view.unsupportedLabels.length > 0 && (
-        <p className="adjust-screen__notice">{unsupportedText.notice(view.unsupportedLabels)}</p>
+        <p className="ui-notice ui-notice--info adjust-screen__notice">
+          {unsupportedText.notice(view.unsupportedLabels)}
+        </p>
       )}
       <IndicesView indices={view.indices} />
       {modeResult.kind === "goals" && prepared.operation.kind === "goals" && (
         <GoalsView result={modeResult.value} descriptions={prepared.operation.descriptions} />
       )}
       {modeResult.kind === "ko" && (
-        <p>
+        <p className="adjust-screen__verdict" data-met={String(modeResult.value.feasible)}>
           {modeResult.value.feasible
             ? T.koFeasible(
                 modeResult.value.stat,
@@ -1716,7 +1747,7 @@ function ResultBody({ view }: { readonly view: ResultView }) {
         </p>
       )}
       {modeResult.kind === "survive" && (
-        <p>
+        <p className="adjust-screen__verdict" data-met={String(modeResult.value.feasible)}>
           {modeResult.value.feasible
             ? T.surviveFeasible(
                 modeResult.value.stat,
@@ -1785,18 +1816,22 @@ function GoalsView({
 }) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="adjust-screen__subregion">
+    <section aria-labelledby={headingId} className="ui-card adjust-screen__subregion">
       <h3 id={headingId}>{result.feasible ? T.goalsPlanHeading : T.goalsNearestHeading}</h3>
-      {!result.feasible && <p className="adjust-screen__notice">{T.goalsInfeasibleNotice}</p>}
-      <p>{T.planSpLine(result.plan.sp)}</p>
-      <p>{T.planTotal(result.plan.totalSp)}</p>
-      <p>{T.statsLine(result.plan.stats)}</p>
-      <p>{T.remainingLabel(result.remaining)}</p>
-      <ul aria-label={T.goalOutcomesLabel} className="adjust-screen__lines">
+      {!result.feasible && (
+        <p className="ui-notice ui-notice--info adjust-screen__notice">{T.goalsInfeasibleNotice}</p>
+      )}
+      <p className="adjust-screen__plan">{T.planSpLine(result.plan.sp)}</p>
+      <p className="adjust-screen__detail">{T.planTotal(result.plan.totalSp)}</p>
+      <p className="adjust-screen__detail">{T.statsLine(result.plan.stats)}</p>
+      <p className="adjust-screen__detail">{T.remainingLabel(result.remaining)}</p>
+      <ul aria-label={T.goalOutcomesLabel} className="ui-rows adjust-screen__lines">
         {descriptions.map((description, index) => {
           const outcome = result.goals[index];
           return outcome === undefined ? null : (
-            <li key={index}>{goalOutcomeText(index + 1, description, outcome)}</li>
+            <li key={index} className="adjust-screen__verdict" data-met={String(outcome.met)}>
+              {goalOutcomeText(index + 1, description, outcome)}
+            </li>
           );
         })}
       </ul>
@@ -1812,7 +1847,9 @@ function HpLineItem({
   readonly point: Schemas["HPLinePoint"] | null;
 }) {
   return (
-    <li>{point === null ? T.hpLineNone(label) : T.hpLinePoint(label, point.hp, point.sp, point.spDelta)}</li>
+    <li className="adjust-screen__detail">
+      {point === null ? T.hpLineNone(label) : T.hpLinePoint(label, point.hp, point.sp, point.spDelta)}
+    </li>
   );
 }
 
@@ -1820,16 +1857,18 @@ function IndicesView({ indices }: { readonly indices: Schemas["AdjustIndicesResu
   const headingId = useId();
   const lines = indices.hpLines;
   return (
-    <section aria-labelledby={headingId} className="adjust-screen__subregion">
+    <section aria-labelledby={headingId} className="ui-card adjust-screen__subregion">
       <h3 id={headingId}>{T.indicesHeading}</h3>
-      <p>{T.statsLine(indices.stats)}</p>
-      <p>{T.indexLine(T.firepowerIndexLabel, indices.firepowerIndex ?? T.firepowerIndexNone)}</p>
-      <p>{T.indexLine(T.physicalBulkLabel, indices.physicalBulkIndex)}</p>
-      <p>{T.indexLine(T.specialBulkLabel, indices.specialBulkIndex)}</p>
-      <p className="adjust-screen__hint">{T.indexNote}</p>
+      <p className="adjust-screen__detail">{T.statsLine(indices.stats)}</p>
+      <p className="adjust-screen__detail">
+        {T.indexLine(T.firepowerIndexLabel, indices.firepowerIndex ?? T.firepowerIndexNone)}
+      </p>
+      <p className="adjust-screen__detail">{T.indexLine(T.physicalBulkLabel, indices.physicalBulkIndex)}</p>
+      <p className="adjust-screen__detail">{T.indexLine(T.specialBulkLabel, indices.specialBulkIndex)}</p>
+      <p className="adjust-screen__hint adjust-screen__detail">{T.indexNote}</p>
       <h4>{T.hpLineHeading}</h4>
-      <p>{T.hpCurrent(lines.hp, T.hpLineKindLabel[lines.current])}</p>
-      <ul className="adjust-screen__lines">
+      <p className="adjust-screen__detail">{T.hpCurrent(lines.hp, T.hpLineKindLabel[lines.current])}</p>
+      <ul className="ui-rows adjust-screen__lines">
         <HpLineItem label={T.next16nLabel} point={lines.next16n} />
         <HpLineItem label={T.prev16nLabel} point={lines.prev16n} />
         <HpLineItem label={T.next16nMinus1Label} point={lines.next16nMinus1} />
@@ -1848,7 +1887,7 @@ interface AllocationViewProps {
 function AllocationView({ allocation, hadGoal, hasSpeedTarget }: AllocationViewProps) {
   return (
     <>
-      <p>{T.remainingLabel(allocation.remaining)}</p>
+      <p className="adjust-screen__detail">{T.remainingLabel(allocation.remaining)}</p>
       <PlanView
         heading={T.maxIndexHeading}
         plan={allocation.maxIndex}
@@ -1863,7 +1902,7 @@ function AllocationView({ allocation, hadGoal, hasSpeedTarget }: AllocationViewP
           hasSpeedTarget={hasSpeedTarget}
         />
       ) : (
-        !hadGoal && <p className="adjust-screen__notice">{T.minSpNotRequested}</p>
+        !hadGoal && <p className="ui-notice ui-notice--info adjust-screen__notice">{T.minSpNotRequested}</p>
       )}
     </>
   );
@@ -1879,21 +1918,25 @@ interface PlanViewProps {
 function PlanView({ heading, plan, hadGoal, hasSpeedTarget }: PlanViewProps) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="adjust-screen__subregion">
+    <section aria-labelledby={headingId} className="ui-card adjust-screen__subregion">
       <h3 id={headingId}>{heading}</h3>
-      <p>{T.planSpLine(plan.sp)}</p>
-      <p>{T.planTotal(plan.totalSp)}</p>
-      <p>{T.statsLine(plan.stats)}</p>
-      <p>{T.indexLine(T.physicalBulkLabel, plan.physicalBulk)}</p>
-      <p>{T.indexLine(T.specialBulkLabel, plan.specialBulk)}</p>
+      <p className="adjust-screen__plan">{T.planSpLine(plan.sp)}</p>
+      <p className="adjust-screen__detail">{T.planTotal(plan.totalSp)}</p>
+      <p className="adjust-screen__detail">{T.statsLine(plan.stats)}</p>
+      <p className="adjust-screen__detail">{T.indexLine(T.physicalBulkLabel, plan.physicalBulk)}</p>
+      <p className="adjust-screen__detail">{T.indexLine(T.specialBulkLabel, plan.specialBulk)}</p>
       {hadGoal && (
-        <p>
+        <p className="adjust-screen__verdict" data-met={String(plan.goalMet)}>
           {plan.goalMet
             ? T.goalMet(formatChancePercent(plan.chancePercent))
             : T.goalNotMet(formatChancePercent(plan.chancePercent))}
         </p>
       )}
-      {hasSpeedTarget && <p>{plan.speedMet ? T.speedMet : T.speedNotMet}</p>}
+      {hasSpeedTarget && (
+        <p className="adjust-screen__verdict" data-met={String(plan.speedMet)}>
+          {plan.speedMet ? T.speedMet : T.speedNotMet}
+        </p>
+      )}
     </section>
   );
 }

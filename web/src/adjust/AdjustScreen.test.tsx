@@ -1156,7 +1156,7 @@ describe("S6 エラー(code から日本語。サーバーの message は出さ�
     ["invalid_input", "hits must be in 1..10"],
     ["unknown_move", "unknown moveId: test-move-fire"],
     ["master_unavailable", "master is not ready"],
-    ["adjust_unavailable", "調整の API に接続できません"],
+    ["adjust_unavailable", "調整のサーバーに接続できません"],
   ] as const)("%s → adjustErrorText の文言", async (code, message) => {
     const { user, client } = renderScreen();
     await fillSelf(user, { move: MOVE_FIRE });
@@ -1203,7 +1203,7 @@ describe("S6 エラー(code から日本語。サーバーの message は出さ�
     await user.click(submitButton());
     await respond(lastCallOf(client, "indices"), {
       ok: false,
-      error: { code: "adjust_unavailable", message: "調整の API に接続できません" },
+      error: { code: "adjust_unavailable", message: "調整のサーバーに接続できません" },
     });
 
     expect(screen.getByRole("combobox", { name: T.selfSpeciesLabel })).toHaveValue(BIRD.key);

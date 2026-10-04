@@ -268,7 +268,7 @@ describe("他タブの入力状態(ADR-0308)を情報ページの往復で失わ
     expect(selected).not.toBe("");
 
     await user.click(screen.getByRole("tab", { name: "逆算" }));
-    await user.type(await screen.findByRole("textbox", { name: "観測1" }), "45");
+    await user.type(await screen.findByRole("textbox", { name: "ダメージ1" }), "45");
 
     await user.click(footerLink());
     expect(screen.getByText(NOTICE)).toBeInTheDocument();
@@ -279,17 +279,17 @@ describe("他タブの入力状態(ADR-0308)を情報ページの往復で失わ
     await user.click(screen.getByRole("link", { name: "計算に戻る" }));
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(selected);
     await user.click(screen.getByRole("tab", { name: "逆算" }));
-    expect(screen.getByRole("textbox", { name: "観測1" })).toHaveValue("45");
+    expect(screen.getByRole("textbox", { name: "ダメージ1" })).toHaveValue("45");
   });
 
   test("/reverse → 情報ページ → ブラウザの戻る(popstate)でも逆算の入力が残る", async () => {
     const user = userEvent.setup();
     setPath("/reverse");
     render(<App engine={createFakeEngine()} />);
-    await user.type(await screen.findByRole("textbox", { name: "観測1" }), "45");
+    await user.type(await screen.findByRole("textbox", { name: "ダメージ1" }), "45");
     await user.click(footerLink());
 
     simulatePopState("/reverse");
-    expect(await screen.findByRole("textbox", { name: "観測1" })).toHaveValue("45");
+    expect(await screen.findByRole("textbox", { name: "ダメージ1" })).toHaveValue("45");
   });
 });

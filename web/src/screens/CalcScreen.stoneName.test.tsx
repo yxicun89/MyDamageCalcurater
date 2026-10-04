@@ -60,8 +60,8 @@ describe("メガストーンの固定表示", () => {
     await user.selectOptions(attackerSpeciesSelect(), MEGA_FIRE.key);
     await user.selectOptions(defenderSpeciesSelect(), MEGA_WATER.key);
 
-    expect(attackerItemSelect()).toHaveDisplayValue("テストほのおのメガストーン");
-    expect(defenderItemSelect()).toHaveDisplayValue("テストみずのメガストーン");
+    expect(attackerItemSelect()).toHaveDisplayValue("テストほのお専用のメガストーン");
+    expect(defenderItemSelect()).toHaveDisplayValue("テストみず専用のメガストーン");
   });
 });
 
@@ -79,7 +79,7 @@ describe("英語名のメガストーンを画面に出さない", () => {
     const rows = within(list).getAllByRole("listitem");
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
-      expect(within(row).getByText("テストほのおのメガストーン")).toBeVisible();
+      expect(within(row).getByText("テストほのお専用のメガストーン")).toBeVisible();
     }
     expect(document.body).not.toHaveTextContent(ENGLISH);
   });
@@ -101,7 +101,7 @@ describe("英語名のメガストーンを画面に出さない", () => {
     await user.selectOptions(attackerSpeciesSelect(), "9001-000");
     await user.selectOptions(defenderSpeciesSelect(), MEGA_FIRE.key);
 
-    const matches = await screen.findAllByText(/テストほのおのメガストーン/);
+    const matches = await screen.findAllByText(/テストほのお専用のメガストーン/);
     expect(matches.some((element) => element.closest('[role="status"]') !== null)).toBe(true);
     expect(document.body).not.toHaveTextContent(ENGLISH);
   });

@@ -1,7 +1,7 @@
 // I-web-2(ADR-0328): 逆算画面の技の選択肢(攻撃側になるほうの learnset)はダメージを与える技だけ。
 //   - オフライン・オンラインの両方で変化技が出ない。既定は最初のダメージ技
 //   - 変化技だけの種族: 選択肢0件・案内・逆算しない(status-move の案内は出ない)
-//   - 自分/相手のどちらの側を観測しても同じ(技の出どころが変わる)
+//   - 自分/相手のどちらの側をダメージしても同じ(技の出どころが変わる)
 
 import { act, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -52,7 +52,7 @@ afterEach(() => {
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const moveSelect = () => screen.getByRole("combobox", { name: "技" });
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 
 function optionIds(select: HTMLElement): string[] {
   return within(select)
@@ -74,7 +74,7 @@ describe("オフライン", () => {
     expect(moveSelect()).toHaveValue(expected[0]);
   });
 
-  test("観測した側を切り替えても、変化技は出ない", async () => {
+  test("ダメージした側を切り替えても、変化技は出ない", async () => {
     const user = userEvent.setup();
     render(<ReverseScreen engine={createFakeEngine()} master={master} />);
     await user.selectOptions(mySpeciesSelect(), mixed.key);
@@ -92,7 +92,7 @@ describe("オフライン", () => {
     const user = userEvent.setup();
     const engine = createFakeEngine();
     render(<ReverseScreen engine={engine} master={master} />);
-    // 技の出どころは観測の側で変わるので、両方を変化技だけの種族にして側に依らず0件にする。
+    // 技の出どころはダメージの側で変わるので、両方を変化技だけの種族にして側に依らず0件にする。
     await user.selectOptions(mySpeciesSelect(), statusOnly.key);
     await user.selectOptions(theirSpeciesSelect(), statusOnly.key);
 

@@ -212,7 +212,7 @@ describe("AC-2 一覧(マウント時に1回だけ読む)", () => {
 describe("AC-6 一覧が読めないときの立て直し", () => {
   test.each([
     ["サーバーのエラー", { code: "internal_error", message: "internal error" }],
-    ["Web 側の team_unavailable", { code: "team_unavailable", message: "構築の API に接続できません" }],
+    ["Web 側の team_unavailable", { code: "team_unavailable", message: "構築のサーバーに接続できません" }],
   ])("%s: role=alert に見出しと message を出し、[新しい構築] は使える", async (_name, error) => {
     const client = await renderWithListError(error);
 

@@ -43,7 +43,7 @@ const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポ
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const myAbilitySelect = () => screen.getByRole("combobox", { name: "自分の特性" });
 const theirAbilitySelect = () => screen.getByRole("combobox", { name: "相手の特性" });
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 
 function optionLabels(select: HTMLElement): string[] {
   return within(select)
@@ -80,9 +80,9 @@ async function choosePair(user: UserEvent, mine: MasterSpecies, theirs: MasterSp
   await user.selectOptions(theirSpeciesSelect(), theirs.key);
 }
 
-/** 観測に 45 を打ってデバウンスを終わらせる(calcReverse が呼ばれるところまで進める)。 */
+/** ダメージに 45 を打ってデバウンスを終わらせる(calcReverse が呼ばれるところまで進める)。 */
 async function observe(user: UserEvent): Promise<void> {
-  await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+  await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
   act(() => {
     vi.advanceTimersByTime(OBSERVATION_INPUT_DEBOUNCE_MS);
   });
@@ -240,7 +240,7 @@ describe("候補の特性の表示", () => {
   const adapt = "exampleabilityadapt";
 
   async function candidateCards(): Promise<HTMLElement[]> {
-    const list = await screen.findByRole("list", { name: "推定結果" });
+    const list = await screen.findByRole("list", { name: "考えられる振り方" });
     return within(list).getAllByRole("listitem");
   }
 

@@ -217,3 +217,5 @@ Next: 実装済み・コミット前。残りは PR 化のみ。iOS は `decisio
 Next(F-09 お気に入りの復元 / I-web-8): 実装済み・コミット前(ADR-0333 採用)。残りは PR 化のみ。Web は一括計算(bulk)で復元し、iOS は calcDamage(単発)で復元する差を `decisions/2026-10-04-web-favorite-calc-restore.md` に書いた。
 次は I-web-9(F-02 技の並び)。技の選択欄に、お気に入りの技を戻せなかったときの未選択の選択肢(`favoritesRestoreText.moveUnselectedOption`)を足した(F-02 で技の選択欄を触るときに残すこと)。
 Next(F-02 技の並び / I-web-9): 実装済み・コミット前(ADR-0335 採用)。残りは PR 化のみ。iOS は `decisions/2026-10-04-web-move-sort.md` の語・照合・保存に揃える。次は I-web-10(F-06 素早さ表)。
+Next(F-12 PR-2 残り画面 / I-web-12): 実装済み・コミット前(ADR-0336 採用)。残りは PR 化のみ。逆算・タイプバランス・お気に入り・このアプリについて・調整に共通クラス(`.ui-*`)を当てた(調整の「種類」は select のまま)。次は I-web-10(F-06 素早さ表)・I-web-11(F-13 文言)。
+Next(F-13 文言のやさしい言い換え / I-web-11): 実装済み・コミット前(ADR-0337 採用)。残りは PR 化のみ。用語集 `docs/glossary.md` を画面の言葉の正にした(判定画面 judge.ts は判定レーンの担当で例外)。iOS は `decisions/2026-10-04-web-plain-wording.md` の語に揃える。次は I-web-10(F-06 素早さ表)。

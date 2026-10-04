@@ -43,13 +43,13 @@ export function AboutScreen({
       <h2 ref={headingRef} tabIndex={-1} className="about__heading">
         {aboutText.pageHeading}
       </h2>
-      <section className="about__section">
+      <section className="ui-card about__section">
         <h3>{aboutText.unofficialHeading}</h3>
         <p>{aboutText.unofficialNotice}</p>
       </section>
-      <section className="about__section">
+      <section className="ui-card about__section">
         <h3>{aboutText.dataSourcesHeading}</h3>
-        <ul aria-label={aboutText.dataSourcesHeading} className="about__sources">
+        <ul aria-label={aboutText.dataSourcesHeading} className="ui-rows about__sources">
           {aboutText.dataSources.map((source) => (
             <li key={source.title}>
               <span className="about__source-title">{source.title}</span> {source.detail}
@@ -66,7 +66,7 @@ export function AboutScreen({
       )}
       <a
         href={backHref}
-        className="about__back"
+        className="ui-button ui-button--secondary about__back"
         onClick={(event) => {
           if (
             event.defaultPrevented ||
