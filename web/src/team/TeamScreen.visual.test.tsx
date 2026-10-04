@@ -1,7 +1,6 @@
-// F-12(I-web-6、ADR-0331 §3): 構築画面への共通部品の適用。
-// 新規作成・Showdown 取り込みの囲みはカード(ui-card)、主な操作は主ボタン、取り消し・名前の変更などは副ボタン、
-// 削除は危険ボタン。一覧は表のような行(ui-rows)、読み込み中・空・失敗は案内(ui-notice)。
-// ボタンの名前(「作成」「「<名前>」を削除」など)・役割・既存のクラスは変えない。
+// F-12(I-web-6、ADR-0331 §3)・F-08(ADR-0332 §4): 構築画面への共通部品の適用。
+// [新しい構築]の囲みはカード(ui-card)で主ボタン、取り消しなどは副ボタン、削除は危険ボタン。
+// 一覧の各構築はカード(ui-card。各カードの詳細は TeamScreen.rebuild.test.tsx R-2)、読み込み中・空・失敗は案内(ui-notice)。
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -44,17 +43,11 @@ async function renderWithTeams(teams: readonly Schemas["Team"][]): Promise<FakeT
 }
 
 describe("構築画面の見た目の部品", () => {
-  test("新規作成の囲みは ui-card、「作成」は主ボタン(名前は変えない)", () => {
+  test("[新しい構築]の囲みは ui-card で、主ボタン", () => {
     renderScreen();
     const create = screen.getByRole("button", { name: teamScreenText.createLabel });
     expect(create).toHaveClass("ui-button", "ui-button--primary");
     expect(create.closest(".team-screen__create")).toHaveClass("ui-card");
-  });
-
-  test("構築名の欄は ui-field の中にある(フォーカスリング・入力の角丸)", () => {
-    renderScreen();
-    const input = screen.getByRole("textbox", { name: teamScreenText.nameLabel });
-    expect(input.closest(".ui-field")).not.toBeNull();
   });
 
   test("読み込み中の案内は ui-notice ui-notice--loading", () => {
@@ -79,14 +72,11 @@ describe("構築画面の見た目の部品", () => {
     expect(alert).toHaveClass("ui-notice", "ui-notice--error", "team-screen__error");
   });
 
-  test("一覧は ui-rows。行の「名前を変更」は副ボタン、「削除」は危険ボタン", async () => {
+  test("一覧の各構築は ui-card。[削除]は危険ボタン(名前は「<名前>」を含む文)", async () => {
     await renderWithTeams([TEAM]);
     const list = screen.getByRole("list", { name: teamScreenText.listLabel });
-    expect(list).toHaveClass("ui-rows", "team-screen__list");
-    expect(screen.getByRole("button", { name: teamScreenText.renameLabel(TEAM.name) })).toHaveClass(
-      "ui-button",
-      "ui-button--secondary",
-    );
+    expect(list).toHaveClass("team-screen__list");
+    expect(within(list).getByRole("listitem")).toHaveClass("ui-card");
     expect(screen.getByRole("button", { name: teamScreenText.deleteLabel(TEAM.name) })).toHaveClass(
       "ui-button",
       "ui-button--danger",

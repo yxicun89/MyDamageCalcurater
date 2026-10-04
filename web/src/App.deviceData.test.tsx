@@ -162,7 +162,9 @@ describe("削除の実行", () => {
       expect(screen.queryByText("削除前の構築")).toBeNull();
     });
     expect(
-      await screen.findByText("保存した構築はまだありません。名前を付けて作成してください"),
+      await screen.findByText(
+        "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます",
+      ),
     ).toBeInTheDocument();
     expect(server.calls.filter((call) => call.method === "GET").length).toBeGreaterThan(listCallsBefore);
   });
