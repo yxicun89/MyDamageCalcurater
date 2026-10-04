@@ -128,3 +128,28 @@ test("トリックルーム(昇順の表)でもマーカーが境界の行と揃
   }
   expect(Math.abs(b.y - m.y)).toBeLessThan(2);
 });
+
+// F-12 のデザイン基盤が行の見た目を変えても、仮想スクロールの前提(行の実高さ = 計算した高さ、内容がはみ出さない)を保つ。
+test("段・境界の行の実高さが計算値(1行24px・余白16px)と一致し、内容がはみ出さない", async ({ page }) => {
+  await openWithSelf(page);
+  await page.getByRole("button", { name: "自分の位置へ移動" }).click();
+  await expect(page.getByTestId("speed-boundary")).toBeVisible();
+  const result = await page.getByTestId("speed-viewport").evaluate((viewport) => {
+    const rows = Array.from(viewport.querySelectorAll<HTMLElement>("li.speed-tier, li.speed-boundary"));
+    return rows.map((row) => ({
+      expected: Number.parseFloat(row.style.height),
+      actual: row.getBoundingClientRect().height,
+      overflow: row.scrollHeight > row.clientHeight,
+      entries: row.querySelectorAll("li.speed-entry").length,
+    }));
+  });
+  expect(result.length).toBeGreaterThan(0);
+  for (const row of result) {
+    expect(Math.abs(row.actual - row.expected)).toBeLessThan(1);
+    expect(row.overflow).toBe(false);
+    if (row.entries > 0) {
+      // 1行の段: 24px + 余白16px = 40px(枠から隙間8pxを引いた値)。
+      expect(row.expected).toBe(row.entries * 24 + 16);
+    }
+  }
+});

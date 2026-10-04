@@ -173,7 +173,15 @@
   object-fit: contain;
 }
 
+/* 1行固定(ADR-0608)。長い名前は省略記号で切り、全文は li の title で出す。 */
+.speed-entry__name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .speed-entry__preset {
+  flex: 0 0 auto;
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
 }

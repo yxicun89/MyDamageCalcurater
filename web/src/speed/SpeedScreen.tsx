@@ -793,6 +793,7 @@ function TierRow({ item, setSize }: TierRowProps) {
             key={`${entry.pokemonId}-${entry.preset}-${String(index)}`}
             className="speed-entry"
             data-testid="speed-entry"
+            title={`${entry.nameJa}${speedScreenText.entrySeparator}${speedPresetText[entry.preset]}`}
             style={{ height: ENTRY_HEIGHT }}
           >
             <PokemonImage
@@ -807,7 +808,7 @@ function TierRow({ item, setSize }: TierRowProps) {
                 />
               }
             />
-            <span>{entry.nameJa}</span>
+            <span className="speed-entry__name">{entry.nameJa}</span>
             <span className="speed-entry__preset">
               {speedScreenText.entrySeparator}
               {speedPresetText[entry.preset]}
