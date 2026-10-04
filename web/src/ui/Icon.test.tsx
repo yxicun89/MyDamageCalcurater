@@ -1,4 +1,4 @@
-// F-12(I-web-6、ADR-0331 §2): インライン SVG の小さなアイコン部品。外部の依存(アイコンフォント・ライブラリ)を入れない。
+// F-12(I-web-6、ADR-0334 §2): インライン SVG の小さなアイコン部品。外部の依存(アイコンフォント・ライブラリ)を入れない。
 // 装飾のアイコン(名前を渡さない)は支援技術から隠し(aria-hidden)、意味を持つアイコンだけ名前(role="img" + aria-label)を持つ。
 // 色は文字色に従う(currentColor)。色の直書きはしない(noColorLiterals.test.ts の対象でもある)。
 
@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { ICON_NAMES, Icon, type IconName } from "./Icon";
 
-/** ADR-0331 §2: タブ(画面)ごとのアイコン + このアプリについて + 未知の画面の既定 + 操作の小さなアイコン。 */
+/** ADR-0334 §2: タブ(画面)ごとのアイコン + このアプリについて + 未知の画面の既定 + 操作の小さなアイコン。 */
 const REQUIRED_ICONS: readonly IconName[] = [
   "calc",
   "reverse",
@@ -37,7 +37,7 @@ function svgOf(container: HTMLElement): SVGSVGElement {
 }
 
 describe("Icon", () => {
-  test("ADR-0331 のアイコンがそろっている(名前の重複なし)", () => {
+  test("ADR-0334 のアイコンがそろっている(名前の重複なし)", () => {
     expect(ICON_NAMES).toEqual(expect.arrayContaining([...REQUIRED_ICONS]));
     expect(new Set(ICON_NAMES).size).toBe(ICON_NAMES.length);
   });

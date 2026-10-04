@@ -1,7 +1,7 @@
 # ADR-0508: iOS のポケモン画像は「manifest にあれば AsyncImage、無ければタイプ色エンブレム」(P8-1c)
 
 - 状態: 採用(2026-10-03。spec-writer。実装は後続)
-- 関連: ADR-0807(gateway の `/images/*`・manifest の形。決定 3〜6)・ADR-0507(機能レジストリ・CoreServices)・ADR-0501(P8-1c の受け入れ条件章)・ADR-0002(公式画像を Git に入れない)・CLAUDE.md「画像は必須にしない」
+- 関連: ADR-0808(gateway の `/images/*`・manifest の形。決定 3〜6)・ADR-0507(機能レジストリ・CoreServices)・ADR-0501(P8-1c の受け入れ条件章)・ADR-0002(公式画像を Git に入れない)・CLAUDE.md「画像は必須にしない」
 
 ## 決定
 
@@ -12,7 +12,7 @@
    openapi・Generated には載せない(ADR-0807 決定 5)。
 2. **再取得の方針は「起動時1回・手動更新なし」**。成功も失敗も保持し、失敗しても再取得しない(画面を遅くしない・通信失敗のたびに待たせない)。
    manifest が変わった(`make assets` をやり直した)ときはアプリを再起動する。ハッシュ付きファイル名なので画像本体のキャッシュは URLSession 任せでよい。
-3. **X-Device-Id は付けない**(ADR-0807 決定 4。画像取得に端末 ID は不要。`<img>` が送れないのと同じ契約)。基点 URL は `AppConfiguration` の API の baseURL と同じ。
+3. **X-Device-Id は付けない**(ADR-0808 決定 4。画像取得に端末 ID は不要。`<img>` が送れないのと同じ契約)。基点 URL は `AppConfiguration` の API の baseURL と同じ。
    ATS の例外は足さない(http は非修飾ホスト名・`.local` のみ。P6-16)。API モードで基点が https/許可ホストなら画像 URL も同じ条件で通る。
 4. **注入は `CoreServices` に `images: any ImageCatalog` を1つ足す**。画像は複数の画面(計算・逆算・検索シート・タイプバランス・構築)が共有する「画面ではないもの」なので `FeatureServices` ではなく core。
    `.ready(core:features:)` の形は変えない。`CoreServices` の追加は既定値付き(`NoImageCatalog()`)にして既存の呼び出し(プレビュー・テスト)を壊さない。

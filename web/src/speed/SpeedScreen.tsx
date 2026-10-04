@@ -61,7 +61,7 @@ interface Completed<T> {
 }
 
 /** key が今の入力(currentKey)と一致する応答が届いていれば成功/失敗、まだなら loading にする。 */
-/** チップの見た目(ADR-0331)。選択・チェック中は ui-chip--selected を足す。 */
+/** チップの見た目(ADR-0334)。選択・チェック中は ui-chip--selected を足す。 */
 function chipClass(selected: boolean, extra?: string): string {
   return ["ui-chip", selected ? "ui-chip--selected" : "", extra ?? ""]
     .filter((part) => part !== "")

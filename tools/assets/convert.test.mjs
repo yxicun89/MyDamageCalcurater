@@ -1,4 +1,4 @@
-// P8-1(ADR-0807)の画像変換ツールのテスト。`node --test tools/assets/convert.test.mjs`。
+// P8-1(ADR-0808)の画像変換ツールのテスト。`node --test tools/assets/convert.test.mjs`。
 //
 // 入力はユーザーが手元に置く画像フォルダ。ここでは Docker・外部ネットワーク・実画像なしで走るよう、
 // 小さな架空の PNG をテスト内で生成する(zlib だけで作る。画像ライブラリに依存しない)。

@@ -9,7 +9,7 @@ describe("isCountedResponseFailure", () => {
     expect(isCountedResponseFailure(304, "/static/a.js")).toBe(false);
   });
 
-  test("/images/manifest.json の 404 だけは許容する(画像なし = エンブレム。ADR-0807)", () => {
+  test("/images/manifest.json の 404 だけは許容する(画像なし = エンブレム。ADR-0808)", () => {
     expect(isCountedResponseFailure(404, "/images/manifest.json")).toBe(false);
   });
 

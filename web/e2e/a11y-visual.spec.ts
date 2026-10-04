@@ -1,10 +1,10 @@
-// F-12(I-web-6、ADR-0331): ポップ・カラフルな見た目の基盤を当てた画面の a11y と「動き」の回帰。
+// F-12(I-web-6、ADR-0334): ポップ・カラフルな見た目の基盤を当てた画面の a11y と「動き」の回帰。
 // - axe(WCAG 2.x A/AA。色のコントラストを含む)で、計算・素早さ・構築をライト/ダークの両方で 0 件にする
 //   (計算はタイプ色のカード〈種族を選んだ状態〉も見る)。
 // - 常時動くアニメーションが無い(無限に繰り返す Animation が document に無い)。
 // - 「視差効果を減らす」(prefers-reduced-motion: reduce)では、ボタン・タブの transition が 0 秒になる。
 // a11y.spec.ts(キーボード操作)・a11y-about.spec.ts(/about)は変えずに残す。見た目の差分の画像比較は入れない
-// (不安定なため。画面の撮り方は ADR-0331「確認の手順」)。
+// (不安定なため。画面の撮り方は ADR-0334「確認の手順」)。
 
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
