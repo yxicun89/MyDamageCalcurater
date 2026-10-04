@@ -14,25 +14,38 @@ public struct APIJudgeService: JudgeService {
     private let client: Client
     private let identity: ClientIdentity
 
+    /// 組み立て済みの `Client` を使う(既存テスト用)。**この経路は未知の素早さの値を許容しない**(生成型の厳格な decode のまま。
+    /// 許容するのは `init(serverURL:transport:identity:)` と `init(baseURL:identity:)`。アプリは後者を使う。ADR-0512 §3)。
     public init(client: Client, identity: ClientIdentity) {
         self.client = client
         self.identity = identity
     }
 
+    /// 任意の transport で組み立てる(テスト用)。**応答の素早さの欄(`*SpeedApplied`・`*SpeedIgnored`)の未知の値を許容する**
+    /// ミドルウェア付きの `Client` を作る(ADR-0512 §3)。
+    public init(serverURL: URL, transport: any ClientTransport, identity: ClientIdentity) {
+        self.init(
+            client: Client(serverURL: serverURL, transport: transport, middlewares: [JudgeSpeedValueMiddleware()]),
+            identity: identity)
+    }
+
     /// `URLSession` の既定 transport で組み立てる(アプリは `PokeCalcJudgeAPI` を直接 import しない)。
     public init(baseURL: URL, identity: ClientIdentity) {
-        self.init(client: Client(serverURL: baseURL, transport: URLSessionTransport()), identity: identity)
+        self.init(serverURL: baseURL, transport: URLSessionTransport(), identity: identity)
     }
 
     public func outspeedAndKo(_ request: JudgeRequest) async throws -> JudgeResponse {
-        let output = try await send {
-            try await client.outspeedAndKo(.init(
-                headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
-                body: .json(Self.generatedRequest(request))))
+        let capture = JudgeSpeedValueCapture()
+        let output = try await JudgeSpeedValueCapture.$current.withValue(capture) {
+            try await send {
+                try await client.outspeedAndKo(.init(
+                    headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID),
+                    body: .json(Self.generatedRequest(request))))
+            }
         }
         switch output {
         case .ok(let ok):
-            return Self.domainResponse(try ok.body.json)
+            return Self.domainResponse(try ok.body.json, capture: capture)
         case .badRequest(let response):
             throw try Self.domainError(response.body.json)
         case .contentTooLarge(let response):
@@ -111,7 +124,8 @@ public struct APIJudgeService: JudgeService {
     private static func generatedIndividual(_ value: JudgeIndividual) -> Components.Schemas.Individual {
         .init(
             speciesKey: value.speciesKey, natureId: value.natureId, sp: generatedStats(value.sp),
-            ranks: value.ranks.map(generatedRanks), abilityId: value.abilityId, itemId: value.itemId)
+            ranks: value.ranks.map(generatedRanks), abilityId: value.abilityId, itemId: value.itemId,
+            status: value.status.flatMap { .init(rawValue: $0.rawValue) })
     }
 
     private static func generatedDefender(_ value: JudgeDefender) -> Components.Schemas.DefenderCandidate {
@@ -119,7 +133,7 @@ public struct APIJudgeService: JudgeService {
         return .init(
             speciesKey: individual.speciesKey, natureId: individual.natureId, sp: generatedStats(individual.sp),
             ranks: individual.ranks.map(generatedRanks), abilityId: individual.abilityId, itemId: individual.itemId,
-            moveId: .init(value1: value.moveId))
+            status: individual.status.flatMap { .init(rawValue: $0.rawValue) }, moveId: .init(value1: value.moveId))
     }
 
     private static func generatedRequest(_ request: JudgeRequest) -> Components.Schemas.OutspeedAndKoRequest {
@@ -144,7 +158,9 @@ public struct APIJudgeService: JudgeService {
             id: mark.id)
     }
 
-    private static func domainMatchup(_ value: Components.Schemas.Matchup) -> JudgeMatchup {
+    private static func domainMatchup(
+        _ value: Components.Schemas.Matchup, raw: JudgeSpeedValueCapture.Values?
+    ) -> JudgeMatchup {
         JudgeMatchup(
             defenderIndex: value.defenderIndex, outspeeds: value.outspeeds, speedTie: value.speedTie,
             attackerSpeed: value.attackerSpeed, defenderSpeed: value.defenderSpeed,
@@ -153,13 +169,18 @@ public struct APIJudgeService: JudgeService {
             attackerKo: domainKO(value.attackerKo.value1), defenderKo: domainKO(value.defenderKo.value1),
             attackerKoUnsupported: value.attackerKoUnsupported.map(domainMark),
             defenderKoUnsupported: value.defenderKoUnsupported.map(domainMark),
-            attackerSpeedApplied: value.attackerSpeedApplied.map(\.rawValue),
-            defenderSpeedApplied: value.defenderSpeedApplied.map(\.rawValue),
-            attackerSpeedIgnored: value.attackerSpeedIgnored.map(\.rawValue),
-            defenderSpeedIgnored: value.defenderSpeedIgnored.map(\.rawValue))
+            attackerSpeedApplied: raw?.attackerApplied ?? value.attackerSpeedApplied.map(\.rawValue),
+            defenderSpeedApplied: raw?.defenderApplied ?? value.defenderSpeedApplied.map(\.rawValue),
+            attackerSpeedIgnored: raw?.attackerIgnored ?? value.attackerSpeedIgnored.map(\.rawValue),
+            defenderSpeedIgnored: raw?.defenderIgnored ?? value.defenderSpeedIgnored.map(\.rawValue))
     }
 
-    private static func domainResponse(_ response: Components.Schemas.OutspeedAndKoResponse) -> JudgeResponse {
-        JudgeResponse(matchups: response.matchups.map(domainMatchup))
+    private static func domainResponse(
+        _ response: Components.Schemas.OutspeedAndKoResponse, capture: JudgeSpeedValueCapture
+    ) -> JudgeResponse {
+        JudgeResponse(
+            matchups: response.matchups.enumerated().map { position, matchup in
+                domainMatchup(matchup, raw: capture.values(at: position))
+            })
     }
 }

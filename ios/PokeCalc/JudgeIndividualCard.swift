@@ -26,6 +26,9 @@ struct JudgeIndividualCard: View {
             selectButton(
                 caption: JudgeLabels.item, value: itemName, id: "ItemButton", request: .option(.item),
                 lockReason: lockReason(for: viewModel.itemLock(for: target)))
+            selectButton(
+                caption: JudgeLabels.status, value: JudgeLabels.statusName(draft.status), id: "StatusButton",
+                request: .option(.status))
             selectButton(caption: JudgeLabels.move, value: moveName, id: "MoveButton", request: .move)
             spSection
             rankSection

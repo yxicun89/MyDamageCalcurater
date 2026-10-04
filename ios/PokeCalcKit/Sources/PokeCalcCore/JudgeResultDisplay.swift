@@ -38,13 +38,28 @@ public struct JudgeMatchupDisplay: Equatable, Identifiable, Sendable {
     public let attackerUnsupportedNote: String?
     /// 逆方向の同上。
     public let defenderUnsupportedNote: String?
+    /// 素早さに反映した補正の文(「自分の素早さに反映: ランク補正・追い風」)。空配列なら nil(出さない)。自分側(`attackerSpeedApplied`)。
+    /// 並びは応答のまま(並べ替えない)。ADR-0512。
+    public let attackerSpeedAppliedText: String?
+    /// 相手候補側(`defenderSpeedApplied`)。自分側と取り違えない。
+    public let defenderSpeedAppliedText: String?
+    /// 素早さに反映していない入力の文(「自分の素早さに特性・持ち物は反映していません」)。空配列なら nil。自分側(`attackerSpeedIgnored`)。
+    public let attackerSpeedIgnoredText: String?
+    /// 相手候補側(`defenderSpeedIgnored`)。
+    public let defenderSpeedIgnoredText: String?
 
     public init(
         defenderIndex: Int, candidateLabel: String, nameJa: String, primaryType: String?, speedText: String,
         priorityText: String, speedComparisonText: String, turnOrderText: String, attackerKoText: String,
         defenderKoText: String, attackerKoUnreliableText: String?, defenderKoUnreliableText: String?,
-        attackerUnsupportedNote: String?, defenderUnsupportedNote: String?
+        attackerUnsupportedNote: String?, defenderUnsupportedNote: String?,
+        attackerSpeedAppliedText: String? = nil, defenderSpeedAppliedText: String? = nil,
+        attackerSpeedIgnoredText: String? = nil, defenderSpeedIgnoredText: String? = nil
     ) {
+        self.attackerSpeedAppliedText = attackerSpeedAppliedText
+        self.defenderSpeedAppliedText = defenderSpeedAppliedText
+        self.attackerSpeedIgnoredText = attackerSpeedIgnoredText
+        self.defenderSpeedIgnoredText = defenderSpeedIgnoredText
         self.defenderIndex = defenderIndex
         self.candidateLabel = candidateLabel
         self.nameJa = nameJa
@@ -136,7 +151,20 @@ public enum JudgeResultDisplayBuilder {
             attackerUnsupportedNote: UnsupportedNoticeText.rowNote(forward, names: names)
                 .map(JudgeLabels.attackerKoUnsupportedNotice(detail:)),
             defenderUnsupportedNote: UnsupportedNoticeText.rowNote(reverse, names: names)
-                .map(JudgeLabels.defenderKoUnsupportedNotice(detail:)))
+                .map(JudgeLabels.defenderKoUnsupportedNotice(detail:)),
+            attackerSpeedAppliedText: appliedNote(JudgeLabels.speedSideSelf, matchup.attackerSpeedApplied),
+            defenderSpeedAppliedText: appliedNote(JudgeLabels.speedSideOpponent, matchup.defenderSpeedApplied),
+            attackerSpeedIgnoredText: ignoredNote(JudgeLabels.speedSideSelf, matchup.attackerSpeedIgnored),
+            defenderSpeedIgnoredText: ignoredNote(JudgeLabels.speedSideOpponent, matchup.defenderSpeedIgnored))
+    }
+
+    /// 空配列は nil(出さない)。並びは応答のまま。
+    private static func appliedNote(_ side: String, _ values: [String]) -> String? {
+        values.isEmpty ? nil : JudgeLabels.speedAppliedNote(side: side, names: values.map(JudgeLabels.speedFactorName))
+    }
+
+    private static func ignoredNote(_ side: String, _ values: [String]) -> String? {
+        values.isEmpty ? nil : JudgeLabels.speedIgnoredNote(side: side, names: values.map(JudgeLabels.speedIgnoredName))
     }
 
     /// `BulkRowDisplay.koText` と同じ規則(確率は小数第1位固定)。

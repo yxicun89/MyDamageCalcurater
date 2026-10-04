@@ -83,12 +83,15 @@ public struct JudgeDraft: Equatable, Sendable {
     public var abilityId: String?
     public var itemId: String?
     public var moveId: String?
+    /// 状態異常(既定 `.none`。選択は自分・候補ごと。要求には `none` を載せない。ADR-0512)。
+    public var status: JudgeStatus
 
     public init(
         speciesKey: String? = nil, natureId: String? = nil,
         sp: StatBlock = StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), ranks: RankBlock = RankBlock(),
-        abilityId: String? = nil, itemId: String? = nil, moveId: String? = nil
+        abilityId: String? = nil, itemId: String? = nil, moveId: String? = nil, status: JudgeStatus = .none
     ) {
+        self.status = status
         self.speciesKey = speciesKey
         self.natureId = natureId
         self.sp = sp
@@ -325,6 +328,11 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
 
     public func setAbility(_ abilityId: String?, for target: JudgeTarget) {
         update(target) { $0.abilityId = abilityId }
+    }
+
+    /// 状態異常を選ぶ(自分・候補ごと)。ADR-0512。
+    public func setStatus(_ status: JudgeStatus, for target: JudgeTarget) {
+        update(target) { $0.status = status }
     }
 
     public func setItem(_ itemId: String?, for target: JudgeTarget) {
@@ -621,7 +629,8 @@ public final class JudgeViewModel: MasterSpeciesSearchProviding, MasterMoveSearc
         guard let speciesKey = draft.speciesKey, let natureId = draft.natureId else { return nil }
         return JudgeIndividual(
             speciesKey: speciesKey, natureId: natureId, sp: draft.sp,
-            ranks: draft.ranks == RankBlock() ? nil : draft.ranks, abilityId: draft.abilityId, itemId: draft.itemId)
+            ranks: draft.ranks == RankBlock() ? nil : draft.ranks, abilityId: draft.abilityId, itemId: draft.itemId,
+            status: draft.status == .none ? nil : draft.status)
     }
 }
 

@@ -4443,3 +4443,71 @@ XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので
 - ステッパーのボタンは最小 37pt(36 ちょうどは丸め誤差で 35.99 になり不合格)。攻撃側と共有。
 
 - **既存テストの操作の追従(2026-10-04。防御側のランク)**: 防御側のランクの行を「詳細」の末尾に足したことで、画面の小さい機種(iPhone 17e)では既存の `CalcConditionsUITests.scrollUntilHittable` が上へスクロールし過ぎて上にある攻撃側のランクを通り越した(iPhone 18 Pro では通っていた)。上へのスクロールで届かないときだけ下へ戻る `swipeDown` を足した。最後の `XCTAssertTrue(target.isHittable)` は変えていない(検証は弱めていない)。両機種で `CalcConditionsUITests`・`CalcDefenderRanksUITests` が全件成功。
+
+## 判定の素早さ反映/無視と状態異常の受け入れ条件(2026-10-04。判定画面は ADR-0504、設計は ADR-0512、契約 v0.3.0 は ADR-0710・0712・0714。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+### 受け入れ条件(検証可能な形)
+
+1. **反映/無視の表示(行ごと・方向ごと)**: 各候補の行に、`attackerSpeedApplied` →「自分の素早さに反映: ランク補正・追い風」、`defenderSpeedApplied` →「相手の素早さに反映: …」、
+   `attackerSpeedIgnored` →「自分の素早さに特性は反映していません」、`defenderSpeedIgnored` →「相手の素早さに持ち物・天候は反映していません」を出す(Web の `judgeScreenText` と同じ語。区切りは「・」)。
+   自分側(attacker*)と相手候補側(defender*)を取り違えない。空配列の文は出さない(識別子も存在しない)。並びは応答のまま。行は `defenderIndex` で対応づける(応答が並び替わっていても他の行の値が混ざらない)。
+   値の文言: rank=ランク補正・tailwind=追い風・ability=特性・choiceScarf=こだわりスカーフ・item=持ち物・paralysis=まひ/abilityId=特性・itemId=持ち物・fieldWeather=天候。既存の行の表示は変わらない。
+2. **状態異常の入力**: 自分と各候補に「状態異常」ボタン(`judgeAttackerStatusButton`・`judgeCandidate<n>StatusButton`)。既定は「なし」。選択シートに7値(なし/やけど/まひ/どく/もうどく/ねむり/こおり。順は契約と同じ)が並び、
+   「未選択に戻す」行(`judgeOptionNone`)は無い。選ぶとシートが閉じてボタンに名前が出る。選択は自分・候補ごとに独立で、候補の削除では候補について行く。
+3. **送信規則**: `none`(既定)は要求に載せない(欄ごと省略・null も送らない)。選んだ値だけ契約の値(`badly_poison` はスネークケース)で、**その側にだけ**載せる(自分の値が候補に、候補の値が自分に載らない)。
+   状態異常を選ばない要求は従来と同じ本文・同じ `JudgeRequest`。状態異常だけでは送れない(検査は変わらない)。入力の編集で judge を呼ばない。
+4. **リセット**: 種族を変えても状態異常は残す。構築のメンバーを呼び出すと `none` に戻る。
+5. **未知の値で落ちない**: 応答の `*SpeedApplied`・`*SpeedIgnored` に契約の既知の値以外が来ても decode は失敗せず、文字列のまま・並べ替えずに運ぶ(他の欄・他の行・方向は正しく読める)。
+   画面は未知の値を「その他の補正」「その他の入力」と出す。欄が無い・配列でない・文字列でない要素・読めない本文は従来どおり decode エラー(厳格さを保つ)。並行の呼び出しで値が混ざらない。ErrorCode の未知値は従来どおり(decode エラー)。
+6. **契約同期**: `SpeedFactor`(6値)・`SpeedIgnoredInput`(3値)・要求の status(自分・候補とも7値)の生成 enum が、ドメイン・文言の対応表と一致する(増えたら落ちる=文言を足す合図)。
+7. **モック**: 既定・`marks` は4欄とも空。`speed-notes` は固定値(自分 Applied = 全行 [rank, tailwind]・自分 Ignored = 2番目の候補だけ [abilityId]・候補 Applied = 1番目だけ [choiceScarf]・候補 Ignored = 2番目だけ [itemId, fieldWeather])。
+   要求の状態異常がまひなら、その側の Applied の末尾に paralysis(自分なら全行、候補ならその候補の行だけ)。まひ以外は何も足さない。素早さ・確定数は既定と同じ。
+8. **画面(XCUITest)**: 上の 1〜4・7 を `speed-notes` のモックで確かめる。AX5 で状態異常のボタン・選択シート・結果の4つの文が横にはみ出さない。**iPhone 17e と iPhone 18 Pro の両方で通る**(スクロールは前方→届かなければ下へ戻る)。
+
+### 追加したテスト(2026-10-04 時点。実装は未着手)
+
+| ファイル | 件数 | 内容 |
+|---|---|---|
+| `ios/PokeCalcKit/Tests/PokeCalcCoreTests/JudgeViewModelStatusTests.swift` | 11 | 既定・7値の順・独立・範囲外・編集で呼ばない・種族変更で残る・候補削除で付いて行く・構築でリセット・none は送らない/本文不変・全値を自側だけに送る・検査不変 |
+| `.../JudgeLabelsSpeedNotesTests.swift` | 8 | 既知の値の文言・未知の値のフォールバック(大文字小文字も区別)・自分/相手・「・」区切り・反映/無視の文・状態異常の語・既存文言不変 |
+| `.../JudgeResultDisplaySpeedNotesTests.swift` | 8 | 空は nil・方向を取り違えない・片側だけ・並び保持・行ごと・index 引き・未知値・既存の表示不変 |
+| `.../JudgeContractSyncSpeedTests.swift` | 6 | SpeedFactor 6値・SpeedIgnoredInput 3値・全値に文言・status 7値(自分/候補)・状態異常の文言 |
+| `.../APIJudgeServiceStatusTests.swift` | 6 | nil は省略/null なし・全値を自分に/候補に・badly_poison・候補ごと・他の任意欄と並ぶ |
+| `.../APIJudgeServiceUnknownSpeedValuesTests.swift` | 13 | 未知の Applied/Ignored で落ちない・他の欄は読める・行/方向ごと・既知値・空・欄欠落/null/非配列/非文字列/本文不正は decode エラー・ErrorCode 未知値は従来どおり・要求不変・並行で混ざらない |
+| `.../MockJudgeServiceSpeedNotesTests.swift` | 6 | 環境変数・固定値・まひの付与(自分/候補/位置)・他の状態異常は足さない・他のシナリオは空・数値不変 |
+| `ios/PokeCalcUITests/JudgeSpeedNotesUITests.swift`(XCUITest・モック) | 8 | 状態異常の既定/シート/選択・自分と候補で独立・反映/無視の表示(行ごと・空は出さない)・既定は何も出ない・既存の値不変・候補のまひ/自分のまひが該当側の行だけに届く・まひ以外 |
+| `ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(追加メソッド2本) | 2 | AX5 で状態異常ボタン・反映/無視の4文・選択シートがはみ出さない |
+
+単体 58 件追加(`swift test` の新規 7 ファイル)。実装前の結果: 失敗 32・成功 26(成功は足場の既定値と同じ結果になるもの: 既定値・none 非送信・契約の値の集合・「厳格さを保つ」系・他シナリオの空)。
+全体は 1376 件中、新規の失敗 32 のみ(既存テストの失敗 0)。XCUITest 10 件は、実行は UI 実装後(下の「XCUITest の実装前結果」)。既存テスト・既存 identifier は1つも変えていない。
+
+### 実装者への注意
+
+- 足場(`TODO(implementer` を検索): `JudgeStatus`(完成。`JudgeIndividual.status`・`JudgeDraft.status`)、`JudgeViewModel.setStatus`(中身は空)と `individual(from:)`(status を渡す)、`JudgeLabels` の状態異常・素早さの文言(値は確定済み。中身は空)、
+  `JudgeMatchupDisplay` の4つの文(既定 nil。`JudgeResultDisplayBuilder.row` で埋める)、`MockJudgeService` の `.speedNotes`(環境値 `speed-notes`。固定値は上の条件 7)、
+  `APIJudgeService.init(serverURL:transport:identity:)`(足場は素の `Client`。ここでミドルウェアを付ける)。
+- 実装箇所: ① `APIJudgeService.generatedIndividual`/`generatedDefender` が `status` を `Components.Schemas.Individual.StatusPayload(rawValue:)` / `DefenderCandidate.StatusPayload(rawValue:)` で載せる(nil は載せない)。
+  ② ADR-0512 §3 のミドルウェア(判定専用。`init(baseURL:identity:)` も同じ経路にする。既存の `init(client:identity:)` は変えない=既存テストが使う)。`APIJudgeService.domainMatchup` は退避した生の文字列を使う。
+  退避は `@TaskLocal` の参照型(呼び出しごと)。**生成の `Client` は `Sendable` で共有されるので、ミドルウェアにインスタンスの可変状態を持たせない**(並行テストが検出する)。
+  ミドルウェアが触るのは 200 の JSON だけで、4配列が「文字列の配列」のときだけ退避して空配列にする。それ以外(欄なし・null・非配列・非文字列要素・JSON でない)は本文をそのまま渡し、生成の decode に落とさせる。
+  ③ `JudgeResultDisplayBuilder` が `JudgeLabels.speedAppliedNote`/`speedIgnoredNote` で4つの文を作る(空配列は nil)。④ View: `JudgeIndividualCard` に「状態異常」ボタン(持ち物の次。`selectButton` を再利用)、
+  `JudgeOptionKind.status`(シートの行は `JudgeStatus.allCases`・`judgeOptionNone` は出さない・選んだら `setStatus`)、`JudgeResultSection` の行に4つの文(識別子は ADR-0512 §6。空は出さない)。
+  結果の `.contain`(`judgeResult`)は子を2つ以上に保つ(子が1つだけの `.contain` は識別子を畳む)。文は行の `.contain` の中の個別の Text にする。
+- `MockJudgeService` の `.speedNotes` は行の位置 i から決まる値で、既存の素早さ・確定数の式は変えない。`JudgeMatchup`/`JudgeMatchupDisplay` の init は既定値付きなので既存の呼び出しは変わらない。
+- 画面の高さは機種で違う(iPhone 17e は小さい)。新しい XCUITest は前方スクロール後に下へ戻る操作を持つ。View を足したあと、**両機種**で `JudgeSpeedNotesUITests`・`LargeTextLayoutUITests` の追加2本・既存の `JudgeScreenUITests` を通す
+  (状態異常のボタンを足すと個体カードが伸びる。既存の `scrollUntilHittable` が通り越したら、操作だけ直す。検証は変えない)。
+- 完了条件: `swift test`・`make ios-test`(両機種の XCUITest を含む)・`make ios-gen-check`・`make ios-lint`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### XCUITest の実装前結果(2026-10-04。View 未実装)
+
+`JudgeSpeedNotesUITests` 8 件を iPhone 17e と iPhone 18 Pro の両方で実行: 各機種で失敗 6・成功 2(成功は `speed-notes` でない既定のシナリオで何も出ないことと、既存の行の値が変わらないこと)。失敗は状態異常のボタン・反映/無視の文が無いため。
+`LargeTextLayoutUITests` の追加 2 本はビルドのみ確認(実行は UI 実装後)。`make ios-gen-check`(生成物は契約と一致。再生成は不要)・`make ios-lint` は成功。
+
+### 実装結果(2026-10-04)
+
+- 単体: `swift test` 1376 件・失敗 0(新規 58 件を含む)。`make ios-lint`・`ios-gen-check`・`ios-check-request-limits` 成功。`xcodebuild build-for-testing` 成功。
+- XCUITest(iPhone 17e・iPhone 18 Pro の両方): `JudgeScreenUITests` 17 件・`JudgeSpeedNotesUITests` 8 件・`LargeTextLayoutUITests` の判定の AX5 追加 2 本、計 27 件ずつ全件成功(失敗 0)。テスト側の操作は変えていない。
+- 実装: `JudgeSpeedValueMiddleware`(判定専用の `ClientMiddleware`。200 の 4 配列を `@TaskLocal` の `JudgeSpeedValueCapture` へ生の文字列で退避し、生成型には空配列で渡す。ミドルウェア自身は状態を持たない。
+  4 配列が文字列の配列でない行は触らず従来どおり decode エラー)。`APIJudgeService` の `init(serverURL:transport:identity:)` と `init(baseURL:identity:)` が同じ経路でミドルウェア付きの `Client` を作る(`init(client:identity:)` は不変)。
+  `Package.swift` は変更なし(`HTTPTypes` は OpenAPIRuntime 経由で参照できる)。
+- 既存の `scrollUntilHittable` が状態異常ボタンの追加で通り越す問題は起きなかった(テストの操作変更なし)。

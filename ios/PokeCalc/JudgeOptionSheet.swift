@@ -2,17 +2,18 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// JudgeOptionSheet: 性格・特性・持ち物の選択シート(P6-25。ADR-0504 §4)。
-// `Menu` は使わない(中のボタンに identifier が付かない)。特性・持ち物は「未選択」に戻せる。性格は必須なので戻せない。
+// JudgeOptionSheet: 性格・特性・持ち物・状態異常の選択シート(P6-25。ADR-0504 §4)。
+// `Menu` は使わない(中のボタンに identifier が付かない)。特性・持ち物は「未選択」に戻せる。性格は必須なので戻せない。状態異常は「なし」が実の選択肢なので「未選択」行を出さない(ADR-0512)。
 
 enum JudgeOptionKind: String {
-    case nature, ability, item
+    case nature, ability, item, status
 
     var title: String {
         switch self {
         case .nature: return JudgeLabels.nature
         case .ability: return JudgeLabels.ability
         case .item: return JudgeLabels.item
+        case .status: return JudgeLabels.status
         }
     }
 }
@@ -29,6 +30,7 @@ struct JudgeOptionSheet: View {
         case .nature: return viewModel.natureOptions.map { ($0.id, $0.nameJa) }
         case .ability: return viewModel.abilityOptions(for: target).map { ($0.id, $0.nameJa) }
         case .item: return viewModel.selectableItemOptions(for: target).map { ($0.id, $0.nameJa) }
+        case .status: return JudgeStatus.allCases.map { ($0.rawValue, JudgeLabels.statusName($0)) }
         }
     }
 
@@ -38,13 +40,14 @@ struct JudgeOptionSheet: View {
         case .nature: return draft.natureId
         case .ability: return draft.abilityId
         case .item: return draft.itemId
+        case .status: return draft.status.rawValue
         }
     }
 
     var body: some View {
         NavigationStack {
             List {
-                if kind != .nature {
+                if kind == .ability || kind == .item {
                     Button {
                         choose(nil)
                     } label: {
@@ -87,6 +90,7 @@ struct JudgeOptionSheet: View {
         case .nature: viewModel.setNature(id, for: target)
         case .ability: viewModel.setAbility(id, for: target)
         case .item: viewModel.setItem(id, for: target)
+        case .status: viewModel.setStatus(id.flatMap(JudgeStatus.init(rawValue:)) ?? .none, for: target)
         }
         dismiss()
     }
