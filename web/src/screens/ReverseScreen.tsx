@@ -206,6 +206,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     abilitiesFor,
     movesFor,
     resolvedSpecies,
+    resolvedAbilities,
+    resolvedMoves,
     register: registerSpeciesResolution,
   } = useSpeciesResolutions();
   // P4-19(issue 110): 観測の上限に達した理由(role="status")の id。ボタンの aria-describedby から指す。
@@ -275,6 +277,12 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     [master.items, side, stoneIds],
   );
   // 結果の候補の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  // 未対応の印の名前引き用。オンラインのマスタは moves・abilities が空なので、解決済みの分を足す。
+  const markMoves = useMemo(() => [...master.moves, ...resolvedMoves], [master.moves, resolvedMoves]);
+  const markAbilities = useMemo(
+    () => [...master.abilities, ...resolvedAbilities],
+    [master.abilities, resolvedAbilities],
+  );
   const displayItems = useMemo(
     () => itemsWithStoneLabels(master.items, [mySpecies, theirsSpecies], stoneIds),
     [master.items, mySpecies, theirsSpecies, stoneIds],
@@ -841,8 +849,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       <ResultsSection
         outcome={outcome}
         items={displayItems}
-        moves={master.moves}
-        abilities={master.abilities}
+        moves={markMoves}
+        abilities={markAbilities}
         theirsHasAbilityChoice={theirsAbilityOptions.length > 1}
         narrowing={narrowing}
         onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
