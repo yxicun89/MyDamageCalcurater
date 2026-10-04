@@ -38,6 +38,10 @@ const (
 	KindItemExcluded     FindingKind = "item-excluded"
 	KindItemShowdownOnly FindingKind = "item-showdown-only"
 
+	// KindItemMegaStoneMismatch は、メガ種族が要求する持ち物なのに Showdown の megaStone が空のときの警告
+	// (判定は真のまま。止めない。ADR-0140)。ID は持ち物。
+	KindItemMegaStoneMismatch FindingKind = "item-mega-stone-mismatch"
+
 	KindSpeciesMismatch     FindingKind = "species-mismatch"
 	KindSpeciesShowdownOnly FindingKind = "species-showdown-only"
 	KindSpeciesExcluded     FindingKind = "species-excluded"

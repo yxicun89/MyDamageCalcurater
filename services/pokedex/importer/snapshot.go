@@ -152,6 +152,9 @@ type ShowdownItem struct {
 	IsNonstandard *string `json:"isNonstandard"`
 	// Hooks はその持ち物のデータオブジェクトが持つ、on で始まる関数のプロパティ名の昇順(無ければ空。ADR-0103 §6)。
 	Hooks []string `json:"hooks"`
+	// MegaStone は Showdown の Item.megaStone(基本種名 → メガ種族名)。ストーンでなければ空のオブジェクト。
+	// キーが無い(nil)古いスナップショットはデコードで拒否する(ADR-0140)。
+	MegaStone map[string]string `json:"megaStone"`
 }
 
 // ShowdownAbility は Showdown の特性1件。

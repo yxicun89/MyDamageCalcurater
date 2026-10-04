@@ -139,21 +139,21 @@ describe("メガ種族の固定中の表示", () => {
   test.each([
     ["自分", attackerRegion],
     ["相手の候補", () => candidate(1)],
-  ])("%s: 「{基本種名}のメガストーン」、理由は aria-describedby", async (_label, region) => {
+  ])("%s: マスタの nameJa(日本語名)、理由は aria-describedby", async (_label, region) => {
     const { user } = renderScreen();
     await user.selectOptions(speciesSelect(region()), MEGA.key);
 
     const item = itemSelect(region());
     expect(item).toBeDisabled();
     expect(item).toHaveValue(ROLE_MEGA_FIRE_STONE.id);
-    expect(item).toHaveDisplayValue("テストカソウドリのメガストーン");
+    expect(item).toHaveDisplayValue(ROLE_MEGA_FIRE_STONE.nameJa);
     expect(item).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
 
-  test("基本種名が無いメガ種族は「メガストーン」だけ", async () => {
+  test("基本種名が無いメガ種族でも、日本語の nameJa はそのまま(ADR-0328)", async () => {
     const { user } = renderScreen();
     await user.selectOptions(speciesSelect(attackerRegion()), MEGA_UNNAMED.key);
 
-    expect(itemSelect(attackerRegion())).toHaveDisplayValue("メガストーン");
+    expect(itemSelect(attackerRegion())).toHaveDisplayValue(ROLE_MEGA_FIRE_STONE.nameJa);
   });
 });

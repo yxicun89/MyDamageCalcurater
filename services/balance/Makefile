@@ -14,17 +14,21 @@ test: balance-test
 lint: balance-lint
 build: balance-build
 
+# 生成物は Git に置かない(ADR-0807)。出力が無いか入力が新しいときだけ生成する(ルート Makefile の GEN_STALE)。
 balance-gen:
-	@cd services && $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml
+	@if $(GEN_STALE) services/balance/internal/api/openapi.gen.go -- services/balance/api/openapi.yaml services/balance/internal/api/cfg.yaml services/go.mod; then \
+		(cd services && GOWORK=off $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml) && \
+		echo "balance-gen: services/balance/internal/api/openapi.gen.go を生成"; \
+	fi
 
-balance-test:
+balance-test: balance-gen
 	@cd $(BALANCE_DIR) && GOWORK=off $(GO) test ./...
 
-balance-lint:
+balance-lint: balance-gen
 	@test -z "$$(gofmt -l $(BALANCE_DIR))" || { gofmt -l $(BALANCE_DIR); exit 1; }
 	@cd $(BALANCE_DIR) && GOWORK=off $(GO) vet ./...
 
-balance-build:
+balance-build: balance-gen
 	@cd $(BALANCE_DIR) && GOWORK=off $(GO) build ./...
 
 balance-kustomize:
@@ -39,10 +43,12 @@ balance-gitops-template-check: balance-kustomize
 balance-gitops-check: balance-kustomize
 	@SERVICE=balance scripts/gitops/check-gitops.sh ready
 
-balance-docker-build:
+balance-docker-build: balance-gen
 	@docker build -t $(BALANCE_IMAGE) $(BALANCE_DIR)
 
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 balance-docker-push:
+	@$(MAKE) --no-print-directory balance-gen GEN_FORCE=1
 	@SERVICE=balance scripts/gitops/publish-image.sh
 
 balance-k3d-deploy: balance-docker-build ## k3d へ balance を直接デプロイ
@@ -58,13 +64,15 @@ balance-registry-apply:
 	@kubectl apply -k $(BALANCE_DIR)/deploy/local-registry
 	@kubectl -n balance-registry rollout status deployment/registry --timeout=120s
 
+# 公開用のイメージは手元の生成物の鮮度に頼らず、push の前に必ず作り直す(ADR-0807)
 balance-registry-push:
+	@$(MAKE) --no-print-directory balance-gen GEN_FORCE=1
 	@SERVICE=balance BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) scripts/gitops/local-registry-push.sh
 
 balance-argocd-app:
 	@SERVICE=balance scripts/gitops/argocd-local-app.sh
 
-balance-k3d-deploy-readmodel:
+balance-k3d-deploy-readmodel: balance-gen
 	@CLUSTER=$(CLUSTER) ./scripts/require-k3d-context.sh balance-k3d-deploy-readmodel
 	@SERVICE=balance BALANCE_IMAGE=$(BALANCE_IMAGE) CLUSTER=$(CLUSTER) scripts/gitops/k3d-deploy-readmodel.sh
 

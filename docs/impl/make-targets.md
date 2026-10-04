@@ -37,7 +37,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `test` | test-engine test-golden test-services test-tools test-scripts balance-test speed-test judge-test web-test | なし |
 | `lint` | speed-lint judge-lint web-lint balance-lint | あり(gofmt・vet(タグ付きも)・shell/Node の構文検査・`k8s-render`・`check-publishable`・`check-publishable-selftest`) |
 | `build` | speed-build judge-build web-build balance-build | あり(engine・services・tools の go build) |
-| `gen` | gen-go gen-sql gen-ts | なし |
+| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | なし |
 
 注意: `api-` ターゲット(calc・gateway)は `test`/`lint`/`build` に前提を足さない(ユニットテストは `test-services` に含まれる。`services/gateway/Makefile:1-6`)。iOS も含まれない(`ios-test` は別)。
 
@@ -49,10 +49,12 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 |---|---|---|---|
 | `help` | — | 全 Makefile の `## ` 付きターゲットを一覧表示 | なし |
 | `doctor` | — | `scripts/doctor.sh` | なし(読み取り/検査) |
-| `gen` | gen-go gen-sql gen-ts | (レシピなし) | なし(前提条件のみ) |
-| `gen-go` | — | oapi-codegen で `api/openapi.yaml` から Go サーバ/型を生成 | 生成物を書換 |
-| `gen-sql` | — | sqlc で pokedex の DB 行の型・クエリを生成 | 生成物を書換 |
-| `gen-ts` | — | openapi-typescript で web の型を生成(要 `make web-install`) | 生成物を書換 |
+| `gen` | gen-go gen-sql gen-ts balance-gen speed-gen judge-gen | (レシピなし)。生成物は Git に置かない(ADR-0807)。各 gen-* は出力が無いか入力が新しいときだけ生成(`scripts/ensure-gen.sh stale`)。強制は `GEN_FORCE=1` | なし(前提条件のみ) |
+| `gen-go` | — | oapi-codegen で `api/openapi.yaml` から Go サーバ/型を生成 | 生成物を書換(Git 管理外) |
+| `gen-sql` | — | sqlc で pokedex の DB 行の型・クエリを生成 | 生成物を書換(Git 管理外) |
+| `gen-ts` | web-deps | `cd web && npm run gen`(openapi-typescript で web の4つの `*.gen.ts` を生成。Web の pre* フックと同じ) | 生成物を書換(Git 管理外) |
+| `gen-clean` | — | `scripts/ensure-gen.sh list` の生成物(iOS を含む)と `ios/.gen-stamps` を削除 | 生成物を削除 |
+| `gen-go-all` | gen-go gen-sql balance-gen speed-gen judge-gen | (レシピなし)。Go をビルドするターゲット(`build`・`lint`・`test-services`・`staticcheck`・`test-db*`・`migrate-*`・`import*`・`e2e` 等)の前提。Web のイメージも作る `up`・`deploy-latest`・`dev` は TypeScript も含む `gen` が前提 | なし(前提条件のみ) |
 | `test` | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | — | `cd engine && go test ./...` | なし |
 | `test-services` | — | `cd services && go test ./...` | なし |
@@ -75,10 +77,10 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `db-local-up` | — | `scripts/db-local-up.sh` | docker で mysql:9.7.2 を 127.0.0.1:3306 に起動(既存なら start)。要 .env の MYSQL_ROOT_PASSWORD |
 | `tidb-local-up` | — | `scripts/tidb-local-up.sh` | tiup playground で TiDB を 127.0.0.1:4000 に起動し record・team の DB を作る |
 | `nats-local-up` | — | `scripts/nats-local-up.sh` | docker で NATS を 127.0.0.1:4222 に起動 |
-| `up` | — | `scripts/up.sh`(context が `k3d-$(CLUSTER)` でなければ中断。Secret は `kubectl create`) | **クラスタ作成+全 apply**、Secret 作成、イメージ build と import |
-| `deploy-latest` | — | `scripts/k3d-deploy-latest.sh`: migrate-up → pokedex・importer・calc・gateway・web・judge・balance・speed の入れ替え | **クラスタへ apply・Pod 再起動・DB migrate**(`make up` 済みが前提。context 検査あり)。read model が無いと balance・speed を飛ばして非0 |
+| `up` | gen | `scripts/up.sh`(context が `k3d-$(CLUSTER)` でなければ中断。Secret は `kubectl create`) | **クラスタ作成+全 apply**、Secret 作成、イメージ build と import |
+| `deploy-latest` | gen | `scripts/k3d-deploy-latest.sh`: migrate-up → pokedex・importer・calc・gateway・web・judge・balance・speed の入れ替え | **クラスタへ apply・Pod 再起動・DB migrate**(`make up` 済みが前提。context 検査あり)。read model が無いと balance・speed を飛ばして非0 |
 | `down` | — | `k3d cluster delete $(CLUSTER)` | **クラスタ削除**(PVC・Secret も消える。人間の確認) |
-| `dev` | — | `scripts/dev.sh` | calc/gateway をホストで常駐 |
+| `dev` | gen | `scripts/dev.sh` | calc/gateway をホストで常駐 |
 | `e2e` | — | `scripts/e2e.sh`: web-e2e・web-e2e-online・web-e2e-balance を常に実行し、kubectl の context が `k3d-$(CLUSTER)` のときだけ api-smoke・web-k3d-smoke・web-k3d-e2e も実行(ADR-0306)。`E2E_REQUIRE_K3D=1` で k3d が無ければ失敗 | chromium・vite preview・go run を一時起動 |
 | `wasm` | — | `scripts/wasm.sh` | web/public/engine.wasm・wasm_exec.js を生成(.gitignore 済み) |
 | `test-wasm` | wasm | `node scripts/wasm-conformance.mjs` | web/public に wasm を作り、node で Go との一致を検査 |
@@ -93,7 +95,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `k8s-render-kubectl` | — | kubectl が無ければ理由を出して失敗(`k8s-render` の前提) | なし |
 | `assets` | — | **未実装**。理由を出して終了コード 2 で終わる(画像の配信は計画外。issue #286) | なし |
 | `check-publishable` | — | `scripts/check-publishable.sh`(絶対パス・秘密・追跡禁止ファイル・第三者データ。ADR-0130) | なし(検査のみ) |
-| `check-publishable-full` | — | `scripts/check-publishable.sh --full` | `make gen` を実行し生成物の差分・Git 作者情報も検査(遅い) |
+| `check-publishable-full` | — | `scripts/check-publishable.sh --full` | `make gen` が成功し生成物が揃うこと・Git 作者情報も検査(遅い) |
 | `check-publishable-selftest` | — | `scripts/check-publishable.sh --self-test` | なし(違反を仕込んで検出を確認) |
 | `fmt` | — | `gofmt -w engine services tools` | ソース整形(書換) |
 | `tidy` | — | 全 Go モジュール(engine・services・tools・balance・speed・judge)の `go mod tidy` | go.mod/go.sum 書換 |
@@ -141,7 +143,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `test` | balance-test | (レシピなし) | なし(前提条件の追記のみ) |
 | `lint` | balance-lint | (レシピなし) | なし(前提条件の追記のみ) |
 | `build` | balance-build | (レシピなし) | なし(前提条件の追記のみ) |
-| `balance-gen` | — | `cd services && $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml` | 生成物を書換 |
+| `balance-gen` | — | 出力が無いか入力が新しいとき `cd services && $(GO) tool oapi-codegen -config balance/internal/api/cfg.yaml balance/api/openapi.yaml`(`balance-test`・`-lint`・`-build`・`-docker-*`・`-registry-push` の前提) | 生成物を書換(Git 管理外) |
 | `balance-test` | — | `cd $(BALANCE_DIR) && GOWORK=off $(GO) test ./...` | なし(読み取り/検査) |
 | `balance-lint` | — | `test -z "$$(gofmt -l $(BALANCE_DIR))" \|\| { gofmt -l $(BALANCE_DIR); exit 1; } ⏎ cd $(BALANCE_DIR) && GOWORK=off $(GO) vet ./...` | なし |
 | `balance-build` | — | `cd $(BALANCE_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
@@ -166,7 +168,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `test` | speed-test | (レシピなし) | なし(前提条件の追記のみ) |
 | `lint` | speed-lint | (レシピなし) | なし(前提条件の追記のみ) |
 | `build` | speed-build | (レシピなし) | なし(前提条件の追記のみ) |
-| `speed-gen` | — | `cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml` | 生成物を書換 |
+| `speed-gen` | — | 出力が無いか入力が新しいとき `cd services && $(GO) tool oapi-codegen -config speed/internal/api/cfg.yaml speed/api/openapi.yaml`(`speed-test`・`-lint`・`-build`・`-docker-*`・`-registry-push` の前提) | 生成物を書換(Git 管理外) |
 | `speed-test` | — | `cd $(SPEED_DIR) && GOWORK=off $(GO) test ./...` | なし(読み取り/検査) |
 | `speed-lint` | — | `test -z "$$(gofmt -l $(SPEED_DIR))" \|\| { gofmt -l $(SPEED_DIR); exit 1; } ⏎ cd $(SPEED_DIR) && GOWORK=off $(GO) vet ./...` | なし |
 | `speed-build` | — | `cd $(SPEED_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
@@ -189,7 +191,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `test` | judge-test | (レシピなし) | なし(前提条件の追記のみ) |
 | `lint` | judge-lint | (レシピなし) | なし(前提条件の追記のみ) |
 | `build` | judge-build | (レシピなし) | なし(前提条件の追記のみ) |
-| `judge-gen` | — | `cd services && $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml` | 生成物を書換 |
+| `judge-gen` | — | 出力が無いか入力が新しいとき `cd services && $(GO) tool oapi-codegen -config judge/internal/api/cfg.yaml judge/api/openapi.yaml`(`judge-test`・`-lint`・`-build`・`-docker-*`・`-registry-push` の前提) | 生成物を書換(Git 管理外) |
 | `judge-test` | — | `cd $(JUDGE_DIR) && GOWORK=off $(GO) test ./...` | なし(読み取り/検査) |
 | `judge-lint` | — | `test -z "$$(gofmt -l $(JUDGE_DIR))" \|\| { gofmt -l $(JUDGE_DIR); exit 1; } ⏎ cd $(JUDGE_DIR) && GOWORK=off $(GO) vet ./...` | なし |
 | `judge-build` | — | `cd $(JUDGE_DIR) && GOWORK=off $(GO) build ./...` | なし(読み取り/検査) |
@@ -202,9 +204,9 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 
 | ターゲット | 前提 | 実行内容(レシピ要約) | 副作用 |
 |---|---|---|---|
-| `ios-gen` | — | `./ios/scripts/openapi-gen.sh` | ios/PokeCalcKit/Sources/PokeCalcAPI/Generated を書換 |
-| `ios-gen-check` | — | `./ios/scripts/openapi-gen.sh --check` | なし(一時ディレクトリに生成して差分検査) |
-| `ios-test` | ios-lint ios-gen-check ios-test-unit ios-test-ui ios-check-infoplist | (レシピなし) | なし(前提条件のみ) |
+| `ios-gen` | — | `./ios/scripts/openapi-gen.sh`(`ios/scripts/openapi-targets.sh` の各対象。出力が無いか入力が新しいときだけ。強制は `GEN_FORCE=1`。ADR-0807) | `ios/PokeCalcKit/Sources/*/Generated` を書換(Git 管理外) |
+| `ios-gen-check` | — | `./ios/scripts/openapi-gen.sh --check` | なし(一時ディレクトリに生成して手元の生成物と差分検査) |
+| `ios-test` | ios-gen ios-lint ios-gen-check ios-check-request-limits ios-test-unit ios-test-ui ios-check-infoplist | (レシピなし)。他の `ios-*`(`ios-gen-check` を除く)も `ios-gen` を前提に持つ | なし(前提条件のみ) |
 | `ios-lint` | — | `for script in ios/scripts/*.sh; do bash -n "$$script" \|\| exit; done` | なし |
 | `ios-test-unit` | — | `cd ios/PokeCalcKit && ../scripts/run-xcode-tests.sh "ios-test-unit" \ ⏎ scheme PokeCalcKit-Package -destination "$(IOS_DESTINATION)"` | シミュレータ/xcodebuild |
 | `ios-test-ui` | — | `./ios/scripts/run-xcode-tests.sh "ios-test-ui" \ ⏎ project ios/PokeCalc.xcodeproj -scheme PokeCalc -destination "$(IOS_DESTINATION)"` | シミュレータ/xcodebuild |

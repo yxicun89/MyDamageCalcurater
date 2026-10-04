@@ -39,6 +39,44 @@ make import-dry-run
 ```
 確認: 最後の行が `import: -dry-run のため DB には投入しない`(終了コード0)。
 
+## 3a. 日本語名の無いものを上書きで補う(issue #607・ADR-0140)
+
+上流(PokeAPI の `ja-Hrkt`・`ja`)に日本語名が無い持ち物・特性・種族の姿は、推測で作らず英語名のまま取り込み、
+試運転の報告 `names.<種類>.fallbackIds` に ID を出す。日本語にしたいものだけ、上書きファイルで補う。
+
+- 場所: `data/local/name_ja_overrides.json`(**Git に入れない**。`data/local/` は .gitignore。実名をコミット・PR・issue に書かない)
+- 形: `schemaVersion` は 1。種類ごとのキーは `species`・`moves`・`items`・`abilities`・`types`・`natures`(使わない種類は省略してよい)。
+  各キーの中身は「報告の `fallbackIds` に出た ID → 日本語名」。未知のキー・値の空文字は取り込みが拒否する(終了コード3)。
+  どの行にも当たらない ID は警告 `override-unused` になる(打ち間違いに気づける)。上書きは上流の名前より優先する。
+
+```json
+{
+  "schemaVersion": 1,
+  "species": {"testleafalola": "テストリーフ(テストのすがた)"},
+  "items": {"testorb": "テストだま"}
+}
+```
+(上の ID・名前は架空。実際の ID は次の手順で出る一覧から写す。)
+
+残っている一覧を見る(試運転の後。DB には触らない)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make import-dry-run
+jq '.names | map_values(.fallbackIds)' data/generated/reports/latest.json
+```
+確認: 種類ごとに英語名のままの ID の配列が出る(無ければ `null`)。上書きを書いたら同じ2行を流し直し、その ID が消えて、
+`jq '.report.warnings | map(select(.kind == "override-unused"))' data/generated/reports/latest.json` が `[]` になる。
+
+k3d の CronJob に反映する(ConfigMap `pokedex-name-overrides` を作り直し、手動で1回流す)。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n pokecalc create configmap pokedex-name-overrides --from-file=name_ja_overrides.json=data/local/name_ja_overrides.json --dry-run=client -o yaml | kubectl apply -f -
+make import-k8s
+```
+確認: `configmap/pokedex-name-overrides configured`(初回は `created`)の後に Job 名が出る。Job が終わったら §5 で行を確かめる。
+
 ## 4. 投入する(k3d 上の CronJob を手動で1回流す)
 
 ```sh

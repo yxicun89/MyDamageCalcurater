@@ -13,7 +13,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
@@ -501,7 +501,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
       expect(moveSelect()).not.toBeDisabled();
     });
     // 名前・分類・威力まで解決できている(ID の羅列ではない)ことを、既存の表示規則ごと確かめる。
-    const expected = learnsetMoves(attacker, example.moves);
+    const expected = damagingLearnsetMoves(attacker, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
     for (const move of expected) {
@@ -655,7 +655,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
 
     await rendered.user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
 
-    const expected = learnsetMoves(defender, example.moves);
+    const expected = damagingLearnsetMoves(defender, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     await waitFor(() => {
       expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
@@ -667,7 +667,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい攻撃側の learnset から
     // 選ばれていることも確かめる(候補は useMemo で作り直されるが、選択中の値は別ロジックで更新されるため、
     // 候補一覧の検査だけでは resolveMoveId に渡す一覧の取り違えを見逃す)。
-    const beforeSwapAttackerOnlyMoves = learnsetMoves(attacker, example.moves).filter(
+    const beforeSwapAttackerOnlyMoves = damagingLearnsetMoves(attacker, example.moves).filter(
       (move) => !expected.some((defenderMove) => defenderMove.id === move.id),
     );
     expect(beforeSwapAttackerOnlyMoves.length).toBeGreaterThan(0);

@@ -257,7 +257,7 @@ export function TeamMemberFields({
       >
         <option value="">{teamMemberText.itemNone}</option>
         {itemLock.kind === "locked" && species !== null ? (
-          <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+          <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
         ) : (
           itemChoices.map((item) => (
             <option key={item.id} value={item.id}>

@@ -34,7 +34,6 @@ import {
   MEGA_FIRE_STONE,
   MEGA_FIRE_STONE_LABEL,
   MEGA_WATER,
-  MEGA_WATER_STONE,
   MEGA_WATER_STONE_LABEL,
 } from "../test/megaMaster";
 import { ReverseScreen } from "./ReverseScreen";
@@ -209,7 +208,7 @@ describe("相手の持ち物候補は、相手の側の役割の持ち物だけ"
 });
 
 describe("メガ種族の固定中の表示", () => {
-  test("自分: 欄は「{基本種名}のメガストーン」(ストーンの nameJa ではない)、理由は aria-describedby", async () => {
+  test("自分: 欄はストーンの nameJa、理由は aria-describedby", async () => {
     const { user } = renderScreen();
     await user.selectOptions(mySpeciesSelect(), MEGA_FIRE.key);
 
@@ -229,7 +228,7 @@ describe("メガ種族の固定中の表示", () => {
     expect(within(myCard()).queryByRole("status")).toBeNull();
   });
 
-  test("相手: カードの文は「持ち物: {基本種名}のメガストーン」", async () => {
+  test("相手: カードの文は「持ち物: {ストーンの nameJa}」", async () => {
     const { user } = renderScreen();
     await user.selectOptions(theirSpeciesSelect(), MEGA_WATER.key);
 
@@ -250,7 +249,6 @@ describe("結果の候補の行にメガストーンの英語名を出さない"
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(within(row).getByText(MEGA_WATER_STONE_LABEL)).toBeVisible();
-      expect(row).not.toHaveTextContent(MEGA_WATER_STONE.nameJa);
     }
   });
 });

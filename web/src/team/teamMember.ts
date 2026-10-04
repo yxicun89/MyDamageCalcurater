@@ -5,6 +5,7 @@
 
 import type { components } from "../api/openapi.gen";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL } from "../domain/requests";
+import { SP_DIGITS } from "../domain/spInput";
 import { itemIdAfterSpeciesChange, megaItemLock, isMegaSpecies } from "../domain/mega";
 import type { Ability, Item, StatKey } from "../engine/types";
 import type { MasterSpecies } from "../master/types";
@@ -52,9 +53,6 @@ export type MemberIssue =
 export type DraftResult =
   | { readonly ok: true; readonly member: Schemas["TeamMember"] }
   | { readonly ok: false; readonly issues: readonly MemberIssue[] };
-
-/** SP の入力として読める形(符号・小数点・指数・全角を含まない 10 進整数)。 */
-const SP_DIGITS = /^\d+$/;
 
 /** SP の6欄の文字列を検査する(空欄 = 0。整数で 0〜MAX_SP_PER_STAT、合計 MAX_SP_TOTAL 以下)。 */
 export function checkSpDraft(draft: Readonly<Record<StatKey, string>>): SpCheck {

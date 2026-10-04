@@ -15,11 +15,11 @@ export const SPECIES = {
  * 理由の文言は src/i18n/ja.ts の megaItemText.lockedReason(iOS と同じ語)。
  */
 export const MEGA = {
-  // lockedLabel: 固定中の持ち物欄の表示(ADR-0326。ストーンの nameJa ではなく「{基本種名}のメガストーン」)。
+  // lockedLabel: 固定中の持ち物欄の表示(ADR-0328。マスタのストーンの nameJa が日本語ならそのまま)。
   fire: {
     nameJa: "メガテストほのお",
     stoneNameJa: "テストほのおナイト",
-    lockedLabel: "テストほのおのメガストーン",
+    lockedLabel: "テストほのおナイト",
   },
   lockedReason: "メガシンカ: メガストーンを持ちます",
 } as const;

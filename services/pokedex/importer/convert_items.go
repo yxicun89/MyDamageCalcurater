@@ -1,5 +1,31 @@
 package importer
 
+// markMegaStones は持ち物の行の IsMegaStone を決める(ADR-0140)。真 ⇔ Showdown の megaStone が空でない
+// または取り込んだメガ種族の required_item_id に現れる。後者だけ(megaStone が空)なら食い違いの警告を返す。
+func markMegaStones(rows []NamedRow, sdItems []ShowdownItem, species []SpeciesRow) []Finding {
+	fromShowdown := map[string]bool{}
+	for _, it := range sdItems {
+		if len(it.MegaStone) > 0 {
+			fromShowdown[it.ID] = true
+		}
+	}
+	required := map[string]bool{}
+	for _, sp := range species {
+		if sp.IsMega && sp.RequiredItemID != "" {
+			required[sp.RequiredItemID] = true
+		}
+	}
+	var warnings []Finding
+	for i := range rows {
+		id := rows[i].ID
+		rows[i].IsMegaStone = fromShowdown[id] || required[id]
+		if required[id] && !fromShowdown[id] {
+			warnings = append(warnings, Finding{Kind: KindItemMegaStoneMismatch, ID: id})
+		}
+	}
+	return warnings
+}
+
 // 持ち物の集合(ADR-0101 §5 最終段落: 技と同じ規則)。
 // 両方にあり Showdown で使用可(isNonstandard が null)→ 取り込む(値の食い違いは無いので警告なし)。
 // Showdown だけで使用可 → 取り込むが item-showdown-only の警告。

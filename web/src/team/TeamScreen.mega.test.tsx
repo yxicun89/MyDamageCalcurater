@@ -386,3 +386,22 @@ describe("AC-8 非メガのメンバーは変わらない", () => {
     expect(itemSelect(first)).toHaveValue("");
   });
 });
+
+// ADR-0326 §4(ADR-0328 でも保つ): ストーンの nameJa が英語なら、持ち物欄・補正の通知のどちらにも英語名を出さない。
+describe("英語名のメガストーンを画面に出さない", () => {
+  test("古いデータを直した通知と持ち物欄は「{基本種名}のメガストーン」で、英語名はどこにも出ない", async () => {
+    const english: MasterData = {
+      ...master,
+      items: master.items.map((item) =>
+        item.id === MEGA_FIRE_STONE.id ? { ...item, nameJa: "Barbaracite" } : item,
+      ),
+    };
+    const { user } = await renderScreen([team([member(MEGA_FIRE.key, OTHER_ITEM_ID)])], { master: english });
+    const first = group(await openEditor(user, "テストメガ構築"), 1);
+
+    const fallback = "テストほのおのメガストーン";
+    expect(itemSelect(first)).toHaveDisplayValue(fallback);
+    notice(first, megaItemText.correctedNotice(fallback));
+    expect(document.body).not.toHaveTextContent("Barbaracite");
+  });
+});

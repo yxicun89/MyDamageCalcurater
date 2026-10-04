@@ -89,7 +89,9 @@ function correctionNoticeText(
     return null;
   }
   return correction.kind === "fixed"
-    ? megaItemText.correctedNotice(species === null ? itemRoleText.megaStoneUnnamed : megaStoneLabel(species))
+    ? megaItemText.correctedNotice(
+        species === null ? itemRoleText.megaStoneUnnamed : megaStoneLabel(species, correction.item.nameJa),
+      )
     : megaItemText.clearedNotice;
 }
 

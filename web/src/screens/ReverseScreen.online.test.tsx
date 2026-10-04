@@ -11,7 +11,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
-import { learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, learnsetMoves } from "../domain/moves";
 import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
@@ -248,7 +248,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
 
     await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
 
-    const expected = learnsetMoves(mine, example.moves);
+    const expected = damagingLearnsetMoves(mine, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     await waitFor(() => {
       expect(moveSelect()).not.toBeDisabled();
@@ -266,10 +266,10 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     await chooseBySearch(rendered, theirCard(), "相手のポケモン", theirs);
     await rendered.user.click(within(sideGroup()).getByRole("radio", { name: "受けたダメージ" }));
 
-    const expected = learnsetMoves(theirs, example.moves);
+    const expected = damagingLearnsetMoves(theirs, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     // 自分と相手の learnset の件数が同じだと「切り替わっていない」実装でも緑になるので、件数で区別できることを先に確かめる。
-    expect(expected.length).not.toBe(learnsetMoves(mine, example.moves).length);
+    expect(expected.length).not.toBe(damagingLearnsetMoves(mine, example.moves).length);
     await waitFor(() => {
       expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
     });
@@ -280,7 +280,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     // 作り直されるが、選択中の値の更新ロジックが古い側の key を参照したままだと、moveId が壊れて
     // (例: 空文字列)いても <select> の DOM 表示は先頭候補にフォールバックするため候補一覧の検査だけでは
     // 見逃す。実際に逆算を実行させ、送られたリクエストの技を直接検査する。
-    const mineOnlyMoveIds = learnsetMoves(mine, example.moves)
+    const mineOnlyMoveIds = damagingLearnsetMoves(mine, example.moves)
       .map((move) => move.id)
       .filter((id) => !expected.some((theirsMove) => theirsMove.id === id));
     expect(mineOnlyMoveIds.length).toBeGreaterThan(0);
@@ -309,7 +309,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     });
     const request = rendered.engine.reverseRequests.at(-1);
     expect(request?.known.species.key).toBe(mine.key);
-    expect(learnsetMoves(mine, example.moves).map((move) => move.id)).toContain(request?.move.id);
+    expect(damagingLearnsetMoves(mine, example.moves).map((move) => move.id)).toContain(request?.move.id);
   });
 
   test.each([MOVES_BATCH_MAX_IDS, MOVES_BATCH_MAX_IDS + 1, MOVES_BATCH_MAX_IDS * 2 + 1])(
