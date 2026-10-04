@@ -188,7 +188,9 @@ final class SpeedScreenUITests: XCTestCase {
         XCTAssertTrue(element(app, "speedResultSlower").exists)
         XCTAssertTrue(element(app, "speedResultNoTie").exists, "同速なし")
 
+        // 表は遅延描画(I-speed-2)なので、末尾の境界線は表の下までスクロールしてから現れる。
         let boundary = element(app, "speedBoundary")
+        for _ in 0..<(Self.maxScrolls * 2) where !boundary.exists { app.swipeUp() }
         wait(boundary, "境界線(speedBoundary)が出ない")
         XCTAssertTrue(elements(app, prefix: "speedTierSelf-").isEmpty, "自分と同じ段は無い")
         let lowestTierBottom = tierSpeeds(app).map(\.minY).max() ?? 0
@@ -200,6 +202,38 @@ final class SpeedScreenUITests: XCTestCase {
         enterRawValue(app, "0")
         wait(element(app, "speedRawValueError"), "範囲外のメッセージが出ない")
         XCTAssertFalse(element(app, "speedResultSpeed").exists, "範囲外は送らない(結果は出ない)")
+    }
+
+    // MARK: - 遅延描画と自分の位置(I-speed-2 / F-06。ADR-0517)
+
+    /// 表は画面付近の段だけを作る(全段を一度に生成しない)。総数は見出しの読み上げ「全N段」から読む。
+    func testTableRendersOnlyNearbyTiersAndReadsOutTheTotal() {
+        let app = launchSpeedScreen()
+        let position = element(app, "speedTablePosition")
+        scrollUntilHittable(app, position)
+        wait(position, "総段数の読み上げ(speedTablePosition)が無い")
+        let digits = position.label.drop { !$0.isNumber }.prefix { $0.isNumber }
+        let total = Int(digits) ?? 0
+        XCTAssertGreaterThan(total, 0, "総段数が読めない: \(position.label)")
+        waitForAny(app, prefix: "speedTier-", "表の段が出る")
+        XCTAssertLessThan(tierSpeeds(app).count, total, "遅延描画: 全 \(total) 段を一度に作らない")
+    }
+
+    /// 自分の行が画面外のとき「自分の位置へ」が出て、押すと自分の行(境界線)が見える。
+    func testJumpToSelfBringsTheSelfRowIntoView() {
+        let app = launchSpeedScreen()
+        enterRawValue(app, "1")
+        wait(element(app, "speedResultSpeed"), "結果の実数値が出ない")
+        // 表の見出しに着くまで少しずつ送る(送りすぎて自分の行が見えると、ボタンは出ない)。
+        let jump = element(app, "speedJumpToSelf")
+        for _ in 0..<Self.maxScrolls where !(jump.exists && jump.isHittable) {
+            app.swipeUp(velocity: .slow)
+        }
+        wait(jump, "自分の行が画面外なのに speedJumpToSelf が無い")
+        jump.tap()
+        let boundary = element(app, "speedBoundary")
+        wait(boundary, "移動後に自分の位置(speedBoundary)が描かれる")
+        XCTAssertTrue(boundary.isHittable, "移動後は自分の位置が画面内にある")
     }
 
     // MARK: - 自分のポケモン(preset)

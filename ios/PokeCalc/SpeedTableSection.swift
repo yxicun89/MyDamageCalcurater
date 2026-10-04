@@ -3,10 +3,15 @@ import PokeCalcDesign
 import SwiftUI
 
 // SpeedTableSection: 素早さの表(絞り込み・場の状態・段。P6-24。ADR-0503 §6・§7)。
-// 段は `LazyVStack` ではなく `VStack`(全段をアクセシビリティの木に出す)。段は `.contain` で子の識別子を飲み込ませない。
+// 段は `LazyVStack` で遅延描画する(I-speed-2 / F-06。ADR-0517。画面付近の段だけを作る)。段は `.contain` で子の識別子を飲み込ませない。
+// 全段は木に出ないので、総数と自分の位置は表の見出しの読み上げ(`speedTablePosition`)で補う。
 
 struct SpeedTableSection: View {
     let viewModel: SpeedViewModel
+    /// 行の id へスクロールする(外側の ScrollView の `ScrollViewProxy`。アニメーションしない)。
+    let scrollToRow: (String) -> Void
+    /// いま描かれている行の添字(`LazyVStack` の行の onAppear / onDisappear で更新)。
+    @State private var renderedRows: Set<Int> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
@@ -15,6 +20,7 @@ struct SpeedTableSection: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
             filterGroup
             fieldGroup
+            positionSummary
             tableBody
         }
         .padding(SpacingToken.x3)
@@ -55,6 +61,29 @@ struct SpeedTableSection: View {
         }
     }
 
+    /// 総段数と自分の位置の読み上げ。自分の行が画面外のときは、そこへ移るボタンを添える。
+    @ViewBuilder
+    private var positionSummary: some View {
+        let rows = viewModel.tableRows
+        if let summary = SpeedTableNavigation.summary(rows: rows) {
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                Text(summary)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .multilineTextAlignment(.leading)
+                    .accessibilityIdentifier("speedTablePosition")
+                if let selfIndex = SpeedTableNavigation.selfRowIndex(in: rows),
+                    let direction = SpeedTableNavigation.direction(selfIndex: selfIndex, visible: renderedRows),
+                    direction != .visible
+                {
+                    SpeedPill(
+                        title: SpeedTableNavigation.jumpLabel(direction), isSelected: false, identifier: "speedJumpToSelf"
+                    ) { scrollToRow(rows[selfIndex].id) }
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var tableBody: some View {
         switch viewModel.tableState {
@@ -66,12 +95,17 @@ struct SpeedTableSection: View {
         case .failed(let failure):
             ErrorBannerView(message: failure.message, identifier: "speedTableError")
         case .loaded:
-            VStack(alignment: .leading, spacing: SpacingToken.x2) {
-                ForEach(viewModel.tableRows) { row in
-                    switch row {
-                    case .tier(let tier): SpeedTierView(tier: tier)
-                    case .selfBoundary: SpeedBoundaryView()
+            LazyVStack(alignment: .leading, spacing: SpacingToken.x2) {
+                ForEach(Array(viewModel.tableRows.enumerated()), id: \.element.id) { index, row in
+                    Group {
+                        switch row {
+                        case .tier(let tier): SpeedTierView(tier: tier)
+                        case .selfBoundary: SpeedBoundaryView()
+                        }
                     }
+                    .id(row.id)
+                    .onAppear { renderedRows.insert(index) }
+                    .onDisappear { renderedRows.remove(index) }
                 }
             }
         }

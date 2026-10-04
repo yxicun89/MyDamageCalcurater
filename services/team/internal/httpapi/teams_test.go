@@ -105,8 +105,8 @@ func TestCreateTeamValidatesInput(t *testing.T) {
 		name string
 		req  map[string]any
 	}{
-		{"名前が空", teamJSON("")},
-		{"名前が空白だけ", teamJSON("   ")},
+		// ADR-0229: 名前の空・空白だけは 400 でなく既定名「名称未設定」で保存する(仕様変更。
+		// team_name_default_test.go の TestCreateTeamWithoutNameUsesDefaultName が固定する)。
 		{"名前が長すぎる(51文字)", teamJSON(longName)},
 		{"メンバーが7体", teamJSON("多すぎ", manyMembers...)},
 		{"技が5つ", teamJSON("技多すぎ", fiveMoves)},
@@ -149,8 +149,8 @@ func TestCreateTeamAcceptsBoundaryValues(t *testing.T) {
 	}
 }
 
-// 軽微3: 構築名ちょうど1文字・ニックネームちょうど24文字も通ること(落ちる側〈0文字・25文字〉は
-// TestCreateTeamValidatesInput が固定済み)。
+// 軽微3: 構築名ちょうど1文字・ニックネームちょうど24文字も通ること(落ちる側〈ニックネーム25文字〉は
+// TestCreateTeamValidatesInput が固定済み。構築名0文字は ADR-0229 で既定名になる〈team_name_default_test.go〉)。
 func TestCreateTeamAcceptsNameAndNicknameLowerBoundary(t *testing.T) {
 	m := memberJSON()
 	m["nickname"] = strings.Repeat("ね", maxNicknameRunes) // ちょうど24文字

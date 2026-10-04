@@ -804,12 +804,15 @@ paths:
       summary: 個体を1つお気に入りにする(ピン留め)
       description: |
         ピン留めした時点の個体を**スナップショットとして**保存する(計算イベントを参照しない。ADR-0209 §3 #3)。
+        任意の `calc` を付けると、その時点の計算の入力全体(`CalcRequest`)も一緒に保存し、一覧から選んで
+        そのまま `POST /api/calc` を呼べる(ADR-0228)。
         `id` と `createdAt` / `updatedAt` はサーバーが決める(要求に含めたら 400 `unknown_field`)。
 
         - **冪等**: この端末に同じ内容(`label` と、既定値を補った `individual`)のお気に入りがすでにあれば、
           新しく作らずにそれを **200** で返す(`updatedAt` だけ現在時刻に進むので一覧の先頭に来る)。
           新しく作ったときは **201**。二重送信で同じピンが2つにならない(ADR-0227 §2)。
         - 1端末が持てるお気に入りは **100件**まで。上限に達している端末からの(重複でない)作成は 400 `invalid_input`。
+        - 既定値を補った保存内容が 4096 バイトを超える作成は 400 `invalid_input`(ADR-0228 §3)。
         - `individual.speciesKey` などの ID はマスタと照合しない(record-svc は pokedex-svc に依存しない。
           存在しない ID でも保存できる。ADR-0227 §2・ADR-0213 §3 と同じ理由)。形式と範囲(SP・ランク・ラベルの長さ)は検証する。
       parameters:
@@ -912,6 +915,7 @@ paths:
       description: |
         `id` と `createdAt` / `updatedAt` はサーバーが決める(要求には含めない。含めたら 400 `unknown_field`)。
         1端末が持てる構築は **100件**まで。上限に達している端末からの作成は 400 `invalid_input`(ADR-0213 §2)。
+        `name` は省略できる。省略・空なら既定名「名称未設定」で保存する(ADR-0229)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -975,6 +979,7 @@ paths:
       description: |
         名前とメンバー全体を要求の内容で置き換える(部分更新・メンバー個別の更新は持たない。ADR-0213 §2)。
         `members` を省略した場合は「メンバーなし」に置き換わる(消し忘れではなく明示の置換として扱う)。
+        `name` を省略・空にした場合は既定名「名称未設定」に置き換わる(前の名前を残さない。ADR-0229)。
         この端末が持っていない `teamId` は 404 `not_found`(ADR-0209 §6-2)。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
@@ -2496,6 +2501,19 @@ components:
         `individual` はピン留めする個体で、計算 API の `Individual` と同じ形(そのまま計算の攻撃側・防御側に使える。
         生成型でも同じ型になるよう `$ref` だけで参照する)。SP(各 0..32・合計 66 以下)・ランク(-6..+6)・
         レベル(50)の範囲外と `speciesKey` の形式違いは 400 `invalid_input`。ID がマスタに実在するかは照合しない(ADR-0227 §2)。
+
+        `calc`(任意。ADR-0228)はピン留めした時点の**計算の入力全体**で、`POST /api/calc` の本文 `CalcRequest` と同じ形
+        (`$ref` だけで参照し、生成型も `CalcRequest` そのもの)。一覧から選んだらそのまま `POST /api/calc` に渡して結果を出せる。
+        - 省略・null は「計算の入力を持たない」従来のお気に入り(ADR-0227 の形。保存内容・重複判定は従来と同じ)。
+        - `individual` は従来どおり必須(一覧の表示と、`calc` を読まない旧クライアントのため)。新しいクライアントは
+          一覧に出したい側(通常は `calc.attacker`)を `individual` にも入れる。サーバーは両者の一致を求めない。
+        - `calc` の中は `individual` と同じ検証(SP・ランク・レベル・`speciesKey` の形式、列挙の未知の値は 400 `invalid_enum`)に加え、
+          `moveId` が空でないこと、`format` / `field.weather` / `field.terrain` の列挙を検証する。マスタとは照合しない。
+          契約に無いキーは `calc` の中も含めて 400 `unknown_field`。
+        - 冪等(同じ内容は 200)の「同じ内容」は `label`・既定値を補った `individual`・既定値を補った `calc` の組。
+          `calc` の有無・中身が違えば別のお気に入り。
+        - 既定値を補った保存内容(`label`・`individual`・`calc` の JSON)が **4096 バイト**を超える作成は 400 `invalid_input`
+          (`calc` の有無にかかわらず。正当な入力は 2KB に満たない。ADR-0228 §3)。
       required: [individual]
       properties:
         label:
@@ -2506,17 +2524,25 @@ components:
             任意の名前(例: 「HB特化」。文字数は Unicode コードポイントで数える)。空文字は null と同じ「未設定」として扱う。
             利用者の自由入力で個人を特定しうるため、**ログには出さない**(ADR-0209 §3)。
         individual: { $ref: '#/components/schemas/Individual' }
+        calc: { $ref: '#/components/schemas/CalcRequest' }
 
     Favorite:
       type: object
       description: |
         保存済みのお気に入り(ADR-0227)。`individual` は保存時に既定値を補った形(`level` は 50、`ranks` は6値すべて、
         `status` は `none`。`abilityId` / `itemId` / `teraType` は未指定〈null・省略〉ならキーごと省く)で返す。
+
+        `calc`(ADR-0228)は計算の入力を付けて保存したお気に入りだけが持ち、持たないものは**キーごと省く**(null を返さない)。
+        持つときは既定値を補った形で返す: `format` は必ず入り、`attacker` / `defender` は `individual` と同じ正規化、
+        `field` は `weather`・`terrain`・`attackerScreens`・`defenderScreens`(各3値)をすべて、`options` は `critical` を必ず持つ。
+        クライアントはこの値をそのまま `POST /api/calc` の本文にできる(マスタとは照合していないので、計算が
+        `unknown_move` 等で 400 になることはある。そのときは計算の失敗として表示する)。
       required: [id, label, individual, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/FavoriteId' }
         label: { type: string, nullable: true, maxLength: 30 }
         individual: { $ref: '#/components/schemas/Individual' }
+        calc: { $ref: '#/components/schemas/CalcRequest' }
         createdAt: { type: string, format: date-time }
         updatedAt:
           type: string
@@ -2571,13 +2597,17 @@ components:
       description: |
         構築の作成(`createTeam`)・置換(`updateTeam`)で送る内容。`id` / `createdAt` / `updatedAt` は
         サーバーが決めるので送らない(送ったら 400 `unknown_field`)。
-      required: [name]
+        `name` は省略できる(ADR-0229。構築名の入力欄を持たない画面のため)。
       properties:
         name:
           type: string
-          minLength: 1
+          nullable: true
           maxLength: 50
-          description: 構築名(前後の空白を除いて1文字以上。文字数は Unicode コードポイントで数える)
+          description: |
+            構築名(任意。文字数は前後の空白を除いて Unicode コードポイントで数え、50文字まで)。
+            省略・null・空文字・空白だけは「未設定」で、サーバーが既定名 **「名称未設定」** を入れて保存する
+            (応答の `Team.name` は常に1文字以上の文字列。ADR-0229)。`updateTeam`(丸ごと置換)で省略したときも既定名に置き換わる
+            (前の名前を残さない。`members` の省略と同じ扱い)。利用者の自由入力なので**ログには出さない**(ADR-0209 §3)。
         members:
           type: array
           description: パーティ(最大6体。省略・空配列は「メンバーなし」)
@@ -2591,7 +2621,11 @@ components:
       required: [id, name, members, createdAt, updatedAt]
       properties:
         id: { $ref: '#/components/schemas/TeamId' }
-        name: { type: string, minLength: 1, maxLength: 50 }
+        name:
+          type: string
+          minLength: 1
+          maxLength: 50
+          description: 構築名。入力で省略・空にしたものは既定名「名称未設定」が入る(常に1文字以上。ADR-0229)
         members:
           type: array
           items: { $ref: '#/components/schemas/TeamMember' }

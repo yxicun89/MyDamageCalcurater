@@ -52,3 +52,44 @@ describe("お気に入り API の生成型(ADR-0227)", () => {
     expectTypeOf<Del>().toHaveProperty(404);
   });
 });
+
+// ADR-0228(usability-round2 F-09): お気に入りに計算の入力全体(CalcRequest)を持たせる。
+// 一覧から選んだら calc をそのまま POST /api/calc の本文にする。calc の無い(旧い)お気に入りもあるので省略可。
+describe("お気に入りの calc(ADR-0228)", () => {
+  test("FavoriteInput.calc と Favorite.calc は CalcRequest そのもの(包む型を挟まない)で省略可", () => {
+    expectTypeOf<Schemas["FavoriteInput"]["calc"]>().toEqualTypeOf<Schemas["CalcRequest"] | undefined>();
+    expectTypeOf<Schemas["Favorite"]["calc"]>().toEqualTypeOf<Schemas["CalcRequest"] | undefined>();
+  });
+
+  test("individual は従来どおり必須(旧クライアントと一覧の表示のため)", () => {
+    expectTypeOf<Schemas["FavoriteInput"]["individual"]>().toEqualTypeOf<Schemas["Individual"]>();
+    expectTypeOf<Schemas["Favorite"]["individual"]>().toEqualTypeOf<Schemas["Individual"]>();
+  });
+
+  test("保存済みの calc はそのまま計算 API の本文として渡せる", () => {
+    type CalcBody = NonNullable<paths["/api/calc"]["post"]["requestBody"]>["content"]["application/json"];
+    expectTypeOf<NonNullable<Schemas["Favorite"]["calc"]>>().toEqualTypeOf<CalcBody>();
+
+    const attacker: Schemas["Individual"] = {
+      speciesKey: "9002-000",
+      level: 50,
+      natureId: "fake-nature",
+      sp: { hp: 0, atk: 32, def: 0, spa: 0, spd: 2, spe: 32 },
+    };
+    const input: Schemas["FavoriteInput"] = {
+      individual: attacker,
+      calc: {
+        format: "single",
+        attacker,
+        defender: {
+          speciesKey: "9003-000",
+          level: 50,
+          natureId: "fake-nature",
+          sp: { hp: 32, atk: 0, def: 32, spa: 0, spd: 2, spe: 0 },
+        },
+        moveId: "fake-move",
+      },
+    };
+    expect(input.calc?.moveId).toBe("fake-move");
+  });
+});
