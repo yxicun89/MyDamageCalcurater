@@ -175,7 +175,7 @@ async function saveAndSucceed(user: UserEvent, client: FakeTeamClient, editor: H
   const call = lastCall(client.updateCalls, "update");
   const saved: Schemas["Team"] = {
     id: call.args.teamId,
-    name: call.args.input.name,
+    name: call.args.input.name ?? "名称未設定", // 名前の省略はサーバーが既定名を補う(ADR-0229)
     members: call.args.input.members,
     createdAt: "2026-09-26T12:00:00Z",
     updatedAt: "2026-10-02T09:00:00Z",
