@@ -16,7 +16,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { resolveAttackerPreset } from "../domain/attackerPresets";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
@@ -201,7 +201,7 @@ describe("与えたダメージ(side defender)", () => {
     const options = within(moveSelect())
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(learnsetMoves(mine, master.moves).map((move) => move.id));
+    expect(options).toEqual(damagingLearnsetMoves(mine, master.moves).map((move) => move.id));
   });
 
   test("自分の調整(攻撃側プリセット)を選ぶと known の SP・性格に入る", async () => {
@@ -263,7 +263,7 @@ describe("受けたダメージ(side attacker)", () => {
     const options = within(moveSelect())
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(learnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
+    expect(options).toEqual(damagingLearnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
     await typeObservation(user, 1, "60");
 
     await waitFor(() => {
@@ -411,15 +411,14 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
     expect(lastRequest(engine).known.nature).toEqual({ plus: "def", minus: "atk" });
   });
 
-  test("変化技のときは選択肢が 無振り / H振り だけになり、選択は H振り に落ちる", async () => {
+  test("変化技は技の選択肢に無いので、選んだ防御側プリセットが H振り に落ちない(落とす規則は domain/defenderPresets.test.ts の「status のとき … → hp」。ADR-0328)", async () => {
     const { species: theirs, statusMove } = speciesWithStatusMove();
     const { user } = renderScreen();
     await chooseReceivedWithMove(user, theirs, moveOf(theirs, "physical"));
     await user.click(within(myPresetGroup()).getByRole("radio", { name: "HB特化" }));
 
-    await user.selectOptions(moveSelect(), statusMove.id);
-    expect(myPresetOptionLabels()).toEqual(["無振り", "H振り"]);
-    expect(within(myPresetGroup()).getByRole("radio", { name: "H振り" })).toBeChecked();
+    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(within(myPresetGroup()).getByRole("radio", { name: "HB特化" })).toBeChecked();
   });
 
   test("観測したダメージの側を切り替えると、自分の調整も攻撃側 ↔ 防御側で入れ替わる", async () => {
@@ -793,14 +792,16 @@ describe("結果の表示", () => {
     expect(screen.queryByText("B 1")).toBeNull();
   });
 
-  test("変化技を選ぶと「変化技はダメージを計算しません」を出し、engine を呼ばない", async () => {
+  test("変化技は技の選択肢に無く、変化技を覚える種族でも逆算が続く(ADR-0328。status-move の判定は domain/moves.statusMove.test.ts)", async () => {
     const { species, statusMove } = speciesWithStatusMove();
     const { user, engine } = renderScreen();
     await choosePair(user, species, speciesAt(1));
-    await user.selectOptions(moveSelect(), statusMove.id);
     await typeObservation(user, 1, "45");
-    expect(screen.getByText("変化技はダメージを計算しません")).toBeInTheDocument();
-    expect(engine.reverseRequests).toHaveLength(0);
+    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(screen.queryByText("変化技はダメージを計算しません")).toBeNull();
+    await waitFor(() => {
+      expect(engine.reverseRequests.length).toBeGreaterThan(0);
+    });
   });
 
   // P4-4 critic 指摘: CompletedCalc の比較(観測・プリセット・技・相手の種族)が古い候補を正しく消すことの確認。

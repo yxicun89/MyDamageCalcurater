@@ -32,7 +32,7 @@ import {
 } from "../domain/defenderPresets";
 import { ADJUST_ITEM_ROLE_FILTER, itemsForRole, itemsWithStoneLabels } from "../domain/itemRoles";
 import { megaStoneItemIds } from "../domain/mega";
-import { isDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, isDamagingMove } from "../domain/moves";
 import { BATTLE_LEVEL, MAX_SP_PER_STAT, MAX_SP_TOTAL, STAT_ORDER } from "../domain/requests";
 import { unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import {
@@ -297,7 +297,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch }: AdjustScree
           species.key,
           species.nameJa,
           species.types,
-          learnsetMoves(species, master.moves),
+          damagingLearnsetMoves(species, master.moves),
           master.abilities,
         );
   }

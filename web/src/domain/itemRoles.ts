@@ -93,13 +93,30 @@ export function itemAfterRoleChange(input: ItemAfterRoleChangeInput): ItemAfterR
   return { itemId: "", dropped: current };
 }
 
+const JAPANESE_CHARACTER = /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u;
+
 /**
- * メガ種族の固定中に持ち物欄へ出す名前(ADR-0175 §4)。baseSpeciesNameJa があれば「{基本種名}のメガストーン」、
- * null・省略・空白なら「メガストーン」(名前を推測しない。ストーンの nameJa は使わない)。
+ * メガストーンの表示名(ADR-0328)。マスタの nameJa がひらがな・カタカナ・漢字を1文字以上含めばそのまま返す
+ * (全角英数字だけ・英語・空・null は日本語として使えない)。使えないときは、基本種名があれば
+ * 「{基本種名}のメガストーン」、無ければ「メガストーン」(名前を推測しない)。
  */
-export function megaStoneLabel(species: MasterSpecies): string {
-  const name = species.baseSpeciesNameJa?.trim();
-  return name === undefined || name === "" ? itemRoleText.megaStoneUnnamed : itemRoleText.megaStoneOf(name);
+export function megaStoneDisplayName(
+  stoneNameJa: string | null | undefined,
+  baseSpeciesNameJa: string | null | undefined,
+): string {
+  const stoneName = stoneNameJa?.trim();
+  if (stoneName !== undefined && JAPANESE_CHARACTER.test(stoneName)) {
+    return stoneName;
+  }
+  const baseName = baseSpeciesNameJa?.trim();
+  return baseName === undefined || baseName === ""
+    ? itemRoleText.megaStoneUnnamed
+    : itemRoleText.megaStoneOf(baseName);
+}
+
+/** メガ種族の固定中に持ち物欄へ出す名前。stoneNameJa はその種族が必要とするメガストーンのマスタ名。 */
+export function megaStoneLabel(species: MasterSpecies, stoneNameJa?: string | null): string {
+  return megaStoneDisplayName(stoneNameJa, species.baseSpeciesNameJa);
 }
 
 /** engine・calc-svc に渡す持ち物の形(id・nameJa・effect だけ。境界は未知のフィールドを拒否する)。 */
@@ -111,9 +128,9 @@ export function toEngineItem(item: MasterItem): Item {
 }
 
 /**
- * 持ち物名を ID から引く表示用の一覧(結果の行・未対応の印)。メガストーンは nameJa を「{基本種名}のメガストーン」
- * (その ID を requiredItemId に持つ species の基本種名。引けなければ「メガストーン」)に差し替え、英語名を画面に出さない
- * (ADR-0326 §4)。ストーンが1つも無ければ同じ配列を返す。要求(engine)には使わない(表示専用)。
+ * 持ち物名を ID から引く表示用の一覧(結果の行・未対応の印)。メガストーンの nameJa は megaStoneDisplayName を通す
+ * (日本語名はそのまま、使えないときは、その ID を requiredItemId に持つ species の基本種名から「{基本種名}のメガストーン」、
+ * 引けなければ「メガストーン」。ADR-0328)。ストーンが1つも無ければ同じ配列を返す。要求(engine)には使わない(表示専用)。
  */
 export function itemsWithStoneLabels(
   items: readonly MasterItem[],
@@ -121,18 +138,18 @@ export function itemsWithStoneLabels(
   stoneIds?: ReadonlySet<string>,
 ): readonly MasterItem[] {
   const stones = stoneIds ?? new Set<string>();
-  const labels = new Map<string, string>();
+  const baseNames = new Map<string, string | null | undefined>();
   for (const candidate of species) {
     if (candidate?.isMega === true && candidate.requiredItemId != null) {
-      labels.set(candidate.requiredItemId, megaStoneLabel(candidate));
+      baseNames.set(candidate.requiredItemId, candidate.baseSpeciesNameJa);
     }
   }
-  if (!items.some((item) => isMegaStoneItem(item, stones) || labels.has(item.id))) {
+  if (!items.some((item) => isMegaStoneItem(item, stones) || baseNames.has(item.id))) {
     return items;
   }
   return items.map((item) =>
-    isMegaStoneItem(item, stones) || labels.has(item.id)
-      ? { ...item, nameJa: labels.get(item.id) ?? itemRoleText.megaStoneUnnamed }
+    isMegaStoneItem(item, stones) || baseNames.has(item.id)
+      ? { ...item, nameJa: megaStoneDisplayName(item.nameJa, baseNames.get(item.id)) }
       : item,
   );
 }

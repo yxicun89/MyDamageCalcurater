@@ -35,7 +35,7 @@ import {
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
 import { formatMoveCategory, formatPercentRange } from "../domain/format";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
 import {
   canAddObservation,
   defaultObservationUnit,
@@ -191,7 +191,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   if (species === null) {
     return "";
   }
-  if (learnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
+  if (damagingLearnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
     return currentMoveId;
   }
   return firstDamagingMove(species, moves)?.id ?? "";
@@ -320,7 +320,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     () =>
       moveSourceSpecies === null
         ? []
-        : learnsetMoves(moveSourceSpecies, movesFor(master.moves, moveSourceKey)),
+        : damagingLearnsetMoves(moveSourceSpecies, movesFor(master.moves, moveSourceKey)),
     [moveSourceSpecies, master.moves, moveSourceKey, movesFor],
   );
   // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または今の攻撃側の技の
@@ -571,7 +571,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       mySpecies === null ||
       theirsSpecies === null ||
       move === null ||
-      move.category === "status" ||
+      isStatusMove(move) ||
       requestHasInvalidObservation ||
       requestValidObservations.length === 0
     ) {
@@ -685,7 +685,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   let outcome: Outcome;
   if (mySpecies === null || theirsSpecies === null || move === null) {
     outcome = { status: "idle" };
-  } else if (move.category === "status") {
+  } else if (isStatusMove(move)) {
     outcome = { status: "status-move" };
   } else if (hasInvalidObservation) {
     outcome = { status: "invalid" };
@@ -790,6 +790,9 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
 
       <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!movesAvailable} />
       {!movesAvailable && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      {moveSourceSpecies !== null && capabilities.moves && moveOptions.length === 0 && (
+        <p className="reverse-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
+      )}
       {!capabilities.effects && (
         <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
       )}
@@ -963,7 +966,7 @@ function ReverseCard({
             >
               <option value="">{calcScreenText.noItemOption}</option>
               {itemLock.kind === "locked" && species !== null ? (
-                <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+                <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
               ) : (
                 items.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -984,7 +987,9 @@ function ReverseCard({
         <>
           <MegaItemReason id={itemReasonId} lock={itemLock} className="reverse-card__reason" />
           {itemLock.kind === "locked" && species !== null && (
-            <p className="reverse-card__reason">{megaItemText.fixedItemName(megaStoneLabel(species))}</p>
+            <p className="reverse-card__reason">
+              {megaItemText.fixedItemName(megaStoneLabel(species, itemLock.item.nameJa))}
+            </p>
           )}
         </>
       )}
