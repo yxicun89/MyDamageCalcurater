@@ -16,6 +16,7 @@ import { describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { attackerPresetLabel } from "../domain/attackerPresets";
 import { defenderPresetKeysFor, defenderPresetLabel } from "../domain/defenderPresets";
+import { unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import { REQUEST_ABORTED_CODE, type Ability, type Move } from "../engine/types";
 import { adjustErrorText, adjustScreenText, unsupportedText, type AdjustModeKey } from "../i18n/ja";
 import type { MasterData, MasterNature, MasterSpecies } from "../master/types";
@@ -822,14 +823,19 @@ describe("G4 結果の表示", () => {
   test("未対応の印を結果の先頭に1回出す", async () => {
     const { user, client } = renderScreen();
     await submitOutspeedAndKo(user);
+    const marks: Schemas["UnsupportedMark"][] = [
+      { target: "attacker_ability", reason: "unsupported_effect", id: ABILITY.id },
+    ];
     await respondBoth(
       client,
-      goalsResult({
-        goals: [outspeedOutcome(), damageOutcome("ko")],
-        unsupported: [{ target: "attacker_ability", reason: "unsupported_effect", id: ABILITY.id }],
-      }),
+      goalsResult({ goals: [outspeedOutcome(), damageOutcome("ko")], unsupported: marks }),
     );
-    expect(within(resultRegion()).getByText(unsupportedText.notice([ABILITY.nameJa]))).toBeVisible();
+    // 既存の全モードと同じ文言(unsupportedMarkLabels を通す)。
+    const notice = unsupportedText.notice(
+      unsupportedMarkLabels(marks, master.moves, master.items, master.abilities),
+    );
+    expect(notice).toContain(ABILITY.nameJa);
+    expect(within(resultRegion()).getByText(notice)).toBeVisible();
   });
 
   test("indices と goals の両方がそろうまで結果を出さない(計算中)", async () => {
