@@ -350,8 +350,14 @@ describe("G1 目標の追加・切り替え・外す", () => {
     expect(screen.getByRole("radio", { name: T.modeLabel.indices })).toBeChecked();
   });
 
-  test("無効(既定)なら「目標から振り方を決める」を出さない", () => {
+  // 段階 B(ADR-0177 §10)で既定を有効に改めた(ADR-0331 §2 の仕様の変更)。無効の経路は props で引き続き確かめる。
+  test("既定(ADJUST_GOALS_ENABLED)で「目標から振り方を決める」を出す", () => {
     render(<AdjustScreen adjustClient={createFakeAdjustClient()} master={master} />);
+    expect(screen.getByRole("radio", { name: T.modeLabel.goals })).toBeInTheDocument();
+  });
+
+  test("goalsEnabled={false} なら「目標から振り方を決める」を出さない", () => {
+    render(<AdjustScreen adjustClient={createFakeAdjustClient()} master={master} goalsEnabled={false} />);
     expect(screen.queryByRole("radio", { name: T.modeLabel.goals })).toBeNull();
   });
 

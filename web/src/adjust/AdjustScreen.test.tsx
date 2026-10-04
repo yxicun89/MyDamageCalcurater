@@ -1525,7 +1525,8 @@ describe("S9 a11y(docs/design.md「入力のラベル」・WCAG 2.2 SC 2.5.3 / 3
     }
   });
 
-  test("モードは「調整の内容」の radio group で、5つの選択肢を持つ", () => {
+  // 段階 B(ADR-0177 §10)で「目標から振り方を決める」を既定で出す(ADR-0331 §結果の仕様の変更。5 → 6 つ)。
+  test("モードは「調整の内容」の radio group で、6つの選択肢を持つ(先頭は目標から振り方を決める)", () => {
     renderScreen();
     const group = screen.getByRole("radiogroup", { name: T.modeGroupLabel });
     expect(
@@ -1533,6 +1534,7 @@ describe("S9 a11y(docs/design.md「入力のラベル」・WCAG 2.2 SC 2.5.3 / 3
         .getAllByRole("radio")
         .map((radio) => accessibleNameOf(radio)),
     ).toEqual([
+      T.modeLabel.goals,
       T.modeLabel.indices,
       T.modeLabel.bulk,
       T.modeLabel.offense,

@@ -656,9 +656,11 @@ paths:
           そのような効果の無い技ならランク 0 で比べる(エラーにしない。応答の `selfSpeedRank` が 0)。
         - `survive`: `opponent` の技 `moveId` を `hits` 発受けて耐える確率 ≥ `thresholdPercent`(min-sp-to-survive と同じ判定)。
         - `ko`: 自分の技 `moveId` で `opponent` を `hits` 発で倒す確率 ≥ `thresholdPercent`(min-sp-to-ko と同じ判定)。
-        - すべては満たせないときも 200 で `feasible: false` を返し、`plan` は最も近い組(選び方は engine の ADR)、
-          目標ごとの可否は `goals[i].met`。
-        - 未実装(ADR-0331 の段階 B。engine の拡張が先に要る)。calc-svc は実装まで 404 `not_found` を返す。
+        - すべては満たせないときも 200 で `feasible: false` を返し、`plan` は最も近い組、目標ごとの可否は `goals[i].met`。
+          最も近い組は「満たす目標の数が最大 → 前の目標ほど近い(素早さは自分の素早さ、耐える・倒すは確率)→ 合計 SP 小」
+          の順で選ぶ(**目標の順に意味がある**。ADR-0177 §5)。
+        - 検査順は 値域(goals の件数・hits・thresholdPercent・ceiling)→ 列挙(format・kind)→ 種類ごとの必須(survive・ko の
+          moveId・hits)→ ID の解決(ADR-0250 §5・ADR-0177 §9)。ステートレスで、計算イベントは発行しない。
       parameters:
         - $ref: '#/components/parameters/DeviceId'
         - $ref: '#/components/parameters/SessionId'
@@ -2214,7 +2216,7 @@ components:
         selfSpeed:
           type: integer
           nullable: true
-          description: outspeed で比べた自分の素早さ(plan の実数値に selfSpeedRank を掛けた値)。それ以外は null
+          description: outspeed で比べた自分の素早さ(plan の素早さの実数値に selfSpeedRank のランク補正を掛けた値)。それ以外は null
         opponentSpeed:
           type: integer
           nullable: true
@@ -2224,7 +2226,9 @@ components:
           nullable: true
           minimum: -6
           maximum: 6
-          description: outspeed で自分に掛けたランク(moveId の追加効果。技なし・効果なしは 0)。それ以外は null
+          description: |
+            outspeed で自分に掛けたランク = self.ranks.spe + moveId の追加効果(確率 100% の自分の素早さのランク変化)を
+            -6..6 に収めた値(技なし・効果なしなら self.ranks.spe。ADR-0177 §2)。それ以外は null
 
     AdjustGoalsResult:
       type: object

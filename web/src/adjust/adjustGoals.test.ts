@@ -97,8 +97,9 @@ describe("P4 定数", () => {
     expect(DEFAULT_KO_PRESET).toBe("none");
   });
 
-  test("段階 B(calc-svc の adjustGoals)が入るまでモードは出さない", () => {
-    expect(ADJUST_GOALS_ENABLED).toBe(false);
+  // 段階 B(calc-svc の adjustGoals。ADR-0177 §10)で有効にする(ADR-0331 §2 の仕様の変更)。
+  test("段階 B(calc-svc の adjustGoals)が入ったのでモードを出す", () => {
+    expect(ADJUST_GOALS_ENABLED).toBe(true);
   });
 });
 
