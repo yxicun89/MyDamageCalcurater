@@ -44,6 +44,17 @@ export const speedScreenText = {
   selfTierLabel: "自分と同速",
   /** 左の表で、自分の行が挟まる境界に引く印。 */
   selfBoundaryLabel: "ここに自分が入る",
+  /** F-06: 表のスクロール領域(キーボードの矢印・PageUp/Down でスクロールできる)の名前。 */
+  viewportLabel: "素早さの一覧(上下にスクロールできます)",
+  /** F-06: 段の一覧(リスト)の名前。画面外の段は描画しないが、総数は aria-setsize で伝える。 */
+  tiersListLabel: "素早さの段",
+  /** F-06: 自分の位置までスクロールするボタン。 */
+  jumpToSelfLabel: "自分の位置へ移動",
+  /** F-06: 左の該当行と同じ高さに置く、右の位置マーカーの文字(見た目だけ。aria-hidden)。 */
+  markerLabel: (speed: number): string => `自分 ${String(speed)}`,
+  /** F-06: マーカーの行が画面の上・下に外れているときの目印。 */
+  markerAboveHint: "↑",
+  markerBelowHint: "↓",
   /** 行の中の区切り(「名前・調整」)。 */
   entrySeparator: "・",
   // ---- 右(自分のポケモン)の入力(ADR-0604 §4) ----
