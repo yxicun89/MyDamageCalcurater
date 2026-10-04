@@ -16,7 +16,7 @@
 | 2 件とも **manual sync**(`syncPolicy` なし。`check-gitops.sh` が `automated:` を検出すると失敗) | `scripts/gitops/check-gitops.sh` |
 | 実クラスタの Application は `pokecalc-balance` の **1 件のみ**(OutOfSync / Healthy)。`pokecalc-speed` は未適用 | §7 |
 | ADR-0206 と CLAUDE.md は「Argo CD が main の `deploy/k8s/overlays/local` を見ている」と読める記述だが、**それを見る Application は Git にもクラスタにも無い** | §8 |
-| 未完了: P7-3 ArgoCD(`docs/plan.md:331`)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
+| 未完了: P7-3 ArgoCD(`docs/plan/m4.md` の P7-3)、クラウド側(overlay `cloud` に対応する Application・レジストリ・実データの配布) | §9 |
 
 ## 1. Argo CD 本体(どこで何のために動くか)
 
@@ -148,10 +148,10 @@ flowchart TD
 
 | 項目 | 状態 | 根拠 |
 |---|---|---|
-| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan.md:331` |
+| P7-3 ArgoCD(GitOps) | 未着手(`[ ]`) | `docs/plan/m4.md` の P7-3 |
 | damage 系(calc・gateway・web・pokedex・mysql)の Application | なし | §5 |
 | judge-svc の gitops overlay・Application・runbook | なし | §5 |
-| `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan.md:264-266` |
+| `pokecalc-speed` の実クラスタ適用・レジストリ push・sync | 未実施(人間確認待ち) | ADR-0605 §4、`docs/plan/speed.md` の SP5 |
 | 自動 sync・prune・selfHeal | 意図的に無効(TB0・SP5 の方針)。有効化は未決 | `docs/type-balance-design.md` §9・§11、`check-gitops.sh:44` |
 | ApplicationSet / AppProject / App-of-Apps | なし。Application 分割の方針は未決 | `docs/type-balance-design.md` §9・§11 |
 | Webhook・通知(notifications-controller は稼働のみ) | Git に設定なし | 該当ファイルなし(`git grep` で確認) |

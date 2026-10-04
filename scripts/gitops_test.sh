@@ -788,7 +788,7 @@ test_runbooks_no_manual_apply_with_argocd() {
   done
 }
 
-# 文書: ADR-0412(方式 a・speed の digest の扱い・取り合い対策)と、plan.md・speed の未配備表記(#237)。
+# 文書: ADR-0412(方式 a・speed の digest の扱い・取り合い対策)と、plan(docs/plan/)・speed の未配備表記(#237)。
 test_issue237_docs() {
   local adr f
   begin "ドキュメント: ADR-0412 と ADR-0018/0403/0605 の追記、plan.md の行、speed の digest の扱い(#237)"
@@ -800,7 +800,8 @@ test_issue237_docs() {
   for f in initContainer emptyDir pokedex-reader-dsn NetworkPolicy ConfigMap '#237'; do
     if grep -q -- "$f" "$adr"; then ok; else ng "ADR-0412 に「$f」の記述が無い"; fi
   done
-  if grep -q '#237' "$ROOT/docs/plan.md"; then ok; else ng "docs/plan.md に issue #237 の行が無い"; fi
+  # plan は区画ごとのファイルに分けた(ADR-0172)。索引と区画のファイルのどこかに行があればよい。
+  if grep -rq '#237' "$ROOT/docs/plan.md" "$ROOT/docs/plan"; then ok; else ng "docs/plan.md・docs/plan/ に issue #237 の行が無い"; fi
   # speed の digest: 実 digest か、placeholder のままなら「未配備」と speed-design・runbook・ADR に明示。
   if grep -q 'digest: sha256:0\{64\}' "$ROOT/services/speed/deploy/k8s/overlays/gitops/kustomization.yaml"; then
     for f in docs/speed-design.md docs/runbooks/speed.md "docs/adr/$(basename "$adr")"; do

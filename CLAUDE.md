@@ -8,7 +8,7 @@ Claude Code / Codex の手順対応は [docs/development-workflow.md](docs/devel
 
 ## 最初に読むもの(この順で)
 
-1. `docs/plan.md` — 進行状況とタスク。**作業の起点は常にここ**
+1. `docs/plan.md` と `docs/plan/` — 進行状況とタスク。**作業の起点は常にここ**
 2. `docs/requirements.md` — 要件の正
 3. `docs/test-strategy.md` — テストの正
 4. `docs/design.md` — 画面・ビジュアルの正
@@ -58,7 +58,7 @@ docs/                   # docs/history/ は役目を終えた起動指示(参照
 5. **計算はイベント保存に依存しない**。record/team/TiDB/NATSが落ちても計算APIは成功を返す
 6. **テストを消したり弱めたりして通さない**。期待値の変更は理由をコミットメッセージに書く
 7. 設計判断をしたら `docs/adr/` に1ファイル追加する
-8. 1タスク = 1コミット。`docs/plan.md` のチェックを更新してからコミット
+8. 1タスク = 1コミット。`docs/plan/` のチェックを更新してからコミット
 
 ## ドメイン規約
 
@@ -116,8 +116,8 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 | 4 | critic | opus | ルール違反・テスト漏れ・越境をレビュー。NGなら3へ(最大3回) |
 | 5 | (廃止) | ― | 外部 Codex レビューは**実行しない**(ユーザー指示 2026-09-21)。Codex の担当はタイプバランスチェッカー実装で、別ターミナルで並行して動く。`scripts/codex-review.sh` は残すが呼ばない |
 
-- 同じ失敗で3回ループしたら止まり、`docs/plan.md` の「ブロッカー」に書いて次のタスクへ
-- 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / plan.md 更新 / 必要ならADR
+- 同じ失敗で3回ループしたら止まり、`docs/plan/blockers/<レーン>.md` に書いて次のタスクへ
+- 完了条件: `make test` 成功 / engine 変更時は `make test-golden` 成功 / docs/plan/ 更新 / 必要ならADR
 - 改善要望は `/improve`、全体確認は `/verify`
 - 上表のモデルは既存 Claude agent 定義の割り当て。Codex のモデルへ機械的に置換しない
 - **各レーンのメインセッションは Sonnet で起動する**(`--model sonnet`)。設計の判断が重いときだけ `/model opus` に切り替え、終わったら戻す。サブエージェントは、spec-writer・critic を **engine・逆算・DB・API 契約に関わるときだけ Opus**(上表の既定)にし、文書・k8s・スクリプト・軽い修正では Agent の `model: "sonnet"` で呼ぶ。利用枠が厳しいときは M1 のレーン(データ・API・Web)を優先し、他のレーンは区切りで止める。Max プランの5時間の利用枠を複数レーンで使い切らないため(2026-09-22 ユーザー決定)
@@ -137,7 +137,7 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 
 ## 人間の確認が必要なこと(自動で進めない)
 
-質問するのは日中(8:00〜23:00 日本時間)だけ。深夜は質問せず plan.md のブロッカーに既定案付きで書いて作業を続ける(docs/ai-shared/COORDINATION.md「人間への質問」)。
+質問するのは日中(8:00〜23:00 日本時間)だけ。深夜は質問せず docs/plan/blockers/<レーン>.md に既定案付きで書いて作業を続ける(docs/ai-shared/COORDINATION.md「人間への質問」)。
 
 - Xcode の署名チームの設定と実機インストール
 - Codex / 外部サービスのログイン

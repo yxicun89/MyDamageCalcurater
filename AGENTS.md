@@ -2,7 +2,7 @@
 
 まず `CLAUDE.md` を読む。プロジェクトの絶対ルール・ドメイン規約・技術規約の正は
 `CLAUDE.md`、Git・役割分担・引き継ぎの共通運用はこのファイルとする。
-続いて `docs/plan.md`、`docs/requirements.md`、`docs/test-strategy.md`、
+続いて `docs/plan.md`(と `docs/plan/`)、`docs/requirements.md`、`docs/test-strategy.md`、
 `docs/design.md`、関連する `docs/adr/`、コードを書く・直す・レビューするときは `docs/coding-rules.md`(共通のコーディング規約)を読む。
 手順と Claude → Codex の対応は `docs/development-workflow.md` を参照。
 
@@ -31,7 +31,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - 依頼された範囲の最小変更に留め、無関係な整形、依存更新、大規模リファクタリングを混ぜない。
   レビューのみの依頼では変更しない。
 - コミットはメインエージェントが担当する。1タスク = 1コミットを基本とし、先に
-  `docs/plan.md` を更新する。直前に `git diff` と `git diff --cached` を確認し、
+  `docs/plan/` を更新する。直前に `git diff` と `git diff --cached` を確認し、
   対象ファイルを明示して stage する。無関係な既存変更を一括で取り込まない。
   作業ブランチへの push は区切りごとに行う。main へは PR 経由でのみ入れる(直接 push・直接 merge をしない。COORDINATION.md)。
   PR のマージは、`gh pr checks N` で CI が全件成功のときだけ、PR 番号を明示し `gh pr view N --json headRefOid -q .headRefOid` の SHA を `--match-head-commit` に付けて単独で `gh pr merge N` してよい(`--admin`・`gh api` でのマージは不可。
@@ -161,7 +161,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 - コマンドの終了コードだけで合格としない。対象テスト 0 件、`[no tests to run]`、
   未実装の echo ターゲット、レビューの skip は「未実施 / 未実装」と記録する。
 - 同じ失敗で 3 回修正を繰り返しても進まない場合、原因・試行・依存を
-  `docs/plan.md` のブロッカーに残し、依存しない許可済みタスクを進める。
-- 終了時は `docs/plan.md` に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
+  `docs/plan/blockers/<レーン>.md` に残し、依存しない許可済みタスクを進める。
+- 終了時は `docs/plan/` に実施内容・検証結果・残作業・既知の問題・次の開始点を残す。
   詳細は `docs/ai-shared/` のログ・状態に書き、別途の引き継ぎ資料は作らない。最終報告に変更点、
   ブランチ、実行した検証と未実施理由を示す。
