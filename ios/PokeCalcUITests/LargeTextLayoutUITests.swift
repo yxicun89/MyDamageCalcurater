@@ -355,6 +355,30 @@ final class LargeTextLayoutUITests: XCTestCase {
         }
     }
 
+    /// 防御側のランク(issue #274。ADR-0501「防御側のランクの受け入れ条件」)を AX5 で開いたとき、
+    /// 計算画面の「詳細」の防御側のランクが横にはみ出さず、ボタンがタップできる(`isHittable`)こと。
+    func testCalcScreenDefenderRankNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
+
+        let toggle = element(app, "calcConditionsToggle")
+        scrollUntilHittable(app, toggle, containerIdentifier: "calcScreen")
+        toggle.tap()
+        XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
+
+        let defenderRankIdentifiers = [
+            "calcDefenderRankValue",
+            "calcDefenderRankDecrement",
+            "calcDefenderRankIncrement",
+        ]
+        scrollUntilHittable(app, element(app, "calcDefenderRankIncrement"), containerIdentifier: "calcScreen")
+        assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + defenderRankIdentifiers)
+        for identifier in defenderRankIdentifiers {
+            XCTAssertTrue(element(app, identifier).isHittable, "AX5 でもタップできる: \(identifier)")
+        }
+    }
+
     /// P6-15 (3): 既定サイズで%表示(`calcResultPercent-*`)が `minimumScaleFactor` によって
     /// 不要に縮んでいないこと。`ResultRowView.percentRangeTextView` は `.lineLimit(1) +
     /// .minimumScaleFactor(0.7)`(`CalcScreenMetrics.compactMinimumScaleFactor`)を使っている

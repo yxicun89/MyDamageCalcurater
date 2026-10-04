@@ -130,6 +130,39 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         RankLabel.text(stat: attackerRankStat, value: attackerRank)
     }
 
+    // MARK: 防御側のランク(issue #274。ADR-0501「防御側のランクの受け入れ条件」)
+
+    /// 防御側のランク。画面で変えられるのは def と spd だけ(他は常に 0)。種族変更・攻守入れ替え・技の変更で消さない。
+    public private(set) var defenderRanks = RankBlock()
+
+    /// 防御側のステッパーが編集する能力(特殊技 = spd、物理・変化・技なし = def)。
+    public var defenderRankStat: StatKey {
+        (selectedMove?.category ?? .physical) == .special ? .spd : .def
+    }
+
+    /// `defenderRankStat` のいまのランク。
+    public var defenderRank: Int {
+        defenderRankStat == .spd ? defenderRanks.spd : defenderRanks.def
+    }
+
+    /// ステッパーの表示(「B +1」「D -2」「B ±0」)。
+    public var defenderRankText: String {
+        RankLabel.text(stat: defenderRankStat, value: defenderRank)
+    }
+
+    /// `defenderRankStat` のランクを `value`(-6..+6 に丸める)にする。値が変わるときだけ計算1回。
+    public func setDefenderRank(_ value: Int) async {
+        let clamped = min(RankLimits.max, max(RankLimits.min, value))
+        guard clamped != defenderRank else { return }
+        let token = beginInput()
+        if defenderRankStat == .spd {
+            defenderRanks.spd = clamped
+        } else {
+            defenderRanks.def = clamped
+        }
+        await recalculate(token: token)
+    }
+
     public func setCritical(_ isOn: Bool) async {
         guard isOn != isCritical else { return }
         let token = beginInput()
@@ -797,7 +830,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         return BulkCalcRequest(
             format: .single, attacker: attacker, defenderSpeciesKey: defenderSpeciesKey, moveId: moveId,
             field: field, critical: isCritical, presets: [], itemVariants: itemVariants,
-            defenderAbilityId: defenderAbilityId
+            defenderAbilityId: defenderAbilityId, defenderRanks: defenderRanks
         )
     }
 
