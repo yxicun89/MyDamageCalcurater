@@ -1,4 +1,4 @@
-// P5-5e(ADR-0321 §4): 構築1件を Showdown 形式で書き出す領域(構築の行の中)。API は呼ばない。
+// P5-5e(ADR-0321 §4・ADR-0332 §3): 構築1件を Showdown 形式で書き出す領域(編集画面の下の折りたたみの中)。API は呼ばない。
 // 名前の無い種族は resolveMasterForExport で必要な分だけ引く。クリップボードが使えなくても例外にせず、手動コピーを案内する。
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -21,6 +21,8 @@ interface OpenExport {
 
 export interface TeamShowdownExportProps {
   readonly team: Schemas["Team"];
+  /** ボタン・領域の名前に使う構築の表示名(team/teamName.ts)。 */
+  readonly name: string;
   readonly master: MasterData;
   readonly masterSearch?: MasterSpeciesSearch;
 }
@@ -31,7 +33,7 @@ function readClipboard(): Clipboard | undefined {
   return value === undefined || value === null ? undefined : (value as Clipboard);
 }
 
-export function TeamShowdownExport({ team, master, masterSearch }: TeamShowdownExportProps): ReactNode {
+export function TeamShowdownExport({ team, name, master, masterSearch }: TeamShowdownExportProps): ReactNode {
   const [open, setOpen] = useState<OpenExport | null>(null);
   const [busy, setBusy] = useState(false);
   const [copy, setCopy] = useState<CopyState>("idle");
@@ -102,20 +104,20 @@ export function TeamShowdownExport({ team, master, masterSearch }: TeamShowdownE
           void handleOpen();
         }}
       >
-        {teamShowdownText.exportLabel(team.name)}
+        {teamShowdownText.exportLabel(name)}
       </button>
       {empty && (
-        <span id={emptyNoticeId} className="team-screen__item-meta">
+        <span id={emptyNoticeId} className="team-showdown__empty">
           {teamShowdownText.exportEmptyNotice}
         </span>
       )}
       {current !== null && (
-        <section aria-label={teamShowdownText.exportRegionLabel(team.name)} className="team-showdown">
+        <section aria-label={teamShowdownText.exportRegionLabel(name)} className="team-showdown">
           <textarea
             ref={textareaRef}
             readOnly
             rows={10}
-            aria-label={teamShowdownText.exportTextLabel(team.name)}
+            aria-label={teamShowdownText.exportTextLabel(name)}
             value={current.text}
           />
           <div className="team-showdown__actions">

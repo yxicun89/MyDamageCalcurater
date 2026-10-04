@@ -41,12 +41,12 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(speedTab).toHaveAttribute("aria-selected", "true");
   await expect(balanceTab).toHaveAttribute("aria-selected", "false");
 
-  // P5-5 PR-A1: 構築(末尾)。team-svc に届かなくても、新規作成の入力は使える(ADR-0309 §4)。
+  // P5-5 PR-A1: 構築(末尾)。team-svc に届かなくても、[新しい構築]は押せる(ADR-0309 §4。構築名の欄は F-08 で廃止。ADR-0332)。
   await page.keyboard.press("ArrowRight");
   await expect(teamTab).toBeFocused();
   await expect(teamTab).toHaveAttribute("aria-selected", "true");
   await expect(speedTab).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("textbox", { name: "構築名", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "新しい構築", exact: true })).toBeVisible();
 
   // P5-3c: お気に入り(構築の次)。タブを選ぶだけで record API を呼んでよい(失敗は画面内の alert に留まる)。
   await page.keyboard.press("ArrowRight");

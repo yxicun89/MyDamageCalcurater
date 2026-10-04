@@ -1,25 +1,26 @@
 // P5-5e(ADR-0321): 構築画面の Showdown 形式の取り込み・書き出し UI。TeamClient は fake、マスタは例データ+架空のメガ(test/megaMaster.ts)。
 // 変換の純粋部は showdownFormat(ADR-0310)・取り込み計画は showdownImportPlan・名前引きのマスタは showdownMaster で別にテストする。
 //
+// F-08(ADR-0332)で、構築名を廃止し、取り込みは一覧の下の閉じた折りたたみの中、書き出しは編集画面の下の折りたたみの中へ移った。
+//
 // 受け入れ条件(AC):
-//  取り込み(領域「Showdown 形式から取り込む」。2段階: 内容を確認 → この内容で作成)
-//   I-1  貼り付けて構築名を入れ「内容を確認」を押すと、作成せず、取り込めるメンバー数(role="status")と問題の一覧を出す
-//   I-2  「この内容で作成」で teamClient.create({name, members}) が1回呼ばれる。成功で一覧の先頭に出て(メンバー数つき)、
-//        完了の role="status" を出し、入力欄(テキスト・名前)は空に戻り、その構築のメンバー編集を開ける
-//   I-3  構築名が空・51文字以上は create を呼ばず理由を出す(既存の構築作成と同じ検査・文言)
+//  取り込み(折りたたみ「Showdown 形式で取り込む」の中の領域「Showdown 形式から取り込む」。2段階: 内容を確認 → この内容で作成)
+//   I-1  貼り付けて「内容を確認」を押すと、作成せず、取り込めるメンバー数(role="status")と問題の一覧を出す
+//   I-2  「この内容で作成」で teamClient.create({members}) が1回呼ばれる(name キーは無い)。成功で一覧の先頭に「構築 N」で出て
+//        (メンバー数つき)、完了の role="status" を出し、入力欄は空に戻り、その構築のメンバー編集を開ける
 //   I-4  取り込めないメンバーがあっても、取り込める分だけで作る。問題の一覧に「何体目か」「理由(日本語)」「値」を出し、
 //        error があれば role="alert"、warning だけなら role="status"。コードの生の文字列は出さない
 //   I-5  空入力・全て落ちた場合は「取り込めるメンバーがいません」と問題を出し、「この内容で作成」は無効で create を呼ばない
 //   I-6  7体以上は6体だけ作り、too_many_members を出す
 //   I-7  メガ種族は持ち物を requiredItemId(ストーン)に直して create に渡し、補正を「取り込み時の補正」の一覧に出す。
 //        ストーンがマスタに無いメガは持ち物を空にして出す
-//   I-8  確認後にテキストか構築名を編集すると、作成は無効に戻り「内容を確認」し直すまで create できない(古いプレビューで作らない)
-//   I-9  create が失敗したら role="alert"(見出し+サーバーの message)。テキスト・名前は残り、もう一度作成できる
+//   I-8  確認後にテキストを編集すると、作成は無効に戻り「内容を確認」し直すまで create できない(古いプレビューで作らない)
+//   I-9  create が失敗したら role="alert"(見出し+サーバーの message)。テキストは残り、もう一度作成できる
 //   I-10 送信中の二重クリックで create は1回だけ
 //   I-11 一覧の無いマスタ(オンライン相当・speciesList=false)でも、masterSearch で種族・特性・技を引いて取り込める(メガ補正も効く)。
 //        masterSearch が無いと種族は解決できず、問題を出して作らない
-//   I-12 a11y: テキスト欄・名前欄は label で引ける。確認中は role="status" で「名前を確認しています」を出し、確認ボタンを無効にする
-//  書き出し(構築の行に「「名前」を Showdown 形式で書き出す」)
+//   I-12 a11y: テキスト欄は label で引ける。確認中は role="status" で「名前を確認しています」を出し、確認ボタンを無効にする
+//  書き出し(編集画面の下の折りたたみ「Showdown 形式で書き出す」の中に「「名前」を Showdown 形式で書き出す」)
 //   E-1  押すと、読み取り専用の textarea(名前は「「名前」の書き出しテキスト」)に exportShowdownTeam の text を出し、textarea にフォーカスする。
 //        API(create/update/get)は呼ばない
 //   E-2  「コピー」で navigator.clipboard.writeText(text)。成功で role="status" 「コピーしました」
@@ -27,7 +28,7 @@
 //   E-4  メンバー0体の構築は書き出しボタンが無効で、理由「メンバーがいないので書き出せません」が見える(aria-describedby)
 //   E-5  書き出せなかった項目(マスタに名前が無い等)は ID を出さず、「書き出しの問題」の一覧に出す
 //   E-6  一覧の無いマスタ(オンライン相当)でも masterSearch で種族名を引いて書き出せる(ID を出さない)
-//   E-7  「書き出しを閉じる」で領域が消える。書き出しの textarea は構築ごとに独立(2つ同時に開いても取り違えない)
+//   E-7  「書き出しを閉じる」で領域が消える。構築を切り替えると、書き出しの内容も切り替わる(編集は1構築ずつ)
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -41,6 +42,7 @@ import { MEGA_FIRE, MEGA_FIRE_STONE, MEGA_ORPHAN, withMegaFixture } from "../tes
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
 import { exportShowdownTeam, type ShowdownIssue } from "./showdownFormat";
 import { TeamScreen } from "./TeamScreen";
+import { SERVER_DEFAULT_TEAM_NAME } from "./teamName";
 
 type Schemas = components["schemas"];
 
@@ -115,17 +117,23 @@ function importRegion(): HTMLElement {
   return screen.getByRole("region", { name: teamShowdownText.importRegionLabel });
 }
 
-async function fillImport(user: UserEvent, text: string, name: string | null): Promise<void> {
-  const region = importRegion();
-  const textbox = within(region).getByRole("textbox", { name: teamShowdownText.importTextLabel });
+/** 一覧の下の取り込みの折りたたみを開く(閉じていれば)。 */
+async function openImportFold(user: UserEvent): Promise<void> {
+  const details = screen.getByText(teamShowdownText.importFoldLabel).closest("details");
+  if (details === null) {
+    throw new Error("取り込みの折りたたみ(details)が無い");
+  }
+  if (!details.open) {
+    await user.click(screen.getByText(teamShowdownText.importFoldLabel));
+  }
+}
+
+async function fillImport(user: UserEvent, text: string): Promise<void> {
+  await openImportFold(user);
+  const textbox = within(importRegion()).getByRole("textbox", { name: teamShowdownText.importTextLabel });
   await user.click(textbox);
   if (text !== "") {
     await user.paste(text);
-  }
-  const nameBox = within(region).getByRole("textbox", { name: teamShowdownText.importNameLabel });
-  if (name !== null) {
-    await user.clear(nameBox);
-    await user.type(nameBox, name);
   }
 }
 
@@ -155,9 +163,9 @@ const VALID_ISSUE_ANY: ShowdownIssue = {
 };
 
 describe("I-1・I-2 取り込み(2段階)", () => {
-  test("確認では作成せず、取り込めるメンバー数を role=status で出す。作成で create が1回、成功すると一覧に出て入力が空に戻る", async () => {
+  test("確認では作成せず、取り込めるメンバー数を role=status で出す。作成で create が1回(name 無し)、成功すると一覧に出て入力が空に戻る", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, VALID, "取り込み構築");
+    await fillImport(user, VALID);
     await preview(user);
 
     expect(await within(importRegion()).findByText(teamShowdownText.previewSummary(1))).toBeInTheDocument();
@@ -168,64 +176,35 @@ describe("I-1・I-2 取り込み(2段階)", () => {
 
     await user.click(createButton());
     expect(client.createCalls).toHaveLength(1);
-    expect(lastCall(client.createCalls, "create").args).toEqual({
-      name: "取り込み構築",
+    expect(lastCall(client.createCalls, "create").args).toStrictEqual({
       members: [expect.objectContaining(VALID_MEMBER)],
     });
     await flush(() => {
       lastCall(client.createCalls, "create").resolve({
         ok: true,
-        value: team(NEW_ID, "取り込み構築", [exportMember()]),
+        value: team(NEW_ID, SERVER_DEFAULT_TEAM_NAME, [exportMember()]),
       });
     });
 
     const list = screen.getByRole("list", { name: teamScreenText.listLabel });
-    expect(within(list).getByText("取り込み構築")).toBeInTheDocument();
+    expect(within(list).getByText(teamScreenText.untitledTeamName(1))).toBeInTheDocument();
     expect(within(list).getByText(teamScreenText.memberCountLabel(1, 6))).toBeInTheDocument();
-    expect(within(importRegion()).getByRole("status")).toHaveTextContent(
-      teamShowdownText.importCreated("取り込み構築", 1),
-    );
+    expect(within(importRegion()).getByRole("status")).toHaveTextContent(teamShowdownText.importCreated(1));
     expect(
       within(importRegion()).getByRole("textbox", { name: teamShowdownText.importTextLabel }),
     ).toHaveValue("");
-    expect(
-      within(importRegion()).getByRole("textbox", { name: teamShowdownText.importNameLabel }),
-    ).toHaveValue("");
 
     // 作成後はメンバー編集を開ける
-    await user.click(screen.getByRole("button", { name: teamMemberText.editLabel("取り込み構築") }));
-    expect(
-      screen.getByRole("region", { name: teamMemberText.editorLabel("取り込み構築") }),
-    ).toBeInTheDocument();
-  });
-});
-
-describe("I-3 構築名の検査", () => {
-  test("空・51文字は create を呼ばず理由を出す", async () => {
-    const { client, user } = await renderScreen();
-    await fillImport(user, VALID, null);
-    await preview(user);
-    await user.click(createButton());
-    expect(client.createCalls).toHaveLength(0);
-    expect(within(importRegion()).getByText(teamScreenText.nameRequiredNotice)).toBeInTheDocument();
-
-    await user.type(
-      within(importRegion()).getByRole("textbox", { name: teamShowdownText.importNameLabel }),
-      "あ".repeat(51),
-    );
-    // 名前を編集するとプレビューは捨てられる(I-8)ので、確認し直してから作成する。
-    await preview(user);
-    await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
-    await user.click(createButton());
-    expect(client.createCalls).toHaveLength(0);
-    expect(within(importRegion()).getByText(teamScreenText.nameTooLongNotice(50))).toBeInTheDocument();
+    const display = teamScreenText.untitledTeamName(1);
+    await user.click(screen.getByRole("button", { name: teamMemberText.editLabel(display) }));
+    expect(screen.getByRole("region", { name: teamMemberText.editorLabel(display) })).toBeInTheDocument();
   });
 });
 
 describe("I-4・I-5・I-6 問題の一覧と、取り込める分だけの作成", () => {
   test("2体目が未解決: 1体だけ作る。一覧に何体目・理由・値を日本語で出し、error なので role=alert", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, `${VALID}\n\n${block("ふめいなもん")}`, "半分");
+    await fillImport(user, `${VALID}\n\n${block("ふめいなもん")}`);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
 
@@ -249,7 +228,7 @@ describe("I-4・I-5・I-6 問題の一覧と、取り込める分だけの作成
 
   test("warning だけ(Level: 100)は取り込め、一覧は role=status", async () => {
     const { user } = await renderScreen();
-    await fillImport(user, `${VALID}\nLevel: 100`, "警告のみ");
+    await fillImport(user, `${VALID}\nLevel: 100`);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
     const list = within(importRegion()).getByRole("list", { name: teamShowdownText.issuesLabel });
@@ -260,7 +239,7 @@ describe("I-4・I-5・I-6 問題の一覧と、取り込める分だけの作成
 
   test("空入力・全て落ちた: 取り込めるメンバーがいません。作成は無効で create を呼ばない", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, "", "空");
+    await fillImport(user, "");
     await preview(user);
     expect(await within(importRegion()).findByText(teamShowdownText.previewNone)).toBeInTheDocument();
     expect(issueItems().join("\n")).toContain(teamShowdownText.issueReason.empty_input);
@@ -276,7 +255,7 @@ describe("I-4・I-5・I-6 問題の一覧と、取り込める分だけの作成
 
   test("7体は6体だけ作り too_many_members を出す", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, Array.from({ length: 7 }, () => VALID).join("\n\n"), "七体");
+    await fillImport(user, Array.from({ length: 7 }, () => VALID).join("\n\n"));
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(6));
     expect(issueItems().join("\n")).toContain(teamShowdownText.issueReason.too_many_members);
@@ -289,7 +268,7 @@ describe("I-7 メガの持ち物補正", () => {
   test("メガ種族の持ち物はストーンに直して create に渡し、補正を一覧に出す。ストーン無しのメガは空にして出す", async () => {
     const { client, user } = await renderScreen();
     const text = `${block(`${MEGA_FIRE.nameJa} @ テストぼうぎょだま`)}\n\n${block(MEGA_ORPHAN.nameJa)}`;
-    await fillImport(user, text, "メガ取り込み");
+    await fillImport(user, text);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(2));
 
@@ -316,9 +295,9 @@ describe("I-7 メガの持ち物補正", () => {
 });
 
 describe("I-8 古いプレビューで作らない", () => {
-  test("確認後にテキスト・名前を編集すると作成が無効に戻り、確認し直すと有効になる", async () => {
+  test("確認後にテキストを編集すると作成が無効に戻り、確認し直すと有効になる", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, VALID, "古い");
+    await fillImport(user, VALID);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
     expect(createButton()).toBeEnabled();
@@ -333,7 +312,7 @@ describe("I-8 古いプレビューで作らない", () => {
     expect(createButton()).toBeEnabled();
 
     await user.type(
-      within(importRegion()).getByRole("textbox", { name: teamShowdownText.importNameLabel }),
+      within(importRegion()).getByRole("textbox", { name: teamShowdownText.importTextLabel }),
       "x",
     );
     expect(createButton()).toBeDisabled();
@@ -342,9 +321,9 @@ describe("I-8 古いプレビューで作らない", () => {
 });
 
 describe("I-9・I-10 作成の失敗と二重送信", () => {
-  test("失敗は role=alert(見出し+message)。入力は残り、再度作成できる", async () => {
+  test("失敗は role=alert(見出し+message)。テキストは残り、再度作成できる", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, VALID, "失敗");
+    await fillImport(user, VALID);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
     await user.click(createButton());
@@ -360,9 +339,6 @@ describe("I-9・I-10 作成の失敗と二重送信", () => {
     expect(
       within(importRegion()).getByRole("textbox", { name: teamShowdownText.importTextLabel }),
     ).toHaveValue(VALID);
-    expect(
-      within(importRegion()).getByRole("textbox", { name: teamShowdownText.importNameLabel }),
-    ).toHaveValue("失敗");
     expect(createButton()).toBeEnabled();
     await user.click(createButton());
     expect(client.createCalls).toHaveLength(2);
@@ -370,7 +346,7 @@ describe("I-9・I-10 作成の失敗と二重送信", () => {
 
   test("送信中の二重クリックで create は1回", async () => {
     const { client, user } = await renderScreen();
-    await fillImport(user, VALID, "二重");
+    await fillImport(user, VALID);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(1));
     await user.dblClick(createButton());
@@ -386,7 +362,7 @@ describe("I-11 一覧の無いマスタ(オンライン相当)", () => {
       moves: master.moves,
     });
     const { client, user } = await renderScreen([], { master: online, masterSearch: search });
-    await fillImport(user, `${VALID}\n\n${block(MEGA_FIRE.nameJa)}`, "オンライン取り込み");
+    await fillImport(user, `${VALID}\n\n${block(MEGA_FIRE.nameJa)}`);
     await preview(user);
     await within(importRegion()).findByText(teamShowdownText.previewSummary(2));
     await user.click(createButton());
@@ -397,7 +373,7 @@ describe("I-11 一覧の無いマスタ(オンライン相当)", () => {
 
   test("masterSearch が無いと種族を解決できず、問題を出して作らない", async () => {
     const { client, user } = await renderScreen([], { master: online });
-    await fillImport(user, VALID, "解決不能");
+    await fillImport(user, VALID);
     await preview(user);
     expect(await within(importRegion()).findByText(teamShowdownText.previewNone)).toBeInTheDocument();
     expect(issueItems().join("\n")).toContain(teamShowdownText.issueReason.unresolved_name);
@@ -425,7 +401,7 @@ describe("I-12 a11y", () => {
       resolveSpecies: (k, s) => inner.resolveSpecies(k, s),
     };
     const { user } = await renderScreen([], { master: online, masterSearch: slow });
-    await fillImport(user, VALID, "待ち");
+    await fillImport(user, VALID);
     await preview(user);
     expect(within(importRegion()).getByText(teamShowdownText.importResolving)).toBeInTheDocument();
     expect(
@@ -445,7 +421,28 @@ function exportButton(name: string): HTMLElement {
   return screen.getByRole("button", { name: teamShowdownText.exportLabel(name) });
 }
 
+/** 構築を開き、編集画面の下の書き出しの折りたたみを開く(閉じていれば)。 */
+async function openExportFold(user: UserEvent, name: string): Promise<void> {
+  await user.click(screen.getByRole("button", { name: teamMemberText.editLabel(name) }));
+  const details = screen.getByText(teamShowdownText.exportFoldLabel).closest("details");
+  if (details === null) {
+    throw new Error("書き出しの折りたたみ(details)が無い");
+  }
+  if (!details.open) {
+    await user.click(screen.getByText(teamShowdownText.exportFoldLabel));
+  }
+}
+
 async function openExport(
+  user: UserEvent,
+  name: string,
+): Promise<{ region: HTMLElement; textarea: HTMLTextAreaElement }> {
+  await openExportFold(user, name);
+  return exportOpened(user, name);
+}
+
+/** 折りたたみを開いた編集画面で、書き出しボタンを押して領域を出す。 */
+async function exportOpened(
   user: UserEvent,
   name: string,
 ): Promise<{ region: HTMLElement; textarea: HTMLTextAreaElement }> {
@@ -514,7 +511,8 @@ describe("E-2・E-3 コピー", () => {
 
 describe("E-4・E-5 空の構築と書き出せない項目", () => {
   test("メンバー0体は書き出しボタンが無効で、理由が見えて aria-describedby で結ばれる", async () => {
-    await renderScreen([team(TEAM_ID, "空", [])]);
+    const { user } = await renderScreen([team(TEAM_ID, "空", [])]);
+    await openExportFold(user, "空");
     const button = exportButton("空");
     expect(button).toBeDisabled();
     expect(screen.getByText(teamShowdownText.exportEmptyNotice)).toBeInTheDocument();
@@ -556,23 +554,23 @@ describe("E-6 一覧の無いマスタ", () => {
   });
 });
 
-describe("E-7 閉じる・構築ごとの独立", () => {
-  test("閉じると領域が消える。2つの構築を同時に開いても取り違えない", async () => {
+describe("E-7 閉じる・構築の切り替え", () => {
+  test("閉じると領域が消える。構築を切り替えると、書き出しの内容も切り替わる(取り違えない)", async () => {
     const a = team(TEAM_ID, "甲", [exportMember()]);
     const b = team(NEW_ID, "乙", [
       exportMember({ speciesKey: "9002-000", moveIds: ["examplemovewaterblast"] }),
     ]);
     const { user } = await renderScreen([a, b]);
     const first = await openExport(user, "甲");
-    const second = await openExport(user, "乙");
     expect(first.textarea.value).toContain("テストほのお");
-    expect(second.textarea.value).toContain("テストみず");
-    expect(second.textarea.value).not.toContain("テストほのお");
 
     await user.click(within(first.region).getByRole("button", { name: teamShowdownText.exportCloseLabel }));
     expect(screen.queryByRole("region", { name: teamShowdownText.exportRegionLabel("甲") })).toBeNull();
-    expect(
-      screen.getByRole("region", { name: teamShowdownText.exportRegionLabel("乙") }),
-    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: teamMemberText.closeLabel }));
+    const second = await openExport(user, "乙");
+    expect(second.textarea.value).toContain("テストみず");
+    expect(second.textarea.value).not.toContain("テストほのお");
+    expect(screen.queryByRole("region", { name: teamShowdownText.exportRegionLabel("甲") })).toBeNull();
   });
 });

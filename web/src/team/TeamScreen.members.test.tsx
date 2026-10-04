@@ -1,15 +1,17 @@
-// P5-5b PR-A2(ADR-0316): 構築のメンバー編集。TeamClient は fake、マスタは架空の例データ(ADR-0300 §3)。
-// 確かめること(受け入れ条件):
-//   AC-1 開く/閉じる: 構築の行から編集領域を開く(API は呼ばない)・各メンバーの現在値が出る・閉じても API を呼ばない
-//   AC-2 追加・削除・並べ替え: 最大6体(7体目は作れない)・削除で番号が詰まる・上下の入れ替え・削除後のフォーカス
-//   AC-3 保存: update は全置換(name + 全メンバー。ニックネームを落とさない)・二重送信しない・成功で一覧と領域が更新・
-//        失敗は role="alert" でサーバーの message を日本語のまま出し、下書きを残して再送できる・一覧は変わらない
+// P5-5b PR-A2(ADR-0316)・F-08(ADR-0332): 構築のメンバー編集。TeamClient は fake、マスタは架空の例データ(ADR-0300 §3)。
+// F-08 で、編集は常に6枠(空の枠は種族の欄と案内だけ)の画面になり、[メンバーを追加]・構築名の変更は無い。
+// 6枠・空の枠・外す・入れ替え・未保存の印・一覧に戻る・Showdown の折りたたみは TeamScreen.rebuild.test.tsx。
+// 確かめること(受け入れ条件。「メンバー数」は種族の決まった枠の数):
+//   AC-1 開く: 構築のカードの [開く] で編集画面を開く(API は呼ばない)・各メンバーの現在値が出る
+//   AC-2 並べ替え: 上下の入れ替え・先頭の [上へ] は無効・種族を選んだ枠の初期値
+//   AC-3 保存: update は全置換(name を送らない・全メンバー。ニックネームを落とさない)・二重送信しない・成功で一覧が更新・
+//        失敗は role="alert" でサーバーの message を日本語のまま出し、下書きを残して再送できる・保存せずに戻ると一覧は変わらない
 //   AC-4 SP: 6欄・0/32 は通り 33/負/小数は明示エラーで保存不可・合計 66 は通り 67 は超過表示で保存不可・直すと保存できる
 //   AC-5 技: 枠は4つだけ(5つ目は無い)・候補はその種族の learnset・他の枠で選んだ技は選べない(重複を作らない)
-//   AC-6 種族変更: 特性は持てば保ち持たなければ選び直す・技は learnset にあるものだけ残る・新しい枠は種族未選択で保存不可
+//   AC-6 種族変更: 特性は持てば保ち持たなければ選び直す・技は learnset にあるものだけ残る・空の枠は保存の妨げにならない
 //   AC-7 マスタ: 種族の一覧が無いマスタ(オンライン)は検索欄で選ぶ・保存済みメンバーの種族は開いたときに解決する・
 //        マスタに無い種族のメンバーも壊さずに保存し直せる
-//   AC-8 a11y: メンバーは legend 付きの group・各コントロールにラベル・キーボードだけで追加できる
+//   AC-8 a11y: メンバーは legend 付きの group・各コントロールにラベル・キーボードだけで空の枠の種族の欄へ行ける
 // 架空の構築名・ID だけを使う(ADR-0002)。
 
 import { render, screen, waitFor, within } from "@testing-library/react";
@@ -100,8 +102,11 @@ function memberGroup(editor: HTMLElement, position: number): HTMLElement {
   return within(editor).getByRole("group", { name: teamMemberText.memberLegend(position) });
 }
 
+/** 種族の決まった枠(技の欄が出ている枠)だけ。空の枠は種族の欄と案内だけなので数えない(ADR-0332 §2)。 */
 function memberGroups(editor: HTMLElement): HTMLElement[] {
-  return within(editor).queryAllByRole("group", { name: /^\d+体目$/ });
+  return within(editor)
+    .queryAllByRole("group", { name: /^\d+体目$/ })
+    .filter((group) => within(group).queryByRole("combobox", { name: teamMemberText.moveLabel(1) }) !== null);
 }
 
 function select(group: HTMLElement, name: string): HTMLSelectElement {
@@ -130,10 +135,6 @@ async function setSp(user: UserEvent, group: HTMLElement, stat: (typeof SP_STATS
 
 function saveButton(editor: HTMLElement): HTMLElement {
   return within(editor).getByRole("button", { name: teamMemberText.saveLabel });
-}
-
-function addButton(editor: HTMLElement): HTMLElement {
-  return within(editor).getByRole("button", { name: teamMemberText.addLabel });
 }
 
 function optionLabels(element: HTMLElement): string[] {
@@ -186,7 +187,7 @@ async function saveAndSucceed(user: UserEvent, client: FakeTeamClient, editor: H
 }
 
 describe("AC-1 開く・閉じる", () => {
-  test("行の [メンバーを編集] で領域が開き、通信はしない(list の応答で足りる)", async () => {
+  test("カードの [開く] で編集画面が開き、通信はしない(list の応答で足りる)", async () => {
     const { client, user } = await renderScreen([TEAM_A]);
     expect(screen.queryByRole("region", { name: teamMemberText.editorLabel(TEAM_A.name) })).toBeNull();
 
@@ -238,86 +239,28 @@ describe("AC-1 開く・閉じる", () => {
       ...master.typeChart.types.map((type) => typeNameJa[type as TypeId]),
     ]);
   });
-
-  test("[編集を閉じる] で領域が消え、未保存の編集は捨てて API を呼ばない。開き直すと保存済みの値", async () => {
-    const { client, user } = await renderScreen([TEAM_A]);
-    let editor = await openEditor(user, TEAM_A.name);
-    await user.selectOptions(
-      select(memberGroup(editor, 1), teamMemberText.natureLabel),
-      "example-nature-spa",
-    );
-
-    await user.click(within(editor).getByRole("button", { name: teamMemberText.closeLabel }));
-    expect(screen.queryByRole("region", { name: teamMemberText.editorLabel(TEAM_A.name) })).toBeNull();
-    expect(client.updateCalls).toHaveLength(0);
-
-    editor = await openEditor(user, TEAM_A.name);
-    expect(select(memberGroup(editor, 1), teamMemberText.natureLabel).value).toBe("example-nature-atk");
-  });
-
-  test("領域は同時に1つだけ(別の構築を開くと前の領域は閉じる)", async () => {
-    const { user } = await renderScreen([TEAM_A, TEAM_EMPTY]);
-    await openEditor(user, TEAM_A.name);
-    await openEditor(user, TEAM_EMPTY.name);
-
-    expect(screen.queryByRole("region", { name: teamMemberText.editorLabel(TEAM_A.name) })).toBeNull();
-    expect(
-      screen.getByRole("region", { name: teamMemberText.editorLabel(TEAM_EMPTY.name) }),
-    ).toBeInTheDocument();
-  });
 });
 
-describe("AC-2 追加・削除・並べ替え(最大6体)", () => {
-  test("空の構築に追加でき、6体になったら追加できない(7体目は作れない。理由を出す)", async () => {
+describe("AC-2 並べ替え・種族を選んだ枠の初期値", () => {
+  test("空の枠で種族を選んだ枠は、技なし・SP 合計 0(残り 66)", async () => {
     const { user } = await renderScreen([TEAM_EMPTY]);
     const editor = await openEditor(user, TEAM_EMPTY.name);
     expect(memberGroups(editor)).toHaveLength(0);
-
-    for (let count = 1; count <= MAX_TEAM_MEMBERS; count += 1) {
-      await user.click(addButton(editor));
-      expect(memberGroups(editor)).toHaveLength(count);
-    }
-
-    expect(addButton(editor)).toBeDisabled();
-    expect(editor).toHaveTextContent(teamMemberText.addDisabledNotice(MAX_TEAM_MEMBERS));
-    await user.click(addButton(editor));
-    expect(memberGroups(editor)).toHaveLength(MAX_TEAM_MEMBERS);
-  });
-
-  test("追加した枠は種族未選択・技なし・SP 合計 0(残り 66)", async () => {
-    const { user } = await renderScreen([TEAM_EMPTY]);
-    const editor = await openEditor(user, TEAM_EMPTY.name);
-    await user.click(addButton(editor));
+    await user.selectOptions(select(memberGroup(editor, 1), teamMemberText.speciesLabel), "9001-000");
     const group = memberGroup(editor, 1);
 
-    expect(select(group, teamMemberText.speciesLabel).value).toBe("");
+    expect(memberGroups(editor)).toHaveLength(1);
     expect(group).toHaveTextContent(teamMemberText.spSummary(0, 66, 66));
     for (let slot = 1; slot <= MAX_MEMBER_MOVES; slot += 1) {
       expect(select(group, teamMemberText.moveLabel(slot)).value).toBe("");
     }
   });
 
-  test("削除すると番号が詰まり、残りの内容は保たれる。削除後のフォーカスは [メンバーを追加] に移る", async () => {
-    const { user } = await renderScreen([TEAM_A]);
-    const editor = await openEditor(user, TEAM_A.name);
-
-    await user.click(
-      within(memberGroup(editor, 1)).getByRole("button", { name: teamMemberText.removeLabel(1) }),
-    );
-
-    expect(memberGroups(editor)).toHaveLength(1);
-    expect(select(memberGroup(editor, 1), teamMemberText.speciesLabel).value).toBe("9004-000");
-    expect(addButton(editor)).toHaveFocus();
-  });
-
-  test("上へ・下へで入れ替わる。先頭の [上へ] と末尾の [下へ] は無効", async () => {
+  test("上へ・下へで入れ替わる。先頭の [上へ] は無効", async () => {
     const { user } = await renderScreen([TEAM_A]);
     const editor = await openEditor(user, TEAM_A.name);
     expect(
       within(memberGroup(editor, 1)).getByRole("button", { name: teamMemberText.moveUpLabel(1) }),
-    ).toBeDisabled();
-    expect(
-      within(memberGroup(editor, 2)).getByRole("button", { name: teamMemberText.moveDownLabel(2) }),
     ).toBeDisabled();
 
     await user.click(
@@ -349,7 +292,7 @@ describe("AC-2 追加・削除・並べ替え(最大6体)", () => {
 });
 
 describe("AC-3 保存(update は全置換。応答で一覧を書き換える)", () => {
-  test("何も変えずに保存すると、名前と全メンバー(ニックネーム含む)をそのまま送る", async () => {
+  test("何も変えずに保存すると、name キーを持たずに全メンバー(ニックネーム含む)をそのまま送る", async () => {
     const { client, user } = await renderScreen([TEAM_A]);
     const editor = await openEditor(user, TEAM_A.name);
     await user.click(saveButton(editor));
@@ -359,7 +302,7 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     });
     const { teamId, input } = lastCall(client.updateCalls, "update").args;
     expect(teamId).toBe(TEAM_A.id);
-    expect(input.name).toBe(TEAM_A.name);
+    expect("name" in input).toBe(false);
     expect(input.members).toEqual(TEAM_A.members);
   });
 
@@ -400,7 +343,7 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     expect(client.updateCalls).toHaveLength(1);
   });
 
-  test("成功すると応答の Team で一覧の行(メンバー数)が書き換わり、領域は開いたまま保存済みを知らせる(list は読み直さない)", async () => {
+  test("成功すると編集画面は開いたまま保存済みを知らせ、一覧に戻ると行のメンバー数が書き換わっている(list は読み直さない)", async () => {
     const { client, user } = await renderScreen([TEAM_A]);
     const editor = await openEditor(user, TEAM_A.name);
     await user.click(
@@ -408,16 +351,21 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     );
     await saveAndSucceed(user, client, editor);
 
-    expect(screen.getByRole("region", { name: teamMemberText.editorLabel(TEAM_A.name) })).toBeInTheDocument();
+    // name を送らないので、保存した構築はサーバーの既定名になり、画面では「構築 N」と出る(ADR-0332 §1)。
+    expect(
+      screen.getByRole("region", { name: teamMemberText.editorLabel(teamScreenText.untitledTeamName(1)) }),
+    ).toBeInTheDocument();
     expect(within(editor).getByRole("status")).toHaveTextContent(teamMemberText.savedNotice);
+    expect(saveButton(editor)).toBeEnabled();
+
+    await user.click(screen.getByRole("button", { name: teamMemberText.closeLabel }));
     expect(screen.getByRole("list", { name: teamScreenText.listLabel })).toHaveTextContent(
       teamScreenText.memberCountLabel(1, MAX_TEAM_MEMBERS),
     );
     expect(client.listCalls).toHaveLength(1);
-    expect(saveButton(editor)).toBeEnabled();
   });
 
-  test("失敗は role=alert にサーバーの message(日本語)をそのまま出し、下書きを残す。一覧は変わらず、直して再送できる", async () => {
+  test("失敗は role=alert にサーバーの message(日本語)をそのまま出し、下書きを残す。直して再送できる", async () => {
     const { client, user } = await renderScreen([TEAM_A]);
     const editor = await openEditor(user, TEAM_A.name);
     const first = memberGroup(editor, 1);
@@ -436,11 +384,8 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     const alert = within(editor).getByRole("alert");
     expect(alert).toHaveTextContent(teamMemberText.saveErrorHeading);
     expect(alert).toHaveTextContent("能力ポイントの合計は66以下にしてください");
-    // 下書きは残り、一覧のメンバー数は保存前のまま。
+    // 下書きは残る。
     expect(select(memberGroup(editor, 1), teamMemberText.natureLabel).value).toBe("example-nature-spa");
-    expect(screen.getByRole("list", { name: teamScreenText.listLabel })).toHaveTextContent(
-      teamScreenText.memberCountLabel(2, MAX_TEAM_MEMBERS),
-    );
     // 再送できる(ボタンは有効に戻る)。
     expect(saveButton(editor)).toBeEnabled();
     await saveAndSucceed(user, client, editor);
@@ -463,6 +408,27 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     });
     expect(within(editor).getByRole("alert")).toHaveTextContent("構築サーバーに接続できません");
   });
+
+  test("保存に失敗したあと、保存せずに戻ると、一覧のメンバー数は保存前のまま", async () => {
+    const { client, user } = await renderScreen([TEAM_A]);
+    const editor = await openEditor(user, TEAM_A.name);
+    await user.click(
+      within(memberGroup(editor, 2)).getByRole("button", { name: teamMemberText.removeLabel(2) }),
+    );
+    await user.click(saveButton(editor));
+    await flush(() => {
+      lastCall(client.updateCalls, "update").resolve({
+        ok: false,
+        error: { code: "invalid_input", message: "テストの入力エラー" },
+      });
+    });
+
+    await user.click(screen.getByRole("button", { name: teamMemberText.closeLabel }));
+    await user.click(screen.getByRole("button", { name: teamMemberText.leaveDiscardLabel }));
+    expect(screen.getByRole("list", { name: teamScreenText.listLabel })).toHaveTextContent(
+      teamScreenText.memberCountLabel(2, MAX_TEAM_MEMBERS),
+    );
+  });
 });
 
 describe("AC-4 SP のグリッド(各 0〜32・合計 66 以下)", () => {
@@ -480,7 +446,7 @@ describe("AC-4 SP のグリッド(各 0〜32・合計 66 以下)", () => {
   test("入力すると合計と残りが更新される", async () => {
     const { user } = await renderScreen([TEAM_EMPTY]);
     const editor = await openEditor(user, TEAM_EMPTY.name);
-    await user.click(addButton(editor));
+    await user.selectOptions(select(memberGroup(editor, 1), teamMemberText.speciesLabel), "9001-000");
     const group = memberGroup(editor, 1);
 
     await setSp(user, group, "hp", "10");
@@ -667,21 +633,21 @@ describe("AC-6 種族を変えたときの特性・技", () => {
     });
   });
 
-  test("新しい枠は種族を選ぶまで保存できない(理由を alert で出す)。選ぶと特性が先頭になり保存できる", async () => {
+  test("空の枠は保存の妨げにならない(理由の alert を出さない)。種族を選ぶと特性が先頭になり、そのまま保存できる", async () => {
     const { client, user } = await renderScreen([TEAM_EMPTY]);
     const editor = await openEditor(user, TEAM_EMPTY.name);
-    await user.click(addButton(editor));
     const group = memberGroup(editor, 1);
 
-    expect(within(group).getByRole("alert")).toHaveTextContent(teamMemberText.speciesRequiredError);
-    expect(saveButton(editor)).toBeDisabled();
-    await user.click(saveButton(editor));
-    expect(client.updateCalls).toHaveLength(0);
+    expect(within(group).queryByRole("alert")).toBeNull();
+    expect(saveButton(editor)).toBeEnabled();
 
     await user.selectOptions(select(group, teamMemberText.speciesLabel), "9004-000");
     expect(within(group).queryByRole("alert")).toBeNull();
     expect(select(group, teamMemberText.abilityLabel).value).toBe("exampleabilityadapt");
     expect(saveButton(editor)).toBeEnabled();
+    await user.click(saveButton(editor));
+    expect(client.updateCalls).toHaveLength(1);
+    expect(lastCall(client.updateCalls, "update").args.input.members).toHaveLength(1);
   });
 });
 
@@ -722,7 +688,6 @@ describe("AC-7 マスタの状態", () => {
     const { master: onlineMaster, search } = onlineFixture();
     const { user } = await renderScreen([TEAM_EMPTY], { master: onlineMaster, masterSearch: search });
     const editor = await openEditor(user, TEAM_EMPTY.name);
-    await user.click(addButton(editor));
     const group = memberGroup(editor, 1);
 
     const input = within(group).getByRole("combobox", { name: teamMemberText.speciesLabel });
@@ -732,9 +697,9 @@ describe("AC-7 マスタの状態", () => {
     );
 
     await waitFor(() => {
-      expect(select(group, teamMemberText.abilityLabel).value).toBe("exampleabilityadapt");
+      expect(select(memberGroup(editor, 1), teamMemberText.abilityLabel).value).toBe("exampleabilityadapt");
     });
-    expect(optionLabels(select(group, teamMemberText.moveLabel(1)))).toContain(
+    expect(optionLabels(select(memberGroup(editor, 1), teamMemberText.moveLabel(1)))).toContain(
       moveName("examplemovethunder"),
     );
   });
@@ -794,14 +759,16 @@ describe("AC-8 a11y(group・ラベル・キーボード)", () => {
     }
   });
 
-  test("キーボードだけで追加できる([メンバーを追加] にフォーカスして Enter)", async () => {
+  test("キーボードだけで空の枠の種族の欄に行ける([一覧に戻る] から Tab)。選ぶと、その枠の欄が出る", async () => {
     const { user } = await renderScreen([TEAM_EMPTY]);
     const editor = await openEditor(user, TEAM_EMPTY.name);
-    addButton(editor).focus();
-    expect(addButton(editor)).toHaveFocus();
+    within(editor).getByRole("button", { name: teamMemberText.closeLabel }).focus();
 
-    await user.keyboard("{Enter}");
+    await user.tab();
 
+    const species = select(memberGroup(editor, 1), teamMemberText.speciesLabel);
+    expect(species).toHaveFocus();
+    await user.selectOptions(species, "9001-000");
     expect(memberGroups(editor)).toHaveLength(1);
   });
 
@@ -886,28 +853,5 @@ describe("AC-9 critic 指摘の修正(特性 null・送信中の無効化・SP �
     const first = memberGroup(await openEditor(user, TEAM_A.name), 1);
 
     expect(select(first, teamMemberText.teraLabel).value).toBe("fire");
-  });
-
-  test("メンバーの保存中は名前変更の保存と [編集を閉じる] を押せない(同時送信で一方が失われない)", async () => {
-    const { client, user } = await renderScreen([TEAM_A]);
-    await user.click(screen.getByRole("button", { name: teamScreenText.renameLabel(TEAM_A.name) }));
-    const editor = await openEditor(user, TEAM_A.name);
-    await user.click(saveButton(editor));
-
-    expect(within(editor).getByRole("button", { name: teamMemberText.closeLabel })).toBeDisabled();
-    expect(screen.getByRole("button", { name: teamScreenText.renameSaveLabel })).toBeDisabled();
-    expect(client.updateCalls).toHaveLength(1);
-  });
-
-  test("名前変更の送信中はメンバーを保存できない", async () => {
-    const { client, user } = await renderScreen([TEAM_A]);
-    const editor = await openEditor(user, TEAM_A.name);
-    await user.click(screen.getByRole("button", { name: teamScreenText.renameLabel(TEAM_A.name) }));
-    await user.click(screen.getByRole("button", { name: teamScreenText.renameSaveLabel }));
-    await waitFor(() => {
-      expect(client.updateCalls).toHaveLength(1);
-    });
-
-    expect(saveButton(editor)).toBeDisabled();
   });
 });

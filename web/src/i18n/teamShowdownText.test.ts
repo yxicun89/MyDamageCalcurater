@@ -31,7 +31,6 @@ describe("teamShowdownText の固定の語", () => {
     expect(teamShowdownText).toMatchObject({
       importRegionLabel: "Showdown 形式から取り込む",
       importTextLabel: "取り込むテキスト",
-      importNameLabel: "取り込む構築名",
       importPreviewLabel: "内容を確認",
       importCreateLabel: "この内容で作成",
       issuesLabel: "取り込みの問題",
@@ -46,7 +45,7 @@ describe("teamShowdownText の固定の語", () => {
     expect(teamShowdownText.exportRegionLabel("A")).toBe("「A」の Showdown 形式");
     expect(teamShowdownText.exportTextLabel("A")).toBe("「A」の書き出しテキスト");
     expect(teamShowdownText.previewSummary(3)).toBe("3体を取り込めます");
-    expect(teamShowdownText.importCreated("A", 3)).toBe("「A」を3体で作成しました");
+    expect(teamShowdownText.importCreated(3)).toBe("3体の構築を作りました");
   });
 
   test("issueReason は全コードに空でない日本語を持つ。コードの生の文字列を出さない", () => {

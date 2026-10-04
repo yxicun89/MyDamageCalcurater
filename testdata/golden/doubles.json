@@ -4323,7 +4323,8 @@
             "DefImmuneTypes": [
               "ground"
             ],
-            "Airborne": true
+            "Airborne": true,
+            "Breakable": true
           }
         },
         "Item": null
