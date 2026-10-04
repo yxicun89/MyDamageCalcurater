@@ -466,8 +466,96 @@ type abilityEffectDTO struct {
 	Airborne                  bool                       `json:"airborne"`                  // 浮いている(フィールドの補正の対象外。ADR-0116)
 	SpeedMods                 []speedModDTO              `json:"speedMods"`                 // 素早さの補正(ADR-0139)
 	IgnoresParalysisSpeedDrop bool                       `json:"ignoresParalysisSpeedDrop"` // まひの素早さ半減を受けない(ADR-0139)
-	UnsupportedAttacker       bool                       `json:"unsupportedAttacker"`       // 「未対応」の印(ADR-0123)
-	UnsupportedDefender       bool                       `json:"unsupportedDefender"`
+	// 特性の段階1(ADR-0176)。入れ子(typeConvert・powerMods の要素)のキーは Web が PascalCase のまま渡す
+	// (encoding/json は大小を区別せずに照合するので受け付ける)。
+	TypeConvert            *typeConvertDTO          `json:"typeConvert"`
+	PowerMods              []conditionalPowerModDTO `json:"powerMods"`
+	AuraType               string                   `json:"auraType"`
+	AuraMod                int                      `json:"auraMod"`
+	StatMods               map[string]int           `json:"statMods"`
+	SeparateStatMods       map[string]int           `json:"separateStatMods"`
+	CritDamageMod          int                      `json:"critDamageMod"`
+	PreventsCritical       bool                     `json:"preventsCritical"`
+	IgnoresOpponentRanks   bool                     `json:"ignoresOpponentRanks"`
+	IgnoresDefenderAbility bool                     `json:"ignoresDefenderAbility"`
+	Breakable              bool                     `json:"breakable"`
+	UnsupportedAttacker    bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
+	UnsupportedDefender    bool                     `json:"unsupportedDefender"`
+}
+
+// typeConvertDTO は技のタイプの変換(ADR-0176)。タイプが語彙に無ければ invalid_enum。
+type typeConvertDTO struct {
+	From     string `json:"from"`
+	To       string `json:"to"`
+	PowerMod int    `json:"powerMod"`
+}
+
+// conditionalPowerModDTO は条件つきの威力補正1つ(ADR-0176)。条件・タイプが語彙に無ければ invalid_enum。
+// 値域(条件ごとの項目の組・補正値の範囲)は engine の Individual.Validate が見る。
+type conditionalPowerModDTO struct {
+	Condition string `json:"condition"`
+	MaxPower  int    `json:"maxPower"`
+	MoveType  string `json:"moveType"`
+	Modifier  int    `json:"modifier"`
+}
+
+// abilityStatModsToEngine は特性の実数値の倍率のキーを検証して engine の型にする(未知のキーは invalid_enum)。
+func abilityStatModsToEngine(path string, m map[string]int) (map[engine.StatKey]int, error) {
+	if m == nil {
+		return nil, nil
+	}
+	out := make(map[engine.StatKey]int, len(m))
+	for _, k := range sortedKeys(m) {
+		key, err := parseStatKey(path, k, false)
+		if err != nil {
+			return nil, err
+		}
+		out[key] = m[k]
+	}
+	return out, nil
+}
+
+// stage1ToEngine は特性の段階1の項目(ADR-0176)を out に写す。
+func (e abilityEffectDTO) stage1ToEngine(path string, out *engine.AbilityEffect) error {
+	out.AuraMod, out.CritDamageMod = e.AuraMod, e.CritDamageMod
+	out.PreventsCritical, out.IgnoresOpponentRanks = e.PreventsCritical, e.IgnoresOpponentRanks
+	out.IgnoresDefenderAbility, out.Breakable = e.IgnoresDefenderAbility, e.Breakable
+	var err error
+	if c := e.TypeConvert; c != nil {
+		tc := &engine.TypeConvert{PowerMod: c.PowerMod}
+		if tc.From, err = parseType(path+".typeConvert.from", c.From, false); err != nil {
+			return err
+		}
+		if tc.To, err = parseType(path+".typeConvert.to", c.To, false); err != nil {
+			return err
+		}
+		out.TypeConvert = tc
+	}
+	if e.PowerMods != nil {
+		out.PowerMods = make([]engine.ConditionalPowerMod, 0, len(e.PowerMods))
+		for i, d := range e.PowerMods {
+			p := fmt.Sprintf("%s.powerMods[%d]", path, i)
+			c := engine.PowerCondition(d.Condition)
+			if !c.Known() {
+				return enumError(p+".condition", d.Condition)
+			}
+			mt, err := parseType(p+".moveType", d.MoveType, true)
+			if err != nil {
+				return err
+			}
+			out.PowerMods = append(out.PowerMods, engine.ConditionalPowerMod{
+				Condition: c, MaxPower: d.MaxPower, MoveType: mt, Modifier: d.Modifier,
+			})
+		}
+	}
+	if out.AuraType, err = parseType(path+".auraType", e.AuraType, true); err != nil {
+		return err
+	}
+	if out.StatMods, err = abilityStatModsToEngine(path+".statMods", e.StatMods); err != nil {
+		return err
+	}
+	out.SeparateStatMods, err = abilityStatModsToEngine(path+".separateStatMods", e.SeparateStatMods)
+	return err
 }
 
 func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
@@ -479,6 +567,9 @@ func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 	}
 	var err error
 	if out.SpeedMods, err = speedModsToEngine(path+".speedMods", e.SpeedMods); err != nil {
+		return nil, err
+	}
+	if err = e.stage1ToEngine(path, out); err != nil {
 		return nil, err
 	}
 	if out.OffBoostType, err = parseType(path+".offBoostType", e.OffBoostType, true); err != nil {

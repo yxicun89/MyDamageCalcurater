@@ -47,8 +47,15 @@ var (
 		"DefResistType": true, "DefImmuneTypes": true, "DefAbsorbTypes": true,
 		"ReduceSuperEffective": true, "IgnoresBurn": true, "Airborne": true,
 		"SpeedMods": true, "IgnoresParalysisSpeedDrop": true,
+		// 特性の段階1(ADR-0176)
+		"TypeConvert": true, "PowerMods": true, "AuraType": true, "AuraMod": true,
+		"StatMods": true, "SeparateStatMods": true, "CritDamageMod": true,
+		"PreventsCritical": true, "IgnoresOpponentRanks": true, "IgnoresDefenderAbility": true, "Breakable": true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
+	// typeConvertFields / powerModFields は TypeConvert・PowerMods の要素の既知のキー(ADR-0176)。
+	typeConvertFields = map[string]bool{"From": true, "To": true, "PowerMod": true}
+	powerModFields    = map[string]bool{"Condition": true, "MaxPower": true, "MoveType": true, "Modifier": true}
 	// absorbEffectFields は DefAbsorbTypes の値(1タイプぶんの副次効果)の既知のフィールド名。
 	absorbEffectFields = map[string]bool{
 		"HealNumerator": true, "HealDenominator": true, "BoostStat": true, "BoostStages": true,
@@ -595,10 +602,255 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 		}
 		e.IgnoresParalysisSpeedDrop = b
 	}
+	if err := decodeAbilityStage1(fields, chart, &e); err != nil {
+		return nil, err
+	}
 	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
 		return nil, err
 	}
 	return &e, nil
+}
+
+// decodeAbilityStage1 は特性の段階1の項目(ADR-0176)を検証つきで e に読む。
+func decodeAbilityStage1(fields map[string]json.RawMessage, chart engine.TypeChart, e *engine.AbilityEffect) error {
+	var err error
+	if v, ok := fields["TypeConvert"]; ok {
+		if e.TypeConvert, err = decodeTypeConvert(v, chart); err != nil {
+			return err
+		}
+	}
+	if v, ok := fields["PowerMods"]; ok {
+		if e.PowerMods, err = decodePowerMods(v, chart); err != nil {
+			return err
+		}
+	}
+	auraType, hasAuraType := fields["AuraType"]
+	auraMod, hasAuraMod := fields["AuraMod"]
+	if hasAuraType != hasAuraMod {
+		return fmt.Errorf("%w: AuraType と AuraMod は組で指定する", ErrInvalidEffect)
+	}
+	if hasAuraType {
+		if e.AuraType, err = decodeKnownType(auraType, chart); err != nil {
+			return err
+		}
+		if e.AuraMod, err = decodePositiveInt(auraMod); err != nil {
+			return err
+		}
+	}
+	if v, ok := fields["StatMods"]; ok {
+		if e.StatMods, err = decodeStatMods(v); err != nil {
+			return err
+		}
+	}
+	if v, ok := fields["SeparateStatMods"]; ok {
+		if e.SeparateStatMods, err = decodeStatMods(v); err != nil {
+			return err
+		}
+		for k := range e.SeparateStatMods {
+			if k != engine.StatAtk && k != engine.StatSpA {
+				return fmt.Errorf("%w: SeparateStatMods のキーは atk / spa だけ: %q", ErrInvalidEffect, k)
+			}
+		}
+	}
+	if v, ok := fields["CritDamageMod"]; ok {
+		if e.CritDamageMod, err = decodePositiveInt(v); err != nil {
+			return err
+		}
+	}
+	for _, f := range []struct {
+		key string
+		dst *bool
+	}{
+		{"PreventsCritical", &e.PreventsCritical},
+		{"IgnoresOpponentRanks", &e.IgnoresOpponentRanks},
+		{"IgnoresDefenderAbility", &e.IgnoresDefenderAbility},
+		{"Breakable", &e.Breakable},
+	} {
+		if v, ok := fields[f.key]; ok {
+			if *f.dst, err = decodeTrueLiteral(v); err != nil {
+				return err
+			}
+		}
+	}
+	if e.Breakable && len(fields) == 1 {
+		return fmt.Errorf("%w: Breakable だけの定義(無視される効果が無い)", ErrInvalidEffect)
+	}
+	return nil
+}
+
+// decodeEffectSubObject は入れ子のオブジェクトを読み、未知のキーを拒否する。
+func decodeEffectSubObject(raw json.RawMessage, name string, known map[string]bool) (map[string]json.RawMessage, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
+		return nil, fmt.Errorf("%w: %s がオブジェクトでない", ErrInvalidEffect, name)
+	}
+	if err := rejectUnknownFields(fields, known); err != nil {
+		return nil, err
+	}
+	return fields, nil
+}
+
+// decodeTypeConvert は TypeConvert を読む(From・To・PowerMod の3つとも必須・表にあるタイプ・From != To)。
+func decodeTypeConvert(raw json.RawMessage, chart engine.TypeChart) (*engine.TypeConvert, error) {
+	fields, err := decodeEffectSubObject(raw, "TypeConvert", typeConvertFields)
+	if err != nil {
+		return nil, err
+	}
+	fromRaw, okF := fields["From"]
+	toRaw, okT := fields["To"]
+	modRaw, okM := fields["PowerMod"]
+	if !okF || !okT || !okM {
+		return nil, fmt.Errorf("%w: TypeConvert は From・To・PowerMod の3つが要る", ErrInvalidEffect)
+	}
+	var c engine.TypeConvert
+	if c.From, err = decodeKnownType(fromRaw, chart); err != nil {
+		return nil, err
+	}
+	if c.To, err = decodeKnownType(toRaw, chart); err != nil {
+		return nil, err
+	}
+	if c.From == c.To {
+		return nil, fmt.Errorf("%w: TypeConvert の From と To が同じ: %q", ErrInvalidEffect, c.From)
+	}
+	if c.PowerMod, err = decodePositiveInt(modRaw); err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// decodePowerMods は PowerMods を読む(空でない配列・語彙の条件・条件ごとの項目の組・4096 以外の正の整数・
+// 同じ要素の重複なし)。配列の順は保つ。
+func decodePowerMods(raw json.RawMessage, chart engine.TypeChart) ([]engine.ConditionalPowerMod, error) {
+	var arr []json.RawMessage
+	if err := json.Unmarshal(raw, &arr); err != nil {
+		return nil, fmt.Errorf("%w: PowerMods が配列でない: %v", ErrInvalidEffect, err)
+	}
+	if len(arr) == 0 {
+		return nil, fmt.Errorf("%w: PowerMods が空", ErrInvalidEffect)
+	}
+	out := make([]engine.ConditionalPowerMod, 0, len(arr))
+	for _, el := range arr {
+		fields, err := decodeEffectSubObject(el, "PowerMods の要素", powerModFields)
+		if err != nil {
+			return nil, err
+		}
+		condRaw, okC := fields["Condition"]
+		modRaw, okM := fields["Modifier"]
+		if !okC || !okM {
+			return nil, fmt.Errorf("%w: PowerMods の要素は Condition と Modifier が要る", ErrInvalidEffect)
+		}
+		s, err := decodeStrictString(condRaw)
+		if err != nil {
+			return nil, err
+		}
+		pm := engine.ConditionalPowerMod{Condition: engine.PowerCondition(s)}
+		maxRaw, hasMax := fields["MaxPower"]
+		typeRaw, hasType := fields["MoveType"]
+		switch pm.Condition {
+		case engine.PowerConditionMaxBasePower:
+			if !hasMax || hasType {
+				return nil, fmt.Errorf("%w: max_base_power は MaxPower だけを持つ", ErrInvalidEffect)
+			}
+			if pm.MaxPower, err = decodePositiveInt(maxRaw); err != nil {
+				return nil, err
+			}
+		case engine.PowerConditionMoveType:
+			if !hasType || hasMax {
+				return nil, fmt.Errorf("%w: move_type は MoveType だけを持つ", ErrInvalidEffect)
+			}
+			if pm.MoveType, err = decodeKnownType(typeRaw, chart); err != nil {
+				return nil, err
+			}
+		default:
+			return nil, fmt.Errorf("%w: PowerMods の条件が語彙に無い: %q", ErrInvalidEffect, s)
+		}
+		if pm.Modifier, err = decodePositiveInt(modRaw); err != nil {
+			return nil, err
+		}
+		if pm.Modifier == engine.Modifier4096 {
+			return nil, fmt.Errorf("%w: PowerMods の Modifier が中立(%d)", ErrInvalidEffect, pm.Modifier)
+		}
+		for _, prev := range out {
+			if prev == pm {
+				return nil, fmt.Errorf("%w: PowerMods に同じ要素が重複している", ErrInvalidEffect)
+			}
+		}
+		out = append(out, pm)
+	}
+	return out, nil
+}
+
+// encodeTypeConvert は From → To → PowerMod の順で書く(正準形)。
+func encodeTypeConvert(c engine.TypeConvert) []byte {
+	w := newEffectWriter()
+	w.field("From", quoteJSON(string(c.From)))
+	w.field("To", quoteJSON(string(c.To)))
+	w.field("PowerMod", []byte(strconv.Itoa(c.PowerMod)))
+	w.buf.WriteByte('}')
+	return w.buf.Bytes()
+}
+
+// encodePowerMods は配列の順のまま、要素のキーを Condition → MaxPower → MoveType → Modifier の順
+// (ゼロ値は省く)で書く(正準形)。
+func encodePowerMods(mods []engine.ConditionalPowerMod) []byte {
+	var buf bytes.Buffer
+	buf.WriteByte('[')
+	for i, m := range mods {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		w := newEffectWriter()
+		w.field("Condition", quoteJSON(string(m.Condition)))
+		if m.MaxPower != 0 {
+			w.field("MaxPower", []byte(strconv.Itoa(m.MaxPower)))
+		}
+		if m.MoveType != "" {
+			w.field("MoveType", quoteJSON(string(m.MoveType)))
+		}
+		w.field("Modifier", []byte(strconv.Itoa(m.Modifier)))
+		w.buf.WriteByte('}')
+		buf.Write(w.buf.Bytes())
+	}
+	buf.WriteByte(']')
+	return buf.Bytes()
+}
+
+// encodeAbilityStage1 は特性の段階1の項目を struct 定義順(ゼロ値省略)で書く。
+func (w *effectWriter) encodeAbilityStage1(e engine.AbilityEffect) {
+	if e.TypeConvert != nil {
+		w.field("TypeConvert", encodeTypeConvert(*e.TypeConvert))
+	}
+	if len(e.PowerMods) > 0 {
+		w.field("PowerMods", encodePowerMods(e.PowerMods))
+	}
+	if e.AuraType != "" {
+		w.field("AuraType", quoteJSON(string(e.AuraType)))
+	}
+	if e.AuraMod != 0 {
+		w.field("AuraMod", []byte(strconv.Itoa(e.AuraMod)))
+	}
+	if len(e.StatMods) > 0 {
+		w.field("StatMods", encodeStatMods(e.StatMods))
+	}
+	if len(e.SeparateStatMods) > 0 {
+		w.field("SeparateStatMods", encodeStatMods(e.SeparateStatMods))
+	}
+	if e.CritDamageMod != 0 {
+		w.field("CritDamageMod", []byte(strconv.Itoa(e.CritDamageMod)))
+	}
+	for _, f := range []struct {
+		key string
+		v   bool
+	}{
+		{"PreventsCritical", e.PreventsCritical},
+		{"IgnoresOpponentRanks", e.IgnoresOpponentRanks},
+		{"IgnoresDefenderAbility", e.IgnoresDefenderAbility},
+		{"Breakable", e.Breakable},
+	} {
+		if f.v {
+			w.field(f.key, []byte("true"))
+		}
+	}
 }
 
 // quoteJSON は文字列を JSON 文字列リテラルにする(エスケープは encoding/json に任せる)。
@@ -807,6 +1059,7 @@ func EncodeAbilityEffect(e engine.AbilityEffect) ([]byte, error) {
 	if e.IgnoresParalysisSpeedDrop {
 		w.field("IgnoresParalysisSpeedDrop", []byte("true"))
 	}
+	w.encodeAbilityStage1(e)
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	return w.bytes()
 }

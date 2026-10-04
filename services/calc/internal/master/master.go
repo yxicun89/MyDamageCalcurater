@@ -10,6 +10,7 @@
 package master
 
 import (
+	"maps"
 	"slices"
 	"sort"
 
@@ -159,6 +160,14 @@ func copyAbilityEffect(e *engine.AbilityEffect) *engine.AbilityEffect {
 		}
 	}
 	out.SpeedMods = slices.Clone(e.SpeedMods)
+	// 特性の段階1(ADR-0176)の参照型も複製する(nil は nil のまま)。
+	if e.TypeConvert != nil {
+		tc := *e.TypeConvert
+		out.TypeConvert = &tc
+	}
+	out.PowerMods = slices.Clone(e.PowerMods)
+	out.StatMods = maps.Clone(e.StatMods)
+	out.SeparateStatMods = maps.Clone(e.SeparateStatMods)
 	return &out
 }
 

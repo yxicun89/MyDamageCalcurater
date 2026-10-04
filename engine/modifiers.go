@@ -237,8 +237,13 @@ func screenDamageMod(in DamageInput) int {
 // offensiveStatMod は攻撃側の持ち物による攻撃実数値の倍率(chainMods 済み)を返す。
 func offensiveStatMod(in DamageInput, atkKey StatKey) int {
 	var mods []int
-	if ae := in.Attacker.Ability.Effect; ae != nil && ae.OffBoostType == in.Move.Type && ae.OffBoostTypeMod != 0 {
-		mods = append(mods, ae.OffBoostTypeMod)
+	if ae := in.Attacker.Ability.Effect; ae != nil {
+		if m, ok := ae.StatMods[atkKey]; ok {
+			mods = append(mods, m)
+		}
+		if ae.OffBoostType == in.Move.Type && ae.OffBoostTypeMod != 0 {
+			mods = append(mods, ae.OffBoostTypeMod)
+		}
 	}
 	if de := in.Defender.Ability.Effect; de != nil {
 		if m, ok := de.DefResistType[in.Move.Type]; ok {
@@ -256,6 +261,11 @@ func offensiveStatMod(in DamageInput, atkKey StatKey) int {
 // defensiveStatMod は防御側の持ち物による防御実数値倍率を返す。
 func defensiveStatMod(in DamageInput, defKey StatKey) int {
 	var mods []int
+	if de := in.Defender.Ability.Effect; de != nil {
+		if m, ok := de.StatMods[defKey]; ok {
+			mods = append(mods, m)
+		}
+	}
 	if e := itemEffect(in.Defender.Item); e != nil {
 		if m, ok := e.StatMods[defKey]; ok {
 			mods = append(mods, m)
@@ -274,8 +284,25 @@ func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 	return Modifier4096
 }
 
-func powerModifier(in DamageInput) int {
+// powerModifier は威力の補正(chainMods 済み)を返す。連鎖の順は oracle と同じ
+// フィールド → 攻撃側の条件つき補正 → オーラ → タイプ変換 → 持ち物(ADR-0176)。
+// in.Move.Type は変換後のタイプ。converted はタイプ変換したか。
+func powerModifier(in DamageInput, converted bool) int {
 	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type, isGrounded(in.Attacker), isGrounded(in.Defender))}
+	ae := in.Attacker.Ability.Effect
+	if ae != nil {
+		for _, pm := range ae.PowerMods {
+			if powerConditionHolds(pm, in.Move) {
+				mods = append(mods, pm.Modifier)
+			}
+		}
+	}
+	if m := auraMod(in); m != 0 {
+		mods = append(mods, m)
+	}
+	if converted {
+		mods = append(mods, ae.TypeConvert.PowerMod)
+	}
 	if e := itemEffect(in.Attacker.Item); e != nil {
 		if e.BoostType != TypeNone && e.BoostType == in.Move.Type && e.BoostTypeMod != 0 {
 			mods = append(mods, e.BoostTypeMod)
@@ -287,6 +314,28 @@ func powerModifier(in DamageInput) int {
 	return chainMods(mods, powerModBounds)
 }
 
+// powerConditionHolds は条件つきの威力補正の条件が技 m(タイプは変換後)で成り立つかを返す。
+func powerConditionHolds(pm ConditionalPowerMod, m Move) bool {
+	switch pm.Condition {
+	case PowerConditionMaxBasePower:
+		return m.Power <= pm.MaxPower
+	case PowerConditionMoveType:
+		return m.Type == pm.MoveType
+	}
+	return false
+}
+
+// auraMod は攻撃側・防御側のどちらかが技のタイプのオーラを持つときの威力補正を返す(両側が持っても1回。攻撃側を優先)。
+// 無ければ 0。
+func auraMod(in DamageInput) int {
+	for _, e := range []*AbilityEffect{in.Attacker.Ability.Effect, in.Defender.Ability.Effect} {
+		if e != nil && e.AuraType != TypeNone && e.AuraType == in.Move.Type && e.AuraMod != 0 {
+			return e.AuraMod
+		}
+	}
+	return 0
+}
+
 func itemEffect(i *Item) *ItemEffect {
 	if i == nil {
 		return nil
@@ -295,7 +344,7 @@ func itemEffect(i *Item) *ItemEffect {
 }
 
 // otherModifiers はやけどの後に chainMods で1回適用する「その他補正」の一覧を返す。
-// 壁・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
+// 壁・急所の補正の特性・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
 // eff は CalcDamage が1回だけ引いた技のタイプ相性(抜群判定に使う)。
 func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	var mods []int
@@ -305,6 +354,9 @@ func otherModifiers(in DamageInput, eff Effectiveness) []int {
 		if sm := screenDamageMod(in); sm != Modifier4096 {
 			mods = append(mods, sm)
 		}
+	}
+	if ae := in.Attacker.Ability.Effect; ae != nil && in.Critical && ae.CritDamageMod != 0 {
+		mods = append(mods, ae.CritDamageMod)
 	}
 	if de := in.Defender.Ability.Effect; de != nil && de.ReduceSuperEffective != 0 && superEffective {
 		mods = append(mods, de.ReduceSuperEffective)
