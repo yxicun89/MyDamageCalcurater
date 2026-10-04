@@ -275,9 +275,16 @@ FROM items
 WHERE id = ?
 `
 
-func (q *Queries) GetItem(ctx context.Context, id string) (Item, error) {
+type GetItemRow struct {
+	ID           string
+	NameJa       string
+	NameJaSource string
+	NameEn       string
+}
+
+func (q *Queries) GetItem(ctx context.Context, id string) (GetItemRow, error) {
 	row := q.db.QueryRowContext(ctx, getItem, id)
-	var i Item
+	var i GetItemRow
 	err := row.Scan(
 		&i.ID,
 		&i.NameJa,
@@ -482,8 +489,8 @@ func (q *Queries) InsertDataVersion(ctx context.Context, arg InsertDataVersionPa
 }
 
 const insertItem = `-- name: InsertItem :exec
-INSERT INTO items (id, name_ja, name_ja_source, name_en)
-VALUES (?, ?, ?, ?)
+INSERT INTO items (id, name_ja, name_ja_source, name_en, is_mega_stone)
+VALUES (?, ?, ?, ?, ?)
 `
 
 type InsertItemParams struct {
@@ -491,6 +498,7 @@ type InsertItemParams struct {
 	NameJa       string
 	NameJaSource string
 	NameEn       string
+	IsMegaStone  bool
 }
 
 func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
@@ -499,6 +507,7 @@ func (q *Queries) InsertItem(ctx context.Context, arg InsertItemParams) error {
 		arg.NameJa,
 		arg.NameJaSource,
 		arg.NameEn,
+		arg.IsMegaStone,
 	)
 	return err
 }
@@ -1040,7 +1049,7 @@ func (q *Queries) ListItemIDs(ctx context.Context) ([]string, error) {
 }
 
 const listItems = `-- name: ListItems :many
-SELECT id, name_ja, name_ja_source, name_en
+SELECT id, name_ja, name_ja_source, name_en, is_mega_stone
 FROM items
 ORDER BY id
 `
@@ -1059,6 +1068,7 @@ func (q *Queries) ListItems(ctx context.Context) ([]Item, error) {
 			&i.NameJa,
 			&i.NameJaSource,
 			&i.NameEn,
+			&i.IsMegaStone,
 		); err != nil {
 			return nil, err
 		}
@@ -1767,7 +1777,7 @@ func (q *Queries) ListTypes(ctx context.Context) ([]Type, error) {
 
 const searchItems = `-- name: SearchItems :many
 SELECT i.id, i.name_ja, ie.effect,
-       EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id) AS is_mega_stone
+       (i.is_mega_stone OR EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id)) = TRUE AS is_mega_stone
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
 LEFT JOIN item_effects ie ON ie.item_id = i.id
@@ -1789,8 +1799,9 @@ type SearchItemsRow struct {
 	IsMegaStone bool
 }
 
-// is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
-// species.required_item_id の外部キーの索引を使う)。
+// is_mega_stone: 列(取得元から導いた判定。ADR-0140)が真、または いずれかのメガ種族の required_item_id に現れる
+// (ADR-0175 §2。使用可能集合で絞らない。species.required_item_id の外部キーの索引を使う)。
+// `= TRUE` は sqlc に bool と推論させるため(OR 式だけだと NullBool・interface になる)。
 func (q *Queries) SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error) {
 	rows, err := q.db.QueryContext(ctx, searchItems, arg.RegulationID, arg.Pattern, arg.Limit)
 	if err != nil {

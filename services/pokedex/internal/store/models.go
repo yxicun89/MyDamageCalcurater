@@ -34,6 +34,7 @@ type Item struct {
 	NameJa       string
 	NameJaSource string
 	NameEn       string
+	IsMegaStone  bool
 }
 
 type ItemEffect struct {

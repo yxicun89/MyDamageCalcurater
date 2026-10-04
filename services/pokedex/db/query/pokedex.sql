@@ -188,8 +188,8 @@ INSERT INTO abilities (id, name_ja, name_ja_source, name_en)
 VALUES (?, ?, ?, ?);
 
 -- name: InsertItem :exec
-INSERT INTO items (id, name_ja, name_ja_source, name_en)
-VALUES (?, ?, ?, ?);
+INSERT INTO items (id, name_ja, name_ja_source, name_en, is_mega_stone)
+VALUES (?, ?, ?, ?, ?);
 
 -- name: InsertMove :exec
 INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
@@ -280,7 +280,7 @@ FROM species_abilities
 ORDER BY species_key, slot;
 
 -- name: ListItems :many
-SELECT id, name_ja, name_ja_source, name_en
+SELECT id, name_ja, name_ja_source, name_en, is_mega_stone
 FROM items
 ORDER BY id;
 
@@ -347,10 +347,11 @@ ORDER BY m.name_ja, m.id
 LIMIT ?;
 
 -- name: SearchItems :many
--- is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
--- species.required_item_id の外部キーの索引を使う)。
+-- is_mega_stone: 列(取得元から導いた判定。ADR-0140)が真、または いずれかのメガ種族の required_item_id に現れる
+-- (ADR-0175 §2。使用可能集合で絞らない。species.required_item_id の外部キーの索引を使う)。
+-- `= TRUE` は sqlc に bool と推論させるため(OR 式だけだと NullBool・interface になる)。
 SELECT i.id, i.name_ja, ie.effect,
-       EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id) AS is_mega_stone
+       (i.is_mega_stone OR EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id)) = TRUE AS is_mega_stone
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
 LEFT JOIN item_effects ie ON ie.item_id = i.id

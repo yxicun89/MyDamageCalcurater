@@ -34,7 +34,7 @@ type Querier interface {
 	GetAbilityEffect(ctx context.Context, abilityID string) (AbilityEffect, error)
 	GetDataVersion(ctx context.Context, source string) (DataVersion, error)
 	GetDefaultRegulation(ctx context.Context) (GetDefaultRegulationRow, error)
-	GetItem(ctx context.Context, id string) (Item, error)
+	GetItem(ctx context.Context, id string) (GetItemRow, error)
 	GetItemEffect(ctx context.Context, itemID string) (ItemEffect, error)
 	GetMove(ctx context.Context, id string) (GetMoveRow, error)
 	GetMovesByIDs(ctx context.Context, ids []string) ([]GetMovesByIDsRow, error)
@@ -100,8 +100,9 @@ type Querier interface {
 	// sqlc のクエリ(ADR-0100 §1)。services/internal/master(DB行→engine型の写像)が
 	// 受け取る素朴な行の型(TypeRow・SpeciesRow 等)にそのまま詰め替えられる列の並びにする。
 	ListTypes(ctx context.Context) ([]Type, error)
-	// is_mega_stone: いずれかのメガ種族の required_item_id に現れるか(ADR-0175 §2。使用可能集合で絞らない。
-	// species.required_item_id の外部キーの索引を使う)。
+	// is_mega_stone: 列(取得元から導いた判定。ADR-0140)が真、または いずれかのメガ種族の required_item_id に現れる
+	// (ADR-0175 §2。使用可能集合で絞らない。species.required_item_id の外部キーの索引を使う)。
+	// `= TRUE` は sqlc に bool と推論させるため(OR 式だけだと NullBool・interface になる)。
 	SearchItems(ctx context.Context, arg SearchItemsParams) ([]SearchItemsRow, error)
 	SearchMoves(ctx context.Context, arg SearchMovesParams) ([]SearchMovesRow, error)
 	// ---------------------------------------------------------------------------------------------

@@ -101,6 +101,11 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に target が無い(ADR-0136 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
 		}
 	}
+	for _, it := range s.Items {
+		if it.MegaStone == nil {
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 持ち物 %q に megaStone が無い(ADR-0140 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, it.ID)
+		}
+	}
 	return s, nil
 }
 
