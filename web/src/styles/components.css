@@ -1,0 +1,293 @@
+/*
+ * 共通の見た目の部品(.ui-* クラス。docs/design.md「共通の部品」、ADR-0331 §2)。
+ * 画面の CSS は配置(グリッド・余白)だけを持ち、見た目はこれらのクラスを足して使う。
+ * 色・角丸・影・時間は tokens.css の `--*` だけを参照する(色の直書きをしない。コーディング規約 §2)。
+ * 動きは押下・選択の transition だけ(animation を置かない。時間は --duration-press で、reduced-motion で 0)。
+ * :hover は @media (hover: hover) の中だけ(タッチで押したあとに色が残らない)。
+ * main.tsx で tokens.css の次に読み込む(同じ詳細度の画面 CSS より後に効く)。
+ */
+
+/* ---- カード ---- */
+.ui-card {
+  border-radius: var(--radius-card);
+  background: var(--surface-card);
+  box-shadow: var(--shadow-card);
+  color: var(--text-primary);
+}
+
+/* タイプ色のカード。--card-type は画面が typeAccentStyle で置く。未設定ならブランド色。 */
+.ui-card--typed {
+  border: 1px solid var(--border-hairline);
+  border-top: 4px solid var(--card-type, var(--brand-primary));
+}
+
+.ui-card__band {
+  background: var(--card-type, var(--brand-primary));
+  border-radius: var(--radius-input);
+  padding: var(--space-1) var(--space-3);
+}
+
+/* ---- セクション・見出し ---- */
+.ui-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.ui-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
+}
+
+/* ---- ボタン ---- */
+.ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--brand-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) ease,
+    background-color var(--duration-press) ease,
+    color var(--duration-press) ease;
+}
+
+.ui-button:active {
+  transform: scale(0.96);
+}
+
+.ui-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ui-button:disabled:active {
+  transform: none;
+}
+
+.ui-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ui-button--primary {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--on-primary);
+}
+
+.ui-button--secondary {
+  background: var(--surface-card);
+  color: var(--brand-primary);
+}
+
+.ui-button--danger {
+  background: var(--danger);
+  border-color: var(--danger);
+  color: var(--on-danger);
+}
+
+/* ---- チップ(チェックボックス・ラジオを包む label) ---- */
+.ui-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  padding: var(--space-1) var(--space-3);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) ease,
+    background-color var(--duration-press) ease,
+    color var(--duration-press) ease;
+}
+
+.ui-chip:active {
+  transform: scale(0.96);
+}
+
+.ui-chip:focus-within:has(:focus-visible),
+.ui-chip:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ui-chip--selected {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--on-primary);
+  font-weight: var(--font-weight-strong);
+}
+
+/* ---- バッジ ---- */
+.ui-badge {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  font-weight: var(--font-weight-strong);
+}
+
+/* ---- 表・一覧 ---- */
+.ui-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  border-radius: var(--radius-input);
+  overflow: hidden;
+}
+
+.ui-table th {
+  background: var(--table-header);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-strong);
+  text-align: left;
+}
+
+.ui-table tbody tr:nth-child(even) {
+  background: var(--table-zebra);
+}
+
+.ui-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-input);
+  overflow: hidden;
+}
+
+:where(.ui-rows > li) {
+  padding: var(--space-2) var(--space-3);
+}
+
+.ui-rows > li:nth-child(even) {
+  background: var(--table-zebra);
+}
+
+@media (hover: hover) {
+  .ui-table tbody tr:hover {
+    background: var(--table-hover);
+  }
+
+  .ui-rows > li:hover {
+    background: var(--table-hover);
+  }
+
+  .ui-button--secondary:hover {
+    background: var(--table-hover);
+  }
+
+  .ui-button--primary:hover,
+  .ui-button--danger:hover {
+    box-shadow: var(--shadow-raised);
+  }
+
+  .ui-tab:hover:not([aria-selected="true"]) {
+    background: var(--table-hover);
+  }
+
+  .ui-chip:hover:not(.ui-chip--selected) {
+    background: var(--table-hover);
+  }
+}
+
+/* ---- タブ ---- */
+.ui-tabs {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.ui-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  background: var(--surface-card);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  padding: var(--space-2) var(--space-4);
+  cursor: pointer;
+  transition:
+    transform var(--duration-press) ease,
+    background-color var(--duration-press) ease,
+    color var(--duration-press) ease;
+}
+
+.ui-tab:active {
+  transform: scale(0.96);
+}
+
+.ui-tab:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.ui-tab[aria-selected="true"] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+  color: var(--on-primary);
+  font-weight: var(--font-weight-strong);
+}
+
+/* ---- 入力 ---- */
+.ui-field input,
+.ui-field select,
+.ui-field textarea {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--surface-card);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+}
+
+.ui-field input:focus-visible,
+.ui-field select:focus-visible,
+.ui-field textarea:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---- 案内(空・エラー・読み込み・情報) ---- */
+.ui-notice {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-input);
+}
+
+.ui-notice--empty {
+  background: var(--surface-card);
+  color: var(--text-secondary);
+}
+
+.ui-notice--error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.ui-notice--loading,
+.ui-notice--info {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+/* ---- アイコン ---- */
+.ui-icon {
+  flex-shrink: 0;
+  color: currentColor;
+}

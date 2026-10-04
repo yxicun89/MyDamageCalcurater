@@ -105,6 +105,8 @@ import { useSpeciesResolutions } from "./speciesResolution";
 import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
+import { Icon } from "../ui/Icon";
+import { typeAccentStyle } from "../ui/typeAccent";
 import "./CalcScreen.css";
 
 /**
@@ -839,7 +841,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
             <AddFavoriteButton recordClient={recordClient} input={favoriteInput} onAdded={onFavoriteAdded} />
           )}
         </SpeciesCard>
-        <button type="button" className="calc-screen__swap" onClick={swap}>
+        <button type="button" className="ui-button ui-button--secondary calc-screen__swap" onClick={swap}>
+          <Icon name="swap" size={16} />
           {calcScreenText.swapButtonLabel}
         </button>
         <SpeciesCard
@@ -1013,7 +1016,13 @@ function SpeciesCard({
 }: SpeciesCardProps) {
   const primaryType = species?.types[0];
   const holo = useHoloCard(activeHoloClearRef);
-  const className = ["calc-card", isSwapping ? "is-swapping" : "", holo.isHolo ? "is-holo" : ""]
+  const className = [
+    "ui-card",
+    "ui-card--typed",
+    "calc-card",
+    isSwapping ? "is-swapping" : "",
+    holo.isHolo ? "is-holo" : "",
+  ]
     .filter((part) => part !== "")
     .join(" ");
   // 領域(カード)の見える見出し(h2)。accessible name はこの見出しの文字から作る(SC 2.5.3)。
@@ -1029,7 +1038,7 @@ function SpeciesCard({
     <section
       className={className}
       aria-labelledby={regionHeadingId}
-      style={holo.style}
+      style={{ ...holo.style, ...typeAccentStyle(primaryType) }}
       onAnimationEnd={(event) => {
         // バブリングで子要素のアニメーション(バッジの弾み等)と混ざらないよう currentTarget と比べる。
         if (event.target === event.currentTarget) {
@@ -1129,7 +1138,7 @@ function SpeciesCard({
             {species.types.map((type) => (
               <li
                 key={type}
-                className="calc-card__type"
+                className="ui-badge calc-card__type"
                 style={{
                   backgroundColor: `var(--type-${type}, var(--border-hairline))`,
                   color: `var(--type-${type}-ink, var(--text-primary))`,
@@ -1228,7 +1237,7 @@ function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: Attacker
           return (
             <label
               key={key}
-              className={`calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
+              className={`ui-chip${selected ? " ui-chip--selected" : ""} calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
             >
               <input
                 type="radio"
@@ -1306,7 +1315,9 @@ interface NatureModifierOptionProps {
 /** 性格補正のピル(上昇・補正なし・下降)。 */
 function NatureModifierOption({ name, modifier, checked, disabled, onSelect }: NatureModifierOptionProps) {
   return (
-    <label className={`calc-preset__option${checked ? " calc-preset__option--selected" : ""}`}>
+    <label
+      className={`ui-chip${checked ? " ui-chip--selected" : ""} calc-preset__option${checked ? " calc-preset__option--selected" : ""}`}
+    >
       <input
         type="radio"
         name={name}
@@ -1489,7 +1500,7 @@ function ResultsList({
           <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
         </p>
       )}
-      <ul aria-label={calcScreenText.resultsListLabel} className="calc-results__list">
+      <ul aria-label={calcScreenText.resultsListLabel} className="ui-rows calc-results__list">
         {result.rows.map((row, index) => {
           const itemLabel =
             row.itemId === ""
@@ -1498,7 +1509,7 @@ function ResultsList({
           const abilityLabel = abilityNamesLabel(row.abilityIds, abilities, defenderHasAbilityChoice);
           const barValue = Math.min(row.result.maxPercent, DAMAGE_BAR_MAX_PERCENT);
           const koKey = koRowKey(row);
-          const koClassName = `calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
+          const koClassName = `ui-badge calc-results__ko${pulsingKeys.has(koKey) ? " is-pulsing" : ""}`;
           // 全行に共通する印は先頭の案内が担うので、この行では残り(一部の行だけにある印)だけ出す。
           const rowMarkLabels = unsupportedMarkLabels(perRowMarks[index] ?? [], moves, items, abilities);
           return (

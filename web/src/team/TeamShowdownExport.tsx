@@ -95,6 +95,7 @@ export function TeamShowdownExport({ team, master, masterSearch }: TeamShowdownE
     <>
       <button
         type="button"
+        className="ui-button ui-button--secondary"
         disabled={empty || busy}
         aria-describedby={empty ? emptyNoticeId : undefined}
         onClick={() => {
@@ -120,13 +121,14 @@ export function TeamShowdownExport({ team, master, masterSearch }: TeamShowdownE
           <div className="team-showdown__actions">
             <button
               type="button"
+              className="ui-button ui-button--primary"
               onClick={() => {
                 void handleCopy(current.text);
               }}
             >
               {teamShowdownText.exportCopyLabel}
             </button>
-            <button type="button" onClick={handleClose}>
+            <button type="button" className="ui-button ui-button--secondary" onClick={handleClose}>
               {teamShowdownText.exportCloseLabel}
             </button>
           </div>

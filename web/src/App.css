@@ -7,7 +7,8 @@
 
 .app-header h1 {
   margin: 0;
-  font-size: var(--font-size-heading);
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-title);
   color: var(--text-primary);
 }
 
@@ -32,29 +33,11 @@
 }
 
 .app-tabs__tab {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
-  color: var(--text-secondary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  padding: var(--space-2) var(--space-4);
-  cursor: pointer;
-  /* white-space だけでも折り返さない(nowrap で min-content = max-content になり flex-shrink の余地が無い)。
+  /* 見た目(ピル・選択色・押下)は共通部品 .ui-tab(styles/components.css)。ここは折り返さない指定だけ。
+     white-space だけでも折り返さない(nowrap で min-content = max-content になり flex-shrink の余地が無い)。
      flex-shrink: 0 は将来 box-sizing・padding 等が変わっても縮まないことを明示するための保険として残す。 */
   white-space: nowrap;
   flex-shrink: 0;
-  /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約)。 */
-  transition:
-    background-color var(--duration-swap) ease,
-    color var(--duration-swap) ease;
-}
-
-.app-tabs__tab[aria-selected="true"] {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-base);
 }
 
 /* 計算モード(オフライン / オンライン)の切り替え(P4-5)。ピル型ラジオグループ(calc-preset と同じ作法)。 */
@@ -66,27 +49,8 @@
 }
 
 .app-mode__option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
-  color: var(--text-secondary);
-  font-family: var(--font-family);
+  /* 見た目(ピル・選択色)は共通部品 .ui-chip(styles/components.css)。 */
   font-size: var(--font-size-caption);
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
-  transition:
-    background-color var(--duration-swap) ease,
-    color var(--duration-swap) ease;
-}
-
-.app-mode__option--selected {
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-base);
 }
 
 .app-mode__input {
@@ -132,6 +96,9 @@
 }
 
 .app-footer__link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
   text-decoration: underline;

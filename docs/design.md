@@ -4,7 +4,7 @@
 
 - **B: Liquid Glass 系のクリーン**(操作パネル・計算画面)
 - **C: カード/ホロのコレクション風**(ポケモン表示・構築)
-- 背景は無彩色。**色を持つのはタイプだけ**
+- **ポップ・カラフル**(ADR-0331): タイプ色のカード・丸いボタン・アイコン・やさしい背景のグラデーション。ブランド色・状態色は「ポップ配色」に限る(旧「背景は無彩色。色を持つのはタイプだけ」を改めた)
 - 静止画をきれいに、動きは操作への反応だけ
 
 ## デザイントークン
@@ -68,11 +68,63 @@ WCAG 2.2 SC 1.4.3(通常文字 4.5:1)に届かない(ライトで14タイプ、�
 ### 文字
 - iOS: SF Pro Rounded。数字は等幅(`.monospacedDigit()`)
 - Web: "SF Pro Rounded", "M PLUS Rounded 1c", system-ui。数字は `font-variant-numeric: tabular-nums`
-- サイズ: 結果の%表示 28 / 見出し 17 / 本文 15 / 補足 12
+- サイズ: タイトル 22 / 結果の%表示 28 / 見出し 17 / 本文 15 / 補足 12
+- 太さ: タイトル 800 / 見出し 700 / 強調 700 / 本文 400
 
 ### 形・余白
 - 角丸: カード 20 / ボタン・チップ 999(ピル)/ 入力 12
 - 余白: 4 の倍数(4, 8, 12, 16, 24)
+- 影: カード 0 2px 8px / 浮き上がり 0 6px 16px(色は shadow.color)。表・案内の角丸は入力(12)を使い、角丸・余白の段階は増やさない
+
+### ポップ配色
+ADR-0331。名前は iOS と共有する。`-ink` で終わる名前と `type-` で始まる名前は使わない(タイプバッジ・タイプ色の命名)。brand.accent は塗りの装飾だけに使い、文字色・境界線にしない。
+
+| トークン | ライト | ダーク | 用途 |
+|---|---|---|---|
+| brand.primary | #1F5FD6 | #7FA8FF | 主ボタン・選択中のタブとチップの塗り・リンク |
+| on.primary | #FFFFFF | #0E1015 | brand.primary の塗りの上の文字 |
+| brand.accent | #FFCB05 | #FFD84D | 塗りの装飾だけ(星・ハイライト)。文字色・境界線には使わない |
+| on.accent | #14161A | #14161A | brand.accent の塗りの上の文字 |
+| success | #17743A | #5FD38A | 成功の文字・アイコン |
+| success.soft | #E2F5E8 | #12301F | 成功の案内の塗り |
+| warning | #9A5B00 | #FFB547 | 注意の文字・アイコン |
+| warning.soft | #FFF1D6 | #33240B | 注意の案内の塗り |
+| info | #0B6BA8 | #5EC2F2 | 情報・読み込み中の文字・アイコン |
+| info.soft | #DCEFFB | #0C2A3A | 情報・読み込み中の案内の塗り |
+| danger.soft | #FDE3E4 | #3A1416 | エラーの案内の塗り(文字は既存の danger) |
+| on.danger | #FFFFFF | #0E1015 | danger の塗り(危険ボタン)の上の文字 |
+| surface.card | #FFFFFF | #1A1D24 | カード・ボタン(副)の不透明な面 |
+| bg.gradient-start | #FFF6E0 | #14131C | 背景のやさしいグラデーション(上) |
+| bg.gradient-end | #E8F1FF | #0E1622 | 背景のやさしいグラデーション(下) |
+| table.header | #DCE7FB | #1C2638 | 表の見出し行 |
+| table.zebra | #EEF2F8 | #151922 | 表・一覧の偶数行 |
+| table.hover | #E3ECFB | #1D2535 | 表・一覧の行ホバー(hover: hover の環境だけ) |
+| focus.ring | #1F5FD6 | #7FA8FF | フォーカスの輪(:focus-visible) |
+| shadow.color | 黒 10% | 黒 40% | 影の色 |
+
+- body の背景は `linear-gradient(180deg, bg.gradient-start, bg.gradient-end)` を画面に固定(`background-attachment: fixed`)。下地の bg.base は残す
+
+### 共通の部品
+`web/src/styles/components.css` の `.ui-*` クラス(ADR-0331 §2)。画面の CSS は配置だけを持ち、見た目はこれらを足して使う。色・角丸・影・時間はトークンだけを参照する。
+
+| クラス | 見た目 |
+|---|---|
+| `.ui-card` | カードの角丸・surface.card・カードの影 |
+| `.ui-card--typed` | ふち(上端)と `.ui-card__band` を `--card-type`(未設定は brand.primary)で塗る |
+| `.ui-card__band` | カード上端の帯(装飾) |
+| `.ui-section` / `.ui-heading` | セクションの余白・見出し(アイコン + 文字) |
+| `.ui-button` | ピル・強調の太さ。押下で少し縮む(`:active`)。`.ui-button--primary` / `.ui-button--secondary` / `.ui-button--danger` |
+| `.ui-chip` / `.ui-chip--selected` | チェックボックス・ラジオを包むピル。選択中は brand.primary / on.primary |
+| `.ui-badge` | ピル・太字(確定数・タイプ) |
+| `.ui-table` | 見出し行・ゼブラ・行ホバー・角丸 |
+| `.ui-rows` | ul/ol を表のように(ゼブラ・行ホバー・角丸) |
+| `.ui-tabs` / `.ui-tab` | アイコンと文字を横に並べたピルのタブ。選択中は brand.primary / on.primary |
+| `.ui-field` | 入力・選択・テキスト領域の角丸とフォーカスの輪 |
+| `.ui-notice` + `.ui-notice--empty` / `.ui-notice--error` / `.ui-notice--loading` / `.ui-notice--info` | 角丸の囲み。empty は surface.card、error は danger.soft、loading・info は info.soft |
+| `.ui-icon` | インライン SVG のアイコン(色は文字色に従う。縮まない) |
+
+- `:hover` は `@media (hover: hover)` の中だけ。`.ui-button / .ui-tab / .ui-chip / .ui-field` は `:focus-visible` で focus.ring の輪(2px・offset 2px)
+- components.css に `animation` を置かない。transition の時間は `duration.press` だけ
 
 ## 入力のラベル
 
@@ -249,9 +301,10 @@ SC 3.3.2 ラベル又は説明)。読み上げ用の名前(accessible name)だ�
 - 攻守入れ替え: カードが入れ替わる(0.35秒。`duration.swap`)
 - ホロ効果: 選択中のカード1枚だけ、端末の傾き(Web はポインタ位置)に連動。ハイライトは白 35%(`holo.highlight`、ライト/ダーク共通)。Web はマウス・ペンのときだけ(タッチでは出さない。指で隠れて見えないため)
 - 逆算で観測を追加して候補が絞られるとき: 候補一覧が 0.3秒で切り替わる(`duration.narrow`)
+- 押下: ボタン・タブ・チップを押したとき 0.15秒で少し縮む(`duration.press`)。OS の「視差効果を減らす」では 0
 - 常時動くものは置かない。OS の「視差効果を減らす」で全演出を無効化
 
 ## パフォーマンス予算
 - 画像: サムネ 128px WebP ≤ 20KB、詳細 512px ≤ 100KB、見えている分だけ読み込む(`loading="lazy"`)。画像は任意で、無い・取れない・読み込み失敗のときはタイプ色エンブレム。装飾なので alt は空、エンブレムと同じ寸法の枠に収めてレイアウトを動かさない(ADR-0325)
 - 計算結果の表示更新: 入力から 100ms 以内(WASM/API とも)
-- Web の初期ロード: JS ≤ 300KB(gzip、WASM 除く)
+- Web の初期ロード: JS ≤ 300KB・CSS ≤ 30KB(gzip、WASM 除く)

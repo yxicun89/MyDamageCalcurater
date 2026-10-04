@@ -138,6 +138,7 @@ export function TeamShowdownImport({
       <div className="team-showdown__actions">
         <button
           type="button"
+          className="ui-button ui-button--secondary"
           disabled={resolving || submitting}
           onClick={() => {
             void handlePreview();
@@ -147,6 +148,7 @@ export function TeamShowdownImport({
         </button>
         <button
           type="button"
+          className="ui-button ui-button--primary"
           disabled={!canCreate}
           onClick={() => {
             void handleCreate();
