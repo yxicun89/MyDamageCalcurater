@@ -9,7 +9,7 @@
 // 4つの呼び出しは互いに独立(1つの遅延・エラーが他の表示を消さない。ADR-0303 §9)。
 
 import { useEffect, useId, useRef, useState } from "react";
-import type { Dispatch, SetStateAction } from "react";
+import type { Dispatch, ReactNode, SetStateAction } from "react";
 import type { components } from "../api/balance.gen";
 import type { BalanceClient, BalanceResult } from "../api/balanceClient";
 import {
@@ -24,6 +24,7 @@ import { learnsetMoves } from "../domain/moves";
 import { balanceErrorText, balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
+import { typeAccentStyle } from "../ui/typeAccent";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions, type SpeciesResolutions } from "./speciesResolution";
 import "./BalanceScreen.css";
@@ -437,7 +438,11 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
     <div className="balance-screen">
       {/* P4-17b(ADR-0304 A-14.1): ポケモン・技のどちらかを選ぶ口が無いときだけ画面ごと使えない案内を出し、
           入力は残すが全部 disabled にする(balance API は1本も呼ばない)。 */}
-      {!balanceAvailable && <p className="balance-screen__notice">{masterOnlineText.balanceUnavailable}</p>}
+      {!balanceAvailable && (
+        <p className="ui-notice ui-notice--info balance-screen__notice">
+          {masterOnlineText.balanceUnavailable}
+        </p>
+      )}
       <div className="balance-screen__members">
         {members.map((member, index) => (
           <MemberFields
@@ -474,6 +479,7 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       </div>
       <button
         type="button"
+        className="ui-button ui-button--secondary balance-screen__add"
         onClick={memberActions.add}
         disabled={!balanceAvailable || members.length >= MAX_MEMBERS}
       >
@@ -516,20 +522,25 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       </div>
       <button
         type="button"
+        className="ui-button ui-button--secondary balance-screen__add"
         onClick={threatActions.add}
         disabled={!balanceAvailable || threats.length >= MAX_MEMBERS}
       >
         {balanceScreenText.addThreatLabel}
       </button>
 
-      {loading && <p className="balance-screen__notice">{balanceScreenText.loadingNotice}</p>}
+      {loading && (
+        <p className="ui-notice ui-notice--loading balance-screen__notice">
+          {balanceScreenText.loadingNotice}
+        </p>
+      )}
       {analyzeState.status === "error" && (
-        <p role="alert" className="balance-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error balance-screen__error">
           {balanceErrorMessage(analyzeState.error.code)}
         </p>
       )}
       {coverageState.status === "error" && (
-        <p role="alert" className="balance-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error balance-screen__error">
           {balanceErrorMessage(coverageState.error.code)}
         </p>
       )}
@@ -543,10 +554,12 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
       {coverageState.status === "success" && <CoverageTable response={coverageState.value} />}
 
       {threatsState.status === "loading" && (
-        <p className="balance-screen__notice">{balanceScreenText.threatsLoadingNotice}</p>
+        <p className="ui-notice ui-notice--loading balance-screen__notice">
+          {balanceScreenText.threatsLoadingNotice}
+        </p>
       )}
       {threatsState.status === "error" && (
-        <p role="alert" className="balance-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error balance-screen__error">
           {balanceErrorMessage(threatsState.error.code)}
         </p>
       )}
@@ -562,10 +575,12 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
         ))}
 
       {recommendationsState.status === "loading" && (
-        <p className="balance-screen__notice">{balanceScreenText.recommendationsLoadingNotice}</p>
+        <p className="ui-notice ui-notice--loading balance-screen__notice">
+          {balanceScreenText.recommendationsLoadingNotice}
+        </p>
       )}
       {recommendationsState.status === "error" && (
-        <p role="alert" className="balance-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error balance-screen__error">
           {balanceErrorMessage(recommendationsState.error.code)}
         </p>
       )}
@@ -640,7 +655,7 @@ function MemberFields({
   const speciesSelectId = useId();
   const abilitySelectId = useId();
   return (
-    <fieldset className="balance-member">
+    <fieldset className="ui-card ui-card--typed balance-member" style={typeAccentStyle(species?.types[0])}>
       <legend>{groupLabel}</legend>
       {speciesListAvailable ? (
         <>
@@ -709,7 +724,12 @@ function MemberFields({
         />
       ))}
       {removable && (
-        <button type="button" onClick={onRemove} disabled={disabled} className="balance-member__remove">
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          className="ui-button ui-button--secondary balance-member__remove"
+        >
           {removeLabel}
         </button>
       )}
@@ -754,6 +774,23 @@ function MoveFieldSelect({ label, value, disabled, moves, onChange }: MoveFieldS
   );
 }
 
+/**
+ * 表を横スクロールできる領域で包む。防御相性の表は 18 列で、狭い画面ではページ全体が横に溢れるため、
+ * 溢れは包みの中で受ける。キーボードでもスクロールできるよう tabIndex=0 の region にする。
+ */
+function TableScroll({ label, children }: { readonly label: string; readonly children: ReactNode }) {
+  return (
+    <div
+      role="region"
+      aria-label={balanceScreenText.tableScrollLabel(label)}
+      tabIndex={0}
+      className="balance-screen__table-scroll"
+    >
+      {children}
+    </div>
+  );
+}
+
 interface DefenseTableProps {
   readonly master: MasterData;
   readonly speciesFor: SpeciesResolutions["speciesFor"];
@@ -764,93 +801,99 @@ interface DefenseTableProps {
 function DefenseTable({ master, speciesFor, response }: DefenseTableProps) {
   const headerTypes = response.teamSummary.map((entry) => entry.attackType);
   return (
-    <table aria-label={balanceScreenText.defenseTableLabel}>
-      <thead>
-        <tr>
-          <th scope="col">{balanceScreenText.memberColumnLabel}</th>
-          {headerTypes.map((type) => (
-            <th key={type} scope="col" style={{ borderBottomColor: `var(--type-${type})` }}>
-              {typeNameJa[type]}
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {response.members.map((member, index) => (
-          <tr key={`${member.pokemonId}-${String(index)}`}>
-            <th scope="row">{findSpeciesName(speciesFor, master, member.pokemonId)}</th>
-            {headerTypes.map((type) => {
-              const entry = member.defense.find((candidate) => candidate.attackType === type);
-              return (
-                <td key={type}>
-                  {entry === undefined ? "" : defenseMultiplierLabel(entry.multiplier, entry.category)}
-                </td>
-              );
-            })}
+    <TableScroll label={balanceScreenText.defenseTableLabel}>
+      <table className="ui-table" aria-label={balanceScreenText.defenseTableLabel}>
+        <thead>
+          <tr>
+            <th scope="col">{balanceScreenText.memberColumnLabel}</th>
+            {headerTypes.map((type) => (
+              <th key={type} scope="col" style={{ borderBottomColor: `var(--type-${type})` }}>
+                {typeNameJa[type]}
+              </th>
+            ))}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {response.members.map((member, index) => (
+            <tr key={`${member.pokemonId}-${String(index)}`}>
+              <th scope="row">{findSpeciesName(speciesFor, master, member.pokemonId)}</th>
+              {headerTypes.map((type) => {
+                const entry = member.defense.find((candidate) => candidate.attackType === type);
+                return (
+                  <td key={type}>
+                    {entry === undefined ? "" : defenseMultiplierLabel(entry.multiplier, entry.category)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableScroll>
   );
 }
 
 /** チームの集計(攻撃タイプごとの 弱点・うち×4・耐性・無効・等倍 の人数)。 */
 function TeamSummaryTable({ response }: { readonly response: Schemas["AnalyzeResponse"] }) {
   return (
-    <table aria-label={balanceScreenText.teamSummaryTableLabel}>
-      <thead>
-        <tr>
-          <th scope="col">{balanceScreenText.attackTypeColumnLabel}</th>
-          <th scope="col">{balanceScreenText.weakColumnLabel}</th>
-          <th scope="col">{balanceScreenText.quadWeakColumnLabel}</th>
-          <th scope="col">{balanceScreenText.resistColumnLabel}</th>
-          <th scope="col">{balanceScreenText.immuneColumnLabel}</th>
-          <th scope="col">{balanceScreenText.neutralColumnLabel}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {response.teamSummary.map((entry) => (
-          <tr key={entry.attackType}>
-            <th scope="row" style={{ borderLeftColor: `var(--type-${entry.attackType})` }}>
-              {typeNameJa[entry.attackType]}
-            </th>
-            <td>{entry.weak}</td>
-            <td>{entry.quadWeak}</td>
-            <td>{entry.resist}</td>
-            <td>{entry.immune}</td>
-            <td>{entry.neutral}</td>
+    <TableScroll label={balanceScreenText.teamSummaryTableLabel}>
+      <table className="ui-table" aria-label={balanceScreenText.teamSummaryTableLabel}>
+        <thead>
+          <tr>
+            <th scope="col">{balanceScreenText.attackTypeColumnLabel}</th>
+            <th scope="col">{balanceScreenText.weakColumnLabel}</th>
+            <th scope="col">{balanceScreenText.quadWeakColumnLabel}</th>
+            <th scope="col">{balanceScreenText.resistColumnLabel}</th>
+            <th scope="col">{balanceScreenText.immuneColumnLabel}</th>
+            <th scope="col">{balanceScreenText.neutralColumnLabel}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {response.teamSummary.map((entry) => (
+            <tr key={entry.attackType}>
+              <th scope="row" style={{ borderLeftColor: `var(--type-${entry.attackType})` }}>
+                {typeNameJa[entry.attackType]}
+              </th>
+              <td>{entry.weak}</td>
+              <td>{entry.quadWeak}</td>
+              <td>{entry.resist}</td>
+              <td>{entry.immune}</td>
+              <td>{entry.neutral}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableScroll>
   );
 }
 
 /** 攻撃範囲(防御タイプごとの 最大倍率・有効・抜群 の人数)。 */
 function CoverageTable({ response }: { readonly response: Schemas["CoverageResponse"] }) {
   return (
-    <table aria-label={balanceScreenText.coverageTableLabel}>
-      <thead>
-        <tr>
-          <th scope="col">{balanceScreenText.defenseTypeColumnLabel}</th>
-          <th scope="col">{balanceScreenText.bestMultiplierColumnLabel}</th>
-          <th scope="col">{balanceScreenText.effectiveColumnLabel}</th>
-          <th scope="col">{balanceScreenText.superEffectiveColumnLabel}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {response.teamCoverage.map((entry) => (
-          <tr key={entry.defenseType}>
-            <th scope="row" style={{ borderLeftColor: `var(--type-${entry.defenseType})` }}>
-              {typeNameJa[entry.defenseType]}
-            </th>
-            <td>{coverageMultiplierLabel(entry.bestMultiplier)}</td>
-            <td>{entry.effectiveMembers}</td>
-            <td>{entry.superEffectiveMembers}</td>
+    <TableScroll label={balanceScreenText.coverageTableLabel}>
+      <table className="ui-table" aria-label={balanceScreenText.coverageTableLabel}>
+        <thead>
+          <tr>
+            <th scope="col">{balanceScreenText.defenseTypeColumnLabel}</th>
+            <th scope="col">{balanceScreenText.bestMultiplierColumnLabel}</th>
+            <th scope="col">{balanceScreenText.effectiveColumnLabel}</th>
+            <th scope="col">{balanceScreenText.superEffectiveColumnLabel}</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {response.teamCoverage.map((entry) => (
+            <tr key={entry.defenseType}>
+              <th scope="row" style={{ borderLeftColor: `var(--type-${entry.defenseType})` }}>
+                {typeNameJa[entry.defenseType]}
+              </th>
+              <td>{coverageMultiplierLabel(entry.bestMultiplier)}</td>
+              <td>{entry.effectiveMembers}</td>
+              <td>{entry.superEffectiveMembers}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </TableScroll>
   );
 }
 
@@ -877,34 +920,36 @@ interface ThreatSectionProps {
 function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
   return (
     <section
-      className="balance-screen__threat"
+      className="ui-card balance-screen__threat"
       aria-label={balanceScreenText.threatRegionLabel(
         n,
         findSpeciesName(speciesFor, master, threat.pokemonId),
       )}
     >
-      <table aria-label={balanceScreenText.threatMatchupTableLabel}>
-        <thead>
-          <tr>
-            <th scope="col">{balanceScreenText.memberColumnLabel}</th>
-            <th scope="col">{balanceScreenText.incomingColumnLabel}</th>
-            <th scope="col">{balanceScreenText.outgoingColumnLabel}</th>
-            <th scope="col">{balanceScreenText.safeColumnLabel}</th>
-            <th scope="col">{balanceScreenText.superEffectiveColumnLabel}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {threat.matchups.map((matchup, index) => (
-            <tr key={`${matchup.pokemonId}-${String(index)}`}>
-              <th scope="row">{findSpeciesName(speciesFor, master, matchup.pokemonId)}</th>
-              <td>{matchupMultiplierLabel(matchup.incoming)}</td>
-              <td>{matchupMultiplierLabel(matchup.outgoing)}</td>
-              <td>{safeLabel(matchup.safe)}</td>
-              <td>{superEffectiveLabel(matchup.superEffective)}</td>
+      <TableScroll label={balanceScreenText.threatMatchupTableLabel}>
+        <table className="ui-table" aria-label={balanceScreenText.threatMatchupTableLabel}>
+          <thead>
+            <tr>
+              <th scope="col">{balanceScreenText.memberColumnLabel}</th>
+              <th scope="col">{balanceScreenText.incomingColumnLabel}</th>
+              <th scope="col">{balanceScreenText.outgoingColumnLabel}</th>
+              <th scope="col">{balanceScreenText.safeColumnLabel}</th>
+              <th scope="col">{balanceScreenText.superEffectiveColumnLabel}</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {threat.matchups.map((matchup, index) => (
+              <tr key={`${matchup.pokemonId}-${String(index)}`}>
+                <th scope="row">{findSpeciesName(speciesFor, master, matchup.pokemonId)}</th>
+                <td>{matchupMultiplierLabel(matchup.incoming)}</td>
+                <td>{matchupMultiplierLabel(matchup.outgoing)}</td>
+                <td>{safeLabel(matchup.safe)}</td>
+                <td>{superEffectiveLabel(matchup.superEffective)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableScroll>
       <p>{balanceScreenText.safeMembersLabel(threat.safeMembers)}</p>
       <p>{balanceScreenText.superEffectiveMembersLabel(threat.superEffectiveMembers)}</p>
     </section>
@@ -921,7 +966,7 @@ interface RecommendationsSectionProps {
 function RecommendationsSection({ master, abilitiesFor, response }: RecommendationsSectionProps) {
   return (
     <section
-      className="balance-screen__recommendations"
+      className="ui-card balance-screen__recommendations"
       aria-label={balanceScreenText.recommendationsRegionLabel}
     >
       <p>{balanceScreenText.defenseHolesLabel(typeListText(response.defenseHoles))}</p>
@@ -939,34 +984,36 @@ function RecommendationsSection({ master, abilitiesFor, response }: Recommendati
 /** おすすめタイプの候補の表(タイプ・ふさぐ防御の穴・ふさぐ攻撃範囲の穴・該当ポケモン。応答の順)。 */
 function CandidatesTable({ candidates }: { readonly candidates: readonly Schemas["TypeCandidate"][] }) {
   return (
-    <table aria-label={balanceScreenText.candidatesTableLabel}>
-      <thead>
-        <tr>
-          <th scope="col">{balanceScreenText.typesColumnLabel}</th>
-          <th scope="col">{balanceScreenText.defenseCoveredColumnLabel}</th>
-          <th scope="col">{balanceScreenText.offenseCoveredColumnLabel}</th>
-          <th scope="col">{balanceScreenText.pokemonColumnLabel}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {candidates.map((candidate, index) => {
-          const pokemonText =
-            candidate.pokemon.length === 0
-              ? balanceScreenText.noneLabel
-              : candidate.pokemon
-                  .map((pokemon) => pokemon.nameJa ?? pokemon.pokemonId)
-                  .join(balanceScreenText.listSeparator);
-          return (
-            <tr key={`${candidate.types.join("-")}-${String(index)}`}>
-              <th scope="row">{typeListText(candidate.types)}</th>
-              <td>{typeListText(candidate.defenseCovered)}</td>
-              <td>{typeListText(candidate.offenseCovered)}</td>
-              <td>{pokemonText}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <TableScroll label={balanceScreenText.candidatesTableLabel}>
+      <table className="ui-table" aria-label={balanceScreenText.candidatesTableLabel}>
+        <thead>
+          <tr>
+            <th scope="col">{balanceScreenText.typesColumnLabel}</th>
+            <th scope="col">{balanceScreenText.defenseCoveredColumnLabel}</th>
+            <th scope="col">{balanceScreenText.offenseCoveredColumnLabel}</th>
+            <th scope="col">{balanceScreenText.pokemonColumnLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {candidates.map((candidate, index) => {
+            const pokemonText =
+              candidate.pokemon.length === 0
+                ? balanceScreenText.noneLabel
+                : candidate.pokemon
+                    .map((pokemon) => pokemon.nameJa ?? pokemon.pokemonId)
+                    .join(balanceScreenText.listSeparator);
+            return (
+              <tr key={`${candidate.types.join("-")}-${String(index)}`}>
+                <th scope="row">{typeListText(candidate.types)}</th>
+                <td>{typeListText(candidate.defenseCovered)}</td>
+                <td>{typeListText(candidate.offenseCovered)}</td>
+                <td>{pokemonText}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </TableScroll>
   );
 }
 
@@ -979,35 +1026,37 @@ interface AbilityOptionsTableProps {
 /** 特性で補えるポケモンの表(防御の穴ごとに 攻撃タイプ・該当ポケモン。ADR-0401 §4)。 */
 function AbilityOptionsTable({ master, abilitiesFor, abilityOptions }: AbilityOptionsTableProps) {
   return (
-    <table aria-label={balanceScreenText.abilityOptionsTableLabel}>
-      <thead>
-        <tr>
-          <th scope="col">{balanceScreenText.attackTypeColumnLabel}</th>
-          <th scope="col">{balanceScreenText.pokemonColumnLabel}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {abilityOptions.map((option) => {
-          const pokemonText =
-            option.pokemon.length === 0
-              ? balanceScreenText.noneLabel
-              : option.pokemon
-                  .map((pokemon) =>
-                    balanceScreenText.abilityOptionEntryLabel(
-                      pokemon.nameJa ?? pokemon.pokemonId,
-                      findAbilityName(abilitiesFor, master, pokemon.pokemonId, pokemon.abilityId),
-                      multiplierLabel(pokemon.multiplier),
-                    ),
-                  )
-                  .join(balanceScreenText.listSeparator);
-          return (
-            <tr key={option.attackType}>
-              <th scope="row">{typeNameJa[option.attackType]}</th>
-              <td>{pokemonText}</td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <TableScroll label={balanceScreenText.abilityOptionsTableLabel}>
+      <table className="ui-table" aria-label={balanceScreenText.abilityOptionsTableLabel}>
+        <thead>
+          <tr>
+            <th scope="col">{balanceScreenText.attackTypeColumnLabel}</th>
+            <th scope="col">{balanceScreenText.pokemonColumnLabel}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {abilityOptions.map((option) => {
+            const pokemonText =
+              option.pokemon.length === 0
+                ? balanceScreenText.noneLabel
+                : option.pokemon
+                    .map((pokemon) =>
+                      balanceScreenText.abilityOptionEntryLabel(
+                        pokemon.nameJa ?? pokemon.pokemonId,
+                        findAbilityName(abilitiesFor, master, pokemon.pokemonId, pokemon.abilityId),
+                        multiplierLabel(pokemon.multiplier),
+                      ),
+                    )
+                    .join(balanceScreenText.listSeparator);
+            return (
+              <tr key={option.attackType}>
+                <th scope="row">{typeNameJa[option.attackType]}</th>
+                <td>{pokemonText}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </TableScroll>
   );
 }

@@ -437,7 +437,7 @@ function RestoreNoticeView({ notice }: { readonly notice: RestoreNotice }): Reac
   const ignored = notice.issues.filter((issue) => issue.kind === "ignored");
   return (
     <div className="calc-screen__restore">
-      <div role="status" tabIndex={-1} ref={noticeRef}>
+      <div role="status" tabIndex={-1} ref={noticeRef} className="ui-notice ui-notice--info">
         <p>
           {notice.attackerOnly
             ? favoritesRestoreText.attackerOnlyNotice(notice.title)
@@ -456,7 +456,7 @@ function RestoreNoticeView({ notice }: { readonly notice: RestoreNotice }): Reac
         )}
       </div>
       {unresolved.length > 0 && (
-        <div role="alert" className="calc-screen__restore-error">
+        <div role="alert" className="ui-notice ui-notice--error calc-screen__restore-error">
           <p>{favoritesRestoreText.unresolvedHeading}</p>
           <ul>
             {unresolved.map((issue) => (

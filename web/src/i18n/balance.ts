@@ -76,6 +76,8 @@ export const balanceScreenText = {
   moveLabel: (slot: number): string => `技${String(slot)}`,
   noMoveOption: "なし",
   loadingNotice: "計算中",
+  /** 表を包むスクロール領域(region)の名前。幅が狭いと表が横にスクロールすることを伝える。 */
+  tableScrollLabel: (tableLabel: string): string => `${tableLabel}の表(横にスクロールできます)`,
   defenseTableLabel: "防御相性",
   teamSummaryTableLabel: "チームの集計",
   coverageTableLabel: "攻撃範囲",

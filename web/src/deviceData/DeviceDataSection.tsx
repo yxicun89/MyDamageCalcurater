@@ -136,7 +136,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
   const retryTargets = result === null ? [] : remainingTargets(result);
 
   return (
-    <section className="about__section about__data">
+    <section className="ui-card about__section about__data">
       <h3>{deviceDataText.sectionHeading}</h3>
       {deviceDataText.explanation.map((sentence) => (
         <p key={sentence}>{sentence}</p>
@@ -145,7 +145,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
         <button
           ref={deleteButtonRef}
           type="button"
-          className="about__button about__button--danger"
+          className="ui-button ui-button--danger about__button about__button--danger"
           disabled={running}
           onClick={() => {
             setDialogOpen(true);
@@ -155,17 +155,17 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
         </button>
       </div>
       {running && (
-        <p role="status" className="about__status">
+        <p role="status" className="ui-notice ui-notice--loading about__status">
           {lastPartial ? deviceDataText.partialNotice : deviceDataText.deleting}
         </p>
       )}
       {!running && message !== null && message.tone !== "failure" && (
-        <p role="status" className="about__status">
+        <p role="status" className="ui-notice ui-notice--info about__status">
           {message.lines.join("")}
         </p>
       )}
       {!running && message !== null && message.tone === "failure" && (
-        <div role="alert" className="about__status about__status--error">
+        <div role="alert" className="ui-notice ui-notice--error about__status about__status--error">
           {message.lines.map((line) => (
             <p key={line}>{line}</p>
           ))}
@@ -174,7 +174,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
       {!running && message !== null && message.tone !== "success" && (
         <button
           type="button"
-          className="about__button"
+          className="ui-button ui-button--secondary about__button"
           onClick={() => {
             if (result !== null) {
               void run(retryTargets, result);
@@ -191,7 +191,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
             aria-modal="true"
             aria-labelledby={titleId}
             aria-describedby={descriptionId}
-            className="about__dialog"
+            className="ui-card about__dialog"
             onKeyDown={onDialogKeyDown}
           >
             <h4 id={titleId} className="about__dialog-title">
@@ -199,13 +199,18 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
             </h4>
             <p id={descriptionId}>{deviceDataText.confirmMessage}</p>
             <div className="about__actions">
-              <button ref={cancelButtonRef} type="button" className="about__button" onClick={closeDialog}>
+              <button
+                ref={cancelButtonRef}
+                type="button"
+                className="ui-button ui-button--secondary about__button"
+                onClick={closeDialog}
+              >
                 {deviceDataText.cancelAction}
               </button>
               <button
                 ref={confirmButtonRef}
                 type="button"
-                className="about__button about__button--danger"
+                className="ui-button ui-button--danger about__button about__button--danger"
                 onClick={confirmDeletion}
               >
                 {deviceDataText.confirmAction}

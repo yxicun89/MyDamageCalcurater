@@ -85,7 +85,7 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
     return (
       <section className="favorites-screen" aria-label={favoritesScreenText.regionLabel}>
         <h2>{favoritesScreenText.regionLabel}</h2>
-        <p role="status" className="favorites-screen__notice">
+        <p role="status" className="ui-notice ui-notice--info favorites-screen__notice">
           {favoritesScreenText.offlineNotice}
         </p>
       </section>
@@ -120,21 +120,25 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
     <section className="favorites-screen" aria-label={favoritesScreenText.regionLabel}>
       <h2>{favoritesScreenText.regionLabel}</h2>
       {count !== null && (
-        <p className="favorites-screen__count">
+        <p className="ui-badge favorites-screen__count">
           {favoritesScreenText.countLabel(count, MAX_FAVORITES_PER_DEVICE)}
         </p>
       )}
       {list.status === "loading" && (
-        <p className="favorites-screen__notice">{favoritesScreenText.loadingNotice}</p>
+        <p className="ui-notice ui-notice--loading favorites-screen__notice">
+          {favoritesScreenText.loadingNotice}
+        </p>
       )}
       {list.status === "error" && (
-        <div role="alert" className="favorites-screen__error">
+        <div role="alert" className="ui-notice ui-notice--error favorites-screen__error">
           <p>{favoritesScreenText.listErrorHeading}</p>
           <p>{list.error.message}</p>
         </div>
       )}
       {list.status === "loaded" && list.favorites.length === 0 && (
-        <p className="favorites-screen__notice">{favoritesScreenText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty favorites-screen__notice">
+          {favoritesScreenText.emptyNotice}
+        </p>
       )}
       {list.status === "loaded" && list.favorites.length > 0 && (
         <ul aria-label={favoritesScreenText.listLabel} className="favorites-screen__list">
@@ -145,11 +149,13 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
             const rowError = rowState?.error ?? null;
             const submitting = rowState?.phase === "submitting";
             return (
-              <li key={favorite.id} className="favorites-screen__item">
+              <li key={favorite.id} className="ui-card favorites-screen__item">
                 <div className="favorites-screen__heading">
                   <span className="favorites-screen__title">{title}</span>
                   {favorite.calc === undefined && onUse !== undefined && (
-                    <span className="favorites-screen__hint">{favoritesScreenText.attackerOnlyHint}</span>
+                    <span className="ui-badge favorites-screen__hint">
+                      {favoritesScreenText.attackerOnlyHint}
+                    </span>
                   )}
                 </div>
                 <div className="favorites-screen__actions">
@@ -177,7 +183,9 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
                     </button>
                   ) : (
                     <div className="favorites-screen__confirm">
-                      <p>{favoritesScreenText.deleteConfirmNotice(title)}</p>
+                      <p className="ui-notice ui-notice--error">
+                        {favoritesScreenText.deleteConfirmNotice(title)}
+                      </p>
                       <button
                         type="button"
                         className="ui-button ui-button--danger"
@@ -202,7 +210,7 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
                   )}
                 </div>
                 {rowError !== null && (
-                  <div role="alert" className="favorites-screen__error">
+                  <div role="alert" className="ui-notice ui-notice--error favorites-screen__error">
                     <p>{favoritesScreenText.deleteErrorHeading}</p>
                     <p>{rowError.message}</p>
                   </div>

@@ -572,7 +572,6 @@
   gap: var(--space-2);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
-  color: var(--text-secondary);
 }
 
 .calc-screen__restore p,
@@ -582,8 +581,4 @@
 
 .calc-screen__restore ul {
   padding-left: var(--space-4);
-}
-
-.calc-screen__restore-error {
-  color: var(--danger);
 }
