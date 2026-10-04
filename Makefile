@@ -284,11 +284,11 @@ nats-local-up: ## make dev 用に docker で NATS v2.15.0(JetStream 有効)を 1
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
-up: gen-go-all ## k3d クラスタ作成 + 全デプロイ
+up: gen ## k3d クラスタ作成 + 全デプロイ
 	@./scripts/up.sh
 
 .PHONY: deploy-latest
-deploy-latest: gen-go-all ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
+deploy-latest: gen ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
 	@./scripts/k3d-deploy-latest.sh
 
 .PHONY: down
@@ -296,7 +296,7 @@ down: ## k3d クラスタ削除
 	@k3d cluster delete $(CLUSTER) || true
 
 .PHONY: dev
-dev: gen-go-all ## k8s を使わずローカルで全サービス起動
+dev: gen ## k8s を使わずローカルで全サービス起動
 	@./scripts/dev.sh
 
 ## --- e2e / iOS --------------------------------------------------------
