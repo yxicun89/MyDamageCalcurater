@@ -54,7 +54,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `gen-sql` | — | sqlc で pokedex の DB 行の型・クエリを生成 | 生成物を書換(Git 管理外) |
 | `gen-ts` | web-deps | `cd web && npm run gen`(openapi-typescript で web の4つの `*.gen.ts` を生成。Web の pre* フックと同じ) | 生成物を書換(Git 管理外) |
 | `gen-clean` | — | `scripts/ensure-gen.sh list` の生成物(iOS を含む)と `ios/.gen-stamps` を削除 | 生成物を削除 |
-| `gen-go-all` | gen-go gen-sql balance-gen speed-gen judge-gen | (レシピなし)。Go をビルドするターゲット(`build`・`lint`・`test-services`・`staticcheck`・`test-db*`・`migrate-*`・`import*`・`up`・`dev`・`e2e` 等)の前提 | なし(前提条件のみ) |
+| `gen-go-all` | gen-go gen-sql balance-gen speed-gen judge-gen | (レシピなし)。Go をビルドするターゲット(`build`・`lint`・`test-services`・`staticcheck`・`test-db*`・`migrate-*`・`import*`・`e2e` 等)の前提。Web のイメージも作る `up`・`deploy-latest`・`dev` は TypeScript も含む `gen` が前提 | なし(前提条件のみ) |
 | `test` | test-engine test-golden test-services test-tools test-scripts | (レシピなし) | なし(前提条件のみ) |
 | `test-engine` | — | `cd engine && go test ./...` | なし |
 | `test-services` | — | `cd services && go test ./...` | なし |
@@ -77,10 +77,10 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `db-local-up` | — | `scripts/db-local-up.sh` | docker で mysql:9.7.2 を 127.0.0.1:3306 に起動(既存なら start)。要 .env の MYSQL_ROOT_PASSWORD |
 | `tidb-local-up` | — | `scripts/tidb-local-up.sh` | tiup playground で TiDB を 127.0.0.1:4000 に起動し record・team の DB を作る |
 | `nats-local-up` | — | `scripts/nats-local-up.sh` | docker で NATS を 127.0.0.1:4222 に起動 |
-| `up` | — | `scripts/up.sh`(context が `k3d-$(CLUSTER)` でなければ中断。Secret は `kubectl create`) | **クラスタ作成+全 apply**、Secret 作成、イメージ build と import |
-| `deploy-latest` | — | `scripts/k3d-deploy-latest.sh`: migrate-up → pokedex・importer・calc・gateway・web・judge・balance・speed の入れ替え | **クラスタへ apply・Pod 再起動・DB migrate**(`make up` 済みが前提。context 検査あり)。read model が無いと balance・speed を飛ばして非0 |
+| `up` | gen | `scripts/up.sh`(context が `k3d-$(CLUSTER)` でなければ中断。Secret は `kubectl create`) | **クラスタ作成+全 apply**、Secret 作成、イメージ build と import |
+| `deploy-latest` | gen | `scripts/k3d-deploy-latest.sh`: migrate-up → pokedex・importer・calc・gateway・web・judge・balance・speed の入れ替え | **クラスタへ apply・Pod 再起動・DB migrate**(`make up` 済みが前提。context 検査あり)。read model が無いと balance・speed を飛ばして非0 |
 | `down` | — | `k3d cluster delete $(CLUSTER)` | **クラスタ削除**(PVC・Secret も消える。人間の確認) |
-| `dev` | — | `scripts/dev.sh` | calc/gateway をホストで常駐 |
+| `dev` | gen | `scripts/dev.sh` | calc/gateway をホストで常駐 |
 | `e2e` | — | `scripts/e2e.sh`: web-e2e・web-e2e-online・web-e2e-balance を常に実行し、kubectl の context が `k3d-$(CLUSTER)` のときだけ api-smoke・web-k3d-smoke・web-k3d-e2e も実行(ADR-0306)。`E2E_REQUIRE_K3D=1` で k3d が無ければ失敗 | chromium・vite preview・go run を一時起動 |
 | `wasm` | — | `scripts/wasm.sh` | web/public/engine.wasm・wasm_exec.js を生成(.gitignore 済み) |
 | `test-wasm` | wasm | `node scripts/wasm-conformance.mjs` | web/public に wasm を作り、node で Go との一致を検査 |
