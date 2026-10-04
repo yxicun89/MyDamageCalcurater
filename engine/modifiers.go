@@ -53,9 +53,84 @@ type AbilityEffect struct {
 	Airborne                  bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
 	SpeedMods                 []SpeedMod            // 素早さの補正(ADR-0139)。ダメージ計算は読まない
 	IgnoresParalysisSpeedDrop bool                  // まひの素早さ半減を受けない(ADR-0139)。ダメージ計算は読まない
+
+	// --- 特性の段階1(ADR-0176)。どれもゼロ値は「その効果なし」 ---
+
+	// TypeConvert は攻撃側: TypeConvert.From タイプの技を To タイプに変え、威力に PowerMod を掛ける
+	// (フェアリースキン等)。技の機構に type_change を持つ技は変えない。nil は無し。
+	TypeConvert *TypeConvert
+	// PowerMods は攻撃側: 条件つきの威力補正(テクニシャン・はがねのせいしん等)。成立した要素をすべて掛ける。
+	PowerMods []ConditionalPowerMod
+	// AuraType / AuraMod は両側: 攻撃側・防御側のどちらが持っていても、AuraType タイプの技の威力に AuraMod を
+	// 1回だけ掛ける(フェアリーオーラ等)。組で指定する。
+	AuraType Type
+	AuraMod  int
+	// StatMods は実数値の倍率(ItemEffect.StatMods と同じ読み方: 攻撃するときは atk/spa、
+	// 受けるときは def/spd を読む)。例 ちからもち{atk:8192}、ファーコート{def:8192}。spe は使わない(SpeedMods)。
+	StatMods map[StatKey]int
+	// SeparateStatMods は攻撃側: ランク補正の直後に、他の補正と連鎖させずに単独で丸める実数値の倍率
+	// (はりきり{atk:6144})。キーは atk / spa だけ。
+	SeparateStatMods map[StatKey]int
+	// CritDamageMod は攻撃側: 急所のときの最終ダメージ倍率(スナイパー 6144)。0 は補正なし。
+	CritDamageMod int
+	// PreventsCritical は防御側: 急所に当たらない(カブトアーマー・シェルアーマー)。
+	PreventsCritical bool
+	// IgnoresOpponentRanks は相手のランク補正を無視する(てんねん): 攻撃するときは防御側の防御・特防のランクを、
+	// 受けるときは攻撃側の攻撃・特攻のランクを 0 として扱う。
+	IgnoresOpponentRanks bool
+	// IgnoresDefenderAbility は攻撃側: 防御側の特性のうち Breakable なものを無いものとして計算する(かたやぶり)。
+	IgnoresDefenderAbility bool
+	// Breakable は防御側: 相手が IgnoresDefenderAbility を持つとき、この特性の効果(印を含む)は無いものとして扱われる。
+	Breakable bool
+
 	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool
+}
+
+// TypeConvert は技のタイプの変換と、変換したときの威力補正(ADR-0176)。
+// From・To は相性表にあるタイプで、From != To。PowerMod は 4096 基準の正の整数(MinEffectModifier..MaxEffectModifier)。
+type TypeConvert struct {
+	From     Type
+	To       Type
+	PowerMod int
+}
+
+// PowerCondition は条件つきの威力補正(ConditionalPowerMod)の条件の語彙(ADR-0176)。閉じた語彙。
+type PowerCondition string
+
+const (
+	// PowerConditionMaxBasePower は技の威力が MaxPower 以下(テクニシャン: 60 以下)。
+	PowerConditionMaxBasePower PowerCondition = "max_base_power"
+	// PowerConditionMoveType は技のタイプが MoveType(タイプ変換の後のタイプ。はがねのせいしん)。
+	PowerConditionMoveType PowerCondition = "move_type"
+)
+
+// AllPowerConditions は語彙のすべてを定義順で返す(呼び出しごとに新しいスライス)。
+func AllPowerConditions() []PowerCondition {
+	return []PowerCondition{PowerConditionMaxBasePower, PowerConditionMoveType}
+}
+
+// Known は c が語彙にあるか(大文字小文字を区別する)。
+func (c PowerCondition) Known() bool {
+	for _, k := range AllPowerConditions() {
+		if c == k {
+			return true
+		}
+	}
+	return false
+}
+
+// ConditionalPowerMod は条件つきの威力補正1つ(ADR-0176)。
+//   - max_base_power: MaxPower(1 以上)を使い、MoveType は空。
+//   - move_type: MoveType(相性表にあるタイプ)を使い、MaxPower は 0。
+//
+// Modifier は 4096 基準の正の整数で、4096(中立)は不可。
+type ConditionalPowerMod struct {
+	Condition PowerCondition
+	MaxPower  int
+	MoveType  Type
+	Modifier  int
 }
 
 // hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る

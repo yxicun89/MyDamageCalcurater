@@ -135,12 +135,12 @@
   ],
   "files": {
     "fixed.json": {
-      "count": 308,
-      "sha256": "c44e0fcf749aa96884108ad88ea436be795a0071cc2faed39de90d8b7e696d44"
+      "count": 375,
+      "sha256": "6945b24fd82c22948195262a18af64f46e5021b7a9defd7a8c091fe773482e5c"
     },
     "random.jsonl.gz": {
       "count": 10000,
-      "sha256": "ac0120d1abc50267a837b41f4a6b102608f153f4609712ececbeda91fb7421b9"
+      "sha256": "b223e73377366294791af59560a45290f5e0138c9d2ba4754591dd13a54fa0af"
     },
     "attack-species.jsonl.gz": {
       "count": 7160,
@@ -156,23 +156,23 @@
     },
     "legacy-effects.jsonl.gz": {
       "count": 3851,
-      "sha256": "00c950bbead7ce8e20351bcab731ac7944606419b78d33f924803342172df725"
+      "sha256": "0162cf731cf889f9fc6574b68008bca603ef762199167099ffbbfea7196d11b7"
     },
     "doubles.json": {
       "count": 33,
-      "sha256": "8eac597f09cc87222f86b9e10871cbebac7b92fa442ccccd74e2e2838aacd37d"
+      "sha256": "2e4f6285f36f3f0b20c5e875111e11dfb0443a55a8ce46345340e3678084e05e"
     },
     "doubles-random.jsonl.gz": {
       "count": 3000,
-      "sha256": "75395eb6428a5f77e3e8fbc7c06fe0cf507662a9f1aa9b70db6e13e1d55f54a2"
+      "sha256": "b4d7d1316f5cfaba8edc685668f91526921a1fa218375f8a9a82478b15edbfb1"
     },
     "tera.json": {
       "count": 180,
-      "sha256": "7ab6bc3d480a0b7d13e9516177b4f5213a7e4d9d539e256f41171efaf0c4699d"
+      "sha256": "0c67416e456d6c847de7c81d55b50e10a12d70377ba5900e080b60653bfe90a9"
     },
     "tera-random.jsonl.gz": {
       "count": 3000,
-      "sha256": "5263bdf50a47a4fa44018e6180e910fc7acf870627ba9b09ebb35ab83023a9ca"
+      "sha256": "5a8519af5a28e9bdf516283b3e749715f967b26d58297a6abb51b0151f7fa269"
     },
     "typechart.json": {
       "count": 324,
