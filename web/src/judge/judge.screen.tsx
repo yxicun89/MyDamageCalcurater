@@ -12,6 +12,7 @@ export default defineScreen({
   label: appText.judgeTabLabel,
   order: 500,
   usesMaster: true,
+  hidden: true, // ADR-0330: 目的を作り直すまでタブから外す(コードは残す。再表示はこの行を消す)
   // createJudgeClient 自体は fetch しない(判定のタブを開くだけでは呼ばれない。JudgeScreen.tsx)。
   createClient: createJudgeClient,
   render: (env, client) => (

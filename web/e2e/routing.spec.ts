@@ -69,6 +69,15 @@ test("未知のパスを開くと /calc に置き換わる", async ({ page }) =>
   await expect(tab(page, "計算")).toHaveAttribute("aria-selected", "true");
 });
 
+// ADR-0330(F-07): 判定は Web で非表示。ブックマークが残っていても壊れず、未知のパスと同じく /calc に置き換わる。
+test("/judge を開くと /calc に置き換わり、判定タブは出ない", async ({ page }) => {
+  await page.goto("/judge");
+  await waitForTabs(page);
+  await expect(page).toHaveURL(/\/calc$/);
+  await expect(tab(page, "計算")).toHaveAttribute("aria-selected", "true");
+  await expect(tab(page, "判定")).toHaveCount(0);
+});
+
 // issue #218(ADR-0308): タブを往復しても各画面の入力が消えない。
 // 実ブラウザでだけ確かめられること:
 //   - 非選択の画面が本当に DOM に残っていること(`page.locator` の toHaveCount は見た目に関係なく
