@@ -317,6 +317,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     abilitiesFor,
     movesFor,
     resolvedSpecies,
+    resolvedAbilities,
+    resolvedMoves,
     register: registerSpeciesResolution,
   } = useSpeciesResolutions();
   const compareReasonId = useId();
@@ -388,6 +390,12 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
     [master.items, stoneIds],
   );
   // 結果の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  // 未対応の印の名前引き用。オンラインのマスタは moves・abilities が空なので、解決済みの分を足す。
+  const markMoves = useMemo(() => [...master.moves, ...resolvedMoves], [master.moves, resolvedMoves]);
+  const markAbilities = useMemo(
+    () => [...master.abilities, ...resolvedAbilities],
+    [master.abilities, resolvedAbilities],
+  );
   const displayItems = useMemo(
     () => itemsWithStoneLabels(master.items, [attackerSpecies, defenderSpecies], stoneIds),
     [master.items, attackerSpecies, defenderSpecies, stoneIds],
@@ -917,8 +925,8 @@ export function CalcScreen({ engine, master, masterSearch, recordClient, onFavor
       <ResultsSection
         outcome={outcome}
         items={displayItems}
-        moves={master.moves}
-        abilities={master.abilities}
+        moves={markMoves}
+        abilities={markAbilities}
         moveType={move?.type}
         defenderHasAbilityChoice={defenderAbilityOptions.length > 1}
         pulsingKeys={pulsingKeys}

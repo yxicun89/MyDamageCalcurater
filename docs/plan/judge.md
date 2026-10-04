@@ -18,4 +18,4 @@
 - [x] issue #235 追加分 判定に status(状態異常)を足し、まひを素早さに反映(ADR-0712。契約・judge コア・Web の select・`*SpeedApplied` の paralysis)。特性・持ち物のデータ駆動(第2段)はデータレーン分(下の行)
 - [x] issue #235 第2段 データレーン分 素早さに効く特性7件・持ち物1件の効果データ(SpeedMods・IgnoresParalysisSpeedDrop。ADR-0139。engine 型・共通マスタ・importer の speedItems/speedAbilities 節・wasmapi・calc-svc)。判定側の利用は判定レーン(下の行)。**デプロイ順: 先にアプリ(calc-svc・Web の WASM)をロールアウト → その後に master-release で再取り込み**
 - [x] issue #235 第2段 判定レーン分 判定の素早さに特性・持ち物の補正をマスタの効果データで反映(ADR-0714。**デプロイ順: calc-svc・Web → master-release の再取り込み → judge**。契約 0.3.0・`internal/speedeffects`・内部 API の小表〈遅延ロード・TTL・フェイルソフト〉・Web の文言)。iOS の `SpeedFactor` 再生成は iOS レーン
-
+- [x] F-07 判定の画面(Web のタブ・iOS の入口)を非表示にする(docs/usability-round2.md。ユーザー決定 2026-10-04「今の機能はいらない・目的を作り直す」)。サービス・契約・コード・単体テストは残す。Web は Web レーン(画面レジストリ ADR-0323)、iOS は iOS レーン(機能レジストリ ADR-0507)が登録を外す。目的の再設計はユーザーの指示待ち(候補: 調整の画面で一度に確認できる形。F-11)

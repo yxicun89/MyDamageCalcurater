@@ -4,7 +4,7 @@
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対として扱う。
 
 import { aboutText, appText } from "../i18n/ja";
-import { ABOUT_SEGMENT, SCREENS } from "./screens";
+import { ABOUT_SEGMENT, SCREENS, visibleScreens } from "./screens";
 
 /** 画面 ID・URL の区切り・タブの表示名の1エントリ。 */
 export interface ScreenRoute {
@@ -26,13 +26,10 @@ export interface ScreenRoute {
  */
 export type ScreenId = string;
 
-/** 画面の定義順(タブの並び順・ロービング tabIndex の移動順もこの順。登録ファイルの order の昇順)。 */
-export const SCREEN_ROUTES: readonly ScreenRoute[] = SCREENS.map(({ id, segment, label, usesMaster }) => ({
-  id,
-  segment,
-  label,
-  usesMaster,
-}));
+/** 画面の定義順(hidden の画面を除く。ADR-0330。タブの並び順・ロービング tabIndex の移動順もこの順。登録ファイルの order の昇順)。 */
+export const SCREEN_ROUTES: readonly ScreenRoute[] = visibleScreens(SCREENS).map(
+  ({ id, segment, label, usesMaster }) => ({ id, segment, label, usesMaster }),
+);
 
 /** 既定の画面(未知のパス・"/" のとき)。 */
 export const DEFAULT_SCREEN: ScreenId = "calc";

@@ -164,8 +164,10 @@ test("取得の完了前にタブを離れても、後から解決して状態�
   expect(screen.queryByRole("group", { name: "メンバー1" })).not.toBeInTheDocument();
 });
 
-test("判定の画面も包まれていて、オフラインのままでもオンラインのマスタの種族が渡る", async () => {
-  const user = userEvent.setup();
+// ADR-0330: 判定は Web で非表示。judge.screen.tsx が OnlineMasterGate で包んでいる点の検証は、非表示の間は無い
+// (マウントされないため。再表示するときにこのテストを復活させる)。タイプバランスの包みは上のテストが担う。
+// ここでは、判定のタブが無く、オンラインのマスタを判定のために使わないことだけを確かめる。
+test("判定のタブは出ない(ADR-0330)", async () => {
   const { offline, online } = await masters();
   render(
     <App
@@ -175,12 +177,5 @@ test("判定の画面も包まれていて、オフラインのままでもオ�
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByRole("tab", { name: "判定" }));
-
-  const region = await screen.findByRole("region", { name: "自分のポケモン" });
-  const labels = within(within(region).getByRole("combobox", { name: "ポケモン" }))
-    .getAllByRole("option")
-    .map((option) => option.textContent);
-  expect(labels.some((label) => label.startsWith("オンライン"))).toBe(true);
-  expect(labels).not.toContain(offline.species[0]?.nameJa);
+  expect(screen.queryByRole("tab", { name: "判定" })).toBeNull();
 });

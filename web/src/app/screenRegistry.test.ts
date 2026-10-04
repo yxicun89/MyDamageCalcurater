@@ -3,8 +3,15 @@
 
 import { describe, expect, test } from "vitest";
 import { defineScreen, noClient, type RegisteredScreen } from "./screenDefinition";
-import { RESERVED_SEGMENTS, SCREENS, buildScreenRegistry, instantiateScreens } from "./screens";
+import {
+  RESERVED_SEGMENTS,
+  SCREENS,
+  buildScreenRegistry,
+  instantiateScreens,
+  visibleScreens,
+} from "./screens";
 import { DEFAULT_SCREEN } from "./routes";
+import { SCREEN_ROUTES } from "./routes";
 import type { ClientIds } from "../api/clientIds";
 
 function fakeScreen(
@@ -52,7 +59,7 @@ describe("実際の登録", () => {
     expect(SCREENS.map((screen) => screen.id)).toContain(DEFAULT_SCREEN);
   });
 
-  test("instantiateScreens は全画面の描画の口を同じ順で返し、生成時に通信しない", () => {
+  test("instantiateScreens は hidden でない全画面の描画の口を同じ順で返し(ADR-0330)、生成時に通信しない", () => {
     const calls: string[] = [];
     const fetchSpy: typeof fetch = (input) => {
       calls.push(input instanceof Request ? input.url : input.toString());
@@ -60,7 +67,7 @@ describe("実際の登録", () => {
     };
     const instances = instantiateScreens(SCREENS, { baseUrl: "", fetch: fetchSpy, ids });
     expect(instances.map((instance) => [instance.id, instance.usesMaster])).toEqual(
-      SCREENS.map((screen) => [screen.id, screen.usesMaster]),
+      visibleScreens(SCREENS).map((screen) => [screen.id, screen.usesMaster]),
     );
     expect(calls).toEqual([]);
   });
@@ -169,5 +176,111 @@ describe("defineScreen", () => {
     expect(instance.render(env)).toBeNull();
     expect(created).toBe(1);
     expect(seen).toEqual([1, 1]);
+  });
+});
+
+// ADR-0330(F-07): defineScreen の省略可の hidden(既定 false)。hidden の画面は登録・検証の対象だが、
+// タブ・URL・マウント・クライアント生成には出ない。hidden を外すだけで元に戻る。
+describe("hidden(非表示の画面。ADR-0330)", () => {
+  function dummy(hidden: boolean | undefined, createClient: () => undefined = noClient): RegisteredScreen {
+    return defineScreen({
+      id: "dummy",
+      segment: "dummy",
+      label: "ダミー",
+      order: 1,
+      usesMaster: true,
+      ...(hidden === undefined ? {} : { hidden }),
+      createClient,
+      render: () => null,
+    });
+  }
+
+  test("hidden の既定は false", () => {
+    expect(dummy(undefined).hidden).toBe(false);
+    expect(dummy(false).hidden).toBe(false);
+    expect(dummy(true).hidden).toBe(true);
+  });
+
+  test("実際の登録では、判定だけが hidden で、タブの表(SCREEN_ROUTES)に判定が無い", () => {
+    expect(SCREENS.filter((screen) => screen.hidden).map((screen) => screen.id)).toEqual(["judge"]);
+    expect(SCREEN_ROUTES.map((route) => route.id)).not.toContain("judge");
+    expect(SCREEN_ROUTES.map((route) => route.id)).toEqual([
+      "calc",
+      "reverse",
+      "balance",
+      "speed",
+      "team",
+      "favorites",
+      "adjust",
+    ]);
+  });
+
+  test("visibleScreens は hidden を除き、order の並びを保つ", () => {
+    const registry = buildScreenRegistry({
+      "./a.screen.tsx": fakeScreen({ id: "a", segment: "a", order: 100 }),
+      "./h.screen.tsx": defineScreen({
+        id: "h",
+        segment: "h",
+        label: "隠し",
+        order: 150,
+        usesMaster: true,
+        hidden: true,
+        createClient: noClient,
+        render: () => null,
+      }),
+      "./b.screen.tsx": fakeScreen({ id: "b", segment: "b", order: 200 }),
+    });
+    expect(registry.map((screen) => screen.id)).toEqual(["a", "h", "b"]);
+    expect(visibleScreens(registry).map((screen) => screen.id)).toEqual(["a", "b"]);
+  });
+
+  test("hidden の画面でも、id・segment・order の重複は検証で弾く", () => {
+    const hiddenOf = (id: string, segment: string, order: number): RegisteredScreen =>
+      defineScreen({
+        id,
+        segment,
+        label: "隠し",
+        order,
+        usesMaster: true,
+        hidden: true,
+        createClient: noClient,
+        render: () => null,
+      });
+    expect(() =>
+      buildScreenRegistry({
+        "./a.screen.tsx": fakeScreen({ id: "dup", segment: "a", order: 1 }),
+        "./b.screen.tsx": hiddenOf("dup", "b", 2),
+      }),
+    ).toThrow(/id "dup"/);
+    expect(() =>
+      buildScreenRegistry({
+        "./a.screen.tsx": fakeScreen({ id: "a", segment: "dup", order: 1 }),
+        "./b.screen.tsx": hiddenOf("b", "dup", 2),
+      }),
+    ).toThrow(/segment "dup"/);
+    expect(() =>
+      buildScreenRegistry({
+        "./a.screen.tsx": fakeScreen({ id: "a", segment: "a", order: 1 }),
+        "./b.screen.tsx": hiddenOf("b", "b", 1),
+      }),
+    ).toThrow(/order 1/);
+  });
+
+  test("instantiateScreens は hidden の画面のクライアントを作らず(マウントもされない)、hidden を外すと作る", () => {
+    let created = 0;
+    const counting = (): undefined => {
+      created += 1;
+      return undefined;
+    };
+    const deps = { baseUrl: "", fetch: () => Promise.reject(new Error("unexpected fetch")), ids };
+
+    expect(instantiateScreens([dummy(true, counting)], deps)).toEqual([]);
+    expect(created).toBe(0);
+
+    // 再表示は hidden を外すだけ。
+    expect(instantiateScreens([dummy(false, counting)], deps).map((instance) => instance.id)).toEqual([
+      "dummy",
+    ]);
+    expect(created).toBe(1);
   });
 });
