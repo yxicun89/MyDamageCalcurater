@@ -85,7 +85,7 @@ export function CalcConditionsPanel({
     <div className="calc-conditions">
       <button
         type="button"
-        className="calc-conditions__toggle"
+        className="ui-button ui-button--secondary calc-conditions__toggle"
         aria-expanded={open}
         aria-controls={bodyId}
         onClick={() => {

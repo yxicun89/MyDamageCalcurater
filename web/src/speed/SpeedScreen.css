@@ -19,6 +19,7 @@
 .speed-table {
   flex: 2 1 320px;
   min-width: 0;
+  padding: var(--space-4);
 }
 
 /* 左の表の絞り込み(道具・ランク。ユーザー確定仕様)。 */
@@ -208,6 +209,7 @@
   flex-direction: column;
   gap: var(--space-3);
   min-width: 0;
+  padding: var(--space-4);
 }
 
 .speed-self__modes {

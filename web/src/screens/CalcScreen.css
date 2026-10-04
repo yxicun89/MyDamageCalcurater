@@ -49,6 +49,15 @@
   transform: rotate(180deg);
 }
 
+/* 共通部品 .ui-button の押下(scale)と同じ詳細度の :active を、入れ替えの回転と合成して保つ(ADR-0331 §7)。 */
+.calc-screen__swap.ui-button {
+  transition: transform var(--duration-swap) ease;
+}
+
+.calc-screen__swap.ui-button:active {
+  transform: rotate(180deg) scale(0.96);
+}
+
 .calc-card {
   display: flex;
   flex-direction: column;
