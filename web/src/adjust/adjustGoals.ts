@@ -17,10 +17,10 @@ type Schemas = components["schemas"];
 export type AdjustGoalKind = Schemas["AdjustGoalKind"];
 
 /**
- * 「目標から振り方を決める」モードを出すか(ADR-0331 §2)。calc-svc の adjustGoals(段階 B)が main に入るまで false。
+ * 「目標から振り方を決める」モードを出すか(ADR-0331 §2)。段階 B(ADR-0177。calc-svc の adjustGoals)で true にした。
  * 画面の props `goalsEnabled` で上書きできる(テスト用)。
  */
-export const ADJUST_GOALS_ENABLED = false;
+export const ADJUST_GOALS_ENABLED = true;
 
 /** 目標の件数の上限(api/openapi.yaml の AdjustGoalsRequest.goals の maxItems)。 */
 export const MAX_ADJUST_GOALS = 6;

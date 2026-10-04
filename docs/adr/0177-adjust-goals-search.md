@@ -1,6 +1,6 @@
 # ADR-0177: 複数の目標(素早さを上回る・耐える・倒す)をすべて満たす最小の振り方の探索(F-11 段階 B)
 
-- 状態: 提案(2026-10-04。spec 段階。engine・calc-svc の実装で「採用」に改める)
+- 状態: 採用(2026-10-04。engine・calc-svc の実装と Web のフラグの有効化まで)
 - 日付: 2026-10-04
 - レーン: ダメージ計算(データ帯 `0100〜`。`0176` は PR #632(特性 段階1)が使うため `0177`)
 - 関連: ADR-0331(F-11 段階 A。契約 `adjustGoals`・§3 相手の素早さはサーバー・§4 engine の拡張の提案)、
@@ -132,6 +132,15 @@ engine の `CalcDamage` は攻撃側の A/C(技の分類)と防御側の H・B/D
 最悪(6 件で全 6 能力を使う: outspeed・物理 ko・特殊 ko・物理 survive・特殊 survive・もう1件)で、`CalcDamage` 最大 約 6,600 回、
 候補の比較 約 7.2 万回。allocation(bulk)の数倍以内。engine と calc-svc に上限ちょうどのベンチマークを置き、実測を本 ADR に追記する
 (壁時計の閾値は判定しない。ADR-0250 §5)。
+
+実測(2026-10-04。Apple M5 Pro・Go のネイティブ・`-benchtime 10x`・3回):
+
+| ベンチマーク | 時間/回 | メモリ/回 | 割り当て/回 |
+|---|---|---|---|
+| `BenchmarkSuggestSPForGoalsAtLimit`(engine) | 約 14 ms(13.7〜15.3) | 約 21.6 MB | 約 22,800 |
+| `BenchmarkAdjustGoalsAtLimit`(calc-svc の HTTP。デコード・ID 解決・写しを含む) | 約 15 ms(14.4〜15.8) | 約 16.4 MB | 約 20,200 |
+
+最悪でも 1 要求あたり数十 ms 以内で、ほかの調整(allocation)と同じ guard(締め切り・同時実行の上限)の範囲に収まる。
 
 ### 7. 未対応の印
 
