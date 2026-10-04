@@ -770,6 +770,13 @@ final class LargeTextLayoutUITests: XCTestCase {
         "speedResultMovesAfter",
     ]
 
+    private static let speedBoundaryMaxScrolls = 60
+
+    /// 遅い速度で 1 回送る。既定の `swipeUp` は勢いで 1 画面以上動き、途中の段(同速の段など)を描かずに飛ばすことがある。
+    private func scrollDownSlowly(_ app: XCUIApplication) {
+        app.swipeUp(velocity: .slow)
+    }
+
     private func openSpeedScreen(_ app: XCUIApplication) {
         let openButton = app.buttons["openSpeedScreen"]
         XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
@@ -801,8 +808,39 @@ final class LargeTextLayoutUITests: XCTestCase {
         field.typeText("1")
         XCTAssertTrue(element(app, "speedResultSpeed").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
 
-        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedBoundary", "speedRawValueField"])
-        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedTier-", "speedTierTie-"])
+        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedRawValueField"])
+
+        // 表は遅延描画(ADR-0517)なので、段・境界線は表までスクロールしてから現れる。
+        // 境界線が出るまでスクロールし(上限あり。出なければ失敗)、その途中で描かれた段を毎回検査する。
+        // 段(speedTier-)・同速の段(speedTierTie-)がそれぞれ一度も描かれなければ失敗にする(検証は弱めない)。
+        let tierPrefixes = ["speedTier-", "speedTierTie-"]
+        var seenPrefixes: Set<String> = []
+        let boundary = element(app, "speedBoundary")
+        func checkRenderedTiers() {
+            for prefix in tierPrefixes {
+                let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+                if first.exists {
+                    seenPrefixes.insert(prefix)
+                    assertNoHorizontalOverflowForPrefixes(app, prefixes: [prefix])
+                }
+            }
+        }
+        var boundaryChecked = false
+        func checkBoundary() {
+            guard !boundaryChecked, boundary.exists else { return }
+            boundaryChecked = true
+            assertNoHorizontalOverflow(app, identifiers: ["speedBoundary"])
+        }
+        checkRenderedTiers()
+        checkBoundary()
+        // 境界線・段・同速の段のすべてが一度は描かれるまで送る(トリックルーム中は境界線が表の上側に出る)。
+        for _ in 0..<Self.speedBoundaryMaxScrolls where !(boundaryChecked && seenPrefixes.count == tierPrefixes.count) {
+            scrollDownSlowly(app)
+            checkRenderedTiers()
+            checkBoundary()
+        }
+        XCTAssertTrue(boundaryChecked, "境界線(speedBoundary)が表のどこにも描かれない")
+        XCTAssertEqual(seenPrefixes, Set(tierPrefixes), "スクロール中に描かれなかった段の種類がある: \(Set(tierPrefixes).subtracting(seenPrefixes))")
     }
 
     /// P6-24: AX5 でポケモンのシート(名前の一覧・検索欄)が横にはみ出さない。
