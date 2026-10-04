@@ -106,7 +106,7 @@
   /* ボタン・タブ・チップの押下・選択の演出の秒数(design.md「動き」: 押下)。 */
   --duration-press: 0.15s;
 
-  /* ポップ配色(docs/design.md「ポップ配色」、ADR-0331)。iOS と同じ名前・同じ値。 */
+  /* ポップ配色(docs/design.md「ポップ配色」、ADR-0334)。iOS と同じ名前・同じ値。 */
   --brand-primary: #1f5fd6;
   --on-primary: #ffffff;
   --brand-accent: #ffcb05;

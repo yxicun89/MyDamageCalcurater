@@ -1,4 +1,4 @@
-// F-12(I-web-6、ADR-0331 §6): 見た目の基盤で CSS とアイコンが増えるので、CSS にも初期ロードの予算を置く。
+// F-12(I-web-6、ADR-0334 §6): 見た目の基盤で CSS とアイコンが増えるので、CSS にも初期ロードの予算を置く。
 // 正は docs/design.md「パフォーマンス予算」。build の最後に走る scripts/check-bundle-size.mjs が JS と CSS の
 // 両方を予算と比べる(超えたら build が失敗する)。ここでは design.md と script の値が一致することを見る。
 

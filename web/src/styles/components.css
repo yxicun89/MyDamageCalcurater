@@ -1,5 +1,5 @@
 /*
- * 共通の見た目の部品(.ui-* クラス。docs/design.md「共通の部品」、ADR-0331 §2)。
+ * 共通の見た目の部品(.ui-* クラス。docs/design.md「共通の部品」、ADR-0334 §2)。
  * 画面の CSS は配置(グリッド・余白)だけを持ち、見た目はこれらのクラスを足して使う。
  * 色・角丸・影・時間は tokens.css の `--*` だけを参照する(色の直書きをしない。コーディング規約 §2)。
  * 動きは押下・選択の transition だけ(animation を置かない。時間は --duration-press で、reduced-motion で 0)。
