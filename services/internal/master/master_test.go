@@ -419,8 +419,20 @@ func fullAbilityEffect() engine.AbilityEffect {
 		Airborne:                  true,
 		SpeedMods:                 []engine.SpeedMod{{Condition: engine.SpeedConditionWeatherRain, Modifier: 8192}},
 		IgnoresParalysisSpeedDrop: true,
-		UnsupportedAttacker:       true,
-		UnsupportedDefender:       true,
+		// 特性の段階1(ADR-0176)。
+		TypeConvert:            &engine.TypeConvert{From: "normal", To: "water", PowerMod: 4915},
+		PowerMods:              []engine.ConditionalPowerMod{{Condition: engine.PowerConditionMaxBasePower, MaxPower: 60, Modifier: 6144}},
+		AuraType:               "grass",
+		AuraMod:                5448,
+		StatMods:               map[engine.StatKey]int{engine.StatAtk: 8192, engine.StatDef: 8192},
+		SeparateStatMods:       map[engine.StatKey]int{engine.StatAtk: 6144},
+		CritDamageMod:          6144,
+		PreventsCritical:       true,
+		IgnoresOpponentRanks:   true,
+		IgnoresDefenderAbility: true,
+		Breakable:              true,
+		UnsupportedAttacker:    true,
+		UnsupportedDefender:    true,
 	}
 }
 

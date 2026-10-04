@@ -60,12 +60,15 @@ const goldenImmunityMinPerAbility = 3
 // 無効・吸収の追加は fixed.json にベクタを足すだけで、Champions の random の特性プールも
 // legacy-effects も相性表も触らない(ADR-0002 §決定 2・ADR-0106 §決定 8)。ここが変わったら、
 // 生成器の乱数列が動いたか、既存の期待値を書き換えたかのどちらかで、どちらも P2-3b では誤り。
+//
+// ADR-0176: random.jsonl.gz と legacy-effects.jsonl.gz は、入力の特性の効果定義に Breakable が足されたので
+// バイト列が変わった(期待値と乱数列は変えていない。全件の expected が前の版と同じことを確かめて更新した)。
 var goldenUnchangedFiles = map[string]string{
-	"random.jsonl.gz":          "ac0120d1abc50267a837b41f4a6b102608f153f4609712ececbeda91fb7421b9",
+	"random.jsonl.gz":          "b223e73377366294791af59560a45290f5e0138c9d2ba4754591dd13a54fa0af",
 	"attack-species.jsonl.gz":  "521f11af3cb8a57d3c03ffd933424a5ef25868a9d9be18fb708aa3d93d2e0339",
 	"defense-species.jsonl.gz": "c28659dab4c9f6be0483582890f960a2ac710daa21979713d01a3db5d19b5507",
 	"stats-species.jsonl.gz":   "587d63614467798da38a361c50f0963b95196600e6aa8572688e03386943fa85",
-	"legacy-effects.jsonl.gz":  "00c950bbead7ce8e20351bcab731ac7944606419b78d33f924803342172df725",
+	"legacy-effects.jsonl.gz":  "0162cf731cf889f9fc6574b68008bca603ef762199167099ffbbfea7196d11b7",
 	"typechart.json":           "962b20126fb1996c13b05de4533fa94f90266cb08cc5e9ab3d093a038efa2228",
 }
 
@@ -122,6 +125,14 @@ func TestGoldenCoversAbilityImmunity(t *testing.T) {
 		}
 
 		zero := c.Expected.Rolls == [16]int{}
+		// ADR-0176: 攻撃側が防御側の特性を無視し、防御側の特性が Breakable なら無効・吸収は起きない
+		// (<slug>/breakable。値は TestGoldenDamage、ベクタの有無は TestGoldenCoversStage1AbilityEffects が見る)。
+		if ae := c.Input.Attacker.Ability.Effect; ae != nil && ae.IgnoresDefenderAbility && eff.Breakable {
+			if zero {
+				t.Errorf("%s: 防御側の特性を無視する攻撃側なのに oracle の期待値が 0", c.ID)
+			}
+			continue
+		}
 		if c.Input.Move.Type == blocked {
 			if !zero {
 				t.Errorf("%s: %s が無効にする %s 技なのに oracle の期待値が 0 でない: %v",
