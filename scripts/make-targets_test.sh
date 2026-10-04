@@ -4,7 +4,7 @@
 #
 # 固定すること:
 #   - make help の左列がターゲット名で(Makefile のファイル名ではない)、数字入りのターゲットも出る
-#   - make assets は画像なしの一時ディレクトリで成功(終了コード 0)する(ADR-0807。旧スタブの終了コード 2 をやめた)
+#   - make assets は画像なしの一時ディレクトリで成功(終了コード 0)する(ADR-0808。旧スタブの終了コード 2 をやめた)
 #   - make lint の k8s-render が全レーンの overlay を描画する(各レーンの *-kustomize を呼ぶ)
 set -uo pipefail
 

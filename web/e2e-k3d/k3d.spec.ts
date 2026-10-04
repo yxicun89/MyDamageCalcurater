@@ -21,7 +21,7 @@ function trackFailures(page: Page): string[] {
   const failures: string[] = [];
   page.on("response", (response) => {
     const pathname = new URL(response.url()).pathname;
-    // /images/manifest.json の 404 だけは正常(画像なし = エンブレム。ADR-0807)。許容は expectedFailures.ts に狭く置く。
+    // /images/manifest.json の 404 だけは正常(画像なし = エンブレム。ADR-0808)。許容は expectedFailures.ts に狭く置く。
     if (isCountedResponseFailure(response.status(), pathname)) {
       failures.push(`${response.status()} ${pathname}`);
     }
