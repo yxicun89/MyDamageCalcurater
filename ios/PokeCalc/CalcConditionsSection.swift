@@ -56,6 +56,9 @@ struct CalcConditionsSection: View {
             weatherSection
             terrainSection
             defenderScreensSection
+            // 防御側の壁の次に置く(攻撃側のランクの前後に挟むと、前方スクロールしかしない既存 XCUITest
+            // `CalcConditionsUITests` の壁→攻撃側ランクの到達が崩れるため。ADR-0501 末尾「実装結果」)。
+            defenderRankSection
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -141,12 +144,33 @@ struct CalcConditionsSection: View {
         }
     }
 
+    /// 防御側のランク: ステッパーの対象(B/D)は `defenderRankStat` が決める(issue #274・ADR-0501)。
+    private var defenderRankSection: some View {
+        sectionRow(CalcConditionLabels.defenderRankTitle) {
+            rankStepperButton(systemName: "minus", label: CalcConditionLabels.defenderRankDecrement, identifier: "calcDefenderRankDecrement", isEnabled: viewModel.defenderRank > RankLimits.min) {
+                viewModel.scheduleLatest { await $0.setDefenderRank($0.defenderRank - 1) }
+            }
+            Text(viewModel.defenderRankText)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .frame(minWidth: CalcScreenMetrics.rankValueMinWidth)
+                .accessibilityIdentifier("calcDefenderRankValue")
+            rankStepperButton(systemName: "plus", label: CalcConditionLabels.defenderRankIncrement, identifier: "calcDefenderRankIncrement", isEnabled: viewModel.defenderRank < RankLimits.max) {
+                viewModel.scheduleLatest { await $0.setDefenderRank($0.defenderRank + 1) }
+            }
+        }
+    }
+
+    private static let rankStepButtonMinSide: CGFloat = 37
+
     private func rankStepperButton(systemName: String, label: String, identifier: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(SpacingToken.x2)
+                // 「−」「+」の記号は細いので、タップ範囲を 36pt 以上にそろえる(受け入れ条件 5)。
+                .frame(minWidth: Self.rankStepButtonMinSide, minHeight: Self.rankStepButtonMinSide)
                 .background(ColorToken.bgGlass.color, in: Circle())
         }
         .buttonStyle(.plain)
@@ -200,7 +224,7 @@ struct CalcConditionsSection: View {
             .accessibilityValue(selectedName)
             .accessibilityIdentifier("calcDefenderAbilityPicker")
         }
-        .task(id: viewModel.defenderSpeciesKey) { await viewModel.loadDefenderAbilityOptions() }
+        // 防御側の詳細は `DefenderCardView` が種族の変更ごとに読む(ここで重ねて読まない。ADR-0509 §4)。
     }
 
     /// 天候(1つ選ぶピル。既定 なし)。

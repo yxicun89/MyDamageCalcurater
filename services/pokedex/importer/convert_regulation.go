@@ -6,6 +6,7 @@ package importer
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 
 	"example.com/pokecalc/engine"
@@ -171,19 +172,60 @@ func buildRegulations(regs RegulationsFile, showdownMod string, speciesKeys, mov
 
 // buildItemEffects / buildAbilityEffects は effects.json の定義を検証・正準化する
 // (取り込む持ち物/特性に無い ID は投入せず effect-unused の警告にする)。
-func buildItemEffects(raw map[string]json.RawMessage, included map[string]bool, chart engine.TypeChart) ([]EffectRow, []Finding, error) {
+// 素早さの定義(speedItems / speedAbilities。ADR-0139)は同じ ID のダメージの定義と1つの効果 JSON に合わせる。
+func buildItemEffects(raw, speed map[string]json.RawMessage, included map[string]bool, chart engine.TypeChart) ([]EffectRow, []Finding, error) {
+	return buildEffectRows(raw, speed, included, itemSpeedKeys, func(b []byte) ([]byte, error) {
+		eff, err := master.DecodeItemEffect(b, chart)
+		if err != nil {
+			return nil, err
+		}
+		return master.EncodeItemEffect(*eff)
+	})
+}
+
+func buildAbilityEffects(raw, speed map[string]json.RawMessage, included map[string]bool, chart engine.TypeChart) ([]EffectRow, []Finding, error) {
+	return buildEffectRows(raw, speed, included, abilitySpeedKeys, func(b []byte) ([]byte, error) {
+		eff, err := master.DecodeAbilityEffect(b, chart)
+		if err != nil {
+			return nil, err
+		}
+		return master.EncodeAbilityEffect(*eff)
+	})
+}
+
+// 素早さの節に書ける項目(ダメージの節には書けない)。
+var (
+	itemSpeedKeys    = []string{"SpeedMods"}
+	abilitySpeedKeys = []string{"SpeedMods", "IgnoresParalysisSpeedDrop"}
+)
+
+func buildEffectRows(raw, speed map[string]json.RawMessage, included map[string]bool, speedKeys []string,
+	canonicalize func([]byte) ([]byte, error)) ([]EffectRow, []Finding, error) {
+	ids := map[string]bool{}
+	for id := range raw {
+		ids[id] = true
+	}
+	for id := range speed {
+		ids[id] = true
+	}
+	sorted := make([]string, 0, len(ids))
+	for id := range ids {
+		sorted = append(sorted, id)
+	}
+	sort.Strings(sorted)
+
 	var rows []EffectRow
 	var warnings []Finding
-	for _, id := range sortedKeysRaw(raw) {
+	for _, id := range sorted {
 		if !included[id] {
 			warnings = append(warnings, Finding{Kind: KindEffectUnused, ID: id})
 			continue
 		}
-		eff, err := master.DecodeItemEffect(raw[id], chart)
+		merged, err := mergeEffectSections(id, raw[id], speed[id], speedKeys)
 		if err != nil {
 			return nil, nil, err
 		}
-		canon, err := master.EncodeItemEffect(*eff)
+		canon, err := canonicalize(merged)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -192,23 +234,38 @@ func buildItemEffects(raw map[string]json.RawMessage, included map[string]bool, 
 	return rows, warnings, nil
 }
 
-func buildAbilityEffects(raw map[string]json.RawMessage, included map[string]bool, chart engine.TypeChart) ([]EffectRow, []Finding, error) {
-	var rows []EffectRow
-	var warnings []Finding
-	for _, id := range sortedKeysRaw(raw) {
-		if !included[id] {
-			warnings = append(warnings, Finding{Kind: KindEffectUnused, ID: id})
-			continue
+// mergeEffectSections はダメージの定義と素早さの定義を1つの JSON オブジェクトに合わせる。
+// 素早さの項目はダメージの節に、ダメージの項目は素早さの節に書けない(定義の置き場を1つにする)。
+func mergeEffectSections(id string, damage, speed json.RawMessage, speedKeys []string) ([]byte, error) {
+	isSpeedKey := func(k string) bool { return k == "SpeedMods" || k == "IgnoresParalysisSpeedDrop" }
+	merged := map[string]json.RawMessage{}
+	if damage != nil {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(damage, &m); err != nil || m == nil {
+			// 形の不正はそのまま共通マスタの検査に任せる。
+			if speed == nil {
+				return damage, nil
+			}
+			return nil, fmt.Errorf("%w: 効果定義 %q がオブジェクトでない", ErrInvalidInput, id)
 		}
-		eff, err := master.DecodeAbilityEffect(raw[id], chart)
-		if err != nil {
-			return nil, nil, err
+		for k, v := range m {
+			if isSpeedKey(k) {
+				return nil, fmt.Errorf("%w: 効果定義 %q のダメージの節に素早さの項目 %q がある(speedItems / speedAbilities に書く)", ErrInvalidInput, id, k)
+			}
+			merged[k] = v
 		}
-		canon, err := master.EncodeAbilityEffect(*eff)
-		if err != nil {
-			return nil, nil, err
-		}
-		rows = append(rows, EffectRow{ID: id, Effect: canon})
 	}
-	return rows, warnings, nil
+	if speed != nil {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(speed, &m); err != nil || len(m) == 0 {
+			return nil, fmt.Errorf("%w: 素早さの効果定義 %q が空でないオブジェクトでない", ErrInvalidInput, id)
+		}
+		for k, v := range m {
+			if !slices.Contains(speedKeys, k) {
+				return nil, fmt.Errorf("%w: 素早さの効果定義 %q に素早さ以外の項目 %q がある(items / abilities に書く)", ErrInvalidInput, id, k)
+			}
+			merged[k] = v
+		}
+	}
+	return json.Marshal(merged)
 }

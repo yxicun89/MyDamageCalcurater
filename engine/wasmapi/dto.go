@@ -299,6 +299,29 @@ func parseMechanisms(path string, vs []string) ([]engine.MoveMechanism, error) {
 	return out, nil
 }
 
+// speedModDTO は素早さの補正の1行(ADR-0139)。語彙に無い条件は invalid_enum。
+// modifier の範囲は検証しない: ダメージ計算が読まない値で、共通マスタが取り込み時に検証済みのため。
+// Web は要素のキーを PascalCase のまま渡すが、encoding/json の照合は大文字小文字を区別しないので受け付ける(テストで固定)。
+type speedModDTO struct {
+	Condition string `json:"condition"`
+	Modifier  int    `json:"modifier"`
+}
+
+func speedModsToEngine(path string, ds []speedModDTO) ([]engine.SpeedMod, error) {
+	if ds == nil {
+		return nil, nil
+	}
+	out := make([]engine.SpeedMod, 0, len(ds))
+	for i, d := range ds {
+		c := engine.SpeedCondition(d.Condition)
+		if !c.Known() {
+			return nil, enumError(fmt.Sprintf("%s[%d].condition", path, i), d.Condition)
+		}
+		out = append(out, engine.SpeedMod{Condition: c, Modifier: d.Modifier})
+	}
+	return out, nil
+}
+
 type itemEffectDTO struct {
 	StatMods           map[string]int `json:"statMods"`
 	DamageMod          int            `json:"damageMod"`
@@ -308,6 +331,7 @@ type itemEffectDTO struct {
 	BoostType          string         `json:"boostType"`
 	BoostTypeMod       int            `json:"boostTypeMod"`
 	ResistBerryType    string         `json:"resistBerryType"`
+	SpeedMods          []speedModDTO  `json:"speedMods"` // 素早さの補正(ADR-0139)。ダメージ計算は読まない
 	// UnsupportedAttacker / UnsupportedDefender は「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool `json:"unsupportedAttacker"`
 	UnsupportedDefender bool `json:"unsupportedDefender"`
@@ -338,6 +362,9 @@ func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
 		return nil, err
 	}
 	if out.ResistBerryType, err = parseType(path+".resistBerryType", e.ResistBerryType, true); err != nil {
+		return nil, err
+	}
+	if out.SpeedMods, err = speedModsToEngine(path+".speedMods", e.SpeedMods); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -428,27 +455,32 @@ func (e absorbEffectDTO) toEngine(path string) (engine.AbsorbEffect, error) {
 }
 
 type abilityEffectDTO struct {
-	StabMod              int                        `json:"stabMod"`
-	OffBoostType         string                     `json:"offBoostType"`
-	OffBoostTypeMod      int                        `json:"offBoostTypeMod"`
-	DefResistType        map[string]int             `json:"defResistType"`
-	DefImmuneTypes       []string                   `json:"defImmuneTypes"`
-	DefAbsorbTypes       map[string]absorbEffectDTO `json:"defAbsorbTypes"`
-	ReduceSuperEffective int                        `json:"reduceSuperEffective"`
-	IgnoresBurn          bool                       `json:"ignoresBurn"`
-	Airborne             bool                       `json:"airborne"`            // 浮いている(フィールドの補正の対象外。ADR-0116)
-	UnsupportedAttacker  bool                       `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
-	UnsupportedDefender  bool                       `json:"unsupportedDefender"`
+	StabMod                   int                        `json:"stabMod"`
+	OffBoostType              string                     `json:"offBoostType"`
+	OffBoostTypeMod           int                        `json:"offBoostTypeMod"`
+	DefResistType             map[string]int             `json:"defResistType"`
+	DefImmuneTypes            []string                   `json:"defImmuneTypes"`
+	DefAbsorbTypes            map[string]absorbEffectDTO `json:"defAbsorbTypes"`
+	ReduceSuperEffective      int                        `json:"reduceSuperEffective"`
+	IgnoresBurn               bool                       `json:"ignoresBurn"`
+	Airborne                  bool                       `json:"airborne"`                  // 浮いている(フィールドの補正の対象外。ADR-0116)
+	SpeedMods                 []speedModDTO              `json:"speedMods"`                 // 素早さの補正(ADR-0139)
+	IgnoresParalysisSpeedDrop bool                       `json:"ignoresParalysisSpeedDrop"` // まひの素早さ半減を受けない(ADR-0139)
+	UnsupportedAttacker       bool                       `json:"unsupportedAttacker"`       // 「未対応」の印(ADR-0123)
+	UnsupportedDefender       bool                       `json:"unsupportedDefender"`
 }
 
 func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 	out := &engine.AbilityEffect{
 		StabMod: e.StabMod, OffBoostTypeMod: e.OffBoostTypeMod,
 		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
-		Airborne:            e.Airborne,
+		Airborne: e.Airborne, IgnoresParalysisSpeedDrop: e.IgnoresParalysisSpeedDrop,
 		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
 	}
 	var err error
+	if out.SpeedMods, err = speedModsToEngine(path+".speedMods", e.SpeedMods); err != nil {
+		return nil, err
+	}
 	if out.OffBoostType, err = parseType(path+".offBoostType", e.OffBoostType, true); err != nil {
 		return nil, err
 	}

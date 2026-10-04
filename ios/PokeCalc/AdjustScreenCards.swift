@@ -18,7 +18,7 @@ struct AdjustOwnCardView: View {
     }
 
     private var itemName: String {
-        viewModel.itemOptions.first { $0.id == viewModel.ownItemId }?.nameJa ?? AdjustText.unselectedOption
+        viewModel.ownItemId.map { viewModel.itemLabel(for: $0) } ?? AdjustText.unselectedOption
     }
 
     private var moveName: String {
@@ -53,10 +53,10 @@ struct AdjustOwnCardView: View {
             }
             AdjustMenuRow(
                 title: AdjustText.itemField, accessibilityLabel: AdjustText.ownItemLabel, valueText: itemName,
-                identifier: "adjustOwnItemPicker"
+                identifier: "adjustOwnItemPicker", lockReason: lockReason(for: viewModel.ownItemLock)
             ) {
                 Button(AdjustText.unselectedOption) { viewModel.selectOwnItem(id: nil) }
-                ForEach(viewModel.itemOptions, id: \.id) { item in
+                ForEach(viewModel.ownItemOptions, id: \.id) { item in
                     Button(item.nameJa) { viewModel.selectOwnItem(id: item.id) }
                 }
             }

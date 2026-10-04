@@ -47,6 +47,8 @@ struct AdjustMenuRow<Items: View>: View {
     let accessibilityLabel: String
     let valueText: String
     let identifier: String
+    /// 固定中の理由(メガ種族の持ち物。nil なら操作できる。ADR-0509 §8)。
+    var lockReason: String?
     @ViewBuilder let items: () -> Items
 
     var body: some View {
@@ -57,9 +59,18 @@ struct AdjustMenuRow<Items: View>: View {
             } label: {
                 MenuLabelChip(text: valueText)
             }
+            .disabled(lockReason != nil)
             .accessibilityLabel(accessibilityLabel)
             .accessibilityValue(valueText)
+            .accessibilityHint(lockReason ?? "")
             .accessibilityIdentifier(identifier)
+            if let lockReason {
+                Text(lockReason)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("\(identifier)LockReason")
+            }
         }
     }
 }

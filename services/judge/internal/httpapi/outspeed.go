@@ -14,6 +14,7 @@ import (
 	"example.com/pokecalc/services/judge/internal/api"
 	"example.com/pokecalc/services/judge/internal/client"
 	"example.com/pokecalc/services/judge/internal/judge"
+	"example.com/pokecalc/services/judge/internal/speedeffects"
 	"github.com/labstack/echo/v5"
 )
 
@@ -335,28 +336,36 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 		defenderMoves[i] = move
 	}
 
+	// 特性・スカーフ以外の持ち物が 1 つも指定されていなければ、素早さ効果のデータは要らない(取りに行かない)。
+	var effects speedeffects.Table
+	var effectsOK bool
+	if needsSpeedEffects(deps, req) {
+		effects, effectsOK = deps.SpeedEffects.Table(ctx)
+	}
+
 	matchups := make([]api.Matchup, len(req.defenders))
-	// 天候は共通の field.weather(none は天候なし)。素早さには反映しないので、指定の有無だけ見る(ADR-0710)。
+	// 天候・場は共通の field(none は天候なし)。素早さの条件の評価と、fieldWeather の印に使う(ADR-0710・ADR-0714)。
 	hasWeather := req.field != nil && req.field.Weather != nil && *req.field.Weather != api.WeatherNone
+	env := judge.SpeedEnvironment{}
+	if req.field != nil {
+		if req.field.Weather != nil {
+			env.Weather = string(*req.field.Weather)
+		}
+		if req.field.Terrain != nil {
+			env.Terrain = string(*req.field.Terrain)
+		}
+	}
+	attackerIn := newSpeedIndividual(req.attacker, deps.ChoiceScarfItemID, env, effects, effectsOK)
 	for i, defender := range req.defenders {
-		attackerSpeedInput := judge.Individual{
-			BaseSpeed: attackerSpecies.BaseStats.Spe,
-			Nature:    attackerNature,
-			SP:        req.attacker.sp,
-			Ranks:     req.attacker.ranks,
-			Scarf:     judge.IsChoiceScarf(req.attacker.itemID, deps.ChoiceScarfItemID),
-			Tailwind:  req.speedField.attackerTailwind,
-			Paralysis: isParalysis(req.attacker.status),
-		}
-		defenderSpeedInput := judge.Individual{
-			BaseSpeed: defenderSpecies[i].BaseStats.Spe,
-			Nature:    defenderNatures[i],
-			SP:        defender.sp,
-			Ranks:     defender.ranks,
-			Scarf:     judge.IsChoiceScarf(defender.itemID, deps.ChoiceScarfItemID),
-			Tailwind:  req.speedField.defenderTailwind,
-			Paralysis: isParalysis(defender.status),
-		}
+		attackerSpeedInput := attackerIn.individual
+		attackerSpeedInput.BaseSpeed = attackerSpecies.BaseStats.Spe
+		attackerSpeedInput.Nature = attackerNature
+		attackerSpeedInput.Tailwind = req.speedField.attackerTailwind
+		defenderIn := newSpeedIndividual(defender.individualInput, deps.ChoiceScarfItemID, env, effects, effectsOK)
+		defenderSpeedInput := defenderIn.individual
+		defenderSpeedInput.BaseSpeed = defenderSpecies[i].BaseStats.Spe
+		defenderSpeedInput.Nature = defenderNatures[i]
+		defenderSpeedInput.Tailwind = req.speedField.defenderTailwind
 		comparison, err := judge.CompareSpeed(
 			attackerSpeedInput,
 			defenderSpeedInput,
@@ -420,14 +429,85 @@ func outspeedAndKo(c *echo.Context, deps Dependencies, params api.OutspeedAndKoP
 			// 素早さに反映した補正と、指定されたのに反映していない入力(ADR-0710)。
 			AttackerSpeedApplied: toSpeedFactors(judge.AppliedSpeedFactors(attackerSpeedInput)),
 			DefenderSpeedApplied: toSpeedFactors(judge.AppliedSpeedFactors(defenderSpeedInput)),
-			AttackerSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputs(
-				req.attacker.abilityID, req.attacker.itemID, attackerSpeedInput.Scarf, hasWeather)),
-			DefenderSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputs(
-				defender.abilityID, defender.itemID, defenderSpeedInput.Scarf, hasWeather)),
+			AttackerSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputsFor(attackerIn.resolution(hasWeather))),
+			DefenderSpeedIgnored: toSpeedIgnoredInputs(judge.IgnoredSpeedInputsFor(defenderIn.resolution(hasWeather))),
 		}
 	}
 
 	return c.JSON(http.StatusOK, api.OutspeedAndKoResponse{Matchups: matchups})
+}
+
+// speedIndividual は 1 つの個体の素早さ入力(BaseSpeed・Nature・Tailwind を除く)と、特性・持ち物の
+// 効果を確定できたかの印(ADR-0714 §4)。
+type speedIndividual struct {
+	individual       judge.Individual
+	abilitySpecified bool
+	abilityResolved  bool
+	itemSpecified    bool
+	itemResolved     bool
+}
+
+// newSpeedIndividual は個体の特性・持ち物の素早さ効果を表から引き、環境(状態異常はこの個体のもの)と
+// ともに judge.Individual に詰める。表が無い・ID が表に無い(効果の形が不正なものを含む)・条件を判定できない
+// ときは、その効果を掛けず、確定できなかった印にする。
+func newSpeedIndividual(in individualInput, scarfItemID string, env judge.SpeedEnvironment, table speedeffects.Table, tableOK bool) speedIndividual {
+	env.HasStatus = in.status != ""
+	scarf := judge.IsChoiceScarf(in.itemID, scarfItemID)
+	out := speedIndividual{
+		individual: judge.Individual{
+			SP:        in.sp,
+			Ranks:     in.ranks,
+			Scarf:     scarf,
+			Paralysis: isParalysis(in.status),
+			Env:       env,
+		},
+		abilitySpecified: in.abilityID != "",
+		itemSpecified:    in.itemID != "" && !scarf,
+	}
+	if out.abilitySpecified && tableOK {
+		if effect, ok := table.Ability(in.abilityID); ok {
+			out.individual.Ability = effect
+			_, _, undetermined := judge.ResolveSpeedMod(effect.Mods, env)
+			out.abilityResolved = !undetermined
+		}
+	}
+	if out.itemSpecified && tableOK {
+		if effect, ok := table.Item(in.itemID); ok {
+			out.individual.Item = effect
+			_, _, undetermined := judge.ResolveSpeedMod(effect.Mods, env)
+			out.itemResolved = !undetermined
+		}
+	}
+	return out
+}
+
+func (s speedIndividual) resolution(hasWeather bool) judge.SpeedInputResolution {
+	return judge.SpeedInputResolution{
+		AbilitySpecified: s.abilitySpecified,
+		AbilityResolved:  s.abilityResolved,
+		ItemSpecified:    s.itemSpecified,
+		ItemResolved:     s.itemResolved,
+		HasWeather:       hasWeather,
+	}
+}
+
+// needsSpeedEffects は、素早さ効果のデータを引く必要があるか(特性か、スカーフ以外の持ち物が指定されている)。
+func needsSpeedEffects(deps Dependencies, req outspeedRequest) bool {
+	if deps.SpeedEffects == nil {
+		return false
+	}
+	needs := func(in individualInput) bool {
+		return in.abilityID != "" || (in.itemID != "" && !judge.IsChoiceScarf(in.itemID, deps.ChoiceScarfItemID))
+	}
+	if needs(req.attacker) {
+		return true
+	}
+	for _, d := range req.defenders {
+		if needs(d.individualInput) {
+			return true
+		}
+	}
+	return false
 }
 
 // candidateLabel は ADR-0703 §3 の「どの候補で失敗したか」を示す message の断片。

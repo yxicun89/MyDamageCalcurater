@@ -1,4 +1,4 @@
-# record-migrate・team-migrate と、record・team 本体・失効ジョブ(record-expire・team-expire。ADR-0220 §2)から TiDB(tidb-operator のラベルを想定。TiDB 起動後に要確認。ADR-0132)の 4000 へ。
+# TidbInitializer の Pod(pokecalc-tidb-initializer。DB 作成・root パスワード設定。ADR-0226)と、record-migrate・team-migrate と、record・team 本体・失効ジョブ(record-expire・team-expire。ADR-0220 §2)から TiDB(tidb-operator のラベルを想定。TiDB 起動後に要確認。ADR-0132)の 4000 へ。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -19,7 +19,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/name
                 operator: In
-                values: [record-migrate, team-migrate, record, team, record-expire, team-expire]
+                values: [pokecalc-tidb-initializer, record-migrate, team-migrate, record, team, record-expire, team-expire]
       ports:
         - protocol: TCP
           port: 4000

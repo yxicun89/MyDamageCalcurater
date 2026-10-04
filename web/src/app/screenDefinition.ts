@@ -34,6 +34,10 @@ export interface ScreenEnvironment {
   readonly recordClient?: RecordClient;
   /** P5-5d(ADR-0318 §6): 構築一覧の取り直しの合図(端末データの削除後に App が進める)。 */
   readonly reloadToken?: number;
+  /** P5-3c(ADR-0327 §5): お気に入り一覧の取り直しの合図(計算画面での追加・端末データの削除の後に App が進める)。 */
+  readonly favoritesReloadToken?: number;
+  /** P5-3c(ADR-0327 §5): お気に入りを追加できたことを App に知らせる(お気に入りタブの一覧を古いままにしない)。 */
+  readonly onFavoriteAdded?: () => void;
   /** issue 276(ADR-0411): オンラインのマスタの取得口(API 専用の画面は計算モードに関係なくこれを使う)。 */
   readonly onlineMasterSource: MasterSource;
 }

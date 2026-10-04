@@ -11,4 +11,5 @@ readonly IOS_OPENAPI_TARGETS=(
   "PokeCalcAPI|api/openapi.yaml|ios/tools/openapi-gen/openapi-generator-config.yaml|ios/PokeCalcKit/Sources/PokeCalcAPI/Generated"
   "PokeCalcBalanceAPI|services/balance/api/openapi.yaml|ios/tools/openapi-gen/openapi-generator-balance-config.yaml|ios/PokeCalcKit/Sources/PokeCalcBalanceAPI/Generated"
   "PokeCalcSpeedAPI|services/speed/api/openapi.yaml|ios/tools/openapi-gen/openapi-generator-config.speed.yaml|ios/PokeCalcKit/Sources/PokeCalcSpeedAPI/Generated"
+  "PokeCalcJudgeAPI|services/judge/api/openapi.yaml|ios/tools/openapi-gen/openapi-generator-config.judge.yaml|ios/PokeCalcKit/Sources/PokeCalcJudgeAPI/Generated"
 )

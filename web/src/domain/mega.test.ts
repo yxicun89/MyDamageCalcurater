@@ -4,7 +4,6 @@
 // 確かめること:
 //   - isMegaSpecies: isMega が true の種族だけ(省略・null は false)
 //   - megaStoneItemIds: いずれかのメガ種族の requiredItemId に現れる ID の集合
-//   - selectableItems: その集合の持ち物を単独の選択肢から外す(順序・実体は保つ)
 //   - megaItemLock: none(メガでない)/ locked(メガ+マスタにストーンあり)/ missing(メガだがストーンを引けない)
 //   - itemIdAfterSpeciesChange: 種族を変えたときの持ち物 ID(メガ→固定、メガ→非メガは未選択に戻す)
 
@@ -21,13 +20,7 @@ import {
 } from "../test/megaMaster";
 import { exampleSpecies } from "../master/example/species";
 import { exampleItems } from "../master/example/items";
-import {
-  itemIdAfterSpeciesChange,
-  isMegaSpecies,
-  megaItemLock,
-  megaStoneItemIds,
-  selectableItems,
-} from "./mega";
+import { itemIdAfterSpeciesChange, isMegaSpecies, megaItemLock, megaStoneItemIds } from "./mega";
 
 function required<T>(value: T | undefined, what: string): T {
   if (value === undefined) {
@@ -78,21 +71,6 @@ describe("megaStoneItemIds", () => {
 
   test("種族が空なら空集合", () => {
     expect(megaStoneItemIds([]).size).toBe(0);
-  });
-});
-
-describe("selectableItems", () => {
-  test("メガストーンの集合に入る持ち物を外し、残りは順序と実体(参照)を保つ", () => {
-    const stoneIds = megaStoneItemIds([MEGA_FIRE, MEGA_WATER]);
-    const selectable = selectableItems(allItems, stoneIds);
-    expect(selectable).toEqual(exampleItems);
-    selectable.forEach((item, index) => {
-      expect(item).toBe(exampleItems[index]);
-    });
-  });
-
-  test("集合が空なら全件(例データだけのマスタは今までどおり)", () => {
-    expect(selectableItems(exampleItems, new Set())).toEqual(exampleItems);
   });
 });
 

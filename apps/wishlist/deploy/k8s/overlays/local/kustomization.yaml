@@ -1,0 +1,13 @@
+# k3d(ローカル)用。イメージは k3d image import で入れた :local を使う。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: wishlist
+resources:
+  - ../../base
+images:
+  - name: wishlist/api
+    newTag: local
+  - name: wishlist/web
+    newTag: local
+  - name: wishlist/refresher
+    newTag: local

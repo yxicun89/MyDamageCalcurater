@@ -149,7 +149,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
         switch output {
         case .ok(let ok):
-            return try ok.body.json.map { Item(id: $0.id, nameJa: $0.nameJa) }
+            return try ok.body.json.map { Self.domainItem($0) }
         case .badRequest(let response):
             throw try Self.domainErrorFromSchema(response.body.json)
         case .serviceUnavailable(let response):
@@ -308,8 +308,18 @@ public struct APIPokeCalcService: PokeCalcService {
             nameJa: detail.value1.nameJa, types: detail.value1.types.map(domainPokeType),
             baseStats: domainStatBlock(detail.value2.baseStats),
             abilities: detail.value2.abilities.map { Ability(id: $0.id, nameJa: $0.nameJa) },
-            learnset: detail.value2.learnset ?? []
+            learnset: detail.value2.learnset ?? [],
+            isMega: detail.value2.isMega ?? false, requiredItemId: detail.value2.requiredItemId,
+            baseSpeciesKey: detail.value2.baseSpeciesKey, baseSpeciesNameJa: detail.value2.baseSpeciesNameJa
         )
+    }
+
+    private static func domainItem(_ item: Components.Schemas.Item) -> Item {
+        Item(
+            id: item.id, nameJa: item.nameJa,
+            // 知らない役割は捨てる(効果から再導出しない。ADR-0175 §4)。
+            roles: item.roles.map { $0.compactMap { ItemRole(rawValue: $0.rawValue) } },
+            isMegaStone: item.isMegaStone)
     }
 
     private static func domainMove(_ move: Components.Schemas.Move) -> Move {
@@ -506,14 +516,21 @@ public struct APIPokeCalcService: PokeCalcService {
             // (ADR-0501「issue #274」4章「判断」)。
             field: request.field == FieldState() ? nil : generatedFieldState(request.field),
             options: .init(critical: request.critical),
-            // 指定なし(nil)は `defenderOverride` 自体を送らない(これまでの要求本文と同じ。
-            // ADR-0501「P6-19」1章)。
-            defenderOverride: request.defenderAbilityId.map { .init(abilityId: $0) },
+            // 特性の指定なし(nil)かつランクが既定(すべて 0)なら `defenderOverride` 自体を送らない
+            // (これまでの要求本文と同じ。ADR-0501「P6-19」1章・「防御側のランクの受け入れ条件」3章)。
+            // ランクは非 0 のときだけ 5 項目(0 も含む)を載せる。`status` は送らない。
+            defenderOverride: generatedDefenderOverride(request),
             // 省略(空配列を含む)は同じ意味(openapi の description)なので、空のときは
             // フィールド自体を送らない(nil のプロパティは JSON エンコード時に省かれる)。
             presets: request.presets.isEmpty ? nil : request.presets.map(generatedDefenderPreset),
             itemVariants: request.itemVariants.isEmpty ? nil : request.itemVariants
         )
+    }
+
+    private static func generatedDefenderOverride(_ request: BulkCalcRequest) -> Components.Schemas.DefenderOverride? {
+        let ranks = request.defenderRanks == RankBlock() ? nil : generatedRankBlock(request.defenderRanks)
+        if request.defenderAbilityId == nil && ranks == nil { return nil }
+        return .init(abilityId: request.defenderAbilityId, ranks: ranks)
     }
 
     /// openapi `ReverseRequest`(ADR-0010 §R): itemCandidates の省略と maxCandidates == 0 は既定値と
@@ -550,7 +567,7 @@ public struct APIPokeCalcService: PokeCalcService {
 
     // MARK: - enum の写像(契約とドメインの enum は同じ値集合。DomainTypesTests が同期を固定する)
 
-    private static func domainPokeType(_ type: Components.Schemas.PokeType) -> PokeType {
+    static func domainPokeType(_ type: Components.Schemas.PokeType) -> PokeType {
         switch type {
         case .normal: return .normal
         case .fire: return .fire

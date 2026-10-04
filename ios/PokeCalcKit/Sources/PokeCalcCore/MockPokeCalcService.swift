@@ -70,7 +70,7 @@ public struct MockPokeCalcService: PokeCalcService {
 
     public func searchItems(query: String, limit: Int) async throws -> [Item] {
         matchingByPrefix(fixtures.items, query: query, limit: limit, nameJa: { $0.nameJa })
-            .map { Item(id: $0.id, nameJa: $0.nameJa) }
+            .map { Item(id: $0.id, nameJa: $0.nameJa, roles: $0.roles?.compactMap(ItemRole.init(rawValue:)), isMegaStone: $0.isMegaStone) }
     }
 
     public func natures() async throws -> [Nature] {
@@ -446,7 +446,9 @@ public struct MockPokeCalcService: PokeCalcService {
                 spa: entry.baseStats.spa, spd: entry.baseStats.spd, spe: entry.baseStats.spe
             ),
             abilities: entry.abilities.map { Ability(id: $0.id, nameJa: $0.nameJa) },
-            learnset: entry.learnset
+            learnset: entry.learnset,
+            isMega: entry.isMega ?? false, requiredItemId: entry.requiredItemId,
+            baseSpeciesKey: entry.baseSpeciesKey, baseSpeciesNameJa: entry.baseSpeciesNameJa
         )
     }
 

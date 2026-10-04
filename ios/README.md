@@ -48,7 +48,7 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-gen                         # 生成物を作る(Git に置かない。変更が無ければ何もしない。Xcode で開く前に1回)
 make ios-test                        # 生成・生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed / judge)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
@@ -64,10 +64,17 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
 素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
+判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks|speed-notes`(`speed-notes` は素早さの反映/無視の文と、状態異常まひの付与を固定値で返す。ADR-0512)、
+起動時に開くのは `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1`(ADR-0504)。
 
 計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。
 `GET /api/record/frequent-opponents`)を出す。取得に失敗しても何も出さず、検索と計算は塞がない。
 モックの挙動は `POKECALC_MOCK_FREQUENT_OPPONENTS=empty|fail` で切り替える(ADR-0501「P6-23」)。
+お気に入り・計算履歴の画面(ADR-0511。ルートの「お気に入り・履歴」)は、お気に入りの一覧と外す操作、「よく計算する相手」(件数・最後に計算した日)を出す。
+計算画面の「攻撃側/防御側をお気に入りに追加」から追加する。取得・保存に失敗しても計算は使える。
+モックの挙動は `POKECALC_MOCK_FAVORITES=list|fail|unavailable|full` で切り替える(未設定は空のストアで、追加・外すが動く)。
+起動時に開くのは `POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH=1`。
+ポケモン画像(ADR-0508)は既定でモックも画像なし(タイプ色エンブレム)。`POKECALC_MOCK_IMAGES=1` で架空キー 9001-000・9003-000 だけ小さな架空 PNG(data URL)が出る。API 接続では gateway の `/images/manifest.json` を起動時に1回だけ取得し、無ければエンブレムのまま。
 
 ### 構築のテキスト書き出し・取り込み(P6-20)
 
@@ -92,7 +99,7 @@ Nature: 性格
 ## 関連 ADR
 
 [0500](../docs/adr/0500-ios-app-architecture.md)(構成・生成・モック・設定・テスト)・
-[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・
+[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・[0503](../docs/adr/0503-ios-speed-screen-and-multi-contract-generation.md)(素早さ画面)・[0504](../docs/adr/0504-ios-judge-screen.md)(判定画面)・
 [0009](../docs/adr/0009-bulk-calc-presets.md)(一括計算のプリセット)・[0010](../docs/adr/0010-reverse-estimation.md) §R(逆算)・
 [0200](../docs/adr/0200-calc-svc-api-contract.md)・[0202](../docs/adr/0202-gateway-routing-and-headers.md)(API 契約)。
 依存(完全固定): swift-openapi-generator 1.13.1・swift-openapi-runtime 1.12.1・swift-openapi-urlsession 1.3.1・swift-http-types 1.8.0(Apache-2.0)。

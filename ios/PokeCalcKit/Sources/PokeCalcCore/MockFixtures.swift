@@ -27,6 +27,11 @@ struct MockFixtures {
         let baseStats: BaseStats
         let abilities: [AbilityEntry]
         let learnset: [String]
+        /// メガ種族の項目(ADR-0509 §9。無ければ非メガ)。
+        let isMega: Bool?
+        let requiredItemId: String?
+        let baseSpeciesKey: String?
+        let baseSpeciesNameJa: String?
     }
 
     struct MoveEntry: Decodable {
@@ -47,6 +52,9 @@ struct MockFixtures {
         /// true なら効果を表せない持ち物(ADR-0123 §4 の `UnsupportedAttacker`/`UnsupportedDefender` に相当)。
         /// モックは持つ側に応じて `attacker_item` / `defender_item` の印を付ける(ADR-0501「P6-17」4章)。
         let unsupportedEffect: Bool?
+        /// 計算での役割(`attacker`/`defender`。無ければ不明 = nil。ADR-0509 §9)。
+        let roles: [String]?
+        let isMegaStone: Bool?
     }
 
     struct NatureEntry: Decodable {

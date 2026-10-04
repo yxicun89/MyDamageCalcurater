@@ -24,6 +24,10 @@ func TestRecordPathsAreRouted(t *testing.T) {
 		{"全削除", http.MethodDelete, "/api/record/device-data"},
 		{"よく使う相手", http.MethodGet, "/api/record/frequent-opponents"},
 		{"未知の下位パスも上流に任せる", http.MethodGet, "/api/record/whatever"},
+		// お気に入り(ADR-0227。P5-3c)。gateway の変更は要らない(前方一致の既存ルート)ことの回帰検査。
+		{"お気に入り一覧", http.MethodGet, "/api/record/favorites"},
+		{"お気に入り作成", http.MethodPost, "/api/record/favorites"},
+		{"お気に入り削除", http.MethodDelete, "/api/record/favorites/42"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,6 +85,32 @@ func TestCORSPreflightAllowsDelete(t *testing.T) {
 		if n := len(up.requests()); n != 0 {
 			t.Errorf("プリフライトが上流 %s に届いた(%d 件)", up.name, n)
 		}
+	}
+}
+
+// ADR-0227 §7: お気に入りの作成(POST)・削除(DELETE)のプリフライトも許可オリジンに通る
+// (CORS の許可メソッドは P5-3・P5-4 で揃っており、お気に入りのために足すものは無い)。
+func TestCORSPreflightAllowsFavoriteMethods(t *testing.T) {
+	for _, tt := range []struct{ method, path string }{
+		{http.MethodPost, "/api/record/favorites"},
+		{http.MethodDelete, "/api/record/favorites/42"},
+	} {
+		t.Run(tt.method, func(t *testing.T) {
+			env := newTestEnv(t)
+			h := http.Header{}
+			h.Set("Origin", allowedOrigin)
+			h.Set("Access-Control-Request-Method", tt.method)
+			h.Set("Access-Control-Request-Headers", "content-type, x-device-id, x-session-id")
+
+			rec := serve(t, env.handler, http.MethodOptions, tt.path, h, nil)
+			if rec.Code != http.StatusNoContent {
+				t.Fatalf("status = %d, want 204", rec.Code)
+			}
+			assertCORSAllowed(t, rec, allowedOrigin)
+			if got := rec.Header().Get("Access-Control-Allow-Methods"); !methodAllowed(got, tt.method) {
+				t.Errorf("Access-Control-Allow-Methods = %q に %s が無い", got, tt.method)
+			}
+		})
 	}
 }
 

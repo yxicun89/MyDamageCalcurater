@@ -7,6 +7,7 @@ import (
 
 	"example.com/pokecalc/services/judge/internal/client"
 	"example.com/pokecalc/services/judge/internal/judge"
+	"example.com/pokecalc/services/judge/internal/speedeffects"
 )
 
 const (
@@ -22,6 +23,12 @@ const (
 	defaultRequestTimeout = 12 * time.Second
 
 	choiceScarfItemIDEnv = "JUDGE_CHOICE_SCARF_ITEM_ID"
+
+	// 素早さ効果の表(マスタから抜き出した特性・持ち物の小表。ADR-0714 §1)。マスタの更新は数日に 1 回なので
+	// 既定 10 分遅れで反映されれば足りる。失敗後の再取得の間隔は TTL より短い固定値。
+	speedEffectsTTLEnv            = "JUDGE_SPEED_EFFECTS_TTL"
+	defaultSpeedEffectsTTL        = 10 * time.Minute
+	speedEffectsRetryAfterFailure = 30 * time.Second
 )
 
 // Upstreams holds the upstream clients judge depends on (ADR-0700 §1). A nil field means its
@@ -120,6 +127,37 @@ func choiceScarfItemIDFromEnv(lookup func(string) (string, bool)) string {
 		return judge.DefaultChoiceScarfItemID
 	}
 	return value
+}
+
+// speedEffectsTTLFromEnv reads JUDGE_SPEED_EFFECTS_TTL (ADR-0714 §1): unset or empty defaults to
+// 10 minutes; an invalid duration, or one not longer than the retry interval after a failure, fails
+// startup (same posture as upstreamTimeoutFromEnv).
+func speedEffectsTTLFromEnv(lookup func(string) (string, bool)) (time.Duration, error) {
+	value, ok := lookup(speedEffectsTTLEnv)
+	if !ok || value == "" {
+		return defaultSpeedEffectsTTL, nil
+	}
+	d, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, fmt.Errorf("%s is not a valid duration: %w", speedEffectsTTLEnv, err)
+	}
+	if d <= speedEffectsRetryAfterFailure {
+		return 0, fmt.Errorf("%s must be longer than %v: %v", speedEffectsTTLEnv, speedEffectsRetryAfterFailure, d)
+	}
+	return d, nil
+}
+
+// speedEffectsFromEnv builds the speed-effects cache over pokedex-svc's internal master export. It
+// is nil when Pokedex is nil (no base URL configured), which judge treats as "no data".
+func speedEffectsFromEnv(lookup func(string) (string, bool), pokedex *client.Pokedex) (*speedeffects.Cache, error) {
+	ttl, err := speedEffectsTTLFromEnv(lookup)
+	if err != nil {
+		return nil, err
+	}
+	if pokedex == nil {
+		return nil, nil
+	}
+	return speedeffects.NewCache(pokedex.MasterEffects, speedeffects.Config{TTL: ttl, RetryAfterFailure: speedEffectsRetryAfterFailure})
 }
 
 // optionalClient builds a client with the given constructor only when envName is set to a

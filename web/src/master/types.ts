@@ -9,6 +9,29 @@ export interface MasterSpecies extends Species {
   readonly learnset: readonly string[];
   // isMega・requiredItemId は Species(engine/types.ts)が持つ。メガ種族の持ち物の検証のため境界へも渡す
   // (domain/requests.ts の toEngineSpecies。ADR-0321)。読むときは domain/mega.ts の isMegaSpecies を通す。
+  /**
+   * メガシンカ前の種族キー・日本語名(ADR-0175 §3・ADR-0326)。公開 API の SpeciesDetail の値をそのまま写す
+   * (メガでなければ null。古いサーバー・例データでは省略)。engine には渡さない(toEngineSpecies が落とす)。
+   * 固定中の持ち物の表示「{基本種名}のメガストーン」に使う(domain/itemRoles.ts の megaStoneLabel)。
+   */
+  readonly baseSpeciesKey?: string | null;
+  readonly baseSpeciesNameJa?: string | null;
+}
+
+/** 持ち物のダメージ計算上の役割(api/openapi.yaml の ItemRole。ADR-0175 §1)。 */
+export type ItemRole = "attacker" | "defender";
+
+/**
+ * マスタの持ち物(ADR-0326)。engine の Item に、画面のための2項目を足したもの。
+ * - roles: その側に持たせるとダメージが変わる役割。メガストーンは空配列。**省略は「役割が分からない」**
+ *   (古いサーバー・例データ)で、役割では絞らない(効果から再導出しない。ADR-0175 §4)。
+ * - isMegaStone: メガストーンか。省略は「分からない」(megaStoneItemIds で補う)。
+ * engine・calc-svc の境界は未知のフィールドを拒否するので、要求に載せるときは domain/itemRoles.ts の
+ * toEngineItem で engine の Item の形に戻す。
+ */
+export interface MasterItem extends Item {
+  readonly roles?: readonly ItemRole[];
+  readonly isMegaStone?: boolean;
 }
 
 /**
@@ -52,7 +75,7 @@ export interface MasterCapabilities {
 export interface MasterData {
   readonly species: readonly MasterSpecies[];
   readonly moves: readonly Move[];
-  readonly items: readonly Item[];
+  readonly items: readonly MasterItem[];
   readonly abilities: readonly Ability[];
   readonly natures: readonly MasterNature[];
   readonly typeChart: TypeChart;

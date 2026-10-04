@@ -107,7 +107,12 @@ func send(ctx context.Context, httpClient *http.Client, req *http.Request, rc Re
 	}
 	req.Header.Set(deviceIDHeader, rc.DeviceID)
 	req.Header.Set(sessionIDHeader, rc.SessionID)
+	return doRequest(ctx, httpClient, req)
+}
 
+// doRequest executes req and normalizes the outcome as send describes (without the identity
+// headers: send adds them, and the internal master export needs none).
+func doRequest(ctx context.Context, httpClient *http.Client, req *http.Request) (*http.Response, error) {
 	resp, err := httpClient.Do(req)
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -182,11 +187,16 @@ func decodeUpstreamJSON(resp *http.Response, out any) error {
 }
 
 func readLimitedBody(r io.Reader) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxResponseBodyBytes+1))
+	return readBodyUpTo(r, maxResponseBodyBytes)
+}
+
+// readBodyUpTo reads r up to limit bytes; a longer body is errBodyTooLarge.
+func readBodyUpTo(r io.Reader, limit int64) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, limit+1))
 	if err != nil {
 		return nil, err
 	}
-	if int64(len(data)) > maxResponseBodyBytes {
+	if int64(len(data)) > limit {
 		return nil, errBodyTooLarge
 	}
 	return data, nil

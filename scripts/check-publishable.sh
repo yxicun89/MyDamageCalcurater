@@ -291,6 +291,9 @@ forbidden_kind() {
     data/generated/* | */data/generated/*) echo "追跡禁止(第三者由来の生成データ data/generated/)"; return 0 ;;
     .reviews/* | */.reviews/*) echo "追跡禁止(レビュー成果物 .reviews/)"; return 0 ;;
     node_modules/* | */node_modules/*) echo "追跡禁止(node_modules/)"; return 0 ;;
+    # apps/wishlist は別アプリ(自分の CLAUDE.md・Makefile を持つウィッシュリストレーン)。生成物を Git に置くかはそのレーンが決める
+    # (ADR-0807 の対象は pokecalc 本体の生成物だけ。2026-10-04、#526 のマージ時に main へ入っていた wishlist の生成物で判明)。
+    apps/wishlist/*.gen.go | apps/wishlist/*.gen.ts) return 1 ;;
     ios/PokeCalcKit/Sources/*/Generated/*) echo "追跡禁止(iOS の API 生成物。make ios-gen で作る。ADR-0807)"; return 0 ;;
     services/pokedex/internal/store/*.go)
       [ "$base" = "gen_required.go" ] && return 1

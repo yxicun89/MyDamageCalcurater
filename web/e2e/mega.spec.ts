@@ -13,7 +13,7 @@ test("メガ種族を選ぶと持ち物がメガストーンに固定され、�
 
   const item = combobox(page, "攻撃側の持ち物");
   await expect(item).toBeDisabled();
-  await expect(item.locator("option:checked")).toHaveText(MEGA.fire.stoneNameJa);
+  await expect(item.locator("option:checked")).toHaveText(MEGA.fire.lockedLabel);
   // 理由は見える文言と、欄の説明(aria-describedby)の両方で伝わる。
   await expect(page.getByText(MEGA.lockedReason)).toBeVisible();
   await expect(item).toHaveAccessibleDescription(MEGA.lockedReason);

@@ -23,6 +23,7 @@ type ItemEffect struct {
 	BoostType          Type            // タイプ強化(タイプ技の威力を上げる持ち物)の対象タイプ
 	BoostTypeMod       int             // 例 4915(=約1.2倍)
 	ResistBerryType    Type            // 半減きのみ: このタイプの抜群技を半減(防御側)
+	SpeedMods          []SpeedMod      // 素早さの補正(ADR-0139)。ダメージ計算は読まない
 	// UnsupportedAttacker / UnsupportedDefender は、その側で持つとダメージが変わるのに効果スキーマで
 	// 表せない(計算に入れていない)ことの印(ADR-0123)。計算は補正なしで行い、結果に印を付ける。
 	UnsupportedAttacker bool
@@ -41,15 +42,17 @@ type AbsorbEffect struct {
 
 // AbilityEffect はダメージに影響する特性の補正(4096基準)。
 type AbilityEffect struct {
-	StabMod              int                   // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
-	OffBoostType         Type                  // 攻撃実数値強化の対象技タイプ
-	OffBoostTypeMod      int                   // 例 6144
-	DefResistType        map[Type]int          // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
-	DefImmuneTypes       []Type                // 無効にする攻撃タイプ(ふゆう)。ダメージ0、副次効果なし(ADR-0106)
-	DefAbsorbTypes       map[Type]AbsorbEffect // 吸収する攻撃タイプ(ちょすい等)→副次効果。ダメージ0(ADR-0106)
-	ReduceSuperEffective int                   // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
-	IgnoresBurn          bool                  // こんじょう等: やけどの攻撃半減を無効化
-	Airborne             bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
+	StabMod                   int                   // タイプ一致補正を上げる特性: 8192(ModifierAdaptability)。0 は通常(ModifierStab)
+	OffBoostType              Type                  // 攻撃実数値強化の対象技タイプ
+	OffBoostTypeMod           int                   // 例 6144
+	DefResistType             map[Type]int          // 相手の攻撃実数値補正。例 炎・氷技を半減する特性{fire:2048, ice:2048}
+	DefImmuneTypes            []Type                // 無効にする攻撃タイプ(ふゆう)。ダメージ0、副次効果なし(ADR-0106)
+	DefAbsorbTypes            map[Type]AbsorbEffect // 吸収する攻撃タイプ(ちょすい等)→副次効果。ダメージ0(ADR-0106)
+	ReduceSuperEffective      int                   // 抜群技を軽減する特性等: 抜群時に軽減(例 3072)
+	IgnoresBurn               bool                  // こんじょう等: やけどの攻撃半減を無効化
+	Airborne                  bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
+	SpeedMods                 []SpeedMod            // 素早さの補正(ADR-0139)。ダメージ計算は読まない
+	IgnoresParalysisSpeedDrop bool                  // まひの素早さ半減を受けない(ADR-0139)。ダメージ計算は読まない
 	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool

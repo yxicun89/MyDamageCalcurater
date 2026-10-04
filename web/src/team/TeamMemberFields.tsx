@@ -2,13 +2,16 @@
 // 状態は持たない(下書きは TeamMemberEditor が持つ)。選択肢はマスタ(と、オンラインでは検索で解決した実体)から作る。
 
 import { useId, type ReactNode } from "react";
-import { megaItemLock, selectableItems } from "../domain/mega";
+import { isMegaStoneItem, itemsForRole, megaStoneLabel, TEAM_ITEM_ROLE_FILTER } from "../domain/itemRoles";
+import { itemRoleText } from "../i18n/items";
+import { megaItemLock } from "../domain/mega";
 import { MAX_SP_PER_STAT, MAX_SP_TOTAL, selectableAbilities } from "../domain/requests";
 import type { Ability, Item, Move, StatKey } from "../engine/types";
 import { isTypeId, statLetterJa, teamMemberText, typeNameJa } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
+  MasterItem,
   MasterSpecies,
   MasterSpeciesResolution,
   MasterSpeciesSearch,
@@ -100,13 +103,18 @@ function issueMessage(issue: MemberIssue): string {
  * (直さない。API が検査しないため)は、名前を引いて選択肢に足す(足さないと ID が出る)。
  */
 function pickableItemChoices(
-  items: readonly Item[],
+  items: readonly MasterItem[],
   stoneIds: ReadonlySet<string>,
   currentId: string | null,
 ): readonly Item[] {
-  const pickable = selectableItems(items, stoneIds);
+  // ADR-0326: 構築は実戦で持たせる持ち物の記録なので役割で絞らない(メガストーンだけ外す)。
+  const pickable = itemsForRole(items, TEAM_ITEM_ROLE_FILTER, stoneIds);
+  const found = currentId === null ? undefined : items.find((item) => item.id === currentId);
+  // 現在値のストーンは、名前を推測せず「メガストーン」と表示する(英語名を出さない)。
   const current =
-    currentId !== null && stoneIds.has(currentId) ? items.find((item) => item.id === currentId) : undefined;
+    found !== undefined && isMegaStoneItem(found, stoneIds)
+      ? { ...found, nameJa: itemRoleText.megaStoneUnnamed }
+      : undefined;
   return itemOptions(current === undefined ? pickable : [...pickable, current], currentId);
 }
 
@@ -248,11 +256,15 @@ export function TeamMemberFields({
         }}
       >
         <option value="">{teamMemberText.itemNone}</option>
-        {(itemLock.kind === "locked" ? [itemLock.item] : itemChoices).map((item) => (
-          <option key={item.id} value={item.id}>
-            {item.nameJa}
-          </option>
-        ))}
+        {itemLock.kind === "locked" && species !== null ? (
+          <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+        ) : (
+          itemChoices.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.nameJa}
+            </option>
+          ))
+        )}
       </LabeledSelect>
       <MegaItemReason id={itemReasonId} lock={itemLock} className="team-member__reason" />
 

@@ -12,6 +12,7 @@
 # 環境変数:
 #   DEV_CALC_PORT     calc-svc の待ち受けポート(既定 8081)
 #   DEV_GATEWAY_METRICS_PORT  gateway のメトリクス専用ポート(既定 9090。/metrics はここだけ。issue #216)
+#   DEV_IMAGES_DIR  ローカル画像の出力先(既定 data/generated/images/dist。manifest.json があるときだけ gateway に渡す。ADR-0807)
 #   DEV_GATEWAY_PORT  gateway の待ち受けポート(既定 8080。k3d の loadbalancer と同じポートなので、
 #                     k3d クラスタを動かしている間はどちらかのポートを変えること)
 #
@@ -61,11 +62,18 @@ CALC_MASTER_PATH="$calc_master" \
 "$tmpdir/calc" &
 pids+=("$!")
 
+# ローカル画像(make assets の出力。ADR-0807)。manifest がある場合だけ渡す(無ければ画像なし = エンブレム)。
+images_dir="${DEV_IMAGES_DIR:-$repo_root/data/generated/images/dist}"
+if [ ! -f "$images_dir/manifest.json" ]; then
+  images_dir=""
+fi
+
 echo "dev: gateway を http://localhost:$gateway_port で起動します(calc-svc: http://127.0.0.1:$calc_port)"
 GATEWAY_ADDR=":$gateway_port" \
 GATEWAY_METRICS_ADDR=":${DEV_GATEWAY_METRICS_PORT:-9090}" \
 GATEWAY_CALC_URL="http://127.0.0.1:$calc_port" \
 GATEWAY_CORS_ALLOWED_ORIGINS="http://localhost:5173" \
+GATEWAY_IMAGES_DIR="$images_dir" \
 "$tmpdir/gateway" &
 pids+=("$!")
 

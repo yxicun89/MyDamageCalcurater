@@ -200,6 +200,9 @@ type EffectsFile struct {
 	SchemaVersion int                        `json:"schemaVersion"`
 	Items         map[string]json.RawMessage `json:"items"`
 	Abilities     map[string]json.RawMessage `json:"abilities"`
+	// 素早さの効果定義(ADR-0139)。ダメージの節とは別に置き、取り込みで同じ ID の定義に合わせる。
+	SpeedItems     map[string]json.RawMessage `json:"speedItems"`
+	SpeedAbilities map[string]json.RawMessage `json:"speedAbilities"`
 }
 
 // RegulationsFile は data/importer/regulations.json。

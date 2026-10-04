@@ -3833,6 +3833,98 @@ XCUITest(`AboutScreenUITests` 2件・`LargeTextLayoutUITests.testAboutScreenNoHo
   `SpeedPill`/`SpeedFlowLayout` は折り返すピル(既存の `ChipButton` は1行固定のため別に持つ)。`SpeedLabels` に `close`・`spIncrement`・`spDecrement` を追加。
 - テストの矛盾: なし(テスト・既存の期待値は変更していない)。
 
+## P6-25 の受け入れ条件(判定画面。判断は ADR-0504。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+契約は `services/judge/api/openapi.yaml`(実用は `POST /api/judge/v1/outspeed-and-ko` 1 本。judge 自身の Ingress の `/api/judge` prefix。ホストは他の API と同じ `baseURL`)。
+参照実装は Web の `JudgeScreen`(ADR-0705)。生成方式・境界・要求の省略規則・印の出し方・モック・識別子は ADR-0504。ユーザー決定は DECISIONS.md 2026-10-03(判定画面)。
+足場(型・プロトコル・`JudgeLabels` の固定文言・各実装の空の殻)は `TODO(implementer P6-25` 付きで追加済み。生成ターゲット(`PokeCalcJudgeAPI`)は
+足場がコンパイルするために spec の段階で作った(`make ios-gen-check` 成功。`openapi-gen.sh` の配列に 1 行・設定ファイル・`Package.swift`)。
+
+1. **生成と同期**: `make ios-gen-check` が `PokeCalcAPI`・`PokeCalcSpeedAPI`(不変)・`PokeCalcJudgeAPI` の 3 本で成功する。契約の `Format`・`ErrorCode`(8 値)とドメイン・文言の対応表が一致し
+   (`JudgeContractSyncTests`)、候補数(`defenders` の min/maxItems)・技 ID の最大長・能力ポイント(`StatBlock` 6 項目の maximum)・ランク(`RankBlock` 5 項目の min/max)は
+   `RequestLimits`・`SPLimits`・`RankLimits` と契約が一致する(`make ios-check-request-limits`。1 つずらすと失敗することを確認済み)。
+2. **API 写像**(`APIJudgeService`): `X-Device-Id`/`X-Session-Id` 付きで `POST /api/judge/v1/outspeed-and-ko`。本文は `format`(常に載せる)・`attacker`・`defenders`(順を保つ。各候補は `moveId` を必ず持つ)・`moveId`。
+   `ranks`(非 nil なら 5 項目すべて)・`speedField`(非 nil なら 3 項目すべて)・`abilityId`・`itemId` は nil なら欄ごと載せない(`null` を送らない)。`field` は載せない。
+   応答の `matchups` は並びも `defenderIndex` も変えずに写し、未対応の印は方向ごとに分けたまま順を保って写す(知らない `target`/`reason` は `.unknown`)。印の欄が欠けた応答は `decode`(ADR-0708 §3)。
+   400/413/422/500/503 は `code`・`message` をそのまま運ぶ `PokeCalcError`、通信不能は `transport`、読めない 200・契約の `ErrorCode` に無い code は `decode`、契約外のステータスは本文が `{code,message}` ならその `code`・読めなければ
+   `client_unexpected_status`、タスクのキャンセルは `CancellationError` のまま。
+3. **入力 → 要求**(`JudgeViewModel`): 初期は自分 1 体 + 空の候補 1 件・場の効果なし・format は常に single。`load()` が性格の一覧を読み、性格が未選択の自分・候補(追加した候補を含む)に「補正なし(plus も minus も無い)の最初の性格」を入れる(ユーザーが選んだ性格は上書きしない)。
+   能力ポイントは各 0…`SPLimits.maxPerStat`・ランクは `RankLimits`(HP のランクは無い)に収める。候補は 1…`RequestLimits.maxJudgeDefenders` 件。省略の規則は Web と同じ: ランクは 5 項目すべて 0 なら nil・
+   特性/持ち物は未選択なら nil・`speedField` は 3 つすべて false なら nil。**送信前の検査**(違反なら判定を呼ばず理由を出す。順: 自分 → 候補を index 昇順、各体の中は 必須〈種族・性格・技〉→ 技 ID の長さ → 能力ポイント合計 ≤ `SPLimits.maxTotal`)。
+   理由は誰の入力かを先頭に付ける(自分のポケモン / 相手候補 N〈1 始まり〉)。同じ候補が重複していても取りまとめない。
+4. **結果の整形**(`JudgeResultDisplayBuilder`): 行は `defenderIndex` の昇順で、種族名・タイプは**送信時点の要求の候補**から index で引く(引けなければ speciesKey、候補が無い index は名前を捏造しない)。
+   素早さ・優先度・行動順は応答のまま(同速は「同速」、行動順が決まらないときは「どちらが先に動くか決まらない」。優先度が違えば素早さで上回っていても相手が先になりうる)。確定数は
+   「倒せない / 確定 n 発 / 乱数 n 発(x.x%。小数第 1 位固定)」。「勝ち」「負け」に丸めた語を持たない(ADR-0700 §6-1)。
+   **未対応の印は方向ごとに分ける**(ADR-0708 §4・§5): 順方向(`attackerKoUnsupported`)と逆方向(`defenderKoUnsupported`)を別々に `UnsupportedPlacement` へ渡し、全候補に共通する印は結果の上に 1 回(方向ごと)、
+   一部の候補だけの印はその行に出す。**その方向の確定数を確定として見せない添え書き**は、置き場所によらず印のある行のその方向だけに付く(順方向の印が逆方向の確定数を疑わしく見せない)。
+   `target` は書き換えず、その calc から見た役割のまま既存の `UnsupportedMarkLabel` で出す。名前は技・持ち物・特性の辞書から引き、無ければ ID。
+5. **非同期・失敗**: 送信は**ボタンを押したときだけ**(入力のたびに送らない。debounce もしない)。`submit()` は同期で検査し、通れば `resultState = .loading`・世代を進め先行を cancel して予約する(違反なら呼ばず `validationError` を立て、直前の結果は消さない)。
+   最新の世代の応答だけ反映する(cancel を無視するサービスの古い応答も捨てる)。`CancellationError` は失敗にしない。結果は送信時点の入力から作る(判定中に入力を変えても名前が変わらない)。失敗は `code` から日本語にし(サーバーの英語 message は出さない)、
+   message の `defenders[<index>]` が候補数の範囲内なら「相手候補 N の入力で失敗しました」を添える(`attacker` の失敗には付けない)。エラーでも入力は消さない。判定・マスタ・構築は互いに巻き込まない(絶対ルール 5。`load()` は throw しない)。
+6. **マスタと構築から呼び出す**: 性格・持ち物・種族・技は ID の自由入力ではなくマスタから選ぶ(種族・技は検索シート。特性は種族の `species(key:)` の候補。種族を変えたら新しい種族に無い特性は外す。最新の種族選択だけを反映)。
+   構築から自分側・各候補側を埋められる: 種族・性格・SP・特性・持ち物・技(`TeamMemberConverter` の規則: 最初のダメージ技 → 無ければ最初の技 → 無ければ未選択)、ランクは 0 に戻す。無効な ID・範囲外の対象は何もしない。
+   呼び出しは判定を送らず、構築のストアも書き換えない。呼び出したあとも各欄は直せる(スナップショット)。
+7. **画面**(XCUITest・モック): ルートの `openJudgeScreen` と `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1` で開く。入力(性格の既定・選択シート・持ち物の解除・SP/ランクのステッパー)・場の効果・候補の増減(上限と最低 1 件)・
+   検査メッセージ・結果の行(モックの固定の事実)・候補ごとに違う値・行動順(優先度が素早さに勝つ行)・トリックルームで結果が変わること・未対応の印の方向別の出し分け・失敗(日本語・候補の番号・入力が残る・計算画面は開く)・構築から呼び出す(自分側・候補側)が動く。
+   AX5 でも入力・結果・印の注記・選択シートが横にはみ出さない。
+8. **文言・デザイン・不変条件**: 文言は `JudgeLabels`(Core)に集約し Web の `judgeScreenText`・`judgeErrorText` と同じ(違いは ADR-0504 §9 の 4 点だけ。`JudgeLabelsTests` が固定)。design.md のトークンのみ・`lineLimit`・`minimumScaleFactor` なし・
+   常時アニメーションなし。件数・範囲は定数から(直書きしない)。既存のテスト・identifier・`PokeCalcAPI`・`PokeCalcSpeedAPI` の生成物は不変。`api/openapi.yaml`・`services/` は変えない。
+
+### 追加したテスト(spec 時点)
+
+- 単体(XCTest。`ios/PokeCalcKit/Tests/PokeCalcCoreTests/`)**130 件**: `JudgeContractSyncTests` 4・`JudgeLabelsTests` 10・`APIJudgeServiceTests` 18・`MockJudgeServiceTests` 13・`JudgeResultDisplayTests` 15・
+  `JudgeViewModelInputTests` 18・`JudgeViewModelRequestTests` 17・`JudgeViewModelAsyncTests` 16・`JudgeViewModelMasterTests` 10・`JudgeViewModelTeamTests` 9。
+  足場: `Support/StubJudgeService.swift`(呼び出しの記録・hold/release・cancel の記録・cancel を無視するモード。候補ごとに違う値を返す既定の応答)・`Support/JudgeTestHarness.swift`・`Support/ArraySafe.swift`
+  (足場が空の殻のとき、空の結果への添字アクセスでテストプロセスごと落ちないための `[safe:]`)。
+  `swift test` は全 819 件中、**新規の 104 件が失敗**(足場が空の殻のため。意図どおり)、新規の 26 件(同期・固定文言・初期値など)と既存の 689 件は成功。
+- 契約の範囲の同期: `ios/scripts/check-request-limits.sh` に judge(`defenders.minItems/maxItems`・`MoveId.maxLength`・`StatBlock` 6 項目・`RankBlock` 5 項目)を追加(成功。`RequestLimits` を 2 つずらして失敗することも確認済み)。
+  既存の speed 用の関数は共通の `schema_property_value` に寄せた(挙動は同じ)。
+- XCUITest(`ios/PokeCalcUITests/`)**20 件**(コンパイル確認のみ。View が未実装のため実行すると失敗する): `JudgeScreenUITests` 17 件、`LargeTextLayoutUITests` に AX5 の 3 件
+  (`testJudgeScreenNoHorizontalOverflowAtAX5`・`testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5`・`testJudgeOptionSheetNoHorizontalOverflowAtAX5`)。
+- `make ios-gen-check`・`make ios-lint`・`make ios-check-request-limits` 成功。`xcodebuild build-for-testing`(PokeCalc スキーム・iPhone 18 Pro)成功。
+- 手順書: `docs/runbooks/ios.md` の確認行を 7 行(gen-check 3 本・check-request-limits を含む)に直した。
+
+### 実装者への注意
+
+- 足場の公開 API(名前・case 名・引数・ID の文字列)をテストが固定している。変えるときは理由をコミットに書く。`TODO(implementer P6-25` を grep して全部埋める
+  (`JudgeLabels.errorMessage`・`JudgeFailure.init(code:serverMessage:candidateCount:)`・`JudgeViewModel`・`JudgeResultDisplayBuilder`・`APIJudgeService`・`MockJudgeService`)。
+- `JudgeViewModel`: `submit()` は同期で検査・`resultState = .loading`・世代の更新・先行の cancel まで行い、要求は `LatestTaskRunner`(debounce `.zero`)に予約する。応答の反映は世代で守る(Task のキャンセル確認だけに頼らない。
+  `hold(ignoringCancellation: true)` のテストがある)。結果の整形は**送信時点の要求・名前の辞書のスナップショット**で行う(`JudgeResultDisplayBuilder.make` に要求を渡す)。`settle()` は最新の予約済み Task を await する。
+  `setSpecies` は種族のキー・名前を同期で反映してから `species(key:)` を await し、世代で最新の選択だけ反映する(`.manual` のテストがある)。特性の候補が取れなくても入力は止めない。
+  `load()` は性格・持ち物・技・種族の先頭ページ・構築を**互いに独立に**読み、失敗は `masterFailure` に入れる(throw しない)。種族・技の検索は `MasterSearchField`(`TeamEditViewModel` と同じ)を再利用する。
+  `applyTeamMember` は `TeamListFetcher`/`TeamMemberConverter` を再利用し、技の判定に使う `moves` は一度見た技の辞書から作る。ストアには書かない。
+- `JudgeResultDisplayBuilder`: 印は `UnsupportedPlacement` を**方向ごとに**呼ぶ(`attackerKoUnsupported` の全行と `defenderKoUnsupported` の全行を 1 つの配列にしない)。注記は `UnsupportedNoticeText.rowNote`
+  の結果を `JudgeLabels.attackerKoUnsupportedNotice(detail:)`/`defenderKoUnsupportedNotice(detail:)` で包む。`UnsupportedMarkNames` は `moveDictionary`(選んだ技・検索結果)・`itemOptions`・見た種族の特性から作る。
+  KO の文言は `BulkRowDisplay.koText` と同じ規則(確率は小数第 1 位固定・ロケール非依存)で、`JudgeKOChance` から `KOChance`(`chancePercent` は `displayChancePercent` で埋める)を作って再利用してよい。
+- `APIJudgeService.swift` は `PokeCalcJudgeAPI` だけを読み込む(`PokeCalcAPI`・`PokeCalcSpeedAPI` と `Client`・`Components` が衝突する)。`attacker`・`moveId` は生成型の allOf ラッパー(`AttackerPayload`・`MoveIdPayload`・`DefenderCandidate.MoveIdPayload`、
+  `Matchup.AttackerKoPayload`・`DefenderKoPayload`)で包む/剥く。`UnsupportedMark.target/reason` は生成型では `String`。`ErrorCode` の enum にない code はデコード失敗(`decode`)になる点は speed と同じ。
+- アプリ側: `AppEnvironment.ready` に `judge: any JudgeService` を足し(API は同じ `baseURL`・同じ `ClientIdentity`。モックは `MockJudgeService(environment:)`)、`RootView`・`#Preview`・既存のパターンマッチ(`.ready(` の全箇所)をすべて更新する。
+  `RootView` に `openJudgeScreen`(`JudgeLabels.openButton`)と `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH`(既存の else-if の並びに足す)、`ios/scripts/sim-run.sh` の `IOS_SCREEN=judge`(使い方・case・usage・Makefile のコメント)、
+  `docs/runbooks/ios.md`・`ios/README.md`(`POKECALC_MOCK_JUDGE=error|candidate-error|marks`)・`docs/plan.md`(P6-25)を更新する。View は `PokeCalcCore` の `JudgeViewModel` を `@State` で持ち、`.task` で `load()`、`.onDisappear` で `cancelPendingWork()`。
+- View の制約: 性格・特性・持ち物の選択は**シート**(`judgeOptionSheet`。`Menu`・メニュー形式の `Picker` は使わない。中のボタンに identifier が付かない制約がある)。種族・技のシートは既存の `SpeciesSearchSheet`・`MoveSearchSheet` を再利用する。
+  構築から呼び出す入口は既存の `TeamSourceMenuRow`(`identifierPrefix` = `judgeAttackerTeam`/`judgeCandidate<n>Team`。メニュー項目は identifier が渡らないのでテストはニックネームのラベルで選ぶ)。
+  オン/オフの操作(場の効果)は選択ボタンで `isSelected` を出す。結果の行は `.accessibilityElement(children: .contain)` を付けて子の識別子を飲み込ませない。`LazyVStack` にしない。`lineLimit`・`minimumScaleFactor` なし、AX5 では長いピルが折り返す。
+  色はタイプのエンブレムだけが持つ(design.md)。未知のタイプ ID は無彩色のフォールバック。種族の選択後に特性が外れた/候補が変わったことを黙って起こさない(特性ボタンのラベルで分かる)。
+- 範囲(32・±6・66・6 件・64 文字)は `SPLimits`・`RankLimits`・`RequestLimits` から。`JudgeLabels` に数値を直書きしない。
+- 完了条件: `make ios-test`(lint・gen-check・check-request-limits・単体・UI・infoplist)がすべて成功する。UI テストはモックの固定の事実(ADR-0504 §8)に頼る箇所が複数ある
+  (素早さ 150 対 100/125・確定 1 発・乱数 2 発〈15.0%〉・優先度 0 対 1)。モックを変えるなら ADR-0504 §8 と `MockJudgeServiceTests`・UI テストを同時に直す。
+
+### 実装結果(implementer)
+
+- `swift test`(`ios/PokeCalcKit`): **全 819 件成功・失敗 0**(spec 時点で失敗していた新規 104 件がすべて成功。既存 689 件と、spec 時点で成功していた新規 26 件も成功)。出力に `error` なし。
+- `make ios-lint ios-gen-check ios-check-request-limits` 成功(gen-check は 3 本一致)。`xcodebuild build-for-testing`(PokeCalc スキーム・iPhone 18 Pro)成功。XCUITest(`JudgeScreenUITests` 17 件・`LargeTextLayoutUITests` の判定 3 件)はこの実装では実行していない(別途実行)。
+- 実装した範囲: `JudgeViewModel`・`JudgeLabels.errorMessage`・`JudgeFailure.init(serverMessage:)`・`JudgeResultDisplayBuilder`(順方向・逆方向の印を `UnsupportedPlacement` へ別々に渡す)・`APIJudgeService`・`MockJudgeService`、
+  `AppEnvironment.ready` への `judge`(既存のパターンマッチを全更新)、`RootView` の `openJudgeScreen`・`POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH`、View(`JudgeScreenView`・`JudgeIndividualCard`・`JudgeOptionSheet`・`JudgeResultSection`)、
+  `sim-run.sh` の `IOS_SCREEN=judge`、`docs/runbooks/ios.md`(7 章を追加し以降を繰り下げ)・`ios/README.md`。
+- 判断: (1) 体ごとの種族名・特性の候補は位置ではなく内部の `id` で結び、候補を消しても名前が候補について行き、非同期の応答は `id` で自分の体を探す。
+  (2) 種族の詳細が取れないとき、種族を変えていれば特性を外す(確かめられない特性を送らない)。(3) `cancelPendingWork` は読み込み中なら `.idle` に戻す。
+  (4) `JudgeLabels` に View 専用の文言(選択シートの閉じる・空、ステッパーのアクセシビリティ名、マスタ読み込み失敗)を足した(既存の固定文言は不変)。
+  (5) 能力ポイント・ランクのステッパーは `SpeedStepper` ではなく識別子に `-<stat>` を付けられる専用の部品にした(`SpeedPill`・`SpeedFlowLayout`・`SpeedCaption` は再利用)。
+- テストと実装の矛盾: なし(テストは変更していない)。
+- XCUITest の失敗の修正(いずれも実装側。テストは変更していない): (1) 結果の行(`judgeRow-N`)が 1 行だけのとき、行の `.contain` が外側の `judgeResult`(`.contain`)に畳まれて識別子が消えた
+  (外側の子が行 1 つだけだと外側が行の枠になり、外側の識別子が勝つ)。`judgeResult` の `.contain` に見出し「判定結果」も含め(読み込み済みのときだけ。他の状態は従来どおり見出し単独)、子を 2 つ以上にして畳まれないようにした。
+  (2) 能力ポイントの「−」ボタンが記号の細さのぶん押せる範囲が小さく(20pt 角。「+」は 31pt)、`tap()` が効かなかった。`JudgeStepper.stepButton` に `minWidth/minHeight 36`・`contentShape(Circle())` を足して − と + をそろえた。
+
 ## P6-23 の受け入れ条件(iOS: 種族ピッカーの「よく使う相手」。ADR-0209・requirements.md §2。spec-writer: 受け入れ条件とテストのみ。実装はしない)
 
 - 日付: 2026-10-02 / 担当レーン: iOS / 関連: api/openapi.yaml(`listFrequentOpponents`・`FrequentOpponent`)、ADR-0209(頻度の保存・減衰・
@@ -4156,3 +4248,266 @@ View の色そのものは単体で検証しづらいため、ink の選択を�
   `TypeBadgeView` の文字色と `SpeciesEmblemView` の頭文字色(先頭タイプの ink)を ink に。未知 ID・タイプ無しは従来の白。
 - design.md の `typeInk(_:)` に当たる Swift 側の名前は `ink(forTypeID:)`(design.md は変更しない)。`ios/README.md` に追記すべき項目は無い。
 - 結果: `swift test` 全件成功(新規 7 件を含む)。critic PASS(軽微のみ。plan.md の項目追記と本章の更新を反映)。
+
+## P8-1c の受け入れ条件(ポケモン画像。2026-10-03。設計は ADR-0508、契約は ADR-0807)
+
+### 受け入れ条件(検証可能な形)
+
+- **AC-X(最優先)**: 画像が無い現状(モックの既定・manifest 404)で、既存の `swift test`・全 XCUITest が無変更で通る。モックの既定は画像なし(`POKECALC_MOCK_IMAGES` が無い/`1` 以外)。
+  既存テスト・identifier は変えない。
+- **AC-1 manifest**: `{"version":1,"images":{…}}` を decode し、キー・サイズ(thumb/detail)で相対パスを引ける。version が 1 以外・欠落・不正 JSON・形違い・`images` 欠落は throw せず画像なし。
+  未知の欄は無視し、1エントリの型違いが他のエントリを巻き込まない。
+- **AC-2 URL**: 基点 URL(末尾スラッシュ・パス接頭辞の有無を問わず)+ `/images/` + 相対パス。空・先頭 `/`・`..`・scheme 付き・`//host`・`?` `#` `\`・制御文字は画像なし。基点と同じ scheme/host/port。
+- **AC-3 カタログ**: manifest の取得は `<基点>/images/manifest.json` への1回(同時・繰り返しの引き当てでも1回。失敗も保持し再取得しない)。200 以外・通信失敗・不正本文・version 違い・危険なパスは throw せず画像なし。キーが manifest に無ければ画像なし。
+- **AC-4 モック**: 既定は全キー画像なし。`POKECALC_MOCK_IMAGES=1` では 9001-000・9003-000 だけ、外部通信しない data URL の小さな架空 PNG(9002-000 は画像なしのまま)。
+- **AC-5 表示判定**: 読み込み成功のときだけ画像、読み込み中・失敗はエンブレム。nil・空・空白のキーは問い合わせない。
+- **AC-6 画面**: 画像ありのとき、計算の種族ヘッダー・種族検索の行に `speciesImage-<key>` の枠が出て、manifest に無いキーの行はエンブレムのまま出る。選択の挙動は変わらない。
+  AX5 でも枠が画面幅に収まり、ヘッダーのボタンが操作できる。画像は装飾(label 無し)。アニメーションを付けない。
+- **AC-7 契約**: 画像取得に X-Device-Id を付けない。`api/openapi.yaml`・Generated は不変。ATS の例外を足さない。実画像・公式画像をコミットしない。
+
+### 追加したテスト
+
+- `PokeCalcKit/Tests/PokeCalcCoreTests/ImageManifestTests.swift`(15 件: manifest の decode 11・URL 組み立て 4)
+- `PokeCalcKit/Tests/PokeCalcCoreTests/ImageCatalogTests.swift`(15 件: カタログ 10〈成功・キー無し・取得先・非 200・不正・通信失敗・危険パス・1回取得・失敗の保持・NoImage〉、モック 3、表示判定 2)
+- `ios/PokeCalcUITests/SpeciesImageUITests.swift`(5 件: 画像なしの既定〈AC-X〉・計算ヘッダー・検索行・選択・AX5)
+- 足場: `PokeCalcKit/Sources/PokeCalcCore/ImageCatalog.swift`(全部「画像なし」を返す。`TODO(implementer P8-1c` で検索)
+
+### spec 時点の結果(2026-10-03)
+
+追加 30 件の単体テストのうち 15 件が失敗(アサーション 23 件。足場が画像なしを返すため)。既存 1128 件は全件成功(`swift test` 全体 1158 件)。
+XCUITest の追加 5 件はコンパイルのみ確認(構文解析)。画像ありの 4 件は identifier が無いので失敗する想定。`testNoImageFramesByDefault` は現状でも通る。
+
+### 実装者への注意
+
+- 足場の TODO を実装する: `ImageManifest(decoding:)`・`PokeImageURL.url`・`RemoteImageCatalog`・`URLSessionImageManifestFetcher`・`MockImageScenario`/`MockImageCatalog`(PNG はコードで生成。数十バイト)・`SpeciesImageDisplay`。
+- App 側: `SpeciesImageView` を足し、`SpeciesEmblemView` の3か所(`CalcScreenCards`・`MasterSearchSheet`・`BalanceMemberCard`)を置き換える。`CoreServices.images`(既定 `NoImageCatalog`)・Environment の注入は ADR-0508 §4。
+  `AppEnvironment.makeAtLaunch` はモックなら `MockImageCatalog(environment:)`、API なら `RemoteImageCatalog`。`.ready(core:features:)` の形・既存 identifier は変えない。
+- `speciesImage-<key>` を XCUITest から見えるようにする(`accessibilityHidden(true)` にすると見えない。ADR-0508 §6)。見えない場合はテストを弱めずに公開の仕方を直す。
+- 同期の `FakeFetcher`(テスト)は 20ms 待つので、取得を並行で1回に束ねる(actor の in-flight Task を保持する)実装でないと「1回」が通らない。
+- ADR-0507 の AppFeature は触らない(画像は画面ではない)。`ios/README.md` に `POKECALC_MOCK_IMAGES` を追記する。plan.md の更新は実装者(本タスクでは触っていない)。
+
+### 実装結果(2026-10-03)
+
+- `swift test` 1158 件・失敗 0(追加 30 件が全件成功。既存テスト無変更)。`make ios-lint ios-gen-check ios-check-request-limits` 成功、`xcodebuild build-for-testing` 成功。
+- `SpeciesImageUITests` 5 件を iPhone 18 Pro シミュレータで実行し 5 件成功(全体の XCUITest は別途)。
+- 実装: `ImageCatalog.swift` の TODO 実装(PNG は 8x8 単色をコードで生成)、`SpeciesImageView.swift`(`\.imageCatalog` Environment・`AsyncImage`・アニメーション無し)、
+  `SpeciesEmblemView` の3か所を置き換え(`SpeciesHeaderMenuLabel` 経由で逆算・調整・構築編集のヘッダーも画像対応)、`CoreServices.images`(既定 `NoImageCatalog`)、`RootView` で Environment 注入。
+- 判断: `accessibilityHidden` は使わず、成功した画像に `.accessibilityElement(children: .ignore)` + identifier を付けて公開したところ XCUITest から見えた(ADR-0508 §6 のリスクは発生せず)。
+  URL 検証は `%` と `:` も拒否(相対パスに現れない文字。エンコード回避・scheme 偽装の防止)。
+
+## お気に入り・計算履歴の受け入れ条件(2026-10-04。設計は ADR-0511、契約は ADR-0227。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+### 受け入れ条件(検証可能な形)
+
+- **AC-X(最優先)**: 既存の `swift test`・全 XCUITest が無変更で通る。モックの既定(`POKECALC_MOCK_FAVORITES` 未設定)は空のストアで、既存画面は何も変わらない。
+  既存テスト・identifier は変えない。`api/openapi.yaml` は触らない。
+- **AC-1 API 写像**(`APIFavoritesServiceTests`): 一覧は `GET /api/record/favorites`(クエリ無し)、作成は `POST`(本文は `label?` と `individual` だけ。
+  `id`・時刻を送らない・`moveId` を送らない)、削除は `DELETE /api/record/favorites/{id}`(本文なし)。すべて `X-Device-Id`・`X-Session-Id` を付ける。
+  一覧はサーバーの順を保ち、`label` null は nil。作成は 201→`created`・200→`alreadyPinned`。204 は成功。400・404・500・503(`store_unavailable`/`upstream_unavailable`)・
+  通信失敗は `PokeCalcError` に code のまま写す(上限到達の 400 `invalid_input` を握りつぶさない)。
+- **AC-2 ラベル**(`FavoriteLabel.normalize`): 前後空白除去・空は未設定・30コードポイントに切り詰め(絵文字も1と数える)。送る前に必ず通す。
+- **AC-3 一覧 ViewModel**(`FavoritesViewModel`): 名前をサーバーの順のまま解決し、引けない種族・マスタの失敗でも行を残す(題名は label → 種族名 → 「不明なポケモン」)。
+  空は `.loaded`(失敗と区別)。失敗は `.failed(種類)`、再試行で回復、再読み込みの失敗は表示中の一覧を消さない。新しい読み込みが古い応答(成功も失敗も)を捨てる。
+  キャンセルは一覧も状態も変えず失敗にしない。サービス nil は何もしない。100件で `isAtLimit`。
+- **AC-4 外す**: 成功・404 は一覧から除く(404 は失敗を見せない)。それ以外の失敗は一覧を保ち `actionError`(読み込み状態は壊さない)。成功で前の `actionError` を消す。
+  外している最中の同じ ID の再タップは要求を増やさない。外した項目は、削除前に始まった読み込みの古い応答で復活しない。
+- **AC-5 追加 ViewModel**(`FavoritePinViewModel`): ラベル無しで個体をそのまま1回送る。`pinned`/`alreadyPinned`/`failed(種類)`。保存中の再呼び出しは無視。
+  キャンセルは `.idle`(失敗にしない)。`reset()` は保存中以外で `.idle`。サービス nil は `isAvailable == false` で何もしない。
+- **AC-6 計算履歴**(`OpponentHistoryViewModel`。データ源は既存の `FrequentOpponentsService`): `limit` は 50。サーバーの順・件数・最終計算時刻を保つ。
+  名前を引けない相手は行を残す(ピッカーと違う)。同じ key は先頭だけ。空は `.loaded`。失敗の扱い・古い応答の破棄・キャンセルは AC-3 と同じ。
+  「3回」「最後: 今日/昨日/N日前」は暦日(Calendar)の差で、未来は今日。生の履歴一覧は契約待ちと画面に注記する。
+- **AC-7 エラー文言**(`RecordScreenError`): code→種類(transport・decode/unexpectedStatus→unexpectedResponse・503 2種→storeUnavailable・not_found・invalid_input・その他)。
+  文言は `FavoritesLabels` に集約した日本語で、サーバーの英語 `message` と `code` を含まない。503 は「計算はそのまま使えます」を含む。上限の文言は `RequestLimits.maxFavorites` から作る。
+- **AC-8 契約同期**: `RequestLimits.maxFavorites`(=listFavorites の maxItems)・`maxFavoriteLabelLength`(=FavoriteInput.label.maxLength)が
+  `ios/scripts/check-request-limits.sh` で契約と一致する。
+- **AC-9 モック**(`MockFavoritesService`): 既定は空のストアで、追加(新しい順・同じ内容は `alreadyPinned` で先頭へ)・削除(2回目 404)が動く。
+  `list`(102「HB特化」9002-000・101 9003-000)/`fail`(transport)/`unavailable`(503)/`full`(100件・新規は 400 `invalid_input`)。架空の 9xxx だけ。
+- **AC-10 画面(XCUITest・モック)**: ルートのピル `openFavoritesScreen` → `favoritesScreen`。`favoritesSection`(`favoritesEmpty`/`favoriteRow-<id>`/`favoriteDeleteButton-<id>`/
+  `favoritesError`+`favoritesRetryButton`/`favoritesActionError`)・`opponentHistorySection`(`opponentHistoryRow-<key>`/`opponentHistoryEmpty`/`opponentHistoryError`+`opponentHistoryRetryButton`/
+  `opponentHistoryPendingNote`)。計算画面に `pinAttackerFavoriteButton`・`pinDefenderFavoriteButton`・`favoritePinStatus`。
+  通信失敗・503・空・上限でも画面を壊さず、計算は成功する(絶対ルール5)。外すボタン 36pt 以上。AX5 で横にはみ出さず外すボタンを押せる。
+
+### 追加したテスト
+
+- `PokeCalcKit/Tests/PokeCalcCoreTests/APIFavoritesServiceTests.swift`(14 件)
+- `FavoritesViewModelTests.swift`(18 件)・`FavoritePinViewModelTests.swift`(9 件)・`OpponentHistoryViewModelTests.swift`(14 件)
+- `RecordScreenErrorTests.swift`(6 件。ラベル正規化を含む)・`MockFavoritesServiceTests.swift`(8 件)
+- 支援: `Support/StubFavoritesService.swift`
+- `ios/PokeCalcUITests/FavoritesScreenUITests.swift`(13 件)
+- 契約同期: `ios/scripts/check-request-limits.sh` に maxFavorites・maxFavoriteLabelLength を追加(`ios-check-request-limits` が通る)
+- 足場(`TODO(implementer P5-3c iOS` で検索): `Favorites.swift`・`OpponentHistory.swift`・`MockFavoritesService.swift`・`APIPokeCalcService+Favorites.swift`、
+  `RequestLimits` の2定数。文言 `FavoritesLabels` は確定値
+
+### spec 時点の結果(2026-10-04)
+
+追加した単体テスト 69 件〈上の内訳の合計〉のうち 66 件が失敗する想定どおり(足場が空・throw のため)。`swift test` 全体は 1237 件・既存 1158 件は全件成功。
+`make ios-gen-check` 成功・`ios/scripts/check-request-limits.sh` 成功。XCUITest 13 件は `xcodebuild build-for-testing` でコンパイルのみ確認(identifier が無いので実行すると失敗する想定)。
+
+### 実装者への注意
+
+- 足場の `TODO(implementer P5-3c iOS` を実装する。API 写像は `FrequentOpponentsService` の extension(`APIPokeCalcService.swift` 末尾)を見本に、
+  `client.listFavorites` / `createFavorite`(201/200 を `Output` で区別)/ `deleteFavorite`(204)を呼ぶ。`generatedIndividual` を再利用し、生成型 → ドメインの
+  `Individual` 逆写像(SpeciesKey・StatBlock・teraType の `value1` 包み)を足す。`moveId` は契約に無いので送らない・読まない。
+- 画面: `ios/PokeCalc/Features/FavoritesFeature.swift`(`AppFeature`。`registerServices` で `FavoritesService` をモック/API で登録、`requiredServices` に入れる)と
+  `FeatureRegistry` の1行だけ。`RootView`・`AppEnvironment` の `.ready` は編集しない。履歴は `context.core.frequentOpponents`・名前の解決は `context.core.pokeCalc`。
+  計算画面の追加ボタンは `context.services.resolve((any FavoritesService).self)` を `CalcScreenView` に任意で渡す(`frequentOpponentsService` と同じ流儀)。
+- **見た目の規約**: design.md のトークンのみ・`lineLimit` を付けない・常時アニメ無し・タップ範囲 36pt 以上。Menu の中の identifier は外から見えにくいので、
+  外すボタンは Menu に入れず直接のボタンにする。**子が1つだけの `.accessibilityElement(children: .contain)` は中の識別子を畳む**ので、
+  セクションは見出し+中身で子を2つ以上にする(空のときも見出し+案内文)。行の `favoriteRow-<id>`・`opponentHistoryRow-<key>` は label に題名・件数を含める。
+  AX5 では横並びを縦積みに切り替える(`dynamicTypeSize >= .accessibility1`。他画面と同じ)。
+- 文言は `FavoritesLabels` に集約済み。画面に直書きしない。件数の数字も `RequestLimits` から。
+- `README.md`(ios)に `POKECALC_MOCK_FAVORITES`・`POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH` を追記。ルートのピルが1つ増えるので、既存 UI テストのスクロール位置を壊さないか全 XCUITest で確認する。
+- 実在ポケモンの実データをフィクスチャにしない(9001〜9004 だけ)。`docs/plan.md` の更新は依頼元(本タスクでは触っていない)。
+
+
+### 実装結果(2026-10-04)
+
+- `swift test` 1237 件・失敗 0(spec 時点の失敗 66 件が全件成功。既存 1158 件は無変更で成功)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。
+  `xcodebuild build-for-testing`(generic/platform=iOS Simulator)成功。
+- `FavoritesScreenUITests` 13 件を iPhone 18 Pro シミュレータで実行し 13 件成功(テストは無変更。全体の XCUITest は別途)。
+- 判断: 計算画面の追加ボタンは、既存テストの位置を動かさないよう結果セクションの**下**に置いた(`FavoritePinSection`)。防御側の個体は計算が種族だけで防御側を指定するため、
+  無補正の性格・SP 0・画面で選んだ特性の個体として追加する(`CalcViewModel.defenderIndividualForFavorite()`。攻撃側は計算に使う個体そのまま)。
+  名前の解決は `SpeciesNameResolver`(お気に入り・履歴で共通)。外した ID は、その時点で進行中の読み込みの応答からも除く(復活防止)。
+- テストと実装の矛盾は無かった。
+
+## 防御側のランクの受け入れ条件(issue #274 の残り。2026-10-04。Web は ADR-0315、契約は ADR-0216。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+- 日付: 2026-10-04 / 担当レーン: iOS / 関連: 本 ADR「issue #274」「P6-19」、ADR-0315(Web)、ADR-0216(`defenderOverride.ranks/status`)、
+  docs/ai-shared/decisions/2026-10-02-215-ios-web-ios-issue-274-adr-0315.md・同 206・同 2026-10-04-ios-defender-ranks.md
+- 生成クライアント: `Components.Schemas.DefenderOverride.ranks`(`RankBlock`)は生成済み。`make ios-gen-check` が一致していれば再生成は不要。
+  api/openapi.yaml・services/ は触らない。
+
+### 判断(新しい ADR は起こさない)
+
+1. **リセット規則 = 消さない**。防御側の種族変更・攻守入れ替え・技の変更・構築の呼び出し・「詳細」の開閉でランクを 0 に戻さない。
+   根拠: Web の ADR-0315 §6、および攻撃側のランクの既存規則(本 ADR「issue #274」: ランクは入れ替えでも消さない)。
+   防御側の特性(P6-19)だけが「種族が変わると選択肢が変わる」ので種族変更・入れ替えで「指定なし」に戻る。ランクは種族に依存しないので別規則。
+2. **状態異常は出さない**(`defenderOverride.status` は送らない。式に効かない。ADR-0216 §3)。
+3. **逆算には足さない**(`ReverseRequest` に防御側 override は無い)。
+
+### 受け入れ条件
+
+1. **表示と編集対象**: 「詳細」の「攻撃側のランク」の次に防御側のランク(見出し「防御側のランク」)を出す。ステッパーは選択中の技の分類で
+   編集対象が決まる(物理・変化・技なし = def〈B〉、特殊 = spd〈D〉)。表示は「B +1」「D -2」「B ±0」(`RankLabel.text` を def → B、spd → D に広げる)。
+   def / spd は別々に保持し、技の分類を往復しても消えない。範囲は -6..+6(`RankLimits`)で、範囲外の指定は丸める。上限・下限でボタンを無効にする。
+2. **要求(ViewModel → `BulkCalcRequest.defenderRanks`)**: 既定(0・0)は既定の `RankBlock()`。値が変わる操作は計算1回、変わらない操作は0回。
+   def/spd は技の分類に関係なく両方そのまま載せる(攻撃側の atk/spa と同じ)。攻撃側の `attacker.ranks`・防御側の特性と混ざらない。
+3. **API 写像**(`APIPokeCalcService.generatedBulkCalcRequest`): `defenderOverride` の出し方を「abilityId も ranks も無いなら送らない」に変える。
+   (abilityId, ranks)の4通り: なし/既定 → 送らない(従来と同じ本文)、あり/既定 → `{abilityId}` のみ、なし/非 0 → `{ranks}` のみ、
+   あり/非 0 → 同じ `defenderOverride` に両方。ranks は非 0 のとき 5 項目(atk/def/spa/spd/spe。0 も含む)を送る。`status` は送らない。
+   攻撃側の `attacker.ranks` は防御側のランクの影響を受けない。
+4. **文言**(Core の `CalcConditionLabels`。既存の固定文言は変えない): `defenderRankTitle`「防御側のランク」、
+   `defenderRankIncrement`「防御側のランクを上げる」、`defenderRankDecrement`「防御側のランクを下げる」(Web と同じ語)。
+5. **identifier(追加のみ)**: `calcDefenderRankDecrement` / `calcDefenderRankValue` / `calcDefenderRankIncrement`
+   (攻撃側の `calcAttackerRank*` と同じ流儀)。ステッパーのボタンのタップ範囲は 36pt 以上、AX5 でも横にはみ出さずタップできる。
+6. **モック**: `MockPokeCalcService.calcBulk` は防御側のランク付きの要求を受け付け、ランクなしと同じ形の行を返す(数値は変えない)。
+7. **古い応答**: ランクを続けて変えたとき、古い計算は追い越され(キャンセル)、最新の要求の結果だけが残る。計算は1操作につき1回。
+
+### 追加したテスト(2026-10-04 時点。実装は未着手)
+
+| ファイル | 件数 | 内容 |
+|---|---|---|
+| `ios/PokeCalcKit/Tests/PokeCalcCoreTests/CalcViewModelDefenderRanksTests.swift` | 13 | 既定・混ざらない・±6・技の分類 def/spd・変化技・リセットしない・特性と併存・古い応答 |
+| `.../APIPokeCalcServiceDefenderRanksTests.swift` | 7 | `defenderOverride` の有無の全組み合わせ・5 項目・status 無し・攻撃側と混ざらない・他のフィールド不変 |
+| `.../DefenderRankLabelsTests.swift` | 3 | 文言 3 つ・既存文言不変・「B +1」「D -2」「B ±0」 |
+| `.../MockPokeCalcServiceDefenderRanksTests.swift` | 1 | モックが要求を受け付けて同じ形の行を返す |
+| `ios/PokeCalcUITests/CalcDefenderRanksUITests.swift`(XCUITest・モック) | 4 | 既定「B ±0」・上げ下げ・上限下限で無効・36pt 以上 |
+| `ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(追加メソッド1本) | 1 | AX5 で防御側のランクがはみ出さずタップできる |
+
+単体は 24 件追加(`swift test --filter DefenderRank`)。実装前の結果: 失敗 16・成功 8(成功は足場の既定値と同じ結果になるもの。
+Labels の文言 2 件・`RankLimits`・モック 1 件・API 4 件〈従来どおり送らない/特性のみ/攻撃側不混入/他フィールド不変〉)。
+XCUITest 5 件はビルドのみ確認(実行は実装後。View が無いので失敗する)。既存テストは1つも変えていない。
+
+### 実装者への注意
+
+- 足場(`TODO(implementer` を検索): `BulkCalcRequest.defenderRanks`(既定値付き。`DomainTypes.swift`)、`CalcViewModel` の
+  `defenderRanks`/`defenderRankStat`/`defenderRank`/`defenderRankText`/`setDefenderRank`(中身は空。`attackerRank*` と同じ作りで実装)、
+  `CalcConditionLabels` の文言(値は確定済み)。
+- 実装箇所: ① `CalcViewModel.buildRequest` が `defenderRanks` を載せる。② `APIPokeCalcService.generatedBulkCalcRequest` の `defenderOverride` を
+  「abilityId も ranks も無いなら nil」に変え、ranks は `RankBlock() != request.defenderRanks` のときだけ 5 項目で載せる(`status` は nil)。
+  生成物の `RankBlock` のメンバーは Optional なので、0 も含めて全項目に値を入れる。③ `RankLabel.text`(def → B、spd → D。
+  `AttackerPreset.statLetter` は private 化せず、攻撃側の A/C の対応を壊さない)。④ `CalcConditionsSection` に `defenderRankSection`
+  (`rankStepperButton` を再利用。identifier は上記)。`CalcScreenMetrics.rankValueMinWidth` を再利用し、ボタンは 36pt 以上を保つ。
+- リセット処理は足さない(判断 1)。`resetDefenderAbility()` にランクを含めない。
+- 既存の API 写像テスト(`defenderOverride` を送らない)・既存 identifier は変えない。
+- 完了条件: `swift test`・`make ios-test`(XCUITest 5 件を含む)・`make ios-gen-check`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### 実装結果(2026-10-04。implementer)
+
+- 単体 `swift test`: 1318 件・失敗 0。XCUITest(iPhone 18 Pro・モック): `CalcDefenderRanksUITests` 4 件・`LargeTextLayoutUITests.testCalcScreenDefenderRankNoHorizontalOverflowAtAX5` 1 件・既存 `CalcConditionsUITests` 2 件、計 7 件すべて成功。
+- 逸脱 1(配置): 防御側のランクは「攻撃側のランクの次」ではなく「詳細」の末尾(防御側の壁の次)に置いた。攻撃側のランクの前後どちらに挟んでも、
+  既存の `CalcConditionsUITests.testTogglingConditionsUpdatesSelectionAndKeepsRows`(前方スクロールのみで 壁→攻撃側ランク の順に触る)が、スワイプの量子化で攻撃側ランクへ届かなくなった(実測)。既存テストは変えない。
+- 逸脱 2(テストの操作のみ): `CalcDefenderRanksUITests.scrollUntilHittable` に、前方スクロールで届かないときの `swipeDown` を追加(防御側のランクが末尾にあり、上の攻撃側ランクへ戻るため)。期待値・検証は変えていない。
+- 逸脱 3(テストの操作のみ): `CalcViewModelDefenderRanksTests.testStaleResponseDoesNotOverwriteLatestRows` は cancel 済みの古い要求に `resolveBulkWithEcho` を呼んでいた(スタブは cancel で保留を外すため失敗)。
+  その呼び出しを `waitForBulkCancellation(at:)` に置き換えた。検証(最新の結果だけが残る・エラー無し・isLoading false)は変えていない。
+- ステッパーのボタンは最小 37pt(36 ちょうどは丸め誤差で 35.99 になり不合格)。攻撃側と共有。
+
+- **既存テストの操作の追従(2026-10-04。防御側のランク)**: 防御側のランクの行を「詳細」の末尾に足したことで、画面の小さい機種(iPhone 17e)では既存の `CalcConditionsUITests.scrollUntilHittable` が上へスクロールし過ぎて上にある攻撃側のランクを通り越した(iPhone 18 Pro では通っていた)。上へのスクロールで届かないときだけ下へ戻る `swipeDown` を足した。最後の `XCTAssertTrue(target.isHittable)` は変えていない(検証は弱めていない)。両機種で `CalcConditionsUITests`・`CalcDefenderRanksUITests` が全件成功。
+
+## 判定の素早さ反映/無視と状態異常の受け入れ条件(2026-10-04。判定画面は ADR-0504、設計は ADR-0512、契約 v0.3.0 は ADR-0710・0712・0714。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+### 受け入れ条件(検証可能な形)
+
+1. **反映/無視の表示(行ごと・方向ごと)**: 各候補の行に、`attackerSpeedApplied` →「自分の素早さに反映: ランク補正・追い風」、`defenderSpeedApplied` →「相手の素早さに反映: …」、
+   `attackerSpeedIgnored` →「自分の素早さに特性は反映していません」、`defenderSpeedIgnored` →「相手の素早さに持ち物・天候は反映していません」を出す(Web の `judgeScreenText` と同じ語。区切りは「・」)。
+   自分側(attacker*)と相手候補側(defender*)を取り違えない。空配列の文は出さない(識別子も存在しない)。並びは応答のまま。行は `defenderIndex` で対応づける(応答が並び替わっていても他の行の値が混ざらない)。
+   値の文言: rank=ランク補正・tailwind=追い風・ability=特性・choiceScarf=こだわりスカーフ・item=持ち物・paralysis=まひ/abilityId=特性・itemId=持ち物・fieldWeather=天候。既存の行の表示は変わらない。
+2. **状態異常の入力**: 自分と各候補に「状態異常」ボタン(`judgeAttackerStatusButton`・`judgeCandidate<n>StatusButton`)。既定は「なし」。選択シートに7値(なし/やけど/まひ/どく/もうどく/ねむり/こおり。順は契約と同じ)が並び、
+   「未選択に戻す」行(`judgeOptionNone`)は無い。選ぶとシートが閉じてボタンに名前が出る。選択は自分・候補ごとに独立で、候補の削除では候補について行く。
+3. **送信規則**: `none`(既定)は要求に載せない(欄ごと省略・null も送らない)。選んだ値だけ契約の値(`badly_poison` はスネークケース)で、**その側にだけ**載せる(自分の値が候補に、候補の値が自分に載らない)。
+   状態異常を選ばない要求は従来と同じ本文・同じ `JudgeRequest`。状態異常だけでは送れない(検査は変わらない)。入力の編集で judge を呼ばない。
+4. **リセット**: 種族を変えても状態異常は残す。構築のメンバーを呼び出すと `none` に戻る。
+5. **未知の値で落ちない**: 応答の `*SpeedApplied`・`*SpeedIgnored` に契約の既知の値以外が来ても decode は失敗せず、文字列のまま・並べ替えずに運ぶ(他の欄・他の行・方向は正しく読める)。
+   画面は未知の値を「その他の補正」「その他の入力」と出す。欄が無い・配列でない・文字列でない要素・読めない本文は従来どおり decode エラー(厳格さを保つ)。並行の呼び出しで値が混ざらない。ErrorCode の未知値は従来どおり(decode エラー)。
+6. **契約同期**: `SpeedFactor`(6値)・`SpeedIgnoredInput`(3値)・要求の status(自分・候補とも7値)の生成 enum が、ドメイン・文言の対応表と一致する(増えたら落ちる=文言を足す合図)。
+7. **モック**: 既定・`marks` は4欄とも空。`speed-notes` は固定値(自分 Applied = 全行 [rank, tailwind]・自分 Ignored = 2番目の候補だけ [abilityId]・候補 Applied = 1番目だけ [choiceScarf]・候補 Ignored = 2番目だけ [itemId, fieldWeather])。
+   要求の状態異常がまひなら、その側の Applied の末尾に paralysis(自分なら全行、候補ならその候補の行だけ)。まひ以外は何も足さない。素早さ・確定数は既定と同じ。
+8. **画面(XCUITest)**: 上の 1〜4・7 を `speed-notes` のモックで確かめる。AX5 で状態異常のボタン・選択シート・結果の4つの文が横にはみ出さない。**iPhone 17e と iPhone 18 Pro の両方で通る**(スクロールは前方→届かなければ下へ戻る)。
+
+### 追加したテスト(2026-10-04 時点。実装は未着手)
+
+| ファイル | 件数 | 内容 |
+|---|---|---|
+| `ios/PokeCalcKit/Tests/PokeCalcCoreTests/JudgeViewModelStatusTests.swift` | 11 | 既定・7値の順・独立・範囲外・編集で呼ばない・種族変更で残る・候補削除で付いて行く・構築でリセット・none は送らない/本文不変・全値を自側だけに送る・検査不変 |
+| `.../JudgeLabelsSpeedNotesTests.swift` | 8 | 既知の値の文言・未知の値のフォールバック(大文字小文字も区別)・自分/相手・「・」区切り・反映/無視の文・状態異常の語・既存文言不変 |
+| `.../JudgeResultDisplaySpeedNotesTests.swift` | 8 | 空は nil・方向を取り違えない・片側だけ・並び保持・行ごと・index 引き・未知値・既存の表示不変 |
+| `.../JudgeContractSyncSpeedTests.swift` | 6 | SpeedFactor 6値・SpeedIgnoredInput 3値・全値に文言・status 7値(自分/候補)・状態異常の文言 |
+| `.../APIJudgeServiceStatusTests.swift` | 6 | nil は省略/null なし・全値を自分に/候補に・badly_poison・候補ごと・他の任意欄と並ぶ |
+| `.../APIJudgeServiceUnknownSpeedValuesTests.swift` | 13 | 未知の Applied/Ignored で落ちない・他の欄は読める・行/方向ごと・既知値・空・欄欠落/null/非配列/非文字列/本文不正は decode エラー・ErrorCode 未知値は従来どおり・要求不変・並行で混ざらない |
+| `.../MockJudgeServiceSpeedNotesTests.swift` | 6 | 環境変数・固定値・まひの付与(自分/候補/位置)・他の状態異常は足さない・他のシナリオは空・数値不変 |
+| `ios/PokeCalcUITests/JudgeSpeedNotesUITests.swift`(XCUITest・モック) | 8 | 状態異常の既定/シート/選択・自分と候補で独立・反映/無視の表示(行ごと・空は出さない)・既定は何も出ない・既存の値不変・候補のまひ/自分のまひが該当側の行だけに届く・まひ以外 |
+| `ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(追加メソッド2本) | 2 | AX5 で状態異常ボタン・反映/無視の4文・選択シートがはみ出さない |
+
+単体 58 件追加(`swift test` の新規 7 ファイル)。実装前の結果: 失敗 32・成功 26(成功は足場の既定値と同じ結果になるもの: 既定値・none 非送信・契約の値の集合・「厳格さを保つ」系・他シナリオの空)。
+全体は 1376 件中、新規の失敗 32 のみ(既存テストの失敗 0)。XCUITest 10 件は、実行は UI 実装後(下の「XCUITest の実装前結果」)。既存テスト・既存 identifier は1つも変えていない。
+
+### 実装者への注意
+
+- 足場(`TODO(implementer` を検索): `JudgeStatus`(完成。`JudgeIndividual.status`・`JudgeDraft.status`)、`JudgeViewModel.setStatus`(中身は空)と `individual(from:)`(status を渡す)、`JudgeLabels` の状態異常・素早さの文言(値は確定済み。中身は空)、
+  `JudgeMatchupDisplay` の4つの文(既定 nil。`JudgeResultDisplayBuilder.row` で埋める)、`MockJudgeService` の `.speedNotes`(環境値 `speed-notes`。固定値は上の条件 7)、
+  `APIJudgeService.init(serverURL:transport:identity:)`(足場は素の `Client`。ここでミドルウェアを付ける)。
+- 実装箇所: ① `APIJudgeService.generatedIndividual`/`generatedDefender` が `status` を `Components.Schemas.Individual.StatusPayload(rawValue:)` / `DefenderCandidate.StatusPayload(rawValue:)` で載せる(nil は載せない)。
+  ② ADR-0512 §3 のミドルウェア(判定専用。`init(baseURL:identity:)` も同じ経路にする。既存の `init(client:identity:)` は変えない=既存テストが使う)。`APIJudgeService.domainMatchup` は退避した生の文字列を使う。
+  退避は `@TaskLocal` の参照型(呼び出しごと)。**生成の `Client` は `Sendable` で共有されるので、ミドルウェアにインスタンスの可変状態を持たせない**(並行テストが検出する)。
+  ミドルウェアが触るのは 200 の JSON だけで、4配列が「文字列の配列」のときだけ退避して空配列にする。それ以外(欄なし・null・非配列・非文字列要素・JSON でない)は本文をそのまま渡し、生成の decode に落とさせる。
+  ③ `JudgeResultDisplayBuilder` が `JudgeLabels.speedAppliedNote`/`speedIgnoredNote` で4つの文を作る(空配列は nil)。④ View: `JudgeIndividualCard` に「状態異常」ボタン(持ち物の次。`selectButton` を再利用)、
+  `JudgeOptionKind.status`(シートの行は `JudgeStatus.allCases`・`judgeOptionNone` は出さない・選んだら `setStatus`)、`JudgeResultSection` の行に4つの文(識別子は ADR-0512 §6。空は出さない)。
+  結果の `.contain`(`judgeResult`)は子を2つ以上に保つ(子が1つだけの `.contain` は識別子を畳む)。文は行の `.contain` の中の個別の Text にする。
+- `MockJudgeService` の `.speedNotes` は行の位置 i から決まる値で、既存の素早さ・確定数の式は変えない。`JudgeMatchup`/`JudgeMatchupDisplay` の init は既定値付きなので既存の呼び出しは変わらない。
+- 画面の高さは機種で違う(iPhone 17e は小さい)。新しい XCUITest は前方スクロール後に下へ戻る操作を持つ。View を足したあと、**両機種**で `JudgeSpeedNotesUITests`・`LargeTextLayoutUITests` の追加2本・既存の `JudgeScreenUITests` を通す
+  (状態異常のボタンを足すと個体カードが伸びる。既存の `scrollUntilHittable` が通り越したら、操作だけ直す。検証は変えない)。
+- 完了条件: `swift test`・`make ios-test`(両機種の XCUITest を含む)・`make ios-gen-check`・`make ios-lint`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### XCUITest の実装前結果(2026-10-04。View 未実装)
+
+`JudgeSpeedNotesUITests` 8 件を iPhone 17e と iPhone 18 Pro の両方で実行: 各機種で失敗 6・成功 2(成功は `speed-notes` でない既定のシナリオで何も出ないことと、既存の行の値が変わらないこと)。失敗は状態異常のボタン・反映/無視の文が無いため。
+`LargeTextLayoutUITests` の追加 2 本はビルドのみ確認(実行は UI 実装後)。`make ios-gen-check`(生成物は契約と一致。再生成は不要)・`make ios-lint` は成功。
+
+### 実装結果(2026-10-04)
+
+- 単体: `swift test` 1376 件・失敗 0(新規 58 件を含む)。`make ios-lint`・`ios-gen-check`・`ios-check-request-limits` 成功。`xcodebuild build-for-testing` 成功。
+- XCUITest(iPhone 17e・iPhone 18 Pro の両方): `JudgeScreenUITests` 17 件・`JudgeSpeedNotesUITests` 8 件・`LargeTextLayoutUITests` の判定の AX5 追加 2 本、計 27 件ずつ全件成功(失敗 0)。テスト側の操作は変えていない。
+- 実装: `JudgeSpeedValueMiddleware`(判定専用の `ClientMiddleware`。200 の 4 配列を `@TaskLocal` の `JudgeSpeedValueCapture` へ生の文字列で退避し、生成型には空配列で渡す。ミドルウェア自身は状態を持たない。
+  4 配列が文字列の配列でない行は触らず従来どおり decode エラー)。`APIJudgeService` の `init(serverURL:transport:identity:)` と `init(baseURL:identity:)` が同じ経路でミドルウェア付きの `Client` を作る(`init(client:identity:)` は不変)。
+  `Package.swift` は変更なし(`HTTPTypes` は OpenAPIRuntime 経由で参照できる)。
+- 既存の `scrollUntilHittable` が状態異常ボタンの追加で通り越す問題は起きなかった(テストの操作変更なし)。

@@ -698,7 +698,7 @@ describe("A5 結果の表示", () => {
       matchup(0, { outspeeds: true, speedTie: false, attackerMovePriority: 0, defenderMovePriority: 1 }),
     ]);
 
-    const row = matchupRows()[0];
+    const row = matchupRows()[0] as HTMLElement;
     expect(row).toHaveTextContent(judgeScreenText.outspeedsTrueLabel);
     expect(row).toHaveTextContent(judgeScreenText.priorityLabel(0, 1));
     expect(row).toHaveTextContent(judgeScreenText.attackerMovesFirstLabel);
@@ -731,12 +731,46 @@ describe("A5 結果の表示", () => {
     expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("相手", ["まひ"]));
   });
 
+  test("マスタの効果データから反映した特性・持ち物は「素早さに反映」の行に連鎖順で出る(issue 235 第2段)", async () => {
+    await submitTwoCandidates([
+      matchup(0, {
+        attackerSpeedApplied: ["tailwind", "ability", "item", "paralysis"],
+        defenderSpeedApplied: ["ability", "choiceScarf"],
+        defenderSpeedIgnored: ["itemId"],
+      }),
+      matchup(1),
+    ]);
+
+    const rows = matchupRows();
+    expect(rows[0]).toHaveTextContent(
+      judgeScreenText.speedAppliedNote("自分", ["追い風", "特性", "持ち物", "まひ"]),
+    );
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedAppliedNote("相手", ["特性", "こだわりスカーフ"]));
+    expect(rows[0]).toHaveTextContent(judgeScreenText.speedIgnoredNote("相手", ["持ち物"]));
+    expect(rows[1]).not.toHaveTextContent("反映");
+  });
+
+  test("素早さの補正の文言は契約の SpeedFactor の全ての値にある(issue 235 第2段)", () => {
+    const contractFactors: Schemas["SpeedFactor"][] = [
+      "rank",
+      "tailwind",
+      "ability",
+      "choiceScarf",
+      "item",
+      "paralysis",
+    ];
+    expect(Object.keys(judgeScreenText.speedFactorLabel).sort()).toEqual([...contractFactors].sort());
+    for (const factor of contractFactors) {
+      expect(judgeScreenText.speedFactorLabel[factor]).not.toBe("");
+    }
+  });
+
   test("同速は「同速」として出す(outspeeds の false と区別する。ADR-0700 §6-1)", async () => {
     await submitTwoCandidates([
       matchup(0, { outspeeds: false, speedTie: true, attackerSpeed: 150, defenderSpeed: 150 }),
     ]);
 
-    const row = matchupRows()[0];
+    const row = matchupRows()[0] as HTMLElement;
     expect(row).toHaveTextContent(judgeScreenText.speedTieLabel);
     expect(row).not.toHaveTextContent(judgeScreenText.outspeedsFalseLabel);
   });
@@ -749,7 +783,7 @@ describe("A5 結果の表示", () => {
   test("行動順が決まらないとき(turnOrderTie)は、どちらが先かを断定しない(ADR-0704 §2)", async () => {
     await submitTwoCandidates([matchup(0, { attackerMovesFirst: false, turnOrderTie: true })]);
 
-    const row = matchupRows()[0];
+    const row = matchupRows()[0] as HTMLElement;
     expect(row).toHaveTextContent(judgeScreenText.turnOrderTieLabel);
     expect(row).not.toHaveTextContent(judgeScreenText.attackerMovesFirstLabel);
     expect(row).not.toHaveTextContent(judgeScreenText.defenderMovesFirstLabel);
@@ -1212,6 +1246,43 @@ describe("A11 種族を検索で選ぶ(speciesList が false)ときは resolveSp
     expect(lastCall(client).args.defenders[0]?.natureId).toBe(NATURE_NEUTRAL.id);
   });
 
+  test("結果を出したあとに自分の種族を変えても、印の技名は送信時点の技から引いた表示名のまま(issue 271)", async () => {
+    const { user, client } = renderOnline();
+    await chooseBySearch(user, attackerRegion(), BIRD);
+    await chooseBySearch(user, candidate(1), FISH);
+    await waitFor(() => {
+      expect(moveOptionValues(candidate(1))).toEqual([MOVE_SPEC.id]);
+    });
+    await user.click(submitButton());
+    const call = lastCall(client);
+    await flush(() => {
+      call.resolve({
+        ok: true,
+        value: {
+          matchups: [
+            matchup(0, {
+              attackerKoUnsupported: [{ target: "move", reason: "multi_hit", id: MOVE_PHYS.id }],
+            }),
+          ],
+        },
+      });
+    });
+    const note = within(matchupRows()[0] as HTMLElement).getByTestId("judge-unsupported-attacker-ko");
+    expect(note).toHaveTextContent(`「${MOVE_PHYS.nameJa}」`);
+
+    // 結果を出したあとに自分の種族を、MOVE_PHYS を覚えない種族へ変える。
+    const input = within(attackerRegion()).getByRole("combobox", { name: judgeScreenText.speciesLabel });
+    await user.clear(input);
+    await chooseBySearch(user, attackerRegion(), FISH);
+    await waitFor(() => {
+      expect(moveOptionValues(attackerRegion())).toEqual([MOVE_SPEC.id]);
+    });
+
+    const after = within(matchupRows()[0] as HTMLElement).getByTestId("judge-unsupported-attacker-ko");
+    expect(after).toHaveTextContent(`「${MOVE_PHYS.nameJa}」`);
+    expect(after).not.toHaveTextContent(`「${MOVE_PHYS.id}」`);
+  });
+
   test("種族の解決に失敗したら(resolveSpecies が reject)技は選べないまま。判定は送らない", async () => {
     const base = createFakeSpeciesSearch({ species: [BIRD, FISH], abilities: [ABILITY], moves: FAKE_MOVES });
     const failing = {
@@ -1639,5 +1710,185 @@ describe("A15 種族を選ぶと、選択済みのプリセットが性格・SP 
     expect(within(attackerRegion()).getByLabelText(judgeScreenText.natureLabel)).toHaveValue(
       NATURE_PLUS_SPE.id,
     );
+  });
+});
+
+// ---- issue 271: calc-svc の「未対応」の印(ADR-0708)を確定数の行の直下に方向ごとに出す ----
+// 受け入れ条件(判定画面):
+//   U1 印が空(両方向)なら注意文を出さない(現状の表示は不変)
+//   U2 順方向(attackerKoUnsupported)の印は「自分の技の確定数」の注意として role="note" で出す。
+//      逆方向(defenderKoUnsupported)は別の note に分け、まとめない
+//   U3 target は向きで読み替える: 順方向 attacker_* = 自分・defender_* = 相手候補、逆方向はその逆
+//   U4 複数の印は返した順のまま全て出す。ID は master.moves / items / abilities から表示名に解決し、
+//      マスタに無ければ ID をそのまま出す
+//   U5 未知の reason / target でも崩れず、ID を出す(ADR-0215)。unsupported_effect は理由の括弧を省く
+//   U6 両方向に印があれば note が 2 つ。候補ごとに違う印は、その候補の行にだけ出る
+//   U7 注意文は確定数の行の直下(確定数の文言は消さず残す)
+describe("U 未対応の印(issue 271・ADR-0708)", () => {
+  const MOVE_MULTI = fakeMove("test-move-multi", "テストれんぞくわざ", "physical", 20);
+  const markMaster: MasterData = {
+    ...master,
+    moves: [...FAKE_MOVES, MOVE_MULTI],
+  };
+
+  function mark(target: string, reason: string, id: string): Schemas["UnsupportedMark"] {
+    return { target, reason, id };
+  }
+
+  async function submitWith(matchups: readonly Schemas["Matchup"][]): Promise<void> {
+    const { user, client } = renderScreen(markMaster);
+    await fillMinimalForm(user);
+    await user.click(addCandidateButton());
+    await fillIndividual(user, candidate(2), GRASS, NATURE_NEUTRAL);
+    await user.click(submitButton());
+    const call = lastCall(client);
+    await flush(() => {
+      call.resolve({ ok: true, value: { matchups: [...matchups] } });
+    });
+  }
+
+  function forwardNote(row: HTMLElement): HTMLElement | null {
+    return within(row).queryByTestId("judge-unsupported-attacker-ko");
+  }
+  function reverseNote(row: HTMLElement): HTMLElement | null {
+    return within(row).queryByTestId("judge-unsupported-defender-ko");
+  }
+
+  test("U1 印が空なら note を出さない", async () => {
+    await submitWith([matchup(0), matchup(1)]);
+    for (const row of matchupRows()) {
+      expect(within(row).queryAllByRole("note")).toHaveLength(0);
+      expect(row).not.toHaveTextContent("未対応");
+    }
+  });
+
+  test("U2 順方向の印だけなら、自分の技の確定数の note だけを出す(確定数の文言は残す)", async () => {
+    await submitWith([
+      matchup(0, { attackerKoUnsupported: [mark("move", "multi_hit", MOVE_MULTI.id)] }),
+      matchup(1),
+    ]);
+    const row = matchupRows()[0] as HTMLElement;
+    const note = forwardNote(row);
+    expect(note).not.toBeNull();
+    expect(note).toHaveAttribute("role", "note");
+    expect(note).toHaveTextContent(
+      judgeScreenText.koUnsupportedNote("attackerKo", ["自分の技「テストれんぞくわざ」(多段技)"]),
+    );
+    expect(reverseNote(row)).toBeNull();
+    expect(row).toHaveTextContent(judgeScreenText.koGuaranteed(1));
+  });
+
+  test("U2 逆方向の印だけなら、相手の技の確定数の note だけを出す", async () => {
+    await submitWith([
+      matchup(0, { defenderKoUnsupported: [mark("move", "fixed_damage", "test-move-fixed")] }),
+      matchup(1),
+    ]);
+    const row = matchupRows()[0] as HTMLElement;
+    expect(forwardNote(row)).toBeNull();
+    expect(reverseNote(row)).toHaveTextContent(
+      judgeScreenText.koUnsupportedNote("defenderKo", ["相手候補の技「test-move-fixed」(固定ダメージ)"]),
+    );
+  });
+
+  test("U3 target は向きで読み替える(順方向 attacker_* は自分・逆方向 attacker_* は相手候補)", async () => {
+    await submitWith([
+      matchup(0, {
+        attackerKoUnsupported: [
+          mark("attacker_item", "unsupported_effect", ITEM.id),
+          mark("defender_ability", "unsupported_effect", ABILITY.id),
+        ],
+        defenderKoUnsupported: [
+          mark("attacker_item", "unsupported_effect", ITEM.id),
+          mark("defender_ability", "unsupported_effect", ABILITY.id),
+        ],
+      }),
+      matchup(1),
+    ]);
+    const row = matchupRows()[0] as HTMLElement;
+    const forward = forwardNote(row);
+    const reverse = reverseNote(row);
+    expect(forward).toHaveTextContent("自分の持ち物「テストもちもの」");
+    expect(forward).toHaveTextContent("相手候補の特性「テストとくせい」");
+    expect(reverse).toHaveTextContent("相手候補の持ち物「テストもちもの」");
+    expect(reverse).toHaveTextContent("自分の特性「テストとくせい」");
+    // 同じ文言が逆の向きで混ざらない。
+    expect(forward).not.toHaveTextContent("自分の特性");
+    expect(reverse).not.toHaveTextContent("自分の持ち物");
+  });
+
+  test("U4 複数の印は返した順のまま全て出す", async () => {
+    await submitWith([
+      matchup(0, {
+        attackerKoUnsupported: [
+          mark("move", "variable_power", MOVE_PHYS.id),
+          mark("move", "multi_hit", MOVE_MULTI.id),
+        ],
+      }),
+      matchup(1),
+    ]);
+    const text = forwardNote(matchupRows()[0] as HTMLElement)?.textContent ?? "";
+    const first = text.indexOf("自分の技「テストぶつりわざ」");
+    const second = text.indexOf("自分の技「テストれんぞくわざ」(多段技)");
+    expect(first).toBeGreaterThanOrEqual(0);
+    expect(second).toBeGreaterThan(first);
+  });
+
+  test("U4 マスタに無い ID は ID をそのまま出す", async () => {
+    await submitWith([
+      matchup(0, {
+        attackerKoUnsupported: [mark("attacker_item", "unsupported_effect", "test-item-unknown")],
+      }),
+      matchup(1),
+    ]);
+    expect(forwardNote(matchupRows()[0] as HTMLElement)).toHaveTextContent(
+      "自分の持ち物「test-item-unknown」",
+    );
+  });
+
+  test("U5 未知の reason / target でも崩れず ID を出す", async () => {
+    await submitWith([
+      matchup(0, {
+        attackerKoUnsupported: [
+          mark("move", "test_future_reason", MOVE_MULTI.id),
+          mark("test_future_target", "multi_hit", "test-future-id"),
+        ],
+      }),
+      matchup(1),
+    ]);
+    const note = forwardNote(matchupRows()[0] as HTMLElement);
+    expect(note).toHaveTextContent("自分の技「テストれんぞくわざ」");
+    expect(note).toHaveTextContent("test-future-id");
+    expect(note).toHaveTextContent("項目「test-future-id」");
+    expect(note?.textContent).not.toContain("undefined");
+  });
+
+  test("U6 両方向に印があれば note は 2 つ。候補ごとに違う印はその候補の行にだけ出る", async () => {
+    await submitWith([
+      matchup(0, {
+        attackerKoUnsupported: [mark("move", "multi_hit", MOVE_MULTI.id)],
+        defenderKoUnsupported: [mark("defender_item", "unsupported_effect", ITEM.id)],
+      }),
+      matchup(1, { defenderKoUnsupported: [mark("move", "fixed_damage", MOVE_SPEC.id)] }),
+    ]);
+    const rows = matchupRows();
+    const first = rows[0] as HTMLElement;
+    const second = rows[1] as HTMLElement;
+    expect(within(first).getAllByRole("note")).toHaveLength(2);
+    expect(forwardNote(first)).toHaveTextContent("テストれんぞくわざ");
+    expect(reverseNote(first)).toHaveTextContent("自分の持ち物「テストもちもの」");
+    expect(within(second).getAllByRole("note")).toHaveLength(1);
+    expect(forwardNote(second)).toBeNull();
+    expect(reverseNote(second)).toHaveTextContent("相手候補の技「テストとくしゅわざ」(固定ダメージ)");
+    expect(second).not.toHaveTextContent("テストれんぞくわざ");
+  });
+
+  test("U7 注意文は対応する確定数の行の直下にある", async () => {
+    await submitWith([
+      matchup(0, { attackerKoUnsupported: [mark("move", "multi_hit", MOVE_MULTI.id)] }),
+      matchup(1),
+    ]);
+    const row = matchupRows()[0] as HTMLElement;
+    const koLine = within(row).getByText(judgeScreenText.attackerKoLabel, { exact: false });
+    expect(koLine.nextElementSibling).toBe(forwardNote(row));
   });
 });

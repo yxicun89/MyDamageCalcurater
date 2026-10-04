@@ -44,6 +44,13 @@ final class CalcConditionsUITests: XCTestCase {
             element(app, "calcScreen").swipeUp()
             attempts += 1
         }
+        // 防御側のランクの行を「詳細」の末尾に足したため、画面の小さい機種では上へスクロールし過ぎて
+        // 上にある要素(攻撃側のランク)を通り越す。届かなければ下へ戻って探す(検証は変えない)。
+        attempts = 0
+        while !target.isHittable && attempts < Self.maxScrollAttempts * 2 {
+            element(app, "calcScreen").swipeDown()
+            attempts += 1
+        }
         XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)")
     }
 

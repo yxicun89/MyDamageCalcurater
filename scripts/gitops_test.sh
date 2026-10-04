@@ -766,6 +766,14 @@ test_manual_overlay_guard() {
     run_isolated "$dir" env FAKE_LIVE_DEPLOY_ANNOTATIONS='{"pokecalc.example/readmodel-hash":"abc"}' SERVICE="$svc" "${upper}_GITOPS_REPO_URL=$FAKE_ORIGIN" ./scripts/gitops/check-gitops.sh ready
     rc=$?
     if [ "$rc" -ne 0 ] && grep -q 'readmodel-hash' "$WORK/log/out" && grep -qE 'sync' "$WORK/log/out"; then ok; else ng "local-readmodel の annotation が残っていても ready 検査が通った(rc=$rc)"; fi
+
+    # (3b) --no-live(Application を最初に作るとき)は、手動 overlay の注釈が残っていても通る(でないと Application を作れず sync で戻せない)。
+    reset_log
+    run_isolated "$dir" env FAKE_LIVE_DEPLOY_ANNOTATIONS='{"pokecalc.example/readmodel-hash":"abc"}' SERVICE="$svc" "${upper}_GITOPS_REPO_URL=$FAKE_ORIGIN" ./scripts/gitops/check-gitops.sh ready --no-live
+    rc=$?
+    if [ "$rc" -eq 0 ]; then ok; else ng "--no-live でも注釈で失敗した(rc=$rc): $(cat "$WORK/log/out")"; fi
+    # --no-live は live の注釈検査だけを省く。pokedex の placeholder など他の検査は省かない(placeholder 検査は引き続き効く)。
+    if grep -q -- 'check-gitops.sh" ready --no-live' scripts/gitops/argocd-local-app.sh; then ok; else ng "argocd-local-app.sh が --no-live を渡していない"; fi
   done
 }
 

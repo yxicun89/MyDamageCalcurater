@@ -21,13 +21,14 @@ const (
 	routeSpeed
 	routeJudge
 	routeAssets
+	routeImages
 	routeWeb
 )
 
 // 名前は httpmetrics の path ラベルに使う(固定集合。routeNone は未知のパス)。
 var routeKindNames = map[routeKind]string{
 	routeNone: "none", routeHealthz: "healthz", routeCalc: "calc", routePokedex: "pokedex", routeRecord: "record",
-	routeTeam: "team", routeBalance: "balance", routeSpeed: "speed", routeJudge: "judge", routeAssets: "assets", routeWeb: "web",
+	routeTeam: "team", routeBalance: "balance", routeSpeed: "speed", routeJudge: "judge", routeAssets: "assets", routeImages: "images", routeWeb: "web",
 }
 
 // String は routeKind のラベル名("calc" 等)。
@@ -49,6 +50,7 @@ const (
 	prefixSpeed   = "/api/speed/"
 	prefixJudge   = "/api/judge/"
 	prefixAssets  = "/assets/"
+	prefixImages  = "/images/"
 )
 
 // reservedFirstSegments は先頭セグメントがこれと完全一致するパスを Web に流さない予約語(ADR-0205)。
@@ -56,7 +58,7 @@ const (
 //
 // metrics は公開入口に出さない運用エンドポイント(メトリクス専用ポートだけが持つ。issue #216)。Web の SPA
 // フォールバックに /metrics が流れて 200 text/html を返さないよう、予約して 404 にする。
-var reservedFirstSegments = map[string]bool{"api": true, "assets": true, "healthz": true, "internal": true, "metrics": true}
+var reservedFirstSegments = map[string]bool{"api": true, "assets": true, "healthz": true, "images": true, "internal": true, "metrics": true}
 
 // firstPathSegment はパスの先頭セグメントを返す("/api/calc" なら "api"。"/" や "" なら "")。
 // "//internal/..." のように空セグメントが先頭に来るパスは hasEmptySegment が先に 404 にするので、
@@ -116,6 +118,12 @@ func matchRoute(method, path string) (routeKind, bool) {
 			return routeNone, false
 		}
 		return routeAssets, true
+	case strings.HasPrefix(path, prefixImages):
+		// ローカル画像の配信(ADR-0807)。/images そのもの(末尾スラッシュ無し)は一致しない → 404。
+		if method != http.MethodGet && method != http.MethodHead {
+			return routeNone, false
+		}
+		return routeImages, true
 	default:
 		return routeNone, false
 	}

@@ -1,3 +1,4 @@
+import PokeCalcCore
 import SwiftUI
 
 /// 計算画面(P6-2a。ADR-0501「P6-2a」)の登録。
@@ -12,6 +13,7 @@ struct CalcFeature: AppFeature {
             CalcScreenView(
                 service: context.core.pokeCalc, teamStore: context.teamStore,
                 backendDescription: context.core.backendDescription,
-                frequentOpponentsService: context.core.frequentOpponents))
+                frequentOpponentsService: context.core.frequentOpponents,
+                favoritesService: context.services.resolve((any FavoritesService).self)))
     }
 }

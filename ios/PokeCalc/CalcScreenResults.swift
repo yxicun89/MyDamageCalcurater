@@ -32,7 +32,7 @@ struct ResultsSectionView: View {
                 ResultRowView(display: row, barColor: barColor, tierChanged: changedRowIDs.contains(row.id))
             }
             if !viewModel.itemOptions.isEmpty {
-                itemComparisonToggles
+                itemComparisonSection
             }
         }
         .onChange(of: viewModel.rows) { _, newRows in
@@ -58,22 +58,44 @@ struct ResultsSectionView: View {
         }
     }
 
+    /// 防御側がメガ種族のときは持ち物がストーンに固定されるので、比較の代わりに理由を出す(ADR-0509 §8)。
+    @ViewBuilder
+    private var itemComparisonSection: some View {
+        switch viewModel.defenderItemLock {
+        case .none:
+            itemComparisonToggles
+        case .locked:
+            lockedComparisonReason(MegaItemText.compareDisabledReason)
+        case .missing:
+            lockedComparisonReason(MegaItemText.missingReason)
+        }
+    }
+
+    private func lockedComparisonReason(_ text: String) -> some View {
+        Text(text)
+            .font(TextStyleToken.caption.font)
+            .foregroundStyle(ColorToken.textSecondary.color)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("defenderItemCompareLockReason")
+    }
+
     private var itemComparisonToggles: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Text("持ち物で比較")
+            Text(CalcScreenLabels.itemComparisonTitle)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
             // チップが折り返せるよう横スクロールにする(design.md「+持ち物のトグル」)。
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: SpacingToken.x2) {
-                    ForEach(viewModel.itemOptions, id: \.id) { item in
+                    ForEach(viewModel.defenderCompareItemOptions, id: \.id) { item in
                         let isSelected = viewModel.comparedDefenderItemIds.contains(item.id)
                         ChipButton(
                             title: item.nameJa,
                             isSelected: isSelected,
                             identifier: "defenderItemToggle-\(item.id)",
                             // 選択済みのチップは上限に達していても常に有効(解除できる。issue #110 A8・9章)。
-                            isEnabled: isSelected || !viewModel.comparedDefenderItemsReachedLimit
+                            isEnabled: isSelected || !viewModel.comparedDefenderItemsReachedLimit,
+                            accessibilityName: "\(CalcScreenLabels.itemComparisonTitle): \(item.nameJa)"
                         ) {
                             viewModel.scheduleLatest { await $0.toggleDefenderItemComparison(itemId: item.id) }
                         }
@@ -225,6 +247,8 @@ struct ChipButton: View {
     let isSelected: Bool
     let identifier: String
     var isEnabled: Bool = true
+    /// VoiceOver・XCUITest に見せる名前(省略は `title`)。同じ名前の別のボタン(メニューの項目)と区別したいときに使う。
+    var accessibilityName: String?
     let action: () -> Void
 
     var body: some View {
@@ -246,6 +270,7 @@ struct ChipButton: View {
         .buttonStyle(.plain)
         .disabled(!isEnabled)
         .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
+        .accessibilityLabel(accessibilityName ?? title)
         .accessibilityIdentifier(identifier)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -270,4 +295,10 @@ struct ErrorBannerView: View {
             .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityIdentifier(identifier)
     }
+}
+
+/// 計算画面の文言(複数の View で使うもの)。
+enum CalcScreenLabels {
+    /// 持ち物の比較欄の見出し(チップの読み上げ名にも使う)。
+    static let itemComparisonTitle = "持ち物で比較"
 }

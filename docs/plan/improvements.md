@@ -1,10 +1,10 @@
 ## 改善要望(/improve で追加)
 (ここに要望と対応状況を書く)
-- [ ] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。
+- [x] お気に入り(手動ピン留め)のCRUD API(requirements.md §2「あれば便利(マストではない)」)。(重複行。P5-3c の API は PR #592・ADR-0227 で実装済み)
   `favorites`テーブル・保持期間(540日)・全削除時の件数カウントはADR-0209で設計・実装済みだが、
   作成・削除・一覧のAPI自体は未着手(ADR-0209にも「recordにお気に入りのCRUDを足すときに検証する」と
   将来課題として記述されている)。Webレーンからの問い合わせ(2026-09-25。P5-5着手時)で未実装であることを
-  確認・回答済み。着手するかどうかはユーザー判断待ち(急ぎではない)
+  確認・回答済み。着手するかどうかはユーザー判断待ち(急ぎではない)。→ 2026-10-03 のユーザー指示「全レーンを100%に」で P5-3c として着手(ADR-0227)
 - [x] issue #271/#270(データレーンからの依頼。ADR-0121 §4・ADR-0123 §7。DECISIONS.md 2026-09-25)の API レーン
   担当分: `api/openapi.yaml` に `MasterMove.mechanisms: string[]`(必須・昇順・通常の技は空配列)と
   `CalcResult`(`BulkCalcRow.result` も同じ型)・`ReverseCandidate` への `unsupported: UnsupportedMark[]`
@@ -156,7 +156,7 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   実装中に見つけた退行も直した: 攻守入れ替えで種族の検索欄の名前が追従しない(`SpeciesSearchField.selectedNameJa`)、
   種族の解決待ちの間に打った逆算の観測が計算に反映されない(`ReverseScreen` の `latestObservationsRef`)。
   E2E は pokedex フィクスチャでオンライン→オフラインを確かめる(コンテナは CSP の下の WASM 計算を `container.spec.ts` だけで確認)
-- [ ] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:
+- [x] issue #274/#272 の API レーン担当分の残り: `defenderOverride.ranks: RankBlock` / `defenderOverride.status:(**実装済み**: PR #450・ADR-0216。`BulkCalcRequest.defenderOverride.ranks/status`。iOS・Web は生成物の再生成で追従可能)
   StatusCondition`(全行に一律で上書き)。abilityId(上記)とは独立に追加できる。engine 側の変更
   (`BulkInput`/`ReverseInput` へのオーバーライド追加。プリセット解決後・計算前に当てる)を伴うため
   ADR-0003 の test-first + 独立 critic の対象。優先度は低い(iOS レーンから「急ぎではない」と明記済み)
@@ -169,7 +169,9 @@ P1-6 独立レビューで出た軽微・任意の指摘(コードは未変更�
   触った分だけ `defenderOverride.ranks`(5項目)を要求に載せ(既定は従来とバイト同一)、API は特性(#272)と同じ `defenderOverride` に合成、
   WASM は素通し(特性は従来どおり `defenderAbilities`)。条件の置き場は `domain/calcConditions.ts`。防御側の状態異常は式に効かないので出さない。iOS は別レーン
   - [x] **P5-5c よく計算する相手(チップ。ADR-0317)**: recordClient(`web/src/record/`)・CalcScreen の結果の下のチップ(マウント時1回取得・失敗/0件は黙って非表示)・App はオンラインのときだけ接続・`SpeciesSearchField` に任意 prop `selectedName`。履歴一覧(API 無し)は対象外
-  - [ ] **P5-5d 端末データの削除 UI**: record-svc の API と ADR-0209 §8 の文言
 - [x] issue #288 のデータレーン分(ADR-0136): 技の対象(`moves.target`。Showdown の15種の文字列のまま・NULL 可・CHECK。migration 000010)を取得(fetch-showdown/fetch-calc)・照合(全体技の食い違いは攻撃技 Blocker)・投入・`master.MoveTarget`(`IsSpread`)まで。engine・WASM・read model は不変。`MasterMove`/公開 API への追加は API レーンへ依頼。取得物は毎回作り直す(古い形で止まらないことをテストで固定)
 - [x] issue #288 の API レーン分(ADR-0223): 内部 API `MasterMove.target`(必須キー・nullable・値は Showdown の文字列のまま)→ calc-svc の `buildMoves` → `master.Move` が `engine.Move.Target`(single/spread/不明は空)に写す。公開 `Move.target`(省略可・single/spread。NULL はキーごと省く・未知の値は 503)を getMove・getMovesByIds・searchMoves に追加。ダブルの `move_target_unknown` の印は対象が不明な技だけに付く。シングル・ゴールデンは不変。Web の `exportSnapshot` は `target: null`
 - [x] issue 514(API レーン。gateway): `/api/*` の上流が JSON でない 5xx(502 text/html・504 text/plain 等)を返したら、503 `upstream_unavailable` の Error JSON に正規化(ADR-0802 追記)。判定は `newReverseProxy` の `apiUpstream`。JSON の 5xx・4xx・assets・Web は素通し。上流の本文・`Retry-After` は引き継がず、専用 WARN に上流のステータス・Content-Type を残す。`upstream_nonjson_test.go`(5 上流×正規化7件+素通し5件)。実装を外すと正規化7件が落ちることを確認。範囲外: Traefik 直結の 502/504。
+- [x] 持ち物の役割とメガストーン判定の API(データレーン。ADR-0175): searchItems に `roles`・`isMegaStone`、getSpecies に `baseSpeciesKey`・`baseSpeciesNameJa` を常に出す。Web・iOS の絞り込み・表示は各レーン
+- [x] 持ち物の役割とメガストーン表示の Web 分(ADR-0326。ユーザーの実使用の不具合報告: メガストーンの英語表記・意味のない持ち物): `web/src/domain/itemRoles.ts` の `itemsForRole` で計算(攻撃側 attacker・防御側と候補比較 defender)・逆算(自分は観測した側の反対・相手の候補は相手の側)・判定と調整(either)・構築の編集(any。メガストーンだけ外す)の持ち物欄を絞る。メガストーンは選択肢に出さず、固定中は「{基本種名}のメガストーン」(基本種名が無ければ「メガストーン」)。攻守入れ替え・逆算の与えた/受けたの切り替えで役割に合わなくなった持ち物は「持ち物なし」に戻して `role="status"` で通知。`roles`・`isMegaStone` は engine・calc-svc の要求に載せない(`toEngineItem`)。オンラインのマスタ写像とキャッシュ版 2→3。iOS は同じ語にそろえる(iOS レーンに残る)
+- [x] 持ち物の役割とメガストーン表示の iOS 分(ADR-0509。同じ不具合報告): `ItemRoleFilter` で計算(攻撃側 attacker・防御側の比較 defender)・逆算(自分と相手の候補は側ごと)・判定・調整(either)の持ち物欄を絞り、メガ種族は持ち物をメガストーンに固定(操作不可・「{基本種名}のメガストーン」・理由の文)。ストーンの `nameJa` は画面に出さない。構築の保存データはメガ種族に別の持ち物があれば開いたときに直して通知(自動保存しない)。ADR-0501「P6-19」の約束は L1・L2 で保つ。構築は役割で絞らずメガストーンだけ外す(Web と同じ)。Web との意図した違い(調整もストーン固定・外れた値は残して通知なし)は ADR-0509 に記載

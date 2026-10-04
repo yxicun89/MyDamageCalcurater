@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc speed API
-  version: 0.5.0
+  version: 0.6.0
   description: |
     素早さ比較の独立サービスの契約。
     SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
@@ -267,6 +267,11 @@ components:
           type: string
           enum:
             - ok
+        dataVersion:
+          type: string
+          description: |
+            Version of the read model this process loaded (metadata.json next to the read model, ADR-0138).
+            Omitted when the read model has no metadata.json (unknown). Public master data version only.
     PokemonListResponse:
       type: object
       additionalProperties: false

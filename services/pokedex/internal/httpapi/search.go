@@ -203,11 +203,18 @@ func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) er
 	var chart engine.TypeChart // 効果を持つ行があるときだけ読む
 	out := make([]api.Item, 0, len(rows))
 	for _, r := range rows {
-		effect, err := publicEffect(reqCtx, tx, &chart, r.Effect, master.DecodeItemEffect)
+		effect, decoded, err := publicEffect(reqCtx, tx, &chart, r.Effect, master.DecodeItemEffect)
 		if err != nil {
 			return unavailable("SearchItems/effect:"+r.ID, err)
 		}
-		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa, Effect: effect})
+		// ItemRoles は nil を返さない(空でも JSON で [] を出す)。isMegaStone は常にキーごと出す(ADR-0175)。
+		roles := master.ItemRoles(decoded, r.IsMegaStone)
+		apiRoles := make([]api.ItemRole, 0, len(roles))
+		for _, role := range roles {
+			apiRoles = append(apiRoles, api.ItemRole(role))
+		}
+		isMegaStone := r.IsMegaStone
+		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa, Effect: effect, Roles: &apiRoles, IsMegaStone: &isMegaStone})
 	}
 	// 読み終えたらすぐ閉じて接続を返す(応答の書き込みを待たない)。エラー経路は defer の Rollback が閉じる。
 	if err := tx.Commit(); err != nil {
@@ -247,7 +254,7 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 	abilities := make([]api.Ability, 0, len(abilityRows))
 	var chart engine.TypeChart // 効果を持つ行があるときだけ読む
 	for _, a := range abilityRows {
-		effect, err := publicEffect(reqCtx, tx, &chart, a.Effect, master.DecodeAbilityEffect)
+		effect, _, err := publicEffect(reqCtx, tx, &chart, a.Effect, master.DecodeAbilityEffect)
 		if err != nil {
 			return unavailable("GetSpecies/effect:"+a.ID, err)
 		}
@@ -269,10 +276,24 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 	}
 	isMega := sp.IsMega
 	detail.IsMega = &isMega
+	// 基本種の名前も同じ読み取り専用トランザクションで読む(1スナップショット。ADR-0127・ADR-0175 §3)。
+	var baseNameJa *string
+	if sp.BaseSpeciesKey.Valid {
+		base, err := tx.GetSpeciesByKey(reqCtx, sp.BaseSpeciesKey.String)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return unavailable("GetSpecies/GetBaseSpecies", err)
+		}
+		if err == nil {
+			baseNameJa = &base.NameJa
+		}
+	}
 	if err := tx.Commit(); err != nil {
 		return unavailable("GetSpecies/Commit", err)
 	}
-	return ctx.JSON(http.StatusOK, speciesDetailBody{SpeciesDetail: detail, RequiredItemId: nullStringPtr(sp.RequiredItemID)})
+	return ctx.JSON(http.StatusOK, speciesDetailBody{
+		SpeciesDetail: detail, RequiredItemId: nullStringPtr(sp.RequiredItemID),
+		BaseSpeciesKey: nullStringPtr(sp.BaseSpeciesKey), BaseSpeciesNameJa: baseNameJa,
+	})
 }
 
 // speciesDetailBody は SpeciesDetail の応答本文。requiredItemId は契約上 optional なので生成型は omitempty だが、
@@ -280,6 +301,9 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 type speciesDetailBody struct {
 	api.SpeciesDetail
 	RequiredItemId *string `json:"requiredItemId"`
+	// BaseSpeciesKey・BaseSpeciesNameJa も同じ扱い(ADR-0175 §3)。
+	BaseSpeciesKey    *string `json:"baseSpeciesKey"`
+	BaseSpeciesNameJa *string `json:"baseSpeciesNameJa"`
 }
 
 // GetMove は GET /api/pokedex/moves/{key}。使用可能集合の外の技も返す(絞り込みは検索の仕事)。
@@ -362,22 +386,24 @@ func (s *Server) ListNatures(ctx *echo.Context, params api.ListNaturesParams) er
 // 厳格に検証してから、数値の字面を保ったまま api.MasterEffect にする。検証に通らなければ error
 // (呼び出し側が 503 にする。error の文面は本文に出ない)。相性表は最初に必要になったときだけ chart に読む。
 func publicEffect[T any](ctx context.Context, q store.Querier, chart *engine.TypeChart, rawp *json.RawMessage,
-	decode func([]byte, engine.TypeChart) (*T, error)) (*api.MasterEffect, error) {
+	decode func([]byte, engine.TypeChart) (*T, error)) (*api.MasterEffect, *T, error) {
 	if rawp == nil {
-		return nil, nil // 効果の行が無い
+		return nil, nil, nil // 効果の行が無い
 	}
 	raw := *rawp
 	if *chart == (engine.TypeChart{}) {
 		c, err := loadTypeChart(ctx, q)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		*chart = c
 	}
-	if _, err := decode(raw, *chart); err != nil {
-		return nil, err
+	decoded, err := decode(raw, *chart)
+	if err != nil {
+		return nil, nil, err
 	}
-	return masterEffectFor(raw)
+	me, err := masterEffectFor(raw)
+	return me, decoded, err
 }
 
 // loadTypeChart は types / type_chart から engine.TypeChart を作る(services/internal/master 経由)。
