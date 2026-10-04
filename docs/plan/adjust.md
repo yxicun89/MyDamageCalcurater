@@ -15,4 +15,6 @@
 - [x] AJ7 iOS 版(Web で確認後。別タスクで切る)
 - [x] AJ8 Web: 調整画面のメガ固定(F-10。ADR-0331 §1。自分・相手のストーンを要求に送る)
 - [x] AJ9 Web: 「目標から振り方を決める」モードと `adjustGoals` クライアント(F-11 段階 A。ADR-0331 §5〜§7。`ADJUST_GOALS_ENABLED` は false でモードは非表示)
-- [ ] AJ10 engine・calc-svc: 複数目標の探索と `POST /api/calc/adjust/goals`(F-11 段階 B。engine ADR を別に書く)。入ったら `ADJUST_GOALS_ENABLED` を true にし、radio の数を固定する既存テストの期待値を 6 へ改める
+- [x] AJ10 engine・calc-svc: 複数目標の探索と `POST /api/calc/adjust/goals`(F-11 段階 B。ADR-0177)。入ったら `ADJUST_GOALS_ENABLED` を true にし、フラグに依存する既存テストの期待値を改める
+  (直すテストは3件: `AdjustScreen.test.tsx` S9 の radio の数(6・先頭 `goals`)、`adjustGoals.test.ts` P4、`AdjustScreen.goals.test.tsx` G1。ADR-0331 §結果)
+  - ユーザーの判断事項: すべては満たせないとき、目標モードの組は配分(allocation)と異なりうる(しきい値で打ち止め・目標の順を優先。ADR-0177 §5 の2例)。既定案は「この差を許容する」
