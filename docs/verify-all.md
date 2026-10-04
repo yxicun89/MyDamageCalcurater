@@ -24,5 +24,5 @@ make pokedex-export-k3d
 
 ## 他レーンの手順書
 
-[runbooks/balance.md](runbooks/balance.md)・[runbooks/speed.md](runbooks/speed.md)・[runbooks/observability.md](runbooks/observability.md)・[runbooks/ios-device-install.md](runbooks/ios-device-install.md)。
+[runbooks/balance.md](runbooks/balance.md)・別アプリ「欲しいものリスト」は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)・[runbooks/speed.md](runbooks/speed.md)・[runbooks/observability.md](runbooks/observability.md)・[runbooks/ios-device-install.md](runbooks/ios-device-install.md)。
 項目と実装の対応は [impl/verify-mapping.md](impl/verify-mapping.md)。
