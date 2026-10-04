@@ -6,7 +6,7 @@
 - 関連: docs/usability-round2.md F-10・F-11(ユーザー決定 2026-10-04)、ADR-0150(調整の探索・配分)、ADR-0250(調整 API の契約)、
   ADR-0319(Web の調整画面)、ADR-0320・ADR-0326・ADR-0328(メガ固定・持ち物の役割・ストーンの名前)、ADR-0509(iOS のメガ固定)、
   ADR-0107(技の追加効果のランク変化)、ADR-0700 §6-5・docs/judge-design.md §4-5(判定の素早さ)、docs/speed-design.md §5(素早さのプリセット)、
-  ADR-0300 §5・ADR-0009(攻撃側・防御側のプリセット)
+  ADR-0300 §5・ADR-0009(攻撃側・防御側のプリセット)、ADR-0177(段階 B の engine の探索と calc-svc。§4 の提案を決定)
 
 ## 背景
 
@@ -201,6 +201,9 @@ E2E: 調整は API 専用の画面で、オフラインの E2E ではマスタ�
 ## 結果
 
 - 既存のモードと契約は変えない(足すだけ)。`AdjustModeKey` に `goals` が増える。無効のとき(既定)の radio は今の5つのまま(既存テストは変えない)。
-  段階 B で有効にするときは、radio の数を固定する既存テストの期待値を 6(先頭に `goals`)へ改める(仕様の変更)。
-- 段階 B が main に入るまで `ADJUST_GOALS_ENABLED` は false で、利用者には今の画面のまま見える。
+  段階 B で有効にするときは、フラグに依存する既存テストの期待値を改める(仕様の変更)。直すテストは次の3件:
+  - `AdjustScreen.test.tsx` S9 の「モードは「調整の内容」の radio group で…」(radio の数を 6、先頭に `goals`)
+  - `adjustGoals.test.ts` P4 の「段階 B…モードは出さない」(`ADJUST_GOALS_ENABLED` が true)
+  - `AdjustScreen.goals.test.tsx` G1 の「無効(既定)なら…出さない」(既定で出す。無効の経路は `goalsEnabled={false}` で確かめる)
+- 段階 B が main に入るまで `ADJUST_GOALS_ENABLED` は false で、利用者には今の画面のまま見える(ADR-0177 で true にした)。
 - ADR-0250 §1 の表に `adjustGoals`(HTTP のみ)が加わる。ADR-0326 の「調整にメガ固定が無い」は解消する。
