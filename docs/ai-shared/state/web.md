@@ -216,3 +216,4 @@ iOS はトークン一覧を `decisions/2026-10-04-web-visual-base-pop-tokens.md
 Next: 実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-04-web-team-rebuild.md` の語に揃える。
 Next(F-09 お気に入りの復元 / I-web-8): 実装済み・コミット前(ADR-0333 採用)。残りは PR 化のみ。Web は一括計算(bulk)で復元し、iOS は calcDamage(単発)で復元する差を `decisions/2026-10-04-web-favorite-calc-restore.md` に書いた。
 次は I-web-9(F-02 技の並び)。技の選択欄に、お気に入りの技を戻せなかったときの未選択の選択肢(`favoritesRestoreText.moveUnselectedOption`)を足した(F-02 で技の選択欄を触るときに残すこと)。
+Next(F-02 技の並び / I-web-9): 実装済み・コミット前(ADR-0335 採用)。残りは PR 化のみ。iOS は `decisions/2026-10-04-web-move-sort.md` の語・照合・保存に揃える。次は I-web-10(F-06 素早さ表)。

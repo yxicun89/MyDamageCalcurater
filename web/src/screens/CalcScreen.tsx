@@ -42,7 +42,7 @@ import {
   type CalcConditions,
 } from "../domain/calcConditions";
 import { abilityNamesLabel } from "../domain/abilityLabels";
-import { formatEffectiveness, formatKO, formatMoveCategory, formatPercentRange } from "../domain/format";
+import { formatEffectiveness, formatKO, formatPercentRange } from "../domain/format";
 import {
   itemIdAfterSpeciesChange,
   lockedOrChosenItem,
@@ -112,6 +112,8 @@ import { favoritesRestoreText } from "../i18n/favorites";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
+import { useMoveSort } from "../app/useMoveSort";
+import { MoveOptions, MoveSortChips } from "./MoveSortControls";
 import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
@@ -1174,7 +1176,13 @@ export function CalcScreen({
         />
       </div>
 
-      <MoveSelect moves={attackerMoves} value={moveId} onChange={setMoveId} disabled={!movesAvailable} />
+      <MoveSelect
+        moves={attackerMoves}
+        types={master.typeChart.types}
+        value={moveId}
+        onChange={setMoveId}
+        disabled={!movesAvailable}
+      />
       {!movesAvailable && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
       {attackerSpecies !== null && capabilities.moves && attackerMoves.length === 0 && (
         <p className="calc-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
@@ -1631,6 +1639,8 @@ function NatureModifierOption({ name, modifier, checked, disabled, onSelect }: N
 
 interface MoveSelectProps {
   readonly moves: readonly Move[];
+  /** マスタのタイプ表の並び(タイプ順の群の並び)。 */
+  readonly types: readonly string[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
   /**
@@ -1640,14 +1650,16 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ。learnset の順のまま、分類と威力(変化技は威力を出さない)を併記する。 */
-function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
+/** 技セレクタ。並びはチップ群で選ぶ(既定は learnset の順)。分類と威力(変化技は威力を出さない)を併記する。 */
+function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
   const moveSelectId = useId();
+  const [order] = useMoveSort();
   return (
     <>
       <label className="calc-screen__label" htmlFor={moveSelectId}>
         {calcScreenText.moveLabel}
       </label>
+      <MoveSortChips variant="calc" />
       <select
         id={moveSelectId}
         className="calc-screen__move"
@@ -1658,22 +1670,7 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
           onChange(event.target.value);
         }}
       >
-        {value === "" && moves.length > 0 && (
-          // お気に入りの技を戻せなかったとき(ADR-0333 §4): 別の技に見えないよう、未選択を表す選択肢を出す。
-          <option value="" disabled>
-            {favoritesRestoreText.moveUnselectedOption}
-          </option>
-        )}
-        {moves.map((move) => (
-          <option key={move.id} value={move.id}>
-            {move.nameJa}
-            {calcScreenText.moveOptionSeparator}
-            {formatMoveCategory(move.category)}
-            {move.category === "status"
-              ? ""
-              : `${calcScreenText.moveOptionSeparator}${calcScreenText.movePowerLabel}${String(move.power)}`}
-          </option>
-        ))}
+        <MoveOptions moves={moves} types={types} order={order} value={value} showUnselected />
       </select>
     </>
   );

@@ -34,7 +34,7 @@ import {
   resolveDefenderPreset,
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
-import { formatMoveCategory, formatPercentRange } from "../domain/format";
+import { formatPercentRange } from "../domain/format";
 import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
 import {
   canAddObservation,
@@ -109,6 +109,8 @@ import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { useMoveSort } from "../app/useMoveSort";
+import { MoveOptions, MoveSortChips } from "./MoveSortControls";
 import "./ReverseScreen.css";
 
 /**
@@ -796,7 +798,13 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         />
       </div>
 
-      <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!movesAvailable} />
+      <MoveSelect
+        moves={moveOptions}
+        types={master.typeChart.types}
+        value={moveId}
+        onChange={selectMove}
+        disabled={!movesAvailable}
+      />
       {!movesAvailable && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
       {moveSourceSpecies !== null && capabilities.moves && moveOptions.length === 0 && (
         <p className="reverse-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
@@ -1120,6 +1128,8 @@ function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPrese
 
 interface MoveSelectProps {
   readonly moves: readonly Move[];
+  /** マスタのタイプ表の並び(タイプ順の群の並び)。 */
+  readonly types: readonly string[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
   /**
@@ -1129,14 +1139,16 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。learnset の順のまま出す。 */
-function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
+/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。並びはチップ群で選ぶ(既定は learnset の順)。 */
+function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
   const moveSelectId = useId();
+  const [order] = useMoveSort();
   return (
     <>
       <label className="reverse-screen__label" htmlFor={moveSelectId}>
         {calcScreenText.moveLabel}
       </label>
+      <MoveSortChips variant="reverse" />
       <select
         id={moveSelectId}
         className="reverse-screen__move"
@@ -1147,16 +1159,7 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
           onChange(event.target.value);
         }}
       >
-        {moves.map((move) => (
-          <option key={move.id} value={move.id}>
-            {move.nameJa}
-            {calcScreenText.moveOptionSeparator}
-            {formatMoveCategory(move.category)}
-            {move.category === "status"
-              ? ""
-              : `${calcScreenText.moveOptionSeparator}${calcScreenText.movePowerLabel}${String(move.power)}`}
-          </option>
-        ))}
+        <MoveOptions moves={moves} types={types} order={order} value={value} />
       </select>
     </>
   );
