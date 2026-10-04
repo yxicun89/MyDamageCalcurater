@@ -1,4 +1,4 @@
-# ADR-0331: Web のビジュアルの基盤(ポップ・カラフル)— F-12 / I-web-6
+# ADR-0334: Web のビジュアルの基盤(ポップ・カラフル)— F-12 / I-web-6
 
 - 状態: 採用(2026-10-04)
 - 関連: docs/usability-round2.md F-12(原文19)、docs/plan/improvements/web.md I-web-6、docs/design.md、
@@ -185,7 +185,7 @@ Playwright(chromium)で `/calc /speed /team /reverse /balance /favorites /about`
 
 ## 付録: iOS 向けトークン一覧の下書き(実装後に docs/ai-shared/decisions/2026-10-0X-web-visual-base-pop-tokens.md として置く)
 
-> Web(F-12、ADR-0331)で次のトークンを足した。iOS は `PokeCalcDesign.swift` に同じ名前(camelCase)・同じ値で足す(ADR-0300 §4)。
+> Web(F-12、ADR-0334)で次のトークンを足した。iOS は `PokeCalcDesign.swift` に同じ名前(camelCase)・同じ値で足す(ADR-0300 §4)。
 >
 > | Web(CSS 変数) | iOS(案) | ライト | ダーク |
 > |---|---|---|---|

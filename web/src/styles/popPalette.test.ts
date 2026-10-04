@@ -1,4 +1,4 @@
-// F-12(I-web-6、ADR-0331): ポップ・カラフルな見た目の基盤のトークン。
+// F-12(I-web-6、ADR-0334): ポップ・カラフルな見た目の基盤のトークン。
 // 値の正は docs/design.md「ポップ配色」(と「文字」「形・余白」「動き」の追記)。期待値は design.md を毎回読んで作り、
 // tokens.css の写しを持たない(コーディング規約 §2。tokens.test.ts と同じ作法)。
 // ここで固定するのは「どの名前のトークンが要るか」と「どの組み合わせで AA を満たすか」だけ。値は design.md が正。
@@ -55,7 +55,7 @@ const explicitDark = declarationMap(
 );
 
 /**
- * ADR-0331 §1 で決めたトークン名(design.md「ポップ配色」の表に、この順で並べる)。
+ * ADR-0334 §1 で決めたトークン名(design.md「ポップ配色」の表に、この順で並べる)。
  * 名前は iOS と共有する(ADR-0300 §4)。`-ink` で終わる名前は使わない(タイプバッジの文字色専用。tokens.test.ts)。
  */
 const REQUIRED_POP_TOKENS = [
@@ -106,7 +106,7 @@ function expectVariable(map: Map<string, string>, name: string): string {
 }
 
 describe("design.md「ポップ配色」の表", () => {
-  test("ADR-0331 の名前がこの順で並ぶ(ライト・ダークの列を持つ)", () => {
+  test("ADR-0334 の名前がこの順で並ぶ(ライト・ダークの列を持つ)", () => {
     expect(popTokens().map((token) => token.token)).toEqual([...REQUIRED_POP_TOKENS]);
   });
 
@@ -137,7 +137,7 @@ describe("tokens.css はポップ配色を持つ(ライト / ダーク)", () => 
 });
 
 /**
- * ADR-0331 §1 の「組み合わせ表」。[前景, 背景, 最低比, 用途]。
+ * ADR-0334 §1 の「組み合わせ表」。[前景, 背景, 最低比, 用途]。
  * 4.5 は通常文字(SC 1.4.3)、3 は UI 部品の境界・フォーカスの印(SC 1.4.11)。
  * brand.accent は塗りの装飾にだけ使い(文字色・境界線には使わない)、その上の文字は on.accent にする。
  */
