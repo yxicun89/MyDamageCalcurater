@@ -238,5 +238,67 @@ func (e AbilityEffect) validate() error {
 			return err
 		}
 	}
+	return e.validateStage1()
+}
+
+// validateStage1 は特性の段階1の項目(ADR-0176)の値域を確かめる。
+func (e AbilityEffect) validateStage1() error {
+	if c := e.TypeConvert; c != nil {
+		if c.From == TypeNone || c.To == TypeNone {
+			return errors.New("TypeConvert の From・To は必須")
+		}
+		if c.From == c.To {
+			return fmt.Errorf("TypeConvert の From と To が同じ: %q", c.From)
+		}
+		if err := validateModifier("TypeConvert.PowerMod", c.PowerMod, false); err != nil {
+			return err
+		}
+	}
+	for i, pm := range e.PowerMods {
+		name := fmt.Sprintf("PowerMods[%d]", i)
+		switch pm.Condition {
+		case PowerConditionMaxBasePower:
+			if pm.MaxPower < 1 || pm.MoveType != TypeNone {
+				return fmt.Errorf("%s: max_base_power は MaxPower 1 以上・MoveType 空", name)
+			}
+		case PowerConditionMoveType:
+			if pm.MoveType == TypeNone || pm.MaxPower != 0 {
+				return fmt.Errorf("%s: move_type は MoveType 必須・MaxPower 0", name)
+			}
+		default:
+			return fmt.Errorf("%s: 未知の条件 %q", name, pm.Condition)
+		}
+		if pm.Modifier == Modifier4096 {
+			return fmt.Errorf("%s.Modifier は中立(%d)不可", name, Modifier4096)
+		}
+		if err := validateModifier(name+".Modifier", pm.Modifier, false); err != nil {
+			return err
+		}
+	}
+	if (e.AuraType == TypeNone) != (e.AuraMod == 0) {
+		return errors.New("AuraType と AuraMod は組で指定する")
+	}
+	if err := validateModifier("AuraMod", e.AuraMod, true); err != nil {
+		return err
+	}
+	if err := validateAbilityStatMods("StatMods", e.StatMods, StatAtk, StatDef, StatSpA, StatSpD); err != nil {
+		return err
+	}
+	if err := validateAbilityStatMods("SeparateStatMods", e.SeparateStatMods, StatAtk, StatSpA); err != nil {
+		return err
+	}
+	return validateModifier("CritDamageMod", e.CritDamageMod, true)
+}
+
+// validateAbilityStatMods は特性の実数値の倍率の map のキーが allowed にあり、値が範囲内かを確かめる。
+func validateAbilityStatMods(name string, mods map[StatKey]int, allowed ...StatKey) error {
+	for _, k := range slices.Sorted(maps.Keys(mods)) {
+		if !slices.Contains(allowed, k) {
+			return fmt.Errorf("%s に %q は書けない", name, k)
+		}
+		if err := validateModifier(name+"["+string(k)+"]", mods[k], false); err != nil {
+			return err
+		}
+	}
 	return nil
 }

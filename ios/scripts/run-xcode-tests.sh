@@ -6,6 +6,9 @@
 # xcodebuild の終了コードに加え、次のどれかでも失敗にする(スキップや空実行を成功と数えないため):
 #   - 実行したテストが 0 件
 #   - 失敗・スキップ・想定内の失敗(expected failure)が 1 件以上
+#
+# 同じ Mac で複数のセッションが同時にシミュレータでテストすると CPU を奪い合って途中で落ちるため(F-15)、
+# 排他ロック(xcode-test-lock.sh)で1つずつ実行する。他が実行中なら順番を待つ。
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -19,8 +22,15 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=ios/scripts/xcode-env.sh
 source "$script_dir/xcode-env.sh"
 
+# shellcheck source=ios/scripts/xcode-test-lock.sh
+source "$script_dir/xcode-test-lock.sh"
+
 work_dir="$(mktemp -d)"
-trap 'rm -rf "$work_dir"' EXIT
+trap 'xcode_test_lock_release; rm -rf "$work_dir"' EXIT
+case "$label" in
+  *ui*) echo "$label: 所要時間の目安は 20〜50 分です(件数・機種・Mac の混み具合による)。他のセッションがテスト中なら、終わるまで順番を待ちます" >&2 ;;
+esac
+xcode_test_lock_acquire "$label"
 result_bundle="$work_dir/result.xcresult"
 summary_json="$work_dir/summary.json"
 
