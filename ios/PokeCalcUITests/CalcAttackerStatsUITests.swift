@@ -102,6 +102,20 @@ final class CalcAttackerStatsUITests: XCTestCase {
         waitForExpectations(timeout: Self.existenceTimeout)
     }
 
+    /// スクロール直後はタップが慣性で外れることがあるため、選択されなければ一度だけ押し直す(期待値は弱めない)。
+    private func tapUntilSelected(_ app: XCUIApplication, _ target: XCUIElement) {
+        scrollUntilHittable(app, target)
+        tapUpperPart(target)
+        if !target.waitForExistence(timeout: 1) || !NSPredicate(format: "isSelected == true").evaluate(with: target) {
+            Thread.sleep(forTimeInterval: 1)
+            if !target.isSelected {
+                scrollUntilHittable(app, target)
+                tapUpperPart(target)
+            }
+        }
+        waitForPredicate("isSelected == true", target)
+    }
+
     private func waitUntilGone(_ target: XCUIElement) {
         waitForPredicate("exists == false", target)
     }
@@ -232,9 +246,7 @@ final class CalcAttackerStatsUITests: XCTestCase {
 
         // 下降は選べて、結果の行は出続ける。
         let atkDown = element(app, "attackerNature-atk-down")
-        scrollUntilHittable(app, atkDown)
-        tapUpperPart(atkDown)
-        waitForPredicate("isSelected == true", atkDown)
+        tapUntilSelected(app, atkDown)
         XCTAssertTrue(element(app, Self.firstRowID).waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertFalse(element(app, "calcErrorMessage").exists)
     }
