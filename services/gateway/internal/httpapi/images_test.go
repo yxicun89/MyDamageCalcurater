@@ -1,6 +1,6 @@
 package httpapi
 
-// P8-1(ADR-0807)の gateway テスト: `/images/*` はローカルのディレクトリ(Config.ImagesDir。環境変数
+// P8-1(ADR-0808)の gateway テスト: `/images/*` はローカルのディレクトリ(Config.ImagesDir。環境変数
 // GATEWAY_IMAGES_DIR)から manifest.json と WebP だけを配信する。画像が無い状態(ImagesDir 未設定・
 // ファイル無し)でも gateway は壊れず、404 の JSON を返す(クライアントはエンブレムにフォールバックする)。
 // 実装前なので、このファイルはコンパイルできず失敗する(Config.ImagesDir が無い)。

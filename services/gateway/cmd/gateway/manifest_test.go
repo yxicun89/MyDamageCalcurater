@@ -194,7 +194,7 @@ func TestManifestGatewayWebURLOnlyInLocal(t *testing.T) {
 	}
 }
 
-// ADR-0807(k3d への画像配線): hostPath は local overlay だけ。base には無く、local では読み取り専用で
+// ADR-0808(k3d への画像配線): hostPath は local overlay だけ。base には無く、local では読み取り専用で
 // GATEWAY_IMAGES_DIR と volumeMount の mountPath が一致し、DirectoryOrCreate(空でも起動)。
 func TestManifestGatewayImagesHostPathOnlyInLocal(t *testing.T) {
 	b := deploytest.BaseDeployment(t, gatewayService)

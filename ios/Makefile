@@ -24,6 +24,7 @@ ios-test: ios-gen ios-lint ios-gen-check ios-check-request-limits ios-test-unit 
 .PHONY: ios-lint
 ios-lint: ios-gen ## ios/scripts の構文チェック(ルートの make lint は scripts/*.sh しか見ないため個別に持つ)
 	@for script in ios/scripts/*.sh; do bash -n "$$script" || exit; done
+	@bash ios/scripts/xcode-test-lock_test.sh
 
 .PHONY: ios-check-request-limits
 ios-check-request-limits: ios-gen ## RequestLimits(件数上限の写し)が api/openapi.yaml の maxItems と一致するか(issue #110)

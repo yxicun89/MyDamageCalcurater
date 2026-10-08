@@ -4249,7 +4249,7 @@ View の色そのものは単体で検証しづらいため、ink の選択を�
 - design.md の `typeInk(_:)` に当たる Swift 側の名前は `ink(forTypeID:)`(design.md は変更しない)。`ios/README.md` に追記すべき項目は無い。
 - 結果: `swift test` 全件成功(新規 7 件を含む)。critic PASS(軽微のみ。plan.md の項目追記と本章の更新を反映)。
 
-## P8-1c の受け入れ条件(ポケモン画像。2026-10-03。設計は ADR-0508、契約は ADR-0807)
+## P8-1c の受け入れ条件(ポケモン画像。2026-10-03。設計は ADR-0508、契約は ADR-0808)
 
 ### 受け入れ条件(検証可能な形)
 
@@ -4556,3 +4556,78 @@ XCUITest 実装前の結果: iPhone 17e は 6 件中 失敗 3(新規 2 + 期待�
 - `swift test`: 1395 件 失敗 0。`make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing` 成功。
 - XCUITest(MegaItemLockUITests・MegaStoneOfficialNameUITests 計 6 件): iPhone 17e は 6 件成功。iPhone 18 Pro は 5 件成功・1 件失敗(既知の `testLockReasonFitsAtAX5`。触っていない)。
 - 関連の既存 XCUITest(17e): CalcScreenUITests・UnsupportedMarksUITests 成功。TeamScreenUITests の `testMemberSpeciesAndMoveSlotSearchSheetsFilterAndSelect` が 1 回だけ「シートが閉じる」で失敗したが、単独の再実行で成功(メガと無関係の時間依存)。
+
+## お気に入りの読み込みの受け入れ条件(2026-10-04。設計は ADR-0513、お気に入り表示は ADR-0511、構築から呼ぶ処理は本書「P6-2d」。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+Web にはお気に入りの読み込みがまだ無い(追加ボタンだけ)ので、iOS の「構築から呼び出す」(P6-2d)に揃えて先に決めた(ADR-0513 背景・§10)。
+
+### 受け入れ条件(検証可能な形)
+
+- **AC-X(最優先)**: 既存の `swift test`・全 XCUITest が無変更で通る。モックの既定(`POKECALC_MOCK_FAVORITES` 未設定=空・`list`=2件)は変えない。既存テスト・identifier は変えない。
+  識別子は追加のみ。`api/openapi.yaml`・Generated・services は触らない。実在ポケモンの実データは使わない(架空の 9001〜9004・`test-*`・`stub-*`)。
+- **AC-1 写像**(`FavoriteLoad.plan`。純粋関数): 攻撃側は性格+SP(組)・特性・持ち物、防御側は特性だけ(性格・SP・持ち物は使わず、落としたことにもしない)。
+  性格がマスタに無ければ性格と SP を落とす(`.nature`)。特性が種族の `abilities` に無い(`.ability`)・持ち物が持ち物マスタに無い(`.item`)は nil にして `dropped` に宣言順(nature, item, ability)で残す。
+  保存に無い特性・持ち物は落としたことにしない。
+- **AC-2 持ち物の役割・メガ固定**(ADR-0509): メガ種族はストーンに固定(保存が nil なら案内なし・別の持ち物なら `.item`・ストーンを引けないなら nil で保存があれば `.item`)。
+  非メガ種族のメガストーンは `.item`。役割に反するだけの持ち物は残し案内もしない。
+- **AC-3 攻撃側の読み込み**(`CalcViewModel.loadFavorite(_:side: .attacker)`): 計算ちょうど1回・`species(key:)` は新しい種族につき1回。要求の攻撃側は種族・性格・SP・特性・持ち物をそのまま使い(プリセットに丸めない)、`Individual.moveId` は nil。
+  防御側は変えない。出どころは `.team`(`teamID == FavoriteLoad.sourceTeamID`・`memberID` = お気に入りの id・`displayName` = ラベル ?? 種族名)で `attackerPreset` は nil。`attackerAbilityOptions` を新しい種族に整合させる。
+  技はいまの技が新しい learnset にあれば残し、無ければ最初のダメージ技。ranks・やけど・急所などの画面の計算条件は変えず、お気に入りの ranks・status も持ち込まない。先頭ページに無い種族も読み込める。
+- **AC-4 防御側の読み込み**(`side: .defender`): 計算ちょうど1回・`species(key:)` は1回。種族と特性だけを設定し、攻撃側の要求は変わらない。特性が種族に無ければ nil+案内(`.ability`)、保存が無ければ旧種族の特性を残さず指定なし。
+  `defenderAbilityOptions` を整合させるので、続く `loadDefenderAbilityOptions()`(P6-19)は `species(key:)` も計算も増やさない。防御側のランクは残す(`selectDefender` と同じ)。
+  メガの防御側はストーン固定を同じ1回の計算に反映(`itemVariants == [ストーン]`)。
+- **AC-5 マスタに無い・失敗**: 種族が `not_found` → 何も変えず計算せず `.speciesMissing`。他の失敗 → `.unavailable`(何も変えない・計算しない)。どちらも画面の `error` を立てず、`rows` を消さず、`isLoading` を解く。
+  性格がマスタに無ければ出どころはプリセットのまま(保存の SP は使わない)で、種族・特性・持ち物は設定して `.partial([.nature])`。全部読めたら案内は nil。
+- **AC-6 古い応答の破棄**: 続けて呼んだとき、追い越された古い読み込みは状態・案内・計算・エラーのどれも変えない(古い species 応答・古い失敗・古い計算の失敗のどれが後から届いても)。計算に勝った新しい読み込みの結果が残る。
+- **AC-7 案内の寿命**: 新しい `loadFavorite` の開始・次の入力操作(`beginInput()`)・`dismissFavoriteLoadNotice()` で消える。
+- **AC-8 シート ViewModel**(`FavoriteLoadPickerViewModel`): サービス nil は `isAvailable == false` で何もしない。`load()` は `favorites()` を1回呼び、サーバーの順・種族名つきで `rows` を作る
+  (マスタに無い種族の行も「不明なポケモン」で残す。行は `Favorite` を持ち、そのまま読み込める)。0件は `.loaded` かつ `isEmpty`(読み込み前・失敗は空と言わない)。
+  失敗は `.failed(RecordScreenError)`(通信・503・decode)。再読み込みは新しい1回の取得。古い応答(成功も失敗も)を捨てる。キャンセルは状態を変えず失敗にしない。追加・削除をしない。
+- **AC-9 文言**(`FavoritesLabels` の追加): 入口・見出し(攻撃側/防御側)・注記・案内3種を Core に集約した日本語で返し、英字の code・サーバーの message を出さない。既存の固定文言は変えない。
+- **AC-10 モック**: `POKECALC_MOCK_FAVORITES=loadable` で4件(304・303・302・301。内容は ADR-0513 §9)。追加・削除は動く。既定・`list` は不変。
+- **AC-11 画面(XCUITest・モック)**: 計算画面に `attackerFavoriteSourceButton`・`defenderFavoriteSourceButton`(36pt 以上)。開くと `favoriteLoadSheet`(注記 `favoriteLoadNote`・行 `favoriteLoadRow-<id>`・`favoriteLoadClose`)。
+  行を選ぶとシートが閉じて攻撃側/防御側の種族が変わり(攻撃側はプリセットの選択が外れる・防御側は外れない)、全部読めたら `favoriteLoadNotice` は出ない。
+  一部読めない(303)・種族が無い(302)は `favoriteLoadNotice` に理由が出て、種族が無いときは何も変わらず結果も消えない。空は `favoriteLoadEmpty`、通信失敗・503 は `favoriteLoadError`+`favoriteLoadRetry`
+  (「計算はそのまま使えます」)で、閉じれば計算画面は無傷(攻守入れ替えも動く)。次の入力で案内は消える。
+  AX5 で入口・シート・案内が横にはみ出さず、閉じる・入口が 36pt 以上で押せる。**iPhone 17e と iPhone 18 Pro の両方で通ること**(スクロールは前方に進めて届かなければ下へ戻る)。
+
+### 追加したテスト
+
+- `PokeCalcKit/Tests/PokeCalcCoreTests/FavoriteLoadPlanTests.swift`(18 件・AC-1・2)
+- `CalcViewModelFavoriteLoadTests.swift`(30 件・AC-3〜7)
+- `FavoriteLoadPickerViewModelTests.swift`(13 件・AC-8)・`FavoriteLoadLabelsTests.swift`(7 件・AC-9)・`MockFavoritesServiceLoadableTests.swift`(6 件・AC-10)
+- `ios/PokeCalcUITests/FavoriteLoadUITests.swift`(12 件・AC-11)
+- `ios/PokeCalcUITests/LargeTextLayoutUITests.swift`(追加メソッド2本・AC-11 の AX5)
+- 足場(`TODO(implementer` で検索): `Sources/PokeCalcCore/FavoriteLoad.swift`(型・文言は確定。`FavoriteLoad.plan` と `FavoriteLoadPickerViewModel.load` は空)、
+  `CalcViewModel.loadFavorite`/`dismissFavoriteLoadNotice`(空)。`favoriteLoadNotice` は保存プロパティ。モックの `loadable` データは完成(テスト用の固定値)。
+
+### spec 時点の結果(2026-10-04)
+
+単体 74 件追加(`swift test --filter "FavoriteLoad|MockFavoritesServiceLoadable"`)。実装前: 失敗 52・成功 22(成功は足場の既定値と同じ結果になるもの: 文言・モック・サービス nil・既定の経路・「落とさない」系)。
+XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で失敗 12(入口の identifier が無いため。想定どおり)。AX5 の2本は `xcodebuild build-for-testing` でコンパイルのみ確認。
+既存テスト・既存 identifier は1つも変えていない。
+
+### 実装者への注意
+
+- 足場を実装する。**`CalcViewModel.loadFavorite`** は `selectTeamIndividual`(攻撃側)と `selectDefender`+`loadDefenderDetail`(防御側)を見本に、`beginInput()` → 詳細を1回読む(攻撃側は `reloadAttackerMoveOptions` の詳細を、
+  防御側は `loadDefenderDetail` の詳細を使い回す。`species(key:)` を重ねて呼ばない)→ `FavoriteLoad.plan` → 反映 → `recalculate` ちょうど1回。
+  詳細を読む前に状態を書き換えると、種族が無い・失敗のとき「何も変えない」が守れない(`selectTeamIndividual` は先に `attackerSpeciesKey` を書くので、そのまま真似ない。成功が確かになってから書く)。
+  `beginInput()` で `favoriteLoadNotice = nil` にし、読み込みの最後に案内をセットする(古い読み込みは `guard token == latestRequestToken` で何もしない)。
+  防御側の特性選択肢は `defenderAbilityOptions`・`defenderAbilityOptionsSpeciesKey` を読み込みで入れる(P6-19 の `.task` を空振りにする)。`resetDefenderAbility()` を使ってから入れる。
+- **`FavoriteLoad.plan`** は純粋(`MegaItemLock.make(for:allItems:)` と `MegaItemLock.correction` を再利用してよい)。`FavoriteLoadPickerViewModel` は `FavoritesViewModel.load()` と同じ世代・名前解決(`SpeciesNameResolver`)。
+- **View**: `CalcScreenView` に `FavoriteLoadRows`(入口2行。`teamSourceRow` の直下。見た目は `TeamSourceMenuRow` と同じ `glassCard`・幅いっぱい・`Menu` ではなく `Button`+`.sheet`)と案内の `Text`(`favoriteLoadNotice`)を足す。
+  シートは `FavoriteLoadSheet`(新規ファイル)で、シートを開くたびに `FavoriteLoadPickerViewModel` を作り `.task` で `load()` を1回。サービスが無ければ入口を出さない
+  (`favoritesService` を `FavoritePinSection` と同じ任意注入で受ける。`FavoriteLoadPickerViewModel` を `CalcScreenView.init` で作ってよい)。
+  読み込みは `viewModel.scheduleLatest { await $0.loadFavorite(row.favorite, side: ...) }`。
+  design.md のトークンのみ・`lineLimit` を付けない・常時アニメ無し・タップ 36pt 以上。**子が1つだけの `.accessibilityElement(children: .contain)` は識別子を畳む**ので、
+  `favoriteLoadSheet` は見出し・注記・一覧(or 空/失敗の案内)で子を2つ以上にする。AX5 は他画面と同じ(`dynamicTypeSize >= .accessibility1` で縦積み)。
+- 画面の高さは機種で違う(iPhone 17e は小さい)。入口の行を足すと計算画面が伸びる。既存の `scrollUntilHittable` が通り越す場合は**操作だけ**直す(検証は変えない)。
+  View を足したあと、**両機種**で `FavoriteLoadUITests`・`LargeTextLayoutUITests` の追加2本・既存の `CalcScreenUITests`/`CalcConditionsUITests`/`FavoritesScreenUITests` を通す。
+- 完了条件: `swift test`・`make ios-test`(両機種の XCUITest を含む)・`make ios-gen-check`・`make ios-lint`。結果をこの章の後ろに追記し、plan.md にチェックを付ける。
+
+### 実装結果(2026-10-04)
+
+- `swift test`: 1450 件・失敗 0(お気に入りの読み込みの単体 74 件を含む)。`make ios-lint ios-gen-check ios-check-request-limits` 成功。`xcodebuild build-for-testing`(generic iOS Simulator)成功。
+- XCUITest(iPhone 17e・iPhone 18 Pro の両方で各々全件成功): `FavoriteLoadUITests` 12 件、`LargeTextLayoutUITests` の AX5 追加 2 本、既存の `CalcScreenUITests`・`CalcConditionsUITests`・`CalcDefenderRanksUITests`・`FavoritesScreenUITests` 計 27 件。テスト・既存 identifier は変えていない。
+- 実装の判断: 攻撃側・防御側とも、詳細(`species(key:)`)を1回読んで成功が確かになってから状態を書く(`reloadAttackerMoveOptions`・`loadDefenderDetail` の反映部分を `applyAttackerDetail`・`applyDefenderDetail` に切り出して共有)。
+  案内は `beginInput()` で消す。画面は `FavoriteLoadViews.swift`(入口2行・案内・シート)。`CalcFeature` は `FavoritesService` を任意で渡していたので受け渡しは変えていない。

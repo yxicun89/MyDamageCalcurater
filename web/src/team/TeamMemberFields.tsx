@@ -16,6 +16,7 @@ import type {
   MasterSpeciesResolution,
   MasterSpeciesSearch,
 } from "../master/types";
+import { typeAccentStyle } from "../ui/typeAccent";
 import { AbilitySelect } from "../screens/AbilitySelect";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
@@ -87,6 +88,7 @@ function LabeledSelect({ label, value, onChange, children, disabled, describedBy
 /** 保存できない理由の文言(メンバー1体の alert にまとめて出す)。 */
 function issueMessage(issue: MemberIssue): string {
   switch (issue.kind) {
+    // 空の枠は保存の対象外(slotsToMembers)なので画面には届かない。draftToMember の検査として残す。
     case "speciesRequired":
       return teamMemberText.speciesRequiredError;
     case "moveDuplicate":
@@ -186,34 +188,48 @@ export function TeamMemberFields({
     onChange({ ...draft, sp: { ...draft.sp, [stat]: value } });
   }
 
+  const speciesField = hasSpeciesList ? (
+    <LabeledSelect label={teamMemberText.speciesLabel} value={draft.speciesKey ?? ""} onChange={pickSpecies}>
+      <option value="">{teamMemberText.speciesPlaceholder}</option>
+      {master.species.map((candidate) => (
+        <option key={candidate.key} value={candidate.key}>
+          {candidate.nameJa}
+        </option>
+      ))}
+      {draft.speciesKey !== null && species === null && (
+        <option value={draft.speciesKey}>{teamMemberText.unknownSpeciesOption(draft.speciesKey)}</option>
+      )}
+    </LabeledSelect>
+  ) : (
+    <SpeciesSearchField
+      label={teamMemberText.speciesLabel}
+      masterSearch={masterSearch}
+      onResolved={onResolved}
+      selectedNameJa={species?.nameJa ?? null}
+    />
+  );
+
+  // 空の枠(ADR-0332 §2): 種族の欄と案内だけ。種族を選ぶと下の欄が出る。
+  if (draft.speciesKey === null) {
+    return (
+      <fieldset className="team-member ui-card">
+        <legend>{teamMemberText.memberLegend(position)}</legend>
+        {speciesField}
+        <p className="team-member__hint">{teamMemberText.emptySlotHint}</p>
+      </fieldset>
+    );
+  }
+
+  // 種族が決まった枠は、最初のタイプの色でカードを染める(種族を引けないときは染めない)。
+  const typeId = species?.types[0];
   return (
-    <fieldset className="team-member">
+    <fieldset
+      className={typeId === undefined ? "team-member ui-card" : "team-member ui-card ui-card--typed"}
+      style={typeAccentStyle(typeId)}
+    >
       <legend>{teamMemberText.memberLegend(position)}</legend>
 
-      {hasSpeciesList ? (
-        <LabeledSelect
-          label={teamMemberText.speciesLabel}
-          value={draft.speciesKey ?? ""}
-          onChange={pickSpecies}
-        >
-          <option value="">{teamMemberText.speciesPlaceholder}</option>
-          {master.species.map((candidate) => (
-            <option key={candidate.key} value={candidate.key}>
-              {candidate.nameJa}
-            </option>
-          ))}
-          {draft.speciesKey !== null && species === null && (
-            <option value={draft.speciesKey}>{teamMemberText.unknownSpeciesOption(draft.speciesKey)}</option>
-          )}
-        </LabeledSelect>
-      ) : (
-        <SpeciesSearchField
-          label={teamMemberText.speciesLabel}
-          masterSearch={masterSearch}
-          onResolved={onResolved}
-          selectedNameJa={species?.nameJa ?? null}
-        />
-      )}
+      {speciesField}
 
       {Array.from({ length: MAX_MEMBER_MOVES }, (_, slot) => {
         const current = draft.moves[slot] ?? null;
@@ -257,7 +273,7 @@ export function TeamMemberFields({
       >
         <option value="">{teamMemberText.itemNone}</option>
         {itemLock.kind === "locked" && species !== null ? (
-          <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+          <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
         ) : (
           itemChoices.map((item) => (
             <option key={item.id} value={item.id}>
@@ -345,6 +361,7 @@ export function TeamMemberFields({
       <div className="team-member__actions">
         <button
           type="button"
+          className="ui-button ui-button--secondary"
           disabled={position === 1}
           onClick={() => {
             onMove(-1);
@@ -354,6 +371,7 @@ export function TeamMemberFields({
         </button>
         <button
           type="button"
+          className="ui-button ui-button--secondary"
           disabled={position === count}
           onClick={() => {
             onMove(1);
@@ -361,7 +379,7 @@ export function TeamMemberFields({
         >
           {teamMemberText.moveDownLabel(position)}
         </button>
-        <button type="button" onClick={onRemove}>
+        <button type="button" className="ui-button ui-button--danger" onClick={onRemove}>
           {teamMemberText.removeLabel(position)}
         </button>
       </div>

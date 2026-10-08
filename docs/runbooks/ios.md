@@ -11,6 +11,8 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で生
 cd "$(git rev-parse --show-toplevel)"
 make ios-test | grep '^ios-'
 ```
+
+**所要時間の目安: 20〜50 分**(XCUITest が大半。件数・機種・Mac の混み具合による)。同じ Mac で別のセッションがシミュレータのテストを動かしている間は、**順番を待ちます**(排他ロック。`ios/scripts/xcode-test-lock.sh`)。待っている間は `他のセッションのテストが終わるのを待っています(… 秒経過。保持者: …)` と表示されます。同時に流すと CPU を奪い合って `TEST INTERRUPTED`・終了コード 65/75・`Restarting after unexpected exit` で途中で落ちるためです(F-15)。待つのをやめて強制的に流すときは `IOS_TEST_LOCK_DISABLE=1 make ios-test`(同じ Mac で他のテストが動いていないことを確かめてから)。
 確認: 初回や仕様の変更後は先頭に `ios-gen: … を生成` の行が出る。続いて `ios/scripts/openapi-targets.sh` の各対象について `ios-gen-check: <名前> の生成物は <仕様> と一致`(PokeCalcAPI・PokeCalcBalanceAPI・PokeCalcSpeedAPI・PokeCalcJudgeAPI)、そのあとに次の3行(`ios-test-unit: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-test-ui: 全 N 件 / 成功 N / 失敗 0 / スキップ 0 / 想定内の失敗 0` / `ios-check-infoplist: … が入っている`)。
 
 ## 2. ルート画面を開く
@@ -55,6 +57,8 @@ make ios-sim-run IOS_SCREEN=speed
 モックの挙動は `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error` で切り替える(ADR-0503 §8)。
 
 ## 7. 判定画面を開く
+
+**判定の入口はルート画面に出ません**(ユーザー決定 2026-10-04: 判定は目的を作り直す。F-07)。コード・サービス・テストは残してあり、環境変数 `POKECALC_SHOW_JUDGE=1` を渡すと入口が出ます。下の `IOS_SCREEN=judge` は、この環境変数を付けて起動します。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

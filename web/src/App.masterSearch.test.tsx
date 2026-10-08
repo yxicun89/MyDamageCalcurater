@@ -30,10 +30,10 @@ afterEach(() => {
 });
 
 function modeRadios(): { offline: HTMLElement; online: HTMLElement } {
-  const group = screen.getByRole("radiogroup", { name: "ダメージ計算の実行場所" });
+  const group = screen.getByRole("radiogroup", { name: "計算する場所" });
   return {
-    offline: within(group).getByRole("radio", { name: "オフライン(WASM)" }),
-    online: within(group).getByRole("radio", { name: "オンライン(API)" }),
+    offline: within(group).getByRole("radio", { name: "この端末(オフライン)" }),
+    online: within(group).getByRole("radio", { name: "サーバー(オンライン)" }),
   };
 }
 

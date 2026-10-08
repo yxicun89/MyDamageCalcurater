@@ -80,7 +80,7 @@ test-services: gen-go-all ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs tools/importer/fetch-showdown-megastone.test.mjs
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@node --test tools/assets/convert.test.mjs
 
@@ -284,11 +284,11 @@ nats-local-up: ## make dev 用に docker で NATS v2.15.0(JetStream 有効)を 1
 
 ## --- クラスタ / ローカル ---------------------------------------------
 .PHONY: up
-up: gen-go-all ## k3d クラスタ作成 + 全デプロイ
+up: gen ## k3d クラスタ作成 + 全デプロイ
 	@./scripts/up.sh
 
 .PHONY: deploy-latest
-deploy-latest: gen-go-all ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
+deploy-latest: gen ## いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(make up 済みが前提。動作確認の前に毎回)
 	@./scripts/k3d-deploy-latest.sh
 
 .PHONY: down
@@ -296,7 +296,7 @@ down: ## k3d クラスタ削除
 	@k3d cluster delete $(CLUSTER) || true
 
 .PHONY: dev
-dev: gen-go-all ## k8s を使わずローカルで全サービス起動
+dev: gen ## k8s を使わずローカルで全サービス起動
 	@./scripts/dev.sh
 
 ## --- e2e / iOS --------------------------------------------------------
@@ -379,12 +379,12 @@ k8s-render-kubectl:
 	@command -v kubectl >/dev/null 2>&1 || { echo "k8s-render: kubectl が無いため overlay を描画できません(brew install kubectl。make doctor で確認)" >&2; exit 1; }
 
 .PHONY: assets
-assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0807。ASSETS_SRC・ASSETS_OUT で場所を変更)
+assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0808。ASSETS_SRC・ASSETS_OUT で場所を変更)
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@cd tools/assets && node convert.mjs
 
 .PHONY: images-k3d
-images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0807)
+images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0808)
 	@./scripts/images-k3d.sh
 
 ## --- 公開前の検査 -----------------------------------------------------

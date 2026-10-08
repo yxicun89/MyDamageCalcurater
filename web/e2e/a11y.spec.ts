@@ -11,9 +11,8 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   const reverseTab = page.getByRole("tab", { name: "逆算", exact: true });
   const balanceTab = page.getByRole("tab", { name: "タイプバランス", exact: true });
   const speedTab = page.getByRole("tab", { name: "素早さ", exact: true });
-  // P5-5 PR-A1(ADR-0309 §1): タブの並びは 計算 → 逆算 → タイプバランス → 素早さ → 判定 → 構築
-  // (6件、構築が末尾。JD5〈ADR-0705 §1〉の時点では判定が末尾だった)。
-  const judgeTab = page.getByRole("tab", { name: "判定", exact: true });
+  // P5-5 PR-A1(ADR-0309 §1): タブの並びは 計算 → 逆算 → タイプバランス → 素早さ → 構築
+  // (判定は ADR-0330 で非表示。巡回の対象外)。
   const teamTab = page.getByRole("tab", { name: "構築", exact: true });
   // AJ6(ADR-0319 §1): 調整を構築の後ろ(末尾)に足した(7件)。
   const adjustTab = page.getByRole("tab", { name: "調整", exact: true });
@@ -42,17 +41,12 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(speedTab).toHaveAttribute("aria-selected", "true");
   await expect(balanceTab).toHaveAttribute("aria-selected", "false");
 
-  await page.keyboard.press("ArrowRight");
-  await expect(judgeTab).toBeFocused();
-  await expect(judgeTab).toHaveAttribute("aria-selected", "true");
-  await expect(speedTab).toHaveAttribute("aria-selected", "false");
-
-  // P5-5 PR-A1: 構築(末尾)。team-svc に届かなくても、新規作成の入力は使える(ADR-0309 §4)。
+  // P5-5 PR-A1: 構築(末尾)。team-svc に届かなくても、[新しい構築]は押せる(ADR-0309 §4。構築名の欄は F-08 で廃止。ADR-0332)。
   await page.keyboard.press("ArrowRight");
   await expect(teamTab).toBeFocused();
   await expect(teamTab).toHaveAttribute("aria-selected", "true");
-  await expect(judgeTab).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("textbox", { name: "構築名", exact: true })).toBeVisible();
+  await expect(speedTab).toHaveAttribute("aria-selected", "false");
+  await expect(page.getByRole("button", { name: "新しい構築", exact: true })).toBeVisible();
 
   // P5-3c: お気に入り(構築の次)。タブを選ぶだけで record API を呼んでよい(失敗は画面内の alert に留まる)。
   await page.keyboard.press("ArrowRight");

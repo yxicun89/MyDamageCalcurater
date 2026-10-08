@@ -12,7 +12,9 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
+import { resolveNatureId } from "../api/apiEngine";
 import type { components } from "../api/openapi.gen";
+import { NEUTRAL_NATURE } from "../domain/requests";
 import { favoritesCalcText } from "../i18n/favorites";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
@@ -249,5 +251,35 @@ describe("AC-7 計算は追加の成否に依存しない(絶対ルール5)", ()
       expect(engine.bulkRequests.length).toBeGreaterThan(0);
     });
     expect(screen.getByRole("list", { name: "計算結果" })).toBeInTheDocument();
+  });
+});
+
+// ADR-0329 §7: お気に入りの攻撃側の SP・性格は、計算画面の「攻撃」「特攻」の入力から解決したものにする。
+describe("お気に入りの SP・性格は攻撃・特攻の入力から決まる(ADR-0329 §7)", () => {
+  async function typeSp(user: ReturnType<typeof userEvent.setup>, name: string, text: string) {
+    const box = screen.getByRole("textbox", { name });
+    await user.clear(box);
+    await user.click(box);
+    await user.paste(text);
+  }
+
+  test("攻撃 SP 20・特攻 SP 12 は individual.sp に載り、性格は無補正の natureId", async () => {
+    const record = okRecord(true);
+    const { user } = renderScreen(record);
+    await user.selectOptions(attackerSelect(), speciesAt(0).key);
+    await typeSp(user, "攻撃のSP", "20");
+    await typeSp(user, "特攻のSP", "12");
+    await user.click(await screen.findByRole("button", { name: favoritesCalcText.addLabel }));
+
+    const individual = record.createMock.mock.calls[0]?.[0].individual;
+    expect(individual?.sp).toEqual({ hp: 0, atk: 20, def: 0, spa: 12, spd: 0, spe: 0 });
+    expect(individual?.natureId).toBe(resolveNatureId(master.natures, NEUTRAL_NATURE));
+  });
+
+  test("攻撃 SP が範囲外(33)のあいだは追加できない", async () => {
+    const { user } = renderScreen(okRecord(true));
+    await user.selectOptions(attackerSelect(), speciesAt(0).key);
+    await typeSp(user, "攻撃のSP", "33");
+    expect(await screen.findByRole("button", { name: favoritesCalcText.addLabel })).toBeDisabled();
   });
 });

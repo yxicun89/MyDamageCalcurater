@@ -86,18 +86,20 @@ const defenderRegionLabel = "防御側";
  */
 export const megaItemText = {
   /** メガ種族の持ち物欄が固定されている理由。 */
-  lockedReason: "メガシンカ: メガストーンを持ちます",
+  lockedReason: "メガシンカするので、持ち物はメガストーンに決まっています",
   /** メガ種族だが、必要なメガストーンをマスタの持ち物から引けないときの理由。 */
-  missingReason: "メガシンカ: メガストーンがマスタに見つかりません",
+  missingReason: "メガシンカに使うメガストーンが、データに見つかりません",
   /** 防御側がメガ種族のとき「持ち物の候補も比較」を使えない理由。 */
-  compareDisabledReason: "メガシンカ: 防御側の持ち物はメガストーンに固定されるため、候補は比較しません",
+  compareDisabledReason:
+    "防御側はメガシンカするので持ち物がメガストーンに決まっています。持ち物の候補は比べません",
   /** 持ち物欄を持たない相手のカードに出す、固定のメガストーンの表示。 */
   fixedItemName: (name: string): string => `持ち物: ${name}`,
   /** 構築の古い保存データ(メガ種族に別の持ち物)を読み込み時にストーンへ直したときの通知(PR-B。保存で永続化)。 */
   correctedNotice: (itemName: string): string =>
     `メガシンカのため持ち物を${itemName}に直しました。保存すると反映されます`,
   /** 同、ストーンがマスタに無いため持ち物を空にしたときの通知(黙って別の持ち物にしない)。 */
-  clearedNotice: "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます",
+  clearedNotice:
+    "メガシンカに使うメガストーンがデータに無いため、持ち物を空にしました。保存すると反映されます",
 };
 
 /**
@@ -119,7 +121,7 @@ export const calcScreenText = {
   attackerAbilityLabel: `${attackerRegionLabel}の${abilityFieldLabel}`,
   defenderAbilityLabel: `${defenderRegionLabel}の${abilityFieldLabel}`,
   /** 防御側・相手の特性を決め打ちしない選択肢(種族の特性を先頭から最大3件まで全部計算する。ADR-0126・ADR-0311)。 */
-  anyAbilityOption: "おまかせ(種族の全特性)",
+  anyAbilityOption: "おまかせ(すべての特性で計算)",
   /** 結果の行・候補に、まとめた特性の名前を並べるときの区切り。 */
   abilityNameSeparator: "・",
   moveLabel: "技",
@@ -131,14 +133,36 @@ export const calcScreenText = {
   compareItemCandidatesLabel: "持ち物の候補も比較",
   swapButtonLabel: "攻守入れ替え",
   statusMoveNotice: "変化技はダメージを計算しません",
+  noDamagingMovesNotice: "このポケモンはダメージを与える技を覚えないため、計算できません",
   /** 技セレクタの各行の区切り(「技名・分類・威力n」)。 */
   moveOptionSeparator: "・",
   /** 技セレクタの威力の前置き(「威力80」)。 */
   movePowerLabel: "威力",
   /** 入力が揃い calcBulk の応答待ちのときに出す文言(古い行を出さず、これに差し替える)。 */
   loadingNotice: "計算中",
-  /** 攻撃側プリセットのラジオグループの名前(P4-3、ADR-0300 §5)。 */
-  attackerPresetGroupLabel: "攻撃側の調整",
+} as const;
+
+/** 計算画面の攻撃側の「攻撃」「特攻」の2ブロック(I-web-1・I-web-3、ADR-0329)の文言。iOS と同じ。 */
+export const attackerStatText = {
+  /** ブロックの見出し(攻撃 = atk、特攻 = spa)。 */
+  statName: { atk: "攻撃", spa: "特攻" } as const,
+  /** 選んだ技が使う側の見出しに足す語(色だけに頼らず、文字でも強調する)。 */
+  usedSuffix: "(この技で使用)",
+  /** プリセットのラジオグループの名前(「攻撃の調整」)。 */
+  presetGroupLabel: (name: string) => `${name}の調整`,
+  /** SP の数値入力の名前(「攻撃のSP」)。 */
+  spLabel: (name: string) => `${name}のSP`,
+  /** 性格補正のラジオグループの名前(「攻撃の性格補正」)。 */
+  natureGroupLabel: (name: string) => `${name}の性格補正`,
+  /** プリセットのどれとも一致しない値のときの印。 */
+  custom: "カスタム",
+  modifierLabel: { up: "上昇", neutral: "補正なし", down: "下降" } as const,
+  /** SP が 0〜32 の整数でないときの明示エラー(計算しない)。 */
+  spInvalid: (name: string) => `${name}のSPは0〜32の整数で入力してください`,
+  /** 補正の組み合わせに当たる性格がマスタに無いときの明示エラー(計算しない)。 */
+  natureUnresolved: "この性格補正の組み合わせに当たる性格が、データにありません",
+  /** 攻撃と特攻を同じ向きにできない理由(選べない選択肢の説明)。 */
+  sameDirectionReason: "攻撃と特攻の両方を上昇、または両方を下降にすることはできません",
 } as const;
 
 /** 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・攻撃側と防御側のランク。issue 274、ADR-0312)の文言。iOS と同じ。 */
@@ -204,9 +228,10 @@ export const defenderPresetText = {
 export const appText = {
   title: "ポケモン ダメージ計算",
   loading: "読み込み中…",
-  masterLoadError: "マスタデータの読み込みに失敗しました",
+  masterLoadError: "ポケモンのデータを読み込めませんでした",
   /** issue 276: API 専用の画面(タイプバランス・判定)がオンラインのマスタを読めなかったときの案内。 */
-  onlineMasterLoadError: "オンラインのマスタを読み込めませんでした。接続を確かめて、もう一度お試しください",
+  onlineMasterLoadError:
+    "サーバーからポケモンのデータを読み込めませんでした。接続を確かめて、もう一度お試しください",
   /**
    * issue 308: マスタが読めないときの次の一手。自動でオフラインへ切り替えることはしない
    * (ADR-0301 §4 の既定方針)ので、画面から操作できるようにする。
@@ -216,7 +241,7 @@ export const appText = {
   masterLoadErrorDetailLabel: "原因",
   masterLoadRetryLabel: "再試行",
   /** ADR-0313: オフラインでキャッシュが空(初回・未取得・破棄後)のときの案内。 */
-  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてマスタを取得してください",
+  masterCacheEmptyError: "オフラインで使うには、一度オンラインで開いてポケモンのデータを取り込んでください",
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
@@ -235,9 +260,9 @@ export const appText = {
   /** AJ6: 調整(指数・16n・SP 配分・最小 SP・技を覚えるポケモン)のタブ(ADR-0319 §1)。 */
   adjustTabLabel: "調整",
   /** 計算モード(オフライン = WASM / オンライン = API)の切り替え(P4-5、ADR-0301 §4)。 */
-  calcModeGroupLabel: "ダメージ計算の実行場所",
-  calcModeOfflineLabel: "オフライン(WASM)",
-  calcModeOnlineLabel: "オンライン(API)",
+  calcModeGroupLabel: "計算する場所",
+  calcModeOfflineLabel: "この端末(オフライン)",
+  calcModeOnlineLabel: "サーバー(オンライン)",
 } as const;
 
 /**
@@ -282,7 +307,7 @@ export const masterOnlineText = {
  * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
  */
 export const recordClientText = {
-  unavailable: "記録の API に接続できません",
+  unavailable: "記録のサーバーに接続できません",
 } as const;
 
 /** P5-5c: 計算画面の「よく計算する相手」チップ(ADR-0317)。 */
@@ -295,9 +320,9 @@ export const frequentOpponentsText = {
  */
 export const apiEngineText = {
   /** 個体の性格(plus/minus の組)に一致するマスタの性格が無いとき。 */
-  unknownNature: "この性格に対応するマスタの性格が見つかりません",
+  unknownNature: "この性格がデータに見つかりません",
   /** 通信できない・応答が読めない・エラー本文の形が不正なとき(ADR-0301 §4: 自動フォールバックはしない)。 */
-  unavailable: "API に接続できません",
+  unavailable: "サーバーに接続できません",
   /** BulkRequest.presets(engine のカスタムプリセット定義)は API に送れないとき(ADR-0301 §2)。 */
   invalidPreset: "カスタムの防御側プリセット定義は API に送れません",
 } as const;
@@ -321,7 +346,7 @@ export const requestLimitText = {
     `持ち物の候補が多いため、先頭から${String(max)}通りまでで計算しています`,
   /** 観測が上限に達して「観測を追加」を無効にしたときの理由。 */
   observationLimitReached: (max: number): string =>
-    `観測は${String(max)}件までです。追加するには、どれかの行を削除してください`,
+    `ダメージは${String(max)}件まで入力できます。追加するには、どれかの行を削除してください`,
 } as const;
 
 /**
@@ -343,7 +368,7 @@ function observationHintLabel(side: ReverseSide, unit: ObservationUnit): string 
 }
 
 export const reverseScreenText = {
-  sideGroupLabel: "観測したダメージ",
+  sideGroupLabel: "どちらのダメージ",
   sideDefenderLabel: "与えたダメージ",
   sideAttackerLabel: "受けたダメージ",
   myRegionLabel,
@@ -354,15 +379,15 @@ export const reverseScreenText = {
   myAbilityLabel: `${myRegionLabel}の${calcScreenText.abilityFieldLabel}`,
   theirAbilityLabel: `${theirRegionLabel}の${calcScreenText.abilityFieldLabel}`,
   myPresetGroupLabel: "自分の調整",
-  observationLabel: (n: number): string => `観測${String(n)}`,
-  observationUnitGroupLabel: (n: number): string => `観測${String(n)}の単位`,
-  removeObservationLabel: (n: number): string => `観測${String(n)}を削除`,
-  addObservationLabel: "観測を追加",
+  observationLabel: (n: number): string => `ダメージ${String(n)}`,
+  observationUnitGroupLabel: (n: number): string => `ダメージ${String(n)}の単位`,
+  removeObservationLabel: (n: number): string => `ダメージ${String(n)}を削除`,
+  addObservationLabel: "ダメージを追加",
   percentUnitLabel: "%",
   damageUnitLabel: "HP",
   percentInvalidMessage: "1〜100 の整数で入力してください",
   damageInvalidMessage: "1 以上の整数で入力してください",
-  resultsListLabel: "推定結果",
+  resultsListLabel: "考えられる振り方",
   observationHintLabel,
 } as const;
 
@@ -371,12 +396,13 @@ export const reverseResultText = {
   natureClassNeutral: "補正なし",
   /** 「関連ステータス上昇」の接尾辞(「B上昇」「C上昇」)。 */
   natureClassPlusSuffix: "上昇",
-  closeCandidateLabel: "近い候補",
+  closeCandidateLabel: "ほぼ合う候補",
   /**
    * 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)に、
    * 結果の先頭へ出す案内(issue 305)。候補一覧自体は消さずに残す(要件「候補の提示を優先」)。
    */
-  noExactCandidateNotice: "入力した観測を説明できる調整がありません(技・持ち物・入力値を確認)",
+  noExactCandidateNotice:
+    "入力したダメージにぴったり合う振り方が見つかりません(技・持ち物・入力した値を確かめてください)",
   /**
    * 全候補が観測と一致しないとき、各候補の SP 範囲に添える印(issue 305)。
    * 見た目だけでなくテキストとして出し、支援技術にも「参考値」であることが伝わるようにする。

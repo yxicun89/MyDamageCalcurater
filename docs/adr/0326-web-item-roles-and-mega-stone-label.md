@@ -61,11 +61,13 @@ PR #579(ADR-0175)で pokedex-svc が `Item.roles`(`attacker`/`defender`。メガ
 ### 4. メガ種族の固定中の表示
 
 - 欄の表示は `megaStoneLabel(species)`: `baseSpeciesNameJa` があれば `itemRoleText.megaStoneOf(基本種名)`(「ルカリオのメガストーン」)、
-  null・省略・空白なら `itemRoleText.megaStoneUnnamed`(「メガストーン」)。**ストーンの `nameJa` は画面に出さない**(名前を推測しない)。
+  null・省略・空白なら `itemRoleText.megaStoneUnnamed`(「メガストーン」)。
+  **ADR-0328 で上書き**: 表示はマスタのストーンの `nameJa` を使い(`megaStoneDisplayName`)、ひらがな・カタカナ・漢字を含まないとき(英語名・全角英数字だけ・空)だけ、
+  上のフォールバック(基本種名・「メガストーン」)にする。`megaStoneLabel(species, stoneNameJa)`。
 - 同じ名前を、逆算の相手のカードの文(`megaItemText.fixedItemName(...)`)と構築の補正の通知(`megaItemText.correctedNotice(...)`)にも使う。
-- 持ち物名を ID から引く場所もすべて同じ名前にする(ストーンの `nameJa` を画面・aria・title・テキストのどこにも出さない): 計算の結果の行(`.calc-results__item`)・
+- 持ち物名を ID から引く場所もすべて同じ名前にする(ADR-0328 により、日本語として使えるストーンの `nameJa` はそのまま、使えないときだけフォールバック。英語名は画面・aria・title・テキストのどこにも出さない): 計算の結果の行(`.calc-results__item`)・
   逆算の候補の行(`.reverse-results__item`)・未対応の印(計算・逆算・判定の確定数の注意・調整)。表示用の一覧 `itemsWithStoneLabels(items, species, stoneIds?)` が
-  ストーンの `nameJa` を `megaStoneLabel`(その ID を `requiredItemId` に持つ種族の基本種名。引けなければ「メガストーン」)に差し替え、
+  ストーンの `nameJa` を `megaStoneDisplayName`(使えないときはその ID を `requiredItemId` に持つ種族の基本種名から。引けなければ「メガストーン」)に通し、
   ID 引きはその一覧を通す(要求には使わない)。
 - 構築で非メガのメンバーが古いデータでメガストーンを持つとき(ADR-0320 PR-B 4a。値は直さない)、現在値の選択肢の表示は「メガストーン」。
 - 固定の理由(`megaItemText.lockedReason`・`missingReason`)と `aria-describedby` は変えない(iOS と同じ語)。

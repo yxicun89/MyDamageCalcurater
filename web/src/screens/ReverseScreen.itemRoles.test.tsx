@@ -4,7 +4,7 @@
 // 自分が防御側(domain/itemRoles.ts の reverseMyItemRole)。
 // 確かめること:
 //   - 自分の持ち物欄: 与えたダメージでは attacker の持ち物、受けたダメージでは defender の持ち物だけ(先頭は「持ち物なし」)
-//   - 観測した側を切り替えて自分の持ち物が合わなくなったら「持ち物なし」に戻し、role="status" で通知して欄の説明に結ぶ
+//   - ダメージした側を切り替えて自分の持ち物が合わなくなったら「持ち物なし」に戻し、role="status" で通知して欄の説明に結ぶ
 //   - 相手の持ち物候補(itemCandidates)は、相手の側の役割の持ち物だけ(役割なし・メガストーンは混ざらない)
 //   - メガ種族の固定中の表示は「{基本種名}のメガストーン」(自分の欄・相手のカードの文の両方)
 
@@ -34,7 +34,6 @@ import {
   MEGA_FIRE_STONE,
   MEGA_FIRE_STONE_LABEL,
   MEGA_WATER,
-  MEGA_WATER_STONE,
   MEGA_WATER_STONE_LABEL,
 } from "../test/megaMaster";
 import { ReverseScreen } from "./ReverseScreen";
@@ -59,7 +58,7 @@ function normalSpecies(index: number): MasterSpecies {
   return species;
 }
 
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 const receivedRadio = () => within(sideGroup()).getByRole("radio", { name: "受けたダメージ" });
 const dealtRadio = () => within(sideGroup()).getByRole("radio", { name: "与えたダメージ" });
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
@@ -67,7 +66,7 @@ const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手の
 const myItemSelect = () => screen.getByRole("combobox", { name: "自分の持ち物" });
 const myCard = () => screen.getByRole("region", { name: "自分のポケモン" });
 const theirCard = () => screen.getByRole("region", { name: "相手のポケモン" });
-const observationInput = (n: number) => screen.getByRole("textbox", { name: `観測${String(n)}` });
+const observationInput = (n: number) => screen.getByRole("textbox", { name: `ダメージ${String(n)}` });
 
 function optionNames(select: HTMLElement): string[] {
   return within(select)
@@ -100,7 +99,7 @@ function renderScreen(data: MasterData = master): { user: UserEvent; engine: Fak
 
 const namesOf = (items: readonly MasterItem[]): string[] => items.map((item) => item.nameJa);
 
-describe("自分の持ち物欄は、観測した側で決まる役割の持ち物だけ", () => {
+describe("自分の持ち物欄は、ダメージした側で決まる役割の持ち物だけ", () => {
   test("与えたダメージ(既定): 自分は攻撃側なので attacker の持ち物", () => {
     renderScreen();
     expect(dealtRadio()).toBeChecked();
@@ -131,7 +130,7 @@ describe("自分の持ち物欄は、観測した側で決まる役割の持ち�
   });
 });
 
-describe("観測した側の切り替えで、自分の持ち物が合わなくなったとき", () => {
+describe("ダメージした側の切り替えで、自分の持ち物が合わなくなったとき", () => {
   test("「持ち物なし」に戻し、role=status で通知して欄の説明に結ぶ", async () => {
     const { user } = renderScreen();
     await user.selectOptions(mySpeciesSelect(), normalSpecies(0).key);
@@ -209,7 +208,7 @@ describe("相手の持ち物候補は、相手の側の役割の持ち物だけ"
 });
 
 describe("メガ種族の固定中の表示", () => {
-  test("自分: 欄は「{基本種名}のメガストーン」(ストーンの nameJa ではない)、理由は aria-describedby", async () => {
+  test("自分: 欄はストーンの nameJa、理由は aria-describedby", async () => {
     const { user } = renderScreen();
     await user.selectOptions(mySpeciesSelect(), MEGA_FIRE.key);
 
@@ -219,7 +218,7 @@ describe("メガ種族の固定中の表示", () => {
     expect(myItemSelect()).toHaveAccessibleDescription(megaItemText.lockedReason);
   });
 
-  test("自分のメガの固定は、観測した側を切り替えても保たれ、通知は出ない", async () => {
+  test("自分のメガの固定は、ダメージした側を切り替えても保たれ、通知は出ない", async () => {
     const { user } = renderScreen();
     await user.selectOptions(mySpeciesSelect(), MEGA_FIRE.key);
 
@@ -229,7 +228,7 @@ describe("メガ種族の固定中の表示", () => {
     expect(within(myCard()).queryByRole("status")).toBeNull();
   });
 
-  test("相手: カードの文は「持ち物: {基本種名}のメガストーン」", async () => {
+  test("相手: カードの文は「持ち物: {ストーンの nameJa}」", async () => {
     const { user } = renderScreen();
     await user.selectOptions(theirSpeciesSelect(), MEGA_WATER.key);
 
@@ -250,7 +249,6 @@ describe("結果の候補の行にメガストーンの英語名を出さない"
     expect(rows.length).toBeGreaterThan(0);
     for (const row of rows) {
       expect(within(row).getByText(MEGA_WATER_STONE_LABEL)).toBeVisible();
-      expect(row).not.toHaveTextContent(MEGA_WATER_STONE.nameJa);
     }
   });
 });

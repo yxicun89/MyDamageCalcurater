@@ -100,6 +100,20 @@ export function baseTokens(markdown: string): BaseToken[] {
   });
 }
 
+/**
+ * F-12(ADR-0334): design.md「ポップ配色」の表(| トークン | ライト | ダーク | 用途 |)。
+ * 色の書き方は「ベース」と同じ(#RRGGBB・`黒 10%` など。designColorToCss)。用途の列は読まない。
+ */
+export function popPaletteTokens(markdown: string): BaseToken[] {
+  return tableRows(sectionOf(markdown, "ポップ配色")).map((cells) => {
+    const [token, light, dark] = cells;
+    if (token === undefined || light === undefined || dark === undefined) {
+      throw new Error(`ポップ配色の表の行が3列以上でない: ${cells.join(" | ")}`);
+    }
+    return { token, light: designColorToCss(light), dark: designColorToCss(dark) };
+  });
+}
+
 /** design.md「ベース」の bg.glass のぼかし量(px)。「blur(20px)」のような表記から数値を読む。 */
 export function glassBlurPixels(markdown: string): number {
   const line = bulletLine(sectionOf(markdown, "ベース"), "bg.glass のぼかし:");

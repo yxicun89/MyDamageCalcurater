@@ -172,7 +172,7 @@ func buildRawSpecies(c CalcSpecies, sd ShowdownSpecies, sdByName map[string]Show
 		return rawSpecies{}, nil, nil, fmt.Errorf("%w: 種族 %q が基本種の formeOrder に無い", ErrInvalidData, sd.Name)
 	}
 
-	isMega := strings.HasPrefix(sd.Forme, "Mega")
+	isMega := strings.Contains(sd.Forme, "Mega")
 	if fromCalc && isMega {
 		if sd.RequiredItem == "" {
 			return rawSpecies{}, nil, nil, fmt.Errorf("%w: メガ %q の requiredItem が無い", ErrInvalidData, sd.Name)

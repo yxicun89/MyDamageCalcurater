@@ -1,6 +1,6 @@
 package httpapi
 
-// ローカル画像の配信(ADR-0807)。Config.ImagesDir の manifest.json と .webp だけを /images/* で返す。
+// ローカル画像の配信(ADR-0808)。Config.ImagesDir の manifest.json と .webp だけを /images/* で返す。
 // 素の http.FileServer は使わない(ディレクトリ一覧・ドットファイル・ディレクトリ外へのシンボリックリンクを
 // 出さないため)。画像が無い・ImagesDir が未設定のときは JSON の 404(クライアントはエンブレムに戻す)。
 

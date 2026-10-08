@@ -26,6 +26,17 @@ public enum SpeedLabels {
 
     public static func tierSpeed(_ speed: Int) -> String { "素早さ \(speed)" }
 
+    // ---- 表の中の自分の位置(遅延描画で自分の行が画面外のとき。ADR-0517) ----
+    public static let jumpToSelf = "自分の位置へ"
+    public static let jumpToSelfAbove = "自分の位置へ(上)"
+    public static let jumpToSelfBelow = "自分の位置へ(下)"
+    public static let summarySeparator = "・"
+    public static func tableTotal(_ count: Int) -> String { "全\(count)段" }
+    public static func selfAtTier(_ n: Int) -> String { "自分は\(n)段目" }
+    public static func selfBeforeTier(_ n: Int) -> String { "自分は\(n)段目の前" }
+    public static func selfAfterTier(_ n: Int) -> String { "自分は\(n)段目の後" }
+    public static func selfBetweenTiers(_ a: Int, _ b: Int) -> String { "自分は\(a)段目と\(b)段目の間" }
+
     // ---- 自分のポケモン ----
     public static let modeGroup = "入力の方法"
     public static let pokemon = "ポケモン"

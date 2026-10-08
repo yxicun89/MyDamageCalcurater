@@ -1,6 +1,6 @@
 // P4-18(issue 113): 逆算で「入力の途中の値」で計算を始めない・先行の計算を取り消す(ADR-0300 §11)。
 // 確かめること:
-//   - 観測の数値を打っている間は計算を始めず、打ち終わって 200ms(OBSERVATION_INPUT_DEBOUNCE_MS)で1回だけ始める
+//   - ダメージの数値を打っている間は計算を始めず、打ち終わって 200ms(OBSERVATION_INPUT_DEBOUNCE_MS)で1回だけ始める
 //     (「45」と打つ途中の「4」では計算しない)
 //   - 表示(計算中)と入力の検証は待たずに今までどおり
 //   - 確定した操作(種族・持ち物の選択、単位の切り替え、行の追加・削除)は待たずに計算する
@@ -59,9 +59,9 @@ function firstItem(): Item {
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const myItemSelect = () => screen.getByRole("combobox", { name: "自分の持ち物" });
-const observationInput = (n: number) => screen.getByRole("textbox", { name: `観測${String(n)}` });
-const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `観測${String(n)}の単位` });
-const addObservationButton = () => screen.getByRole("button", { name: "観測を追加" });
+const observationInput = (n: number) => screen.getByRole("textbox", { name: `ダメージ${String(n)}` });
+const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `ダメージ${String(n)}の単位` });
+const addObservationButton = () => screen.getByRole("button", { name: "ダメージを追加" });
 
 interface Rendered {
   readonly engine: FakeEngine;
@@ -80,7 +80,7 @@ function select(element: HTMLElement, value: string): void {
 }
 
 /**
- * 観測の欄に value を入れる(その時点の欄の中身そのもの)。
+ * ダメージの欄に value を入れる(その時点の欄の中身そのもの)。
  * 「4」→「45」と続けて呼べば、利用者が1文字ずつ打ったのと同じ onChange の並びになる。
  */
 function typeObservation(n: number, value: string): void {
@@ -101,7 +101,7 @@ async function settle(): Promise<void> {
   });
 }
 
-/** 観測のデバウンスの待ちを終わらせる(trailing debounce の発火)。 */
+/** ダメージのデバウンスの待ちを終わらせる(trailing debounce の発火)。 */
 function flushObservationDebounce(): Promise<void> {
   return advance(OBSERVATION_INPUT_DEBOUNCE_MS);
 }
@@ -124,7 +124,7 @@ function liveCalls(pending: readonly PendingReverse[]): PendingReverse[] {
   return pending.filter((entry) => entry.signal?.aborted !== true);
 }
 
-describe("観測の数値を打っている間は計算を始めない(200ms の trailing debounce)", () => {
+describe("ダメージの数値を打っている間は計算を始めない(200ms の trailing debounce)", () => {
   test("素早く「4」→「45」と打つと、確定値の 45 だけで1回計算する", async () => {
     const { engine } = renderScreen();
     choosePair();
@@ -224,7 +224,7 @@ describe("確定した操作は待たずに計算する", () => {
     expect(engine.reverseRequests[1]?.known.item?.id).toBe(firstItem().id);
   });
 
-  test("観測の単位(%/HP)を切り替えたら、待たずに計算し直す", async () => {
+  test("ダメージの単位(%/HP)を切り替えたら、待たずに計算し直す", async () => {
     const { engine } = renderScreen();
     choosePair();
     typeObservation(1, "45");
@@ -236,7 +236,7 @@ describe("確定した操作は待たずに計算する", () => {
     expect(engine.reverseRequests[1]?.observations).toEqual([{ damage: 45 }]);
   });
 
-  test("観測の行を削除したら、待たずに残りの観測で計算し直す", async () => {
+  test("ダメージの行を削除したら、待たずに残りのダメージで計算し直す", async () => {
     const { engine } = renderScreen();
     choosePair();
     typeObservation(1, "45");
@@ -246,7 +246,7 @@ describe("確定した操作は待たずに計算する", () => {
     await flushObservationDebounce();
     const before = engine.reverseRequests.length;
 
-    fireEvent.click(screen.getByRole("button", { name: "観測2を削除" }));
+    fireEvent.click(screen.getByRole("button", { name: "ダメージ2を削除" }));
     await settle();
     expect(engine.reverseRequests).toHaveLength(before + 1);
     expect(engine.reverseRequests.at(-1)?.observations).toEqual([{ percent: 45 }]);
@@ -344,7 +344,7 @@ describe("先行の計算を取り消す(AbortSignal)", () => {
         await Promise.resolve();
       });
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(screen.getByRole("list", { name: "推定結果" })).toBeInTheDocument();
+      expect(screen.getByRole("list", { name: "考えられる振り方" })).toBeInTheDocument();
       expect(screen.queryByText("計算中")).toBeNull();
     },
   );

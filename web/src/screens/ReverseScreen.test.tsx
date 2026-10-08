@@ -4,11 +4,11 @@
 //   - 「与えたダメージ」= side defender(自分 = 攻撃側、技は自分の learnset、自分の調整は攻撃側プリセット)
 //     「受けたダメージ」= side attacker(自分 = 防御側、技は相手の learnset、自分の調整は防御側プリセット。
 //     issue #275 で「常に無振り固定・画面から変えられない」を直した。既定は無振りのまま)
-//   - 観測は整数%(1〜100)か HP の実点数(1 以上)。単位は行ごとに「%」「HP」で切り替え、不正な入力は engine を呼ばない
-//   - 「観測を追加」「観測nを削除」、観測はすべての有効な行を順に送る(空行は送らない)
+//   - ダメージは整数%(1〜100)か HP の実点数(1 以上)。単位は行ごとに「%」「HP」で切り替え、不正な入力は engine を呼ばない
+//   - 「ダメージを追加」「ダメージnを削除」、ダメージはすべての有効な行を順に送る(空行は送らない)
 //   - 持ち物候補は reverseItemCandidates(効果データから)、maxCandidates は送らない
-//   - 結果は engine の順のまま候補カードにし、性格クラス・持ち物・SP 範囲(全部)・目安・近い候補・%幅を出す
-//   - 全候補が観測と一致しない(exactCount 0)ときは role=status の案内を出し、候補一覧は残したまま
+//   - 結果は engine の順のまま候補カードにし、性格クラス・持ち物・SP 範囲(全部)・目安・ほぼ合う候補・%幅を出す
+//   - 全候補がダメージと一致しない(exactCount 0)ときは role=status の案内を出し、候補一覧は残したまま
 //     SP 範囲に「参考」の印を添える。%欄には「予測」のラベルを添える(issue #305)
 //   - 防御側は H32 の仮定を出す。計算中・エラー(role=alert)・古い応答の無視・変化技
 
@@ -16,7 +16,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { resolveAttackerPreset } from "../domain/attackerPresets";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
 import { reverseItemCandidates } from "../domain/reverseItems";
@@ -81,17 +81,17 @@ function lastRequest(engine: FakeEngine): ReverseRequest {
   return request;
 }
 
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const myItemSelect = () => screen.getByRole("combobox", { name: "自分の持ち物" });
 const moveSelect = () => screen.getByRole("combobox", { name: "技" });
-const observationInput = (n: number) => screen.getByRole("textbox", { name: `観測${String(n)}` });
-const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `観測${String(n)}の単位` });
-const addObservationButton = () => screen.getByRole("button", { name: "観測を追加" });
+const observationInput = (n: number) => screen.getByRole("textbox", { name: `ダメージ${String(n)}` });
+const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `ダメージ${String(n)}の単位` });
+const addObservationButton = () => screen.getByRole("button", { name: "ダメージを追加" });
 
 /**
- * P4-18(issue 113): 観測の数値入力は 200ms の trailing debounce を挟むので、入力した後は
+ * P4-18(issue 113): ダメージの数値入力は 200ms の trailing debounce を挟むので、入力した後は
  * flushObservationDebounce() でその待ちを終わらせてから計算が始まる。タイマーは fake にし、
  * 実時間でも進める(shouldAdvanceTime)ことで waitFor / findBy* を今までどおり使う。
  * デバウンス自体の境界(何 ms で・何回呼ぶか)は ReverseScreen.debounce.test.tsx が決定的に確かめる。
@@ -103,14 +103,14 @@ function renderScreen(engine: FakeEngine = createFakeEngine()): { user: UserEven
   return { user, engine };
 }
 
-/** 観測の数値入力のデバウンスの待ちを終わらせる(issue 113)。 */
+/** ダメージの数値入力のデバウンスの待ちを終わらせる(issue 113)。 */
 function flushObservationDebounce(): void {
   act(() => {
     vi.advanceTimersByTime(OBSERVATION_INPUT_DEBOUNCE_MS);
   });
 }
 
-/** 観測に数値を打ち、デバウンスの待ちを終わらせる(計算が始まるところまで進める)。 */
+/** ダメージに数値を打ち、デバウンスの待ちを終わらせる(計算が始まるところまで進める)。 */
 async function typeObservation(user: UserEvent, n: number, text: string): Promise<void> {
   await user.type(observationInput(n), text);
   flushObservationDebounce();
@@ -136,12 +136,12 @@ function myPresetOptionLabels(): string[] {
 }
 
 async function candidateCards(): Promise<HTMLElement[]> {
-  const list = await screen.findByRole("list", { name: "推定結果" });
+  const list = await screen.findByRole("list", { name: "考えられる振り方" });
   return within(list).getAllByRole("listitem");
 }
 
 describe("初期表示", () => {
-  test("既定は「与えたダメージ」、観測1行(単位は%)、engine は呼ばない", () => {
+  test("既定は「与えたダメージ」、ダメージ1行(単位は%)、engine は呼ばない", () => {
     const { engine } = renderScreen();
     expect(within(sideGroup()).getByRole("radio", { name: "与えたダメージ" })).toBeChecked();
     expect(within(sideGroup()).getByRole("radio", { name: "受けたダメージ" })).not.toBeChecked();
@@ -151,13 +151,13 @@ describe("初期表示", () => {
     expect(moveSelect()).toBeInTheDocument();
     expect(observationInput(1)).toHaveValue("");
     expect(within(unitGroup(1)).getByRole("radio", { name: "%" })).toBeChecked();
-    expect(screen.queryByRole("textbox", { name: "観測2" })).toBeNull();
-    // 1行目は消せない(観測は1件以上)
-    expect(screen.queryByRole("button", { name: "観測1を削除" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "ダメージ2" })).toBeNull();
+    // 1行目は消せない(ダメージは1件以上)
+    expect(screen.queryByRole("button", { name: "ダメージ1を削除" })).toBeNull();
     expect(engine.reverseRequests).toHaveLength(0);
   });
 
-  test("種族と技が揃っても、観測が空なら engine を呼ばない", async () => {
+  test("種族と技が揃っても、ダメージが空なら engine を呼ばない", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     expect(moveSelect()).toHaveValue(firstMoveOf(speciesAt(0)).id);
@@ -166,7 +166,7 @@ describe("初期表示", () => {
 });
 
 describe("与えたダメージ(side defender)", () => {
-  test("自分 = 攻撃側(無振り)、相手の種族、自分の技、持ち物候補、整数%の観測で calcReverse を呼ぶ", async () => {
+  test("自分 = 攻撃側(無振り)、相手の種族、自分の技、持ち物候補、整数%のダメージで calcReverse を呼ぶ", async () => {
     const mine = speciesAt(0);
     const theirs = speciesAt(1);
     const move = firstMoveOf(mine);
@@ -201,7 +201,7 @@ describe("与えたダメージ(side defender)", () => {
     const options = within(moveSelect())
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(learnsetMoves(mine, master.moves).map((move) => move.id));
+    expect(options).toEqual(damagingLearnsetMoves(mine, master.moves).map((move) => move.id));
   });
 
   test("自分の調整(攻撃側プリセット)を選ぶと known の SP・性格に入る", async () => {
@@ -237,7 +237,7 @@ describe("与えたダメージ(side defender)", () => {
     });
   });
 
-  test("単位を HP に切り替えると damage の観測になる", async () => {
+  test("単位を HP に切り替えると damage のダメージになる", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     await user.click(within(unitGroup(1)).getByRole("radio", { name: "HP" }));
@@ -263,7 +263,7 @@ describe("受けたダメージ(side attacker)", () => {
     const options = within(moveSelect())
       .getAllByRole("option")
       .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(learnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
+    expect(options).toEqual(damagingLearnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
     await typeObservation(user, 1, "60");
 
     await waitFor(() => {
@@ -280,19 +280,19 @@ describe("受けたダメージ(side attacker)", () => {
     expect(request).not.toHaveProperty("maxCandidates");
   });
 
-  test("対象側を切り替えると観測は空の1行に戻り、単位はその側の既定になる", async () => {
+  test("対象側を切り替えるとダメージは空の1行に戻り、単位はその側の既定になる", async () => {
     const { user } = renderScreen();
     await typeObservation(user, 1, "45");
     await user.click(addObservationButton());
     await chooseReceived(user);
     expect(observationInput(1)).toHaveValue("");
-    expect(screen.queryByRole("textbox", { name: "観測2" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "ダメージ2" })).toBeNull();
     expect(within(unitGroup(1)).getByRole("radio", { name: "HP" })).toBeChecked();
     await user.click(within(sideGroup()).getByRole("radio", { name: "与えたダメージ" }));
     expect(within(unitGroup(1)).getByRole("radio", { name: "%" })).toBeChecked();
   });
 
-  test("受けたダメージのとき、観測を追加した行の単位も既定で HP になる", async () => {
+  test("受けたダメージのとき、ダメージを追加した行の単位も既定で HP になる", async () => {
     const { user } = renderScreen();
     await chooseReceived(user);
     await user.click(addObservationButton());
@@ -411,18 +411,17 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
     expect(lastRequest(engine).known.nature).toEqual({ plus: "def", minus: "atk" });
   });
 
-  test("変化技のときは選択肢が 無振り / H振り だけになり、選択は H振り に落ちる", async () => {
+  test("変化技は技の選択肢に無いので、選んだ防御側プリセットが H振り に落ちない(落とす規則は domain/defenderPresets.test.ts の「status のとき … → hp」。ADR-0328)", async () => {
     const { species: theirs, statusMove } = speciesWithStatusMove();
     const { user } = renderScreen();
     await chooseReceivedWithMove(user, theirs, moveOf(theirs, "physical"));
     await user.click(within(myPresetGroup()).getByRole("radio", { name: "HB特化" }));
 
-    await user.selectOptions(moveSelect(), statusMove.id);
-    expect(myPresetOptionLabels()).toEqual(["無振り", "H振り"]);
-    expect(within(myPresetGroup()).getByRole("radio", { name: "H振り" })).toBeChecked();
+    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(within(myPresetGroup()).getByRole("radio", { name: "HB特化" })).toBeChecked();
   });
 
-  test("観測したダメージの側を切り替えると、自分の調整も攻撃側 ↔ 防御側で入れ替わる", async () => {
+  test("どちらのダメージの側を切り替えると、自分の調整も攻撃側 ↔ 防御側で入れ替わる", async () => {
     const mine = speciesAt(0);
     const { user } = renderScreen();
     await choosePair(user, mine, speciesAt(1));
@@ -444,12 +443,12 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
 async function pasteInto(user: UserEvent, element: HTMLElement, text: string): Promise<void> {
   await user.click(element);
   await user.paste(text);
-  // 貼り付けも観測のテキストの変更なので、待ちを終わらせてから「engine を呼ばない」ことを確かめる
+  // 貼り付けもダメージのテキストの変更なので、待ちを終わらせてから「engine を呼ばない」ことを確かめる
   // (待ちのせいで呼ばれていないだけ、を通してしまわないため)。
   flushObservationDebounce();
 }
 
-describe("観測の入力の検証", () => {
+describe("ダメージの入力の検証", () => {
   test.each(["12.5", "101", "0", "-3", "abc"])(
     "%% の %j は不正として知らせ、engine を呼ばない",
     async (text) => {
@@ -486,12 +485,12 @@ describe("観測の入力の検証", () => {
     expect(observationInput(1)).not.toHaveAttribute("aria-invalid", "true");
     expect(engine.reverseRequests).toHaveLength(callsBefore);
     // 不正の間は古い候補を出さない
-    expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "考えられる振り方" })).toBeNull();
   });
 });
 
-describe("観測を追加・削除", () => {
-  test("「観測を追加」で行が増え、有効な観測を入力順に送る(空行は送らない)", async () => {
+describe("ダメージを追加・削除", () => {
+  test("「ダメージを追加」で行が増え、有効なダメージを入力順に送る(空行は送らない)", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     await typeObservation(user, 1, "45");
@@ -509,7 +508,7 @@ describe("観測を追加・削除", () => {
     });
   });
 
-  test("「観測2を削除」で行が消え、残りの観測で計算し直す", async () => {
+  test("「ダメージ2を削除」で行が消え、残りのダメージで計算し直す", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
     await typeObservation(user, 1, "45");
@@ -519,8 +518,8 @@ describe("観測を追加・削除", () => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }, { percent: 50 }]);
     });
 
-    await user.click(screen.getByRole("button", { name: "観測2を削除" }));
-    expect(screen.queryByRole("textbox", { name: "観測2" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "ダメージ2を削除" }));
+    expect(screen.queryByRole("textbox", { name: "ダメージ2" })).toBeNull();
     await waitFor(() => {
       expect(lastRequest(engine).observations).toEqual([{ percent: 45 }]);
     });
@@ -595,7 +594,7 @@ describe("結果の表示", () => {
     expect(within(first).getByText("B 0〜3")).toBeInTheDocument();
     expect(within(first).getByText(/H振り/)).toBeInTheDocument();
     expect(within(first).getByText("40.2〜47.8%")).toBeInTheDocument();
-    expect(within(first).queryByText("近い候補")).toBeNull();
+    expect(within(first).queryByText("ほぼ合う候補")).toBeNull();
 
     expect(within(second).getByText("B上昇")).toBeInTheDocument();
     expect(within(second).getByText("テストぼうぎょだま")).toBeInTheDocument();
@@ -606,7 +605,7 @@ describe("結果の表示", () => {
 
     expect(within(third).getByText("B 32")).toBeInTheDocument();
     expect(within(third).getByText(/HB特化/)).toBeInTheDocument();
-    expect(within(third).getByText("近い候補")).toBeInTheDocument();
+    expect(within(third).getByText("ほぼ合う候補")).toBeInTheDocument();
   });
 
   test("攻撃側は仮定を出さず、A/C の表記と攻撃側の目安を使う", async () => {
@@ -639,7 +638,7 @@ describe("結果の表示", () => {
     expect(within(second).getByText(/無振り/)).toBeInTheDocument();
   });
 
-  // issue #305: 観測を厳密に説明できる候補(exact)が1件も無いとき、その旨が分かるようにする。
+  // issue #305: ダメージを厳密に説明できる候補(exact)が1件も無いとき、その旨が分かるようにする。
   // 一致の判定そのものは engine が返した exact / exactCount をそのまま使う(TS で再計算・再判定しない。
   // ADR-0300 §8「Web は返ってきた値を加工せずに表示する」)。
   const noExactResult: ReverseResult = {
@@ -652,9 +651,9 @@ describe("結果の表示", () => {
     })),
   };
 
-  test("全候補が観測と一致しないときは role=status で理由の案内を出す(issue #305)", async () => {
+  test("全候補がダメージと一致しないときは role=status で理由の案内を出す(issue #305)", async () => {
     await renderWithResult(noExactResult);
-    // critic指摘: role="status" は観測の上限の案内(L936付近)にも使われるので、role だけでなく
+    // critic指摘: role="status" はダメージの上限の案内(L936付近)にも使われるので、role だけでなく
     // 文言でも絞り込む(将来 status が複数同時に出るテストを足しても複数マッチで落ちないように)。
     const notice = await screen.findByText(reverseResultText.noExactCandidateNotice);
     expect(notice.closest('[role="status"]')).not.toBeNull();
@@ -678,7 +677,7 @@ describe("結果の表示", () => {
     expect(within(second).getByText(/B 4〜7, 9〜12/)).toBeInTheDocument();
     expect(within(third).getByText(/B 32/)).toBeInTheDocument();
     expect(within(third).getByText(/HB特化/)).toBeInTheDocument();
-    // 個別の「近い候補」ラベルは今までどおり全件に付く(弱めない)
+    // 個別の「ほぼ合う候補」ラベルは今までどおり全件に付く(弱めない)
     expect(screen.getAllByText(reverseResultText.closeCandidateLabel)).toHaveLength(cards.length);
   });
 
@@ -702,7 +701,7 @@ describe("結果の表示", () => {
 
   test("候補が0件のときは全件不一致の案内を出さない(issue #305)", async () => {
     await renderWithResult({ ...defenderResult, exactCount: 0, candidates: [] });
-    expect(await screen.findByRole("list", { name: "推定結果" })).toBeInTheDocument();
+    expect(await screen.findByRole("list", { name: "考えられる振り方" })).toBeInTheDocument();
     expect(screen.queryByRole("status")).toBeNull();
   });
 
@@ -725,7 +724,7 @@ describe("結果の表示", () => {
     await choosePair(user, speciesAt(0), speciesAt(1));
     await typeObservation(user, 1, "45");
     expect(await screen.findByText("計算中")).toBeInTheDocument();
-    expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
+    expect(screen.queryByRole("list", { name: "考えられる振り方" })).toBeNull();
 
     const last = pending.at(-1);
     if (last === undefined) {
@@ -744,15 +743,15 @@ describe("結果の表示", () => {
 
   test("engine のエラーは role=alert で message を出す", async () => {
     const engine = createFakeEngine(undefined, () =>
-      engineError("invalid_observation", "観測の入力が不正: テスト"),
+      engineError("invalid_observation", "ダメージの入力が不正: テスト"),
     );
     const { user } = renderScreen(engine);
     await choosePair(user, speciesAt(0), speciesAt(1));
     await typeObservation(user, 1, "45");
-    expect(await screen.findByRole("alert")).toHaveTextContent("観測の入力が不正: テスト");
+    expect(await screen.findByRole("alert")).toHaveTextContent("ダメージの入力が不正: テスト");
   });
 
-  test("古い応答が後から届いても、新しい観測の結果を上書きしない", async () => {
+  test("古い応答が後から届いても、新しいダメージの結果を上書きしない", async () => {
     const { engine, pending } = createDeferredReverseEngine();
     const { user } = renderScreen(engine);
     await choosePair(user, speciesAt(0), speciesAt(1));
@@ -793,18 +792,20 @@ describe("結果の表示", () => {
     expect(screen.queryByText("B 1")).toBeNull();
   });
 
-  test("変化技を選ぶと「変化技はダメージを計算しません」を出し、engine を呼ばない", async () => {
+  test("変化技は技の選択肢に無く、変化技を覚える種族でも逆算が続く(ADR-0328。status-move の判定は domain/moves.statusMove.test.ts)", async () => {
     const { species, statusMove } = speciesWithStatusMove();
     const { user, engine } = renderScreen();
     await choosePair(user, species, speciesAt(1));
-    await user.selectOptions(moveSelect(), statusMove.id);
     await typeObservation(user, 1, "45");
-    expect(screen.getByText("変化技はダメージを計算しません")).toBeInTheDocument();
-    expect(engine.reverseRequests).toHaveLength(0);
+    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(screen.queryByText("変化技はダメージを計算しません")).toBeNull();
+    await waitFor(() => {
+      expect(engine.reverseRequests.length).toBeGreaterThan(0);
+    });
   });
 
-  // P4-4 critic 指摘: CompletedCalc の比較(観測・プリセット・技・相手の種族)が古い候補を正しく消すことの確認。
-  // この比較を side だけに弱めると、下のどのテストも(観測を変えても古い候補が残ってしまうため)失敗するはず。
+  // P4-4 critic 指摘: CompletedCalc の比較(ダメージ・プリセット・技・相手の種族)が古い候補を正しく消すことの確認。
+  // この比較を side だけに弱めると、下のどのテストも(ダメージを変えても古い候補が残ってしまうため)失敗するはず。
   describe("結果が出た後に入力を変えると、古い候補を消して「計算中」に戻る", () => {
     async function showInitialResult(
       user: UserEvent,
@@ -827,12 +828,12 @@ describe("結果の表示", () => {
 
     function expectBackToLoading(): Promise<HTMLElement> {
       return screen.findByText("計算中").then((notice) => {
-        expect(screen.queryByRole("list", { name: "推定結果" })).toBeNull();
+        expect(screen.queryByRole("list", { name: "考えられる振り方" })).toBeNull();
         return notice;
       });
     }
 
-    test("観測を変えると", async () => {
+    test("ダメージを変えると", async () => {
       const { engine, pending } = createDeferredReverseEngine();
       const { user } = renderScreen(engine);
       await showInitialResult(user, pending, speciesAt(0), speciesAt(1));
@@ -907,14 +908,14 @@ describe("結果の表示", () => {
   });
 });
 
-// P4-19(issue #110、ADR-0208、DECISIONS.md 2026-09-23): 候補・観測の件数上限。
+// P4-19(issue #110、ADR-0208、DECISIONS.md 2026-09-23): 候補・ダメージの件数上限。
 // 期待値(16件・64通り)は api/openapi.yaml の maxItems から直接書く(実装の写しにしない)。
 // 定数とのずれは domain/requestLimits.test.ts が openapi.yaml を読んで検出する。
 describe("件数の上限(issue #110)", () => {
-  const observationLimitReason = "観測は16件までです。追加するには、どれかの行を削除してください";
+  const observationLimitReason = "ダメージは16件まで入力できます。追加するには、どれかの行を削除してください";
   const itemsTruncatedNotice = "持ち物の候補が多いため、先頭から64通りまでで計算しています";
 
-  /** 観測が count 行になるまで「観測を追加」を押す(初期状態は1行)。 */
+  /** ダメージが count 行になるまで「ダメージを追加」を押す(初期状態は1行)。 */
   async function addObservationsUntil(user: UserEvent, count: number): Promise<void> {
     for (let rows = 1; rows < count; rows += 1) {
       await user.click(addObservationButton());
@@ -924,15 +925,15 @@ describe("件数の上限(issue #110)", () => {
   test("15件(上限-1)までは追加でき、理由は出ない", async () => {
     const { user } = renderScreen();
     await addObservationsUntil(user, 15);
-    expect(screen.getByRole("textbox", { name: "観測15" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "ダメージ15" })).toBeInTheDocument();
     expect(addObservationButton()).toBeEnabled();
     expect(screen.queryByText(observationLimitReason)).toBeNull();
   });
 
-  test("16件(上限)に達すると「観測を追加」が無効になり、理由がスクリーンリーダーにも伝わる", async () => {
+  test("16件(上限)に達すると「ダメージを追加」が無効になり、理由がスクリーンリーダーにも伝わる", async () => {
     const { user } = renderScreen();
     await addObservationsUntil(user, 16);
-    expect(screen.getByRole("textbox", { name: "観測16" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "ダメージ16" })).toBeInTheDocument();
     expect(addObservationButton()).toBeDisabled();
 
     // 理由は live region(role=status)で読み上げられ、ボタンからも aria-describedby で指す
@@ -945,14 +946,14 @@ describe("件数の上限(issue #110)", () => {
     const { user } = renderScreen();
     await addObservationsUntil(user, 16);
     await user.click(addObservationButton());
-    expect(screen.queryByRole("textbox", { name: "観測17" })).toBeNull();
+    expect(screen.queryByRole("textbox", { name: "ダメージ17" })).toBeNull();
   });
 
   test("1行削除すると再び追加でき、理由も消える", async () => {
     const { user } = renderScreen();
     await addObservationsUntil(user, 16);
-    await user.click(screen.getByRole("button", { name: "観測16を削除" }));
-    expect(screen.queryByRole("textbox", { name: "観測16" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "ダメージ16を削除" }));
+    expect(screen.queryByRole("textbox", { name: "ダメージ16" })).toBeNull();
     expect(addObservationButton()).toBeEnabled();
     expect(screen.queryByText(observationLimitReason)).toBeNull();
   });
@@ -1009,7 +1010,7 @@ describe("件数の上限(issue #110)", () => {
 // ADR-0501「P6-17」)に揃える(CalcScreen.test.tsx の同名 describe と同じ考え方):
 //   - **全候補に共通する印**(target・reason・id が同じ)は、候補一覧の**先頭に1回**(role=status)だけ出す。
 //   - **一部の候補だけにある印**(候補ごとに持ち物が違う等)は、その**候補カードだけ**に出す
-//     (issue 305 の「近い候補」「参考」と同じ並びに置く)。
+//     (issue 305 の「ほぼ合う候補」「参考」と同じ並びに置く)。
 describe("未対応の印(issue 271 / issue 270)", () => {
   const moveMark = (moveId: string): UnsupportedMark => ({
     target: "move",

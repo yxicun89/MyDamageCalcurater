@@ -1,4 +1,4 @@
-# ADR-0807: ポケモン画像はローカル変換+gateway の `/images/*` で配信する(MinIO は入れない)
+# ADR-0808: ポケモン画像はローカル変換+gateway の `/images/*` で配信する(MinIO は入れない)
 
 - 状態: 採用(2026-10-03。P8-1 の範囲確定。spec-writer。実装は後続)
 - 関連: requirements.md「ポケモン画像」・ADR-0001(画像: MinIO + gateway /assets)・ADR-0002(公式画像を Git に入れない)・ADR-0202(gateway ルーティング)・issue #286 所見1

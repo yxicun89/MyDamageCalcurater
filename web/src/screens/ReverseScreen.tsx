@@ -34,8 +34,8 @@ import {
   resolveDefenderPreset,
   type DefenderPresetKey,
 } from "../domain/defenderPresets";
-import { formatMoveCategory, formatPercentRange } from "../domain/format";
-import { firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { formatPercentRange } from "../domain/format";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
 import {
   canAddObservation,
   defaultObservationUnit,
@@ -105,10 +105,13 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { typeAccentStyle } from "../ui/typeAccent";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { useMoveSort } from "../app/useMoveSort";
+import { MoveOptions, MoveSortChips } from "./MoveSortControls";
 import "./ReverseScreen.css";
 
 /**
@@ -191,7 +194,7 @@ function resolveMoveId(species: MasterSpecies | null, moves: readonly Move[], cu
   if (species === null) {
     return "";
   }
-  if (learnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
+  if (damagingLearnsetMoves(species, moves).some((move) => move.id === currentMoveId)) {
     return currentMoveId;
   }
   return firstDamagingMove(species, moves)?.id ?? "";
@@ -206,6 +209,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     abilitiesFor,
     movesFor,
     resolvedSpecies,
+    resolvedAbilities,
+    resolvedMoves,
     register: registerSpeciesResolution,
   } = useSpeciesResolutions();
   // P4-19(issue 110): 観測の上限に達した理由(role="status")の id。ボタンの aria-describedby から指す。
@@ -275,6 +280,12 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     [master.items, side, stoneIds],
   );
   // 結果の候補の行・未対応の印は持ち物を ID から引く。メガストーンの英語名を出さない(ADR-0326 §4)。
+  // 未対応の印の名前引き用。オンラインのマスタは moves・abilities が空なので、解決済みの分を足す。
+  const markMoves = useMemo(() => [...master.moves, ...resolvedMoves], [master.moves, resolvedMoves]);
+  const markAbilities = useMemo(
+    () => [...master.abilities, ...resolvedAbilities],
+    [master.abilities, resolvedAbilities],
+  );
   const displayItems = useMemo(
     () => itemsWithStoneLabels(master.items, [mySpecies, theirsSpecies], stoneIds),
     [master.items, mySpecies, theirsSpecies, stoneIds],
@@ -320,7 +331,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
     () =>
       moveSourceSpecies === null
         ? []
-        : learnsetMoves(moveSourceSpecies, movesFor(master.moves, moveSourceKey)),
+        : damagingLearnsetMoves(moveSourceSpecies, movesFor(master.moves, moveSourceKey)),
     [moveSourceSpecies, master.moves, moveSourceKey, movesFor],
   );
   // P4-17(ADR-0304 A-13): 技セレクトが使えるのは capabilities.moves が true、または今の攻撃側の技の
@@ -571,7 +582,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       mySpecies === null ||
       theirsSpecies === null ||
       move === null ||
-      move.category === "status" ||
+      isStatusMove(move) ||
       requestHasInvalidObservation ||
       requestValidObservations.length === 0
     ) {
@@ -685,7 +696,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
   let outcome: Outcome;
   if (mySpecies === null || theirsSpecies === null || move === null) {
     outcome = { status: "idle" };
-  } else if (move.category === "status") {
+  } else if (isStatusMove(move)) {
     outcome = { status: "status-move" };
   } else if (hasInvalidObservation) {
     outcome = { status: "invalid" };
@@ -788,13 +799,30 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         />
       </div>
 
-      <MoveSelect moves={moveOptions} value={moveId} onChange={selectMove} disabled={!movesAvailable} />
-      {!movesAvailable && <p className="reverse-screen__notice">{masterOnlineText.movesUnavailable}</p>}
+      <MoveSelect
+        moves={moveOptions}
+        types={master.typeChart.types}
+        value={moveId}
+        onChange={selectMove}
+        disabled={!movesAvailable}
+      />
+      {!movesAvailable && (
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {masterOnlineText.movesUnavailable}
+        </p>
+      )}
+      {moveSourceSpecies !== null && capabilities.moves && moveOptions.length === 0 && (
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {calcScreenText.noDamagingMovesNotice}
+        </p>
+      )}
       {!capabilities.effects && (
-        <p className="reverse-screen__notice">{masterOnlineText.itemCandidatesUnavailable}</p>
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
+          {masterOnlineText.itemCandidatesUnavailable}
+        </p>
       )}
       {itemCandidatesResult.truncated && (
-        <p className="reverse-screen__notice">
+        <p className="ui-notice ui-notice--info reverse-screen__notice">
           {requestLimitText.itemCandidatesTruncated(MAX_ITEM_CANDIDATES)}
         </p>
       )}
@@ -821,7 +849,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
         ))}
         <button
           type="button"
-          className="reverse-observations__add"
+          className="ui-button ui-button--secondary reverse-observations__add"
           onClick={addObservation}
           disabled={!canAddObservation(observations.length)}
           aria-describedby={canAddObservation(observations.length) ? undefined : observationLimitReasonId}
@@ -829,7 +857,11 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
           {reverseScreenText.addObservationLabel}
         </button>
         {!canAddObservation(observations.length) && (
-          <p id={observationLimitReasonId} role="status" className="reverse-screen__notice">
+          <p
+            id={observationLimitReasonId}
+            role="status"
+            className="ui-notice ui-notice--info reverse-screen__notice"
+          >
             {requestLimitText.observationLimitReached(MAX_OBSERVATIONS)}
           </p>
         )}
@@ -838,8 +870,8 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       <ResultsSection
         outcome={outcome}
         items={displayItems}
-        moves={master.moves}
-        abilities={master.abilities}
+        moves={markMoves}
+        abilities={markAbilities}
         theirsHasAbilityChoice={theirsAbilityOptions.length > 1}
         narrowing={narrowing}
         onNarrowingAnimationEnd={handleNarrowingAnimationEnd}
@@ -910,7 +942,11 @@ function ReverseCard({
   return (
     // section の accessible name は今までどおり aria-label(cardLabel、「自分のポケモン」等。変えない)。
     // h2 は見える見出し(regionLabel、「自分」「相手」)を足すためだけに置く(issue 304)。
-    <section className="reverse-card" aria-label={cardLabel}>
+    <section
+      className="ui-card ui-card--typed reverse-card"
+      aria-label={cardLabel}
+      style={typeAccentStyle(species?.types[0])}
+    >
       <h2 className="reverse-card__region">{regionLabel}</h2>
       {speciesListAvailable ? (
         <>
@@ -963,7 +999,7 @@ function ReverseCard({
             >
               <option value="">{calcScreenText.noItemOption}</option>
               {itemLock.kind === "locked" && species !== null ? (
-                <option value={itemLock.item.id}>{megaStoneLabel(species)}</option>
+                <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
               ) : (
                 items.map((item) => (
                   <option key={item.id} value={item.id}>
@@ -984,7 +1020,9 @@ function ReverseCard({
         <>
           <MegaItemReason id={itemReasonId} lock={itemLock} className="reverse-card__reason" />
           {itemLock.kind === "locked" && species !== null && (
-            <p className="reverse-card__reason">{megaItemText.fixedItemName(megaStoneLabel(species))}</p>
+            <p className="reverse-card__reason">
+              {megaItemText.fixedItemName(megaStoneLabel(species, itemLock.item.nameJa))}
+            </p>
           )}
         </>
       )}
@@ -1006,7 +1044,7 @@ function SideSelector({ side, onChange }: SideSelectorProps) {
   const groupName = useId();
   return (
     <div role="radiogroup" aria-label={reverseScreenText.sideGroupLabel} className="reverse-side">
-      <label className="reverse-side__option">
+      <label className={`ui-chip${side === "defender" ? " ui-chip--selected" : ""} reverse-side__option`}>
         <input
           type="radio"
           name={groupName}
@@ -1017,7 +1055,7 @@ function SideSelector({ side, onChange }: SideSelectorProps) {
         />
         {reverseScreenText.sideDefenderLabel}
       </label>
-      <label className="reverse-side__option">
+      <label className={`ui-chip${side === "attacker" ? " ui-chip--selected" : ""} reverse-side__option`}>
         <input
           type="radio"
           name={groupName}
@@ -1048,7 +1086,7 @@ function MyPresetSelector({ category, value, onChange }: MyPresetSelectorProps) 
         return (
           <label
             key={key}
-            className={`reverse-preset__option${selected ? " reverse-preset__option--selected" : ""}`}
+            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
           >
             <input
               type="radio"
@@ -1086,7 +1124,7 @@ function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPrese
         return (
           <label
             key={key}
-            className={`reverse-preset__option${selected ? " reverse-preset__option--selected" : ""}`}
+            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
           >
             <input
               type="radio"
@@ -1107,6 +1145,8 @@ function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPrese
 
 interface MoveSelectProps {
   readonly moves: readonly Move[];
+  /** マスタのタイプ表の並び(タイプ順の群の並び)。 */
+  readonly types: readonly string[];
   readonly value: string;
   readonly onChange: (moveId: string) => void;
   /**
@@ -1116,14 +1156,16 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。learnset の順のまま出す。 */
-function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProps) {
+/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。並びはチップ群で選ぶ(既定は learnset の順)。 */
+function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
   const moveSelectId = useId();
+  const [order] = useMoveSort();
   return (
     <>
       <label className="reverse-screen__label" htmlFor={moveSelectId}>
         {calcScreenText.moveLabel}
       </label>
+      <MoveSortChips variant="reverse" />
       <select
         id={moveSelectId}
         className="reverse-screen__move"
@@ -1134,16 +1176,7 @@ function MoveSelect({ moves, value, onChange, disabled = false }: MoveSelectProp
           onChange(event.target.value);
         }}
       >
-        {moves.map((move) => (
-          <option key={move.id} value={move.id}>
-            {move.nameJa}
-            {calcScreenText.moveOptionSeparator}
-            {formatMoveCategory(move.category)}
-            {move.category === "status"
-              ? ""
-              : `${calcScreenText.moveOptionSeparator}${calcScreenText.movePowerLabel}${String(move.power)}`}
-          </option>
-        ))}
+        <MoveOptions moves={moves} types={types} order={order} value={value} />
       </select>
     </>
   );
@@ -1203,7 +1236,9 @@ function ObservationRowView({
         aria-label={reverseScreenText.observationUnitGroupLabel(n)}
         className="reverse-observation__unit"
       >
-        <label className="reverse-observation__unit-option">
+        <label
+          className={`ui-chip${row.unit === "percent" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
+        >
           <input
             type="radio"
             name={groupName}
@@ -1214,7 +1249,9 @@ function ObservationRowView({
           />
           {reverseScreenText.percentUnitLabel}
         </label>
-        <label className="reverse-observation__unit-option">
+        <label
+          className={`ui-chip${row.unit === "damage" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
+        >
           <input
             type="radio"
             name={groupName}
@@ -1238,7 +1275,11 @@ function ObservationRowView({
         </p>
       )}
       {removable && (
-        <button type="button" className="reverse-observation__remove" onClick={onRemove}>
+        <button
+          type="button"
+          className="ui-button ui-button--secondary reverse-observation__remove"
+          onClick={onRemove}
+        >
           {reverseScreenText.removeObservationLabel(n)}
         </button>
       )}
@@ -1276,14 +1317,18 @@ function ResultsSection({
     case "loading":
       return (
         <div className="reverse-results" aria-busy="true">
-          <p className="reverse-screen__notice">{calcScreenText.loadingNotice}</p>
+          <p className="ui-notice ui-notice--loading reverse-screen__notice">
+            {calcScreenText.loadingNotice}
+          </p>
         </div>
       );
     case "status-move":
-      return <p className="reverse-screen__notice">{calcScreenText.statusMoveNotice}</p>;
+      return (
+        <p className="ui-notice ui-notice--info reverse-screen__notice">{calcScreenText.statusMoveNotice}</p>
+      );
     case "error":
       return (
-        <p role="alert" className="reverse-screen__error">
+        <p role="alert" className="ui-notice ui-notice--error reverse-screen__error">
           {outcome.error.message}
         </p>
       );
@@ -1328,7 +1373,7 @@ function ReverseResultsList({
   onNarrowingAnimationEnd,
 }: ReverseResultsListProps) {
   const assumptionNote = reverseAssumptionNote(result);
-  const listClassName = `reverse-results__list${narrowing ? " is-narrowing" : ""}`;
+  const listClassName = `ui-rows reverse-results__list${narrowing ? " is-narrowing" : ""}`;
   // issue 305: 観測を厳密に説明できる候補(exact)が1件も無いとき(exactCount 0 かつ候補が1件以上)。
   // 判定は engine が返した exactCount をそのまま使う(ADR-0300 §8: TS 側で再判定しない)。
   const hasNoExactCandidate = result.exactCount === 0 && result.candidates.length > 0;

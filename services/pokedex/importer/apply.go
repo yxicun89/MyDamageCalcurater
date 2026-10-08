@@ -145,7 +145,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 		}
 	}
 	for _, it := range out.Items {
-		if err := q.InsertItem(ctx, store.InsertItemParams{ID: it.ID, NameJa: it.NameJa, NameJaSource: it.NameJaSource, NameEn: it.NameEn}); err != nil {
+		if err := q.InsertItem(ctx, store.InsertItemParams{ID: it.ID, NameJa: it.NameJa, NameJaSource: it.NameJaSource, NameEn: it.NameEn, IsMegaStone: it.IsMegaStone}); err != nil {
 			return err
 		}
 	}

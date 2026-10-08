@@ -41,13 +41,13 @@ test("攻撃側・防御側を選ぶと技が自動で選ばれ、既定の5行�
   await expect(page.getByRole("meter")).toHaveCount(0);
 });
 
-test("攻撃側の調整を A特化 に変えると、先頭行の最大%が増える", async ({ page }) => {
+test("攻撃の調整を A特化 に変えると、先頭行の最大%が増える", async ({ page }) => {
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   const rows = calcRows(page);
   const [before] = await rowTexts(rows, DEFAULT_ROW_COUNT);
   const beforeMax = parsePercentRange(before ?? "").max;
 
-  await chooseRadio(page, "攻撃側の調整", "A特化");
+  await chooseRadio(page, "攻撃の調整", "A特化");
 
   await expect
     .poll(async () => {
@@ -55,6 +55,33 @@ test("攻撃側の調整を A特化 に変えると、先頭行の最大%が増�
       return parsePercentRange(after ?? "").max;
     })
     .toBeGreaterThan(beforeMax);
+});
+
+// I-web-1・I-web-3(ADR-0329): 「技」の次に「攻撃」「特攻」の2ブロック。選んだ技が使う方を強調し、
+// SP の数値入力と性格補正(上昇)で結果が強くなる向きに変わる(丸めは engine のまま。Web は値を渡すだけ)。
+test("技が使う側のブロックで SP を数値で入れ、性格補正を上昇にすると、先頭行の最大%が段階的に増える", async ({
+  page,
+}) => {
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const rows = calcRows(page);
+  const firstMax = async () => parsePercentRange((await rowTexts(rows, DEFAULT_ROW_COUNT))[0] ?? "").max;
+  const before = await firstMax();
+
+  // 2ブロックとも出ていて、強調(この技で使用)はちょうど1つ。
+  await expect(page.getByRole("group", { name: /^(攻撃|特攻)(\(この技で使用\))?$/ })).toHaveCount(2);
+  const used = page.getByRole("group", { name: /^(攻撃|特攻)\(この技で使用\)$/ });
+  await expect(used).toHaveCount(1);
+  await expect(used).toHaveAttribute("aria-current", "true");
+
+  await used.getByRole("textbox", { name: /のSP$/ }).fill("20");
+  await expect.poll(firstMax).toBeGreaterThan(before);
+  const afterSp = await firstMax();
+
+  const nature = used.getByRole("radiogroup", { name: /の性格補正$/ });
+  await nature.getByText("上昇", { exact: true }).click();
+  await expect(nature.getByRole("radio", { name: "上昇", exact: true })).toBeChecked();
+  await expect.poll(firstMax).toBeGreaterThan(afterSp);
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test("攻守入れ替えで攻撃側・防御側の名前が入れ替わり、結果が更新される", async ({ page }) => {
@@ -146,4 +173,29 @@ test("「詳細」で防御側のランク B を +1 にすると、物理技の�
       return parsePercentRange(after ?? "").max;
     })
     .toBeLessThan(beforeMax);
+});
+
+test("技の並びを 五十音順 に切り替えると、技の選択肢が並び替わり、選んでいた技は変わらない(I-web-9 = F-02)", async ({
+  page,
+}) => {
+  await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+  const move = combobox(page, "技");
+  const optionNames = () => move.locator("option").allTextContents();
+  const nameOf = (text: string) => text.split("・")[0] ?? text;
+
+  // 既定は習得順(テストほのお: たいあたり → かえんパンチ)。選ばれている技を覚えておく。
+  const selectedBefore = await move.inputValue();
+  expect((await optionNames()).map(nameOf)).toEqual(["テストたいあたり", "テストかえんパンチ"]);
+
+  await chooseRadio(page, "技の並び", "五十音順");
+  // 五十音順(か行 → た行)に入れ替わる。
+  await expect
+    .poll(async () => (await optionNames()).map(nameOf))
+    .toEqual(["テストかえんパンチ", "テストたいあたり"]);
+  await expect(move).toHaveValue(selectedBefore);
+
+  await chooseRadio(page, "技の並び", "習得順");
+  await expect
+    .poll(async () => (await optionNames()).map(nameOf))
+    .toEqual(["テストたいあたり", "テストかえんパンチ"]);
 });

@@ -162,7 +162,7 @@ ID は `toID(名前)`(小文字英数字以外を落とす)。calc の技は `ty
   - タイプ = calc の `types` から `config.json` の `excludeTypes`(calc の型名。`???` だけ。`Stellar` は固定した calc 0.12.0 の
     Champions 世代に存在しないため含めない。含めると calc に無い名前として `ErrInvalidData` になる。上の「更新」4点目)を除いたもの。
     sort_order は calc の並び順の 1 始まり。種族・技・効果が除外したタイプを使えば `ErrInvalidData`。相性表は除外したタイプの組を落とす(無い組は等倍)。
-  - 持ち物 = 技と同じ規則(両方にあり Showdown で null → 取り込む。Showdown だけで null → 取り込み警告 `item-showdown-only`。calc だけ、または Showdown で非 null・無い → 除外警告 `item-excluded`)。
+  - 持ち物 = 技と同じ規則(両方にあり Showdown で null → 取り込む。Showdown だけで null → 取り込み警告 `item-showdown-only`。calc だけ、または Showdown で非 null・無い → 除外警告 `item-excluded`)。メガストーンの判定の食い違いは警告 `item-mega-stone-mismatch`(ADR-0140)。
     技と違い値の食い違いは無い(名前と有無だけ)ので Blocker は無い。
 
 ### 6. 日本語名

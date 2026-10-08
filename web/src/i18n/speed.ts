@@ -6,7 +6,7 @@
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
  */
 export const speedClientText = {
-  unavailable: "素早さの API に接続できません",
+  unavailable: "素早さのサーバーに接続できません",
 } as const;
 
 /**
@@ -44,11 +44,22 @@ export const speedScreenText = {
   selfTierLabel: "自分と同速",
   /** 左の表で、自分の行が挟まる境界に引く印。 */
   selfBoundaryLabel: "ここに自分が入る",
+  /** F-06: 表のスクロール領域(キーボードの矢印・PageUp/Down でスクロールできる)の名前。 */
+  viewportLabel: "素早さの一覧(上下にスクロールできます)",
+  /** F-06: 段の一覧(リスト)の名前。画面外の段は描画しないが、総数は aria-setsize で伝える。 */
+  tiersListLabel: "素早さの段",
+  /** F-06: 自分の位置までスクロールするボタン。 */
+  jumpToSelfLabel: "自分の位置へ移動",
+  /** F-06: 左の該当行と同じ高さに置く、右の位置マーカーの文字(見た目だけ。aria-hidden)。 */
+  markerLabel: (speed: number): string => `自分 ${String(speed)}`,
+  /** F-06: マーカーの行が画面の上・下に外れているときの目印。 */
+  markerAboveHint: "↑",
+  markerBelowHint: "↓",
   /** 行の中の区切り(「名前・調整」)。 */
   entrySeparator: "・",
   // ---- 右(自分のポケモン)の入力(ADR-0604 §4) ----
   modeGroupLabel: "入力の方法",
-  modeLabel: { preset: "プリセット", custom: "カスタム", raw: "実数値" } as const,
+  modeLabel: { preset: "定番の振り方", custom: "カスタム", raw: "実数値" } as const,
   pokemonLabel: "ポケモン",
   /** ポケモンを選んでいないときの選択肢(raw では選ばなくてよい)。 */
   unselectedOption: "未選択",
@@ -69,13 +80,13 @@ export const speedScreenText = {
   /** services/speed/api/openapi.yaml の ErrorCode と、Web 側の speed_unavailable に対応する。 */
   errorByCode: {
     invalid_request: "入力の形が正しくありません。値の範囲を確認してください",
-    missing_header: "端末の識別情報が送られていません",
-    invalid_header: "端末の識別情報の形が正しくありません",
-    unknown_pokemon: "このポケモンはマスタにありません",
+    missing_header: "端末の情報が送られていません。ページを開き直してください",
+    invalid_header: "端末の情報が正しくありません。ページを開き直してください",
+    unknown_pokemon: "このポケモンはデータにありません",
     request_too_large: "入力が大きすぎます",
-    master_unavailable: "ポケモンのマスタを読み込めません",
+    master_unavailable: "ポケモンのデータを読み込めません",
     internal_error: "素早さの計算に失敗しました",
-    speed_unavailable: "素早さの API に接続できません",
+    speed_unavailable: "素早さのサーバーに接続できません",
   } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",

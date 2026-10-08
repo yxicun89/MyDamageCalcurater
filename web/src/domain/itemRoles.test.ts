@@ -5,7 +5,7 @@
 //   - roles が無い持ち物(古いサーバー・古いキャッシュ・例データ)は役割で絞らない(効果から再導出しない)
 //   - 「持ち物なし」は含めない(欄が先頭に足す)
 //   - itemAfterRoleChange: 役割が変わったとき、合わない持ち物は未選択に戻し外した持ち物を返す
-//   - megaStoneLabel: 「{基本種名}のメガストーン」、基本種名が無ければ「メガストーン」(ストーンの nameJa は使わない)
+//   - megaStoneLabel: ストーンの nameJa が日本語ならそのまま、使えなければ「{基本種名}のメガストーン」、基本種名も無ければ「メガストーン」(ADR-0328)
 //   - toEngineItem: roles・isMegaStone を落として engine の Item の形にする(境界は未知のフィールドを拒否する)
 //   - 画面ごとの役割: 逆算の自分は観測した側の反対、判定・調整は either、構築は any
 
@@ -207,9 +207,9 @@ describe("itemAfterRoleChange: 欄の役割が変わったときの持ち物", (
 });
 
 describe("megaStoneLabel: 固定中の表示", () => {
-  test("基本種名があれば「{基本種名}のメガストーン」(ストーンの nameJa は使わない)", () => {
-    expect(megaStoneLabel(MEGA_FIRE)).toBe(MEGA_FIRE_STONE_LABEL);
-    expect(megaStoneLabel(MEGA_FIRE)).not.toContain(MEGA_FIRE_STONE.nameJa);
+  test("ストーンの nameJa が日本語ならそのまま、英語名などのときは「{基本種名}のメガストーン」", () => {
+    expect(megaStoneLabel(MEGA_FIRE, MEGA_FIRE_STONE.nameJa)).toBe(MEGA_FIRE_STONE_LABEL);
+    expect(megaStoneLabel(MEGA_FIRE, "Examplite F")).toBe(`${MEGA_FIRE.baseSpeciesNameJa}専用のメガストーン`);
   });
 
   test.each<[string, MasterSpecies]>([
@@ -221,7 +221,9 @@ describe("megaStoneLabel: 固定中の表示", () => {
   });
 
   test("ユーザー報告の例: ルカリオのメガストーン", () => {
-    expect(megaStoneLabel({ ...MEGA_FIRE, baseSpeciesNameJa: "ルカリオ" })).toBe("ルカリオのメガストーン");
+    expect(megaStoneLabel({ ...MEGA_FIRE, baseSpeciesNameJa: "ルカリオ" })).toBe(
+      "ルカリオ専用のメガストーン",
+    );
   });
 });
 

@@ -1,9 +1,9 @@
-// P4-6: オンライン(API)の主な流れ(ADR-0301 §4・§6)。playwright.online.config.ts が
+// P4-6: サーバー(オンライン)の主な流れ(ADR-0301 §4・§6)。playwright.online.config.ts が
 //   - calc-svc を Web の例データ(MasterExport)で起動し、vite preview の /api を転送する
 //   - pokedex フィクスチャ(e2e/support/pokedexFixtureServer.mjs。PR2・ADR-0307)を起動し、
 //     /api/pokedex を /api より前にそちらへ転送する(POKEDEX_PROXY_TARGET)
 // 計算モードをオンラインに切り替えると、マスタは /api/pokedex/* から読み、計算は /api/calc/bulk で行い、
-// engine.wasm は読まない。同じ画面操作がオフライン(WASM)と同じ行を出すこと(ADR-0301 §6 の結合)も確かめる。
+// engine.wasm は読まない。同じ画面操作がこの端末(オフライン)と同じ行を出すこと(ADR-0301 §6 の結合)も確かめる。
 //
 // PR2 での変更(ADR-0307):
 //   - 種族の選択は `<select>` ではなく検索欄(ADR-0304 A-4・A-10)なので selectMatchupBySearch を使う。
@@ -31,8 +31,8 @@ function isEngineWasm(request: Request): boolean {
   return new URL(request.url()).pathname.endsWith("/engine.wasm");
 }
 
-async function selectMode(page: Page, name: "オンライン(API)" | "オフライン(WASM)"): Promise<void> {
-  await chooseRadio(page, "ダメージ計算の実行場所", name);
+async function selectMode(page: Page, name: "サーバー(オンライン)" | "この端末(オフライン)"): Promise<void> {
+  await chooseRadio(page, "計算する場所", name);
 }
 
 test("オンラインのマスタは /api/pokedex/* から読む(フィクスチャへの振り分けが効いている)", async ({
@@ -44,7 +44,7 @@ test("オンラインのマスタは /api/pokedex/* から読む(フィクスチ
     (response) => new URL(response.url()).pathname === "/api/pokedex/natures",
   );
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
 
   for (const response of [await items, await natures]) {
     expect(response.status(), `${response.url()} が 200 でない`).toBe(200);
@@ -80,7 +80,7 @@ test("オンラインでは /api/calc/bulk(200)で計算し、engine.wasm を取
     }
   });
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
 
   const bulkResponse = page.waitForResponse(
     (response) =>
@@ -106,7 +106,7 @@ test("オンラインで「持ち物の候補も比較」をオンにすると�
   page,
 }) => {
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
   await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
   const compare = page.getByRole("checkbox", { name: "持ち物の候補も比較", exact: true });
@@ -115,9 +115,9 @@ test("オンラインで「持ち物の候補も比較」をオンにすると�
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
-test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結果の行が一致する", async ({ page }) => {
+test("同じ画面操作で、サーバー(オンライン)とこの端末(オフライン)の結果の行が一致する", async ({ page }) => {
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
   // オンライン側の行が API から来たことを、このテストの中でも確かめる(bulk の応答が 200)。
   const bulkResponse = page.waitForResponse(
     (response) =>
@@ -134,7 +134,7 @@ test("同じ画面操作で、オンライン(API)とオフライン(WASM)の結
   // 計算モードは localStorage に覚えるので、開き直してオフラインに切り替え、同じ操作をする
   // (オンラインで取得したマスタ・種族は IndexedDB に保存済み。ADR-0313)。
   await openApp(page);
-  await selectMode(page, "オフライン(WASM)");
+  await selectMode(page, "この端末(オフライン)");
   await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   // ADR-0313: オフラインのマスタはオンラインで取得したキャッシュなので、効果データが無く(effects: false)、
   // 候補比較はオフラインでも選べない(以前は架空の例データで選べた。実データ相当では同じ制約になる)。
@@ -160,7 +160,7 @@ test("オンラインでは、よく計算する相手のチップを押すと�
     });
   });
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
 
   const group = page.getByRole("group", { name: "よく計算する相手", exact: true });
   const chip = group.getByRole("button", { name: SPECIES.water.nameJa, exact: true });
@@ -185,7 +185,7 @@ test("オンラインで record が 503 でも、チップは出ず、計算は�
     }),
   );
   await openApp(page);
-  await selectMode(page, "オンライン(API)");
+  await selectMode(page, "サーバー(オンライン)");
   await selectMatchupBySearch(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
 
   for (const text of await rowTexts(calcRows(page), DEFAULT_ROW_COUNT)) {

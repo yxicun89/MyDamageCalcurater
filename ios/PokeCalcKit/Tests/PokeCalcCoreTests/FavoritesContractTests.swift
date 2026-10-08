@@ -47,6 +47,66 @@ final class FavoritesContractTests: XCTestCase {
         XCTAssertEqual(input.label, "物理受け")
     }
 
+    /// ADR-0228(usability-round2 F-09): `calc` を持つお気に入りは、計算の入力全体を `CalcRequest` そのものとして読める
+    /// (そのまま `calcDamage` の本文にできる)。`calc` の無い(旧い)お気に入りは `calc` が nil で、従来どおり読める。
+    func testFavoriteWithCalcDecodesAsCalcRequest() throws {
+        let json = #"""
+        [{"id":"42","label":"雨ダブル","individual":{"speciesKey":"9002-000","level":50,"natureId":"fake-nature",
+          "sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32},
+          "ranks":{"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"status":"none"},
+          "calc":{"format":"double",
+            "attacker":{"speciesKey":"9002-000","level":50,"natureId":"fake-nature",
+              "sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32},
+              "ranks":{"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"status":"none"},
+            "defender":{"speciesKey":"9003-000","level":50,"natureId":"fake-nature",
+              "sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":2,"spe":0},
+              "ranks":{"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"status":"none"},
+            "moveId":"fake-move",
+            "field":{"weather":"rain","terrain":"none",
+              "attackerScreens":{"reflect":false,"lightScreen":false,"auroraVeil":false},
+              "defenderScreens":{"reflect":true,"lightScreen":false,"auroraVeil":false}},
+            "options":{"critical":false}},
+          "createdAt":"2026-10-01T00:00:00Z","updatedAt":"2026-10-02T00:00:00Z"},
+         {"id":"7","label":null,"individual":{"speciesKey":"9003-000","level":50,"natureId":"fake-nature",
+          "sp":{"hp":0,"atk":0,"def":0,"spa":0,"spd":0,"spe":0},
+          "ranks":{"atk":0,"def":0,"spa":0,"spd":0,"spe":0},"status":"none"},
+          "createdAt":"2026-10-01T00:00:00Z","updatedAt":"2026-10-01T00:00:00Z"}]
+        """#
+        let list = try decoder().decode([Components.Schemas.Favorite].self, from: Data(json.utf8))
+        let calc: Components.Schemas.CalcRequest? = list[0].calc
+        XCTAssertEqual(calc?.moveId, "fake-move")
+        XCTAssertEqual(calc?.format, .double)
+        XCTAssertEqual(calc?.defender.speciesKey, "9003-000")
+        XCTAssertEqual(calc?.field?.weather, .rain)
+        XCTAssertNil(list[1].calc, "calc の無いお気に入りは nil(旧い行・旧クライアントの作成)")
+    }
+
+    /// ADR-0228: 作成の本文に `calc`(`CalcRequest` そのもの)を付けられる。`individual` は従来どおり必須。
+    func testFavoriteInputAcceptsCalcRequest() throws {
+        let json = #"""
+        {"individual":{"speciesKey":"9002-000","level":50,"natureId":"fake-nature",
+          "sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32}},
+         "calc":{"format":"single",
+          "attacker":{"speciesKey":"9002-000","level":50,"natureId":"fake-nature",
+            "sp":{"hp":0,"atk":32,"def":0,"spa":0,"spd":2,"spe":32}},
+          "defender":{"speciesKey":"9003-000","level":50,"natureId":"fake-nature",
+            "sp":{"hp":32,"atk":0,"def":32,"spa":0,"spd":2,"spe":0}},
+          "moveId":"fake-move"}}
+        """#
+        let input = try decoder().decode(Components.Schemas.FavoriteInput.self, from: Data(json.utf8))
+        let calc: Components.Schemas.CalcRequest? = input.calc
+        XCTAssertEqual(calc?.moveId, "fake-move")
+        XCTAssertEqual(input.individual.speciesKey, "9002-000")
+        // 復元した calc はそのまま計算 API の本文(Operations.CalcDamage の JSON 本文)に入る。
+        if let calc {
+            let body: Operations.CalcDamage.Input.Body = .json(calc)
+            XCTAssertNotNil(body)
+        }
+        // calc を付けない従来の本文も作れる(memberwise init の calc は省略可)。
+        let legacy = Components.Schemas.FavoriteInput(label: nil, individual: input.individual)
+        XCTAssertNil(legacy.calc)
+    }
+
     /// 操作は一覧・作成・削除の3つ(更新は持たない。ADR-0227 §1)。生成クライアントに3つがあることを型で確かめる。
     func testClientHasFavoriteOperations() {
         let list: (Client) -> (Operations.ListFavorites.Input) async throws -> Operations.ListFavorites.Output =

@@ -1,6 +1,6 @@
 package httpapi
 
-// 調整(plan.md AJ4)の4操作。契約は api/openapi.yaml の /api/calc/adjust/* と ADR-0250。
+// 調整(plan.md AJ4・AJ10)の5操作。契約は api/openapi.yaml の /api/calc/adjust/* と ADR-0250。
 //
 // 流れは既存の calc と同じ: 厳格デコード → 値域の検査(hits・thresholdPercent・ceiling・minSpeed・modifier・damageModifier。ID 解決より前)
 // → 列挙(format・mode・focus・offenseCategory・field・status・teraType)→ ID 解決 → engine → 生成型への写し。
@@ -8,6 +8,7 @@ package httpapi
 // 計算イベントは発行しない(ADR-0250 §7)。式は持たず engine の関数を呼ぶだけ(CLAUDE.md 絶対ルール2・3)。
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -249,6 +250,124 @@ func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpT
 		HpSp: res.HPSP, StatSp: res.StatSP, TotalSp: res.TotalSP, BulkIndex: int64(res.BulkIndex),
 		ChancePercent: res.ChancePercent, Unsupported: unsupportedFrom(res.Unsupported),
 	})
+}
+
+// --- goals ---------------------------------------------------------------------------
+
+// AdjustGoals は POST /api/calc/adjust/goals(ADR-0331 の段階 B・ADR-0177 §9)。
+// 検査順は 値域 → 列挙 → 種類ごとの必須 → ID 解決(self → 目標の順に opponent → moveId)→ engine。
+// ID 解決より前はマスタを引かない。場は契約に無いので零値(parseField(nil) と同じ)を渡す。
+func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
+	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
+		return err
+	}
+	var req api.AdjustGoalsRequest
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+		return err
+	}
+	// 値域(ID 解決・列挙より前。ADR-0250 §5)。hits・thresholdPercent は種類によらず、値があれば検査する。
+	if len(req.Goals) < 1 || len(req.Goals) > engine.MaxSPGoals {
+		return newError(api.InvalidInput, "goals は 1..%d 件でなければならない: %d", engine.MaxSPGoals, len(req.Goals))
+	}
+	thresholds := make([]float64, len(req.Goals))
+	for i, g := range req.Goals {
+		if g.Hits != nil {
+			if err := checkAdjustHits(fmt.Sprintf("goals[%d].hits", i), *g.Hits); err != nil {
+				return err
+			}
+		}
+		threshold, err := adjustThreshold(fmt.Sprintf("goals[%d].thresholdPercent", i), g.ThresholdPercent)
+		if err != nil {
+			return err
+		}
+		thresholds[i] = threshold
+	}
+	ceiling, err := adjustCeiling(req.Ceiling)
+	if err != nil {
+		return err
+	}
+	// 列挙。
+	format, err := parseFormat(req.Format)
+	if err != nil {
+		return err
+	}
+	for i, g := range req.Goals {
+		if !g.Kind.Valid() {
+			return newError(api.InvalidEnum, "goals[%d].kind に未知の値 %q", i, string(g.Kind))
+		}
+	}
+	// 種類ごとの必須(outspeed の moveId は任意)。
+	for i, g := range req.Goals {
+		if g.Kind == api.AdjustGoalKindOutspeed {
+			continue
+		}
+		if g.MoveId == nil {
+			return newError(api.InvalidInput, "goals[%d](%s)の moveId は必須", i, g.Kind)
+		}
+		if g.Hits == nil {
+			return newError(api.InvalidInput, "goals[%d](%s)の hits は必須", i, g.Kind)
+		}
+	}
+	// ID 解決。
+	self, err := s.resolveIndividual("self", req.Self)
+	if err != nil {
+		return err
+	}
+	goals := make([]engine.SPGoal, 0, len(req.Goals))
+	for i, g := range req.Goals {
+		opponent, err := s.resolveIndividual(fmt.Sprintf("goals[%d].opponent", i), g.Opponent)
+		if err != nil {
+			return err
+		}
+		goal := engine.SPGoal{Kind: engine.SPGoalKind(g.Kind), Opponent: opponent}
+		if g.MoveId != nil {
+			move, err := s.resolveMove(*g.MoveId)
+			if err != nil {
+				return err
+			}
+			if g.Kind == api.AdjustGoalKindOutspeed {
+				// 先に使う技は素早さのランク変化だけを使う(ダメージは計算しない。ADR-0177 §4)。
+				goal.SelfSpeedStage = engine.GuaranteedSelfSpeedStage(move)
+			} else {
+				goal.Move = move
+			}
+		}
+		if g.Kind != api.AdjustGoalKindOutspeed {
+			goal.Hits, goal.ThresholdPercent = *g.Hits, thresholds[i]
+		}
+		goals = append(goals, goal)
+	}
+
+	res, err := engine.SuggestSPForGoals(engine.SPGoalsInput{
+		Format: format, Self: self, Ceiling: ceiling, Field: engine.Field{}, TypeChart: s.store.TypeChart(), Goals: goals,
+	})
+	if err != nil {
+		return errFromEngine(err)
+	}
+	return ctx.JSON(http.StatusOK, adjustGoalsResultFrom(res))
+}
+
+// adjustGoalsResultFrom は engine の結果を契約の形に写す。outspeed は chancePercent を、survive・ko は
+// 素早さの3項目を null にする(キーは省略しない)。
+func adjustGoalsResultFrom(r engine.SPGoalsResult) api.AdjustGoalsResult {
+	out := api.AdjustGoalsResult{
+		Feasible: r.Feasible, Remaining: r.Remaining,
+		Plan:        api.AdjustGoalsPlan{Sp: statBlockFrom(r.Plan.SP), TotalSp: r.Plan.TotalSP, Stats: statBlockFrom(r.Plan.Real)},
+		Goals:       make([]api.AdjustGoalOutcome, 0, len(r.Goals)),
+		Unsupported: unsupportedFrom(r.Unsupported),
+	}
+	for _, o := range r.Goals {
+		g := api.AdjustGoalOutcome{Kind: api.AdjustGoalKind(o.Kind), Met: o.Met}
+		if o.Kind == engine.SPGoalOutspeed {
+			selfSpeed, opponentSpeed, rank := o.SelfSpeed, o.OpponentSpeed, o.SelfSpeedRank
+			g.SelfSpeed, g.OpponentSpeed, g.SelfSpeedRank = &selfSpeed, &opponentSpeed, &rank
+		} else {
+			chance := o.ChancePercent
+			g.ChancePercent = &chance
+		}
+		out.Goals = append(out.Goals, g)
+	}
+	return out
 }
 
 // --- allocation ----------------------------------------------------------------------

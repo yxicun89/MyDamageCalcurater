@@ -65,10 +65,10 @@
      "mechanism": {"multihit": null, "damage": null, "ohko": null, "willCrit": false, "overrideOffensiveStat": "", "overrideOffensivePokemon": "", "overrideDefensiveStat": "", "ignoreDefensive": false, "hooks": [], "fieldConditions": ["testterrain.onBasePower"]}}
   ],
   "items": [
-    {"id": "testmonite", "name": "Testmonite", "isNonstandard": null},
-    {"id": "testorb", "name": "Test Orb", "isNonstandard": null},
-    {"id": "testberry", "name": "Test Berry", "isNonstandard": null},
-    {"id": "testrelic", "name": "Test Relic", "isNonstandard": "Past"}
+    {"id": "testmonite", "name": "Testmonite", "isNonstandard": null, "megaStone": {"Testmon": "Testmon-Mega"}},
+    {"id": "testorb", "name": "Test Orb", "isNonstandard": null, "megaStone": {}},
+    {"id": "testberry", "name": "Test Berry", "isNonstandard": null, "megaStone": {}},
+    {"id": "testrelic", "name": "Test Relic", "isNonstandard": "Past", "megaStone": {}}
   ],
   "abilities": [
     {"id": "testblaze", "name": "Test Blaze", "isNonstandard": null},

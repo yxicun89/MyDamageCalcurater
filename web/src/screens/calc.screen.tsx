@@ -17,6 +17,7 @@ export default defineScreen({
       masterSearch={env.masterSearch}
       recordClient={env.recordClient}
       onFavoriteAdded={env.onFavoriteAdded}
+      restoreRequest={env.favoriteRestore}
     />
   ),
 });

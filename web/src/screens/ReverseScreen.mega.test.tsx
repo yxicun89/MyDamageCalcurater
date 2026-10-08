@@ -6,7 +6,7 @@
 //   - 相手がメガ種族: 持ち物候補は探索せず、メガストーン1件に固定(itemCandidates = [メガストーン])。理由と名前を相手のカードに出す
 //   - 相手がメガでない種族: 候補は今までどおり(メガストーンは候補に混ざらない)
 //   - ストーンを引けないメガ種族の相手は、候補を探索せず [null]・理由を出す
-//   - 観測した側(与えた / 受けた)を切り替えても整合する
+//   - ダメージした側(与えた / 受けた)を切り替えても整合する
 //   - 検索で解決するマスタでも同じに動く
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
@@ -62,13 +62,13 @@ function firstMoveOf(species: MasterSpecies): Move {
   return move;
 }
 
-const sideGroup = () => screen.getByRole("radiogroup", { name: "観測したダメージ" });
+const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const myItemSelect = () => screen.getByRole("combobox", { name: "自分の持ち物" });
 const myCard = () => screen.getByRole("region", { name: "自分のポケモン" });
 const theirCard = () => screen.getByRole("region", { name: "相手のポケモン" });
-const observationInput = (n: number) => screen.getByRole("textbox", { name: `観測${String(n)}` });
+const observationInput = (n: number) => screen.getByRole("textbox", { name: `ダメージ${String(n)}` });
 
 function lastRequest(engine: FakeEngine): ReverseRequest {
   const request = engine.reverseRequests.at(-1);
@@ -247,7 +247,7 @@ describe("相手がメガ種族(持ち物候補を探索しない)", () => {
   });
 });
 
-describe("観測した側(与えた / 受けた)の切り替え", () => {
+describe("ダメージした側(与えた / 受けた)の切り替え", () => {
   test("自分がメガのまま「受けたダメージ」に切り替えても、固定が保たれ known.item(防御側)がメガストーン", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, MEGA_FIRE, normalSpecies(1));

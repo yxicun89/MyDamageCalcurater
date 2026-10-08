@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# make images-k3d: 変換済みの画像(make assets の出力)を k3d のノードへ置き、gateway の /images/* で配信する(ADR-0807 追記)。
+# make images-k3d: 変換済みの画像(make assets の出力)を k3d のノードへ置き、gateway の /images/* で配信する(ADR-0808 追記)。
 # gateway の local overlay が、ノード上の NODE_DIR を hostPath(読み取り専用)で GATEWAY_IMAGES_DIR に見せている。
 # 画像が無くてもアプリは動く(エンブレム)ので、dist に manifest.json が無ければ何もせず終了コード 0。
 # 使い方: make assets && make images-k3d。gateway の再起動は不要(ファイルを読むだけ)。

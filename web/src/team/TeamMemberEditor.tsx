@@ -1,11 +1,12 @@
-// P5-5b PR-A2(ADR-0316): 構築1件のメンバー編集領域。下書き(MemberDraft)を持ち、[メンバーを保存] でだけ
-// パーティ全体を update(全置換)する。応答を待ってから親の一覧を書き換える(楽観更新しない。失敗時は下書きを残す)。
-// 領域は開いている間だけ mount される(閉じると未保存の下書きは捨てる)。
+// F-08(ADR-0332 §2): 構築1件の編集画面。常に6つの枠(TEAM_SLOT_COUNT)を持ち、下書き(MemberDraft)を枠ごとに持つ。
+// [保存] でだけ、種族の決まった枠を枠の順に詰めて update(全置換)する。応答を待ってから親の一覧を書き換える
+// (楽観更新しない。失敗時は下書きを残す)。画面は TeamScreen が開いている間だけ mount される(閉じると下書きは捨てる)。
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
+import { teamShowdownText } from "../i18n/team";
 import { itemRoleText } from "../i18n/items";
 import { megaStoneLabel } from "../domain/itemRoles";
 import { masterCapabilities } from "../master/capabilities";
@@ -20,36 +21,36 @@ import { useSpeciesResolutions } from "../screens/speciesResolution";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
 import type { TeamClient, TeamError } from "./teamClient";
-import {
-  changeSpecies,
-  blankDraft,
-  correctMegaItem,
-  draftToMember,
-  memberToDraft,
-  type MegaItemCorrection,
-  type MemberDraft,
-} from "./teamMember";
+import { changeSpecies, correctMegaItem, type MegaItemCorrection, type MemberDraft } from "./teamMember";
 import { defaultNatureId } from "./teamMemberOptions";
+import {
+  TEAM_SLOT_COUNT,
+  clearSlot,
+  hasUnsavedChanges,
+  isEmptySlot,
+  slotsFromMembers,
+  slotsToMembers,
+  swapSlots,
+  teamInputFromMembers,
+} from "./teamSlots";
+import { TeamShowdownExport } from "./TeamShowdownExport";
 
 type Schemas = components["schemas"];
 
 export interface TeamMemberEditorProps {
   readonly team: Schemas["Team"];
-  /** パーティの上限(TeamScreen.tsx の MAX_TEAM_MEMBERS)。 */
-  readonly maxMembers: number;
+  /** 画面に出す構築の名前(team/teamName.ts の teamDisplayNames)。 */
+  readonly displayName: string;
   readonly master: MasterData;
   readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly teamClient: TeamClient;
   /** update が成功したときに、応答の Team で親の一覧を書き換える。 */
   readonly onSaved: (team: Schemas["Team"]) => void;
+  /** 一覧に戻る(未保存の変更があるときは、確認の後に呼ばれる)。 */
   readonly onClose: () => void;
-  /** 保存の送信中かどうかを親に知らせる(送信中は名前変更を無効にし、同時送信で一方が失われるのを防ぐ)。 */
-  readonly onSavingChange: (saving: boolean) => void;
-  /** 名前変更の送信中(true の間は保存できない。update は全置換なので同時に送ると一方が失われる)。 */
-  readonly locked: boolean;
 }
 
-/** 下書き1体(id は並べ替え・削除でも変わらない key)。 */
+/** 枠1つ(id は入れ替え・外すでも枠の中身に付いて動く key)。 */
 interface Entry {
   readonly id: number;
   readonly draft: MemberDraft;
@@ -69,15 +70,14 @@ interface EditorState {
 function initialState(members: readonly Schemas["TeamMember"][], master: MasterData): EditorState {
   const hasSpeciesList = masterCapabilities(master).speciesList;
   return {
-    entries: members.map((member, id) => {
-      const draft = memberToDraft(member);
-      if (!hasSpeciesList) {
+    entries: slotsFromMembers(members, defaultNatureId(master)).map((draft, id) => {
+      if (!hasSpeciesList || isEmptySlot(draft)) {
         return { id, draft, correction: null };
       }
-      const species = master.species.find((candidate) => candidate.key === member.speciesKey) ?? null;
+      const species = master.species.find((candidate) => candidate.key === draft.speciesKey) ?? null;
       return { id, ...correctMegaItem(draft, species, master.items) };
     }),
-    nextId: members.length,
+    nextId: TEAM_SLOT_COUNT,
   };
 }
 
@@ -89,25 +89,26 @@ function correctionNoticeText(
     return null;
   }
   return correction.kind === "fixed"
-    ? megaItemText.correctedNotice(species === null ? itemRoleText.megaStoneUnnamed : megaStoneLabel(species))
+    ? megaItemText.correctedNotice(
+        species === null ? itemRoleText.megaStoneUnnamed : megaStoneLabel(species, correction.item.nameJa),
+      )
     : megaItemText.clearedNotice;
 }
 
 export function TeamMemberEditor({
   team,
-  maxMembers,
+  displayName,
   master,
   masterSearch,
   teamClient,
   onSaved,
   onClose,
-  onSavingChange,
-  locked,
 }: TeamMemberEditorProps): ReactNode {
   const [state, setState] = useState<EditorState>(() => initialState(team.members, master));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<TeamError | null>(null);
+  const [confirmingLeave, setConfirmingLeave] = useState(false);
   const [failedKeys, setFailedKeys] = useState<ReadonlySet<string>>(new Set());
   const resolutions = useSpeciesResolutions();
   const { register } = resolutions;
@@ -115,8 +116,19 @@ export function TeamMemberEditor({
     () => megaStoneItemIds([...master.species, ...resolutions.resolvedSpecies]),
     [master.species, resolutions.resolvedSpecies],
   );
-  const addButtonRef = useRef<HTMLButtonElement>(null);
-  const [focusAddToken, setFocusAddToken] = useState(0);
+  const editorRef = useRef<HTMLElement>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const backButtonRef = useRef<HTMLButtonElement>(null);
+
+  // 編集画面を開いたら見出しへフォーカスを移す(一覧のボタンが消えてもフォーカスを失わない。ADR-0332 §7)。
+  useEffect(() => {
+    headingRef.current?.focus();
+  }, []);
+  // 外した枠の「ポケモン」欄へフォーカスを移す合図(枠の位置と回数。0 回の間は動かさない)。
+  const [focusRequest, setFocusRequest] = useState<{ readonly index: number; readonly count: number }>({
+    index: 0,
+    count: 0,
+  });
 
   // 種族の一覧が無いマスタ(オンライン): 保存済みメンバーの種族を開いたときに1体ずつ解決する(特性・技の実体を得る)。
   // 解決に失敗したメンバーは内容を書き換えず、alert だけ出す(ADR-0316 §7)。
@@ -125,7 +137,7 @@ export function TeamMemberEditor({
       return;
     }
     let cancelled = false;
-    // 開いた時点のメンバー(id は初期の並び順)。解決した種族に合わせて、古い保存データの持ち物を1回だけ直す。
+    // 開いた時点のメンバー(id は初期の枠の位置)。解決した種族に合わせて、古い保存データの持ち物を1回だけ直す。
     const openedCount = team.members.length;
     for (const key of new Set(team.members.map((member) => member.speciesKey))) {
       masterSearch.resolveSpecies(key).then(
@@ -158,12 +170,14 @@ export function TeamMemberEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // 削除後のフォーカスは [メンバーを追加] に移す(消えた要素にフォーカスが残らないように)。
+  // 枠を外した後は、その枠の先頭の入力欄(空の枠では「ポケモン」欄)へフォーカスを移す(消えた要素に残さない)。
   useEffect(() => {
-    if (focusAddToken > 0) {
-      addButtonRef.current?.focus();
+    if (focusRequest.count === 0) {
+      return;
     }
-  }, [focusAddToken]);
+    const slot = editorRef.current?.querySelectorAll<HTMLElement>("fieldset.team-member")[focusRequest.index];
+    slot?.querySelector<HTMLElement>("select, input")?.focus();
+  }, [focusRequest]);
 
   function edit(update: (entries: readonly Entry[]) => readonly Entry[]): void {
     setState((current) => ({ ...current, entries: update(current.entries) }));
@@ -210,72 +224,92 @@ export function TeamMemberEditor({
     );
   }
 
-  function addMember(): void {
-    if (state.entries.length >= maxMembers) {
-      return;
-    }
+  /** 枠を外す: その枠だけ空に戻す(他の枠は動かさない)。 */
+  function removeMember(index: number): void {
     setState((current) => ({
-      entries: [
-        ...current.entries,
-        { id: current.nextId, draft: blankDraft(defaultNatureId(master)), correction: null },
-      ],
+      entries: replaceWithBlank(current.entries, index, current.nextId, master),
       nextId: current.nextId + 1,
     }));
     setSaved(false);
-  }
-
-  function removeMember(id: number): void {
-    edit((entries) => entries.filter((entry) => entry.id !== id));
-    setFocusAddToken((token) => token + 1);
+    setFocusRequest((current) => ({ index, count: current.count + 1 }));
   }
 
   function moveMember(index: number, delta: -1 | 1): void {
-    edit((entries) => {
-      const target = index + delta;
-      const moved = entries[index];
-      const other = entries[target];
-      if (moved === undefined || other === undefined) {
-        return entries;
-      }
-      return entries.map((entry, position) =>
-        position === index ? other : position === target ? moved : entry,
-      );
-    });
+    edit((entries) => swapSlots(entries, index, delta));
   }
 
-  const results = state.entries.map((entry) => draftToMember(entry.draft));
-  const canSave = !saving && !locked && results.every((result) => result.ok);
+  const drafts = state.entries.map((entry) => entry.draft);
+  const result = slotsToMembers(drafts);
+  const unsaved = hasUnsavedChanges(team.members, drafts);
+  const canSave = !saving && result.ok;
 
   async function save(): Promise<void> {
-    if (saving || locked) {
+    if (saving || !result.ok) {
       return;
     }
-    const members: Schemas["TeamMember"][] = [];
-    for (const result of results) {
-      if (!result.ok) {
-        return;
-      }
-      members.push(result.member);
-    }
     setSaving(true);
-    onSavingChange(true);
     setSaved(false);
     setError(null);
-    const response = await teamClient.update(team.id, { name: team.name, members });
+    const response = await teamClient.update(team.id, teamInputFromMembers(result.members));
     if (response.ok) {
       onSaved(response.value);
       setSaved(true);
+      setConfirmingLeave(false);
     } else {
       setError(response.error);
     }
     setSaving(false);
-    onSavingChange(false);
   }
 
-  const atLimit = state.entries.length >= maxMembers;
+  function handleBack(): void {
+    if (unsaved) {
+      setConfirmingLeave(true);
+    } else {
+      onClose();
+    }
+  }
 
   return (
-    <section aria-label={teamMemberText.editorLabel(team.name)} className="team-member-editor">
+    <section
+      ref={editorRef}
+      aria-label={teamMemberText.editorLabel(displayName)}
+      className="team-member-editor"
+    >
+      <div className="team-member-editor__header">
+        <h2 ref={headingRef} tabIndex={-1}>
+          {displayName}
+        </h2>
+        <button
+          ref={backButtonRef}
+          type="button"
+          className="ui-button ui-button--secondary"
+          disabled={saving}
+          onClick={handleBack}
+        >
+          {teamMemberText.closeLabel}
+        </button>
+      </div>
+      {confirmingLeave && unsaved && (
+        <div className="ui-notice team-member-editor__leave">
+          <p>{teamMemberText.leaveConfirmNotice}</p>
+          <div className="team-member-editor__actions">
+            <button type="button" className="ui-button ui-button--danger" disabled={saving} onClick={onClose}>
+              {teamMemberText.leaveDiscardLabel}
+            </button>
+            <button
+              type="button"
+              className="ui-button ui-button--secondary"
+              onClick={() => {
+                setConfirmingLeave(false);
+                backButtonRef.current?.focus();
+              }}
+            >
+              {teamMemberText.leaveCancelLabel}
+            </button>
+          </div>
+        </div>
+      )}
+
       {state.entries.map((entry, index) => {
         const key = entry.draft.speciesKey;
         const species = key === null ? null : resolutions.speciesFor(master.species, key);
@@ -300,7 +334,7 @@ export function TeamMemberEditor({
               handleResolved(entry.id, resolution);
             }}
             onRemove={() => {
-              removeMember(entry.id);
+              removeMember(index);
             }}
             onMove={(delta) => {
               moveMember(index, delta);
@@ -310,14 +344,9 @@ export function TeamMemberEditor({
       })}
 
       <div className="team-member-editor__actions">
-        <button type="button" ref={addButtonRef} disabled={atLimit} onClick={addMember}>
-          {teamMemberText.addLabel}
-        </button>
-        {atLimit && (
-          <p className="team-member-editor__notice">{teamMemberText.addDisabledNotice(maxMembers)}</p>
-        )}
         <button
           type="button"
+          className="ui-button ui-button--primary"
           disabled={!canSave}
           onClick={() => {
             void save();
@@ -325,9 +354,7 @@ export function TeamMemberEditor({
         >
           {teamMemberText.saveLabel}
         </button>
-        <button type="button" disabled={saving} onClick={onClose}>
-          {teamMemberText.closeLabel}
-        </button>
+        {unsaved && <span className="team-member-editor__unsaved">{teamMemberText.unsavedNotice}</span>}
       </div>
 
       {saved && (
@@ -336,11 +363,34 @@ export function TeamMemberEditor({
         </p>
       )}
       {error !== null && (
-        <div role="alert" className="team-member-editor__error">
+        <div role="alert" className="ui-notice ui-notice--error team-member-editor__error">
           <p>{teamMemberText.saveErrorHeading}</p>
           <p>{error.message}</p>
         </div>
       )}
+
+      <details className="ui-card team-fold">
+        <summary>{teamShowdownText.exportFoldLabel}</summary>
+        <p className="team-fold__help">{teamShowdownText.exportHelp}</p>
+        <TeamShowdownExport team={team} name={displayName} master={master} masterSearch={masterSearch} />
+      </details>
     </section>
+  );
+}
+
+/** index の枠を新しい id の空の枠に置き換える(外した枠の入力欄を作り直し、他の枠は動かさない)。 */
+function replaceWithBlank(
+  entries: readonly Entry[],
+  index: number,
+  id: number,
+  master: MasterData,
+): readonly Entry[] {
+  const cleared = clearSlot(
+    entries.map((entry) => entry.draft),
+    index,
+    defaultNatureId(master),
+  );
+  return entries.map((entry, position) =>
+    position === index ? { id, draft: cleared[index] ?? entry.draft, correction: null } : entry,
   );
 }

@@ -1,6 +1,6 @@
 // P8-1c(ADR-0325): ポケモン画像の表示(vite preview + pokedex フィクスチャ。playwright.config.ts が走らせる)。
 // 画像の配信(gateway の /images)はここでは持たないので、page.route で manifest と WebP を偽装する。
-// 契約(ADR-0807): manifest は /images/manifest.json、画像 URL は /images/ + 相対パス。無ければタイプ色エンブレム。
+// 契約(ADR-0808): manifest は /images/manifest.json、画像 URL は /images/ + 相対パス。無ければタイプ色エンブレム。
 // 画像なしで従来どおり動くこと(AC-X)は既存の spec 全体が担保し、ここでは「manifest が使えない」場合を明示する。
 //   - preview・nginx(コンテナ)は /images/* を SPA のフォールバック(index.html の 200)で返すので、manifest として
 //     読めず(JSON でない)エンブレムのままになり、コンソールエラーも出ない(container.spec.ts の CSP テストを壊さない)。

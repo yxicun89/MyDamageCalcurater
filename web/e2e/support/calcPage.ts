@@ -15,13 +15,13 @@ export const SPECIES = {
  * 理由の文言は src/i18n/ja.ts の megaItemText.lockedReason(iOS と同じ語)。
  */
 export const MEGA = {
-  // lockedLabel: 固定中の持ち物欄の表示(ADR-0326。ストーンの nameJa ではなく「{基本種名}のメガストーン」)。
+  // lockedLabel: 固定中の持ち物欄の表示(ADR-0328。マスタのストーンの nameJa が日本語ならそのまま)。
   fire: {
     nameJa: "メガテストほのお",
     stoneNameJa: "テストほのおナイト",
-    lockedLabel: "テストほのおのメガストーン",
+    lockedLabel: "テストほのおナイト",
   },
-  lockedReason: "メガシンカ: メガストーンを持ちます",
+  lockedReason: "メガシンカするので、持ち物はメガストーンに決まっています",
 } as const;
 
 /** 計算結果の1行が持つ表示%の書式(domain/format.ts formatPercentRange)。 */
@@ -48,9 +48,9 @@ export function calcRows(page: Page): Locator {
   return page.getByRole("list", { name: "計算結果", exact: true }).getByRole("listitem");
 }
 
-/** 逆算画面の候補の行(「推定結果」のリストの項目)。 */
+/** 逆算画面の候補の行(「考えられる振り方」のリストの項目)。 */
 export function reverseRows(page: Page): Locator {
-  return page.getByRole("list", { name: "推定結果", exact: true }).getByRole("listitem");
+  return page.getByRole("list", { name: "考えられる振り方", exact: true }).getByRole("listitem");
 }
 
 /**
@@ -127,7 +127,7 @@ export const MASTER_CACHE_DB_NAME = "pokecalc-master-cache";
 export async function warmOfflineCache(page: Page): Promise<void> {
   await page.goto("/calc");
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "オンライン(API)", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "サーバー(オンライン)", exact: true })).toBeChecked();
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   // データベースができただけでは足りない(開くのは保存より先)。種族(fire・water)まで書き込まれるのを待つ。
   await expect
@@ -168,14 +168,14 @@ export async function warmOfflineCache(page: Page): Promise<void> {
 }
 
 /**
- * ADR-0313: キャッシュを温めてからオフライン(WASM)に切り替え、`path` を開き直して、マスタの読み込みが
+ * ADR-0313: キャッシュを温めてからこの端末(オフライン)に切り替え、`path` を開き直して、マスタの読み込みが
  * 終わって画面の切り替えタブが出るまで待つ。以降の画面はキャッシュのマスタ(fire・water)で動く。
  */
 export async function openAppOffline(page: Page, path = "/calc"): Promise<void> {
   await warmOfflineCache(page);
-  await chooseRadio(page, "ダメージ計算の実行場所", "オフライン(WASM)");
+  await chooseRadio(page, "計算する場所", "この端末(オフライン)");
   await page.goto(path);
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "オフライン(WASM)", exact: true })).toBeChecked();
+  await expect(page.getByRole("radio", { name: "この端末(オフライン)", exact: true })).toBeChecked();
   await expect(page.getByRole("alert")).toHaveCount(0);
 }

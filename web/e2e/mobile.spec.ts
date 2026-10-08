@@ -64,36 +64,40 @@ async function expectInsideViewport(page: Page, locator: Locator, name: string):
 
 /** 計算画面を開き、結果まで出た状態にする(入力が全部そろった、いちばん横に広がる状態)。 */
 async function openCalcScreen(page: Page): Promise<void> {
-  // ADR-0313: キャッシュを温めてからオフライン(WASM)で開く(既定はオンライン)。
+  // ADR-0313: キャッシュを温めてからこの端末(オフライン)で開く(既定はオンライン)。
   await openAppOffline(page, "/calc");
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await expect(calcRows(page)).toHaveCount(DEFAULT_ROW_COUNT);
 }
 
-/** 逆算画面を開き、観測を2件入れた状態にする(観測の行が増えても溢れないことを見るため)。 */
+/** 逆算画面を開き、ダメージを2件入れた状態にする(ダメージの行が増えても溢れないことを見るため)。 */
 async function openReverseScreen(page: Page): Promise<void> {
   await openAppOffline(page, "/reverse");
   await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
-  await page.getByRole("textbox", { name: "観測1", exact: true }).fill("50");
-  await page.getByRole("button", { name: "観測を追加", exact: true }).click();
-  await page.getByRole("textbox", { name: "観測2", exact: true }).fill("50");
-  await expect(page.getByRole("textbox", { name: "観測2", exact: true })).toHaveValue("50");
+  await page.getByRole("textbox", { name: "ダメージ1", exact: true }).fill("50");
+  await page.getByRole("button", { name: "ダメージを追加", exact: true }).click();
+  await page.getByRole("textbox", { name: "ダメージ2", exact: true }).fill("50");
+  await expect(page.getByRole("textbox", { name: "ダメージ2", exact: true })).toHaveValue("50");
 }
 
 /** 計算画面の主要な操作部品(すべて表示領域の中で操作できること)。 */
 function calcControls(page: Page): { name: string; locator: Locator }[] {
-  const named = (role: "combobox" | "button" | "checkbox" | "radiogroup", name: string) => ({
+  const named = (role: "combobox" | "button" | "checkbox" | "radiogroup" | "textbox", name: string) => ({
     name,
     locator: page.getByRole(role, { name, exact: true }),
   });
   return [
     named("combobox", "攻撃側のポケモン"),
     named("combobox", "攻撃側の持ち物"),
-    named("radiogroup", "攻撃側の調整"),
     named("button", "攻守入れ替え"),
     named("combobox", "防御側のポケモン"),
     named("combobox", "防御側の持ち物"),
     named("combobox", "技"),
+    // ADR-0329: 技の直後の「攻撃」「特攻」の2ブロック(プリセット・SP の数値入力)。
+    named("radiogroup", "攻撃の調整"),
+    named("textbox", "攻撃のSP"),
+    named("radiogroup", "特攻の調整"),
+    named("textbox", "特攻のSP"),
     named("checkbox", "持ち物の候補も比較"),
     { name: "計算結果", locator: page.getByRole("list", { name: "計算結果", exact: true }) },
   ];
@@ -106,18 +110,18 @@ function reverseControls(page: Page): { name: string; locator: Locator }[] {
     locator: page.getByRole(role, { name, exact: true }),
   });
   return [
-    named("radiogroup", "観測したダメージ"),
+    named("radiogroup", "どちらのダメージ"),
     named("combobox", "自分のポケモン"),
     named("combobox", "自分の持ち物"),
     named("radiogroup", "自分の調整"),
     named("combobox", "相手のポケモン"),
     named("combobox", "技"),
-    named("textbox", "観測1"),
-    named("radiogroup", "観測1の単位"),
-    named("textbox", "観測2"),
-    // 削除ボタンが出るのは末尾の観測だけ(ReverseScreen.tsx)。
-    named("button", "観測2を削除"),
-    named("button", "観測を追加"),
+    named("textbox", "ダメージ1"),
+    named("radiogroup", "ダメージ1の単位"),
+    named("textbox", "ダメージ2"),
+    // 削除ボタンが出るのは末尾のダメージだけ(ReverseScreen.tsx)。
+    named("button", "ダメージ2を削除"),
+    named("button", "ダメージを追加"),
   ];
 }
 
@@ -307,7 +311,7 @@ for (const width of NARROW_WIDTHS) {
     test("計算画面: 攻守入れ替えと調整のラジオが操作できる", async ({ page }) => {
       await openCalcScreen(page);
 
-      await chooseRadio(page, "攻撃側の調整", "A特化");
+      await chooseRadio(page, "攻撃の調整", "A特化");
 
       await page.getByRole("button", { name: "攻守入れ替え", exact: true }).click();
       // issue #304: カードの見出し階層が h2(領域名「攻撃側」固定)→ h3(種族名)になった(calc.spec.ts と同じ形)。

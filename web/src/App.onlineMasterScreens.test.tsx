@@ -1,9 +1,9 @@
 // issue 276(ADR-0411): API 専用の画面(タイプバランス・判定)は、計算モードに関係なく常にオンラインのマスタを使う。
 // 確かめること:
 //   - オフライン(既定)のままタイプバランスを開いても、画面にはオンラインのマスタの種族が出る
-//   - そのとき計算画面は引き続きオフラインのマスタ(ダメージ計算の実行場所の選択に従う)
+//   - そのとき計算画面は引き続きオフラインのマスタ(計算する場所の選択に従う)
 //   - オンラインのマスタを読めないときは、日本語の案内と「再試行」を出す(オフラインの架空データに落とさない)
-//   - ヘッダーの切替の名前は「ダメージ計算の実行場所」
+//   - ヘッダーの切替の名前は「計算する場所」
 
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -92,7 +92,7 @@ test("オンラインのマスタを読めないときは、日本語の案内�
   await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
 
   const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent("オンラインのマスタを読み込めませんでした");
+  expect(alert).toHaveTextContent("サーバーからポケモンのデータを読み込めませんでした");
   expect(alert).not.toHaveTextContent("connection refused");
   await user.click(within(alert).getByRole("button", { name: "再試行" }));
   await waitFor(async () => {
@@ -100,10 +100,10 @@ test("オンラインのマスタを読めないときは、日本語の案内�
   });
 });
 
-test("ヘッダーの切替は「ダメージ計算の実行場所」という名前", async () => {
+test("ヘッダーの切替は「計算する場所」という名前", async () => {
   render(<App engine={createFakeEngine()} />);
   expect(
-    await within(screen.getByRole("banner")).findByRole("radiogroup", { name: "ダメージ計算の実行場所" }),
+    await within(screen.getByRole("banner")).findByRole("radiogroup", { name: "計算する場所" }),
   ).toBeInTheDocument();
 });
 
@@ -164,8 +164,10 @@ test("取得の完了前にタブを離れても、後から解決して状態�
   expect(screen.queryByRole("group", { name: "メンバー1" })).not.toBeInTheDocument();
 });
 
-test("判定の画面も包まれていて、オフラインのままでもオンラインのマスタの種族が渡る", async () => {
-  const user = userEvent.setup();
+// ADR-0330: 判定は Web で非表示。judge.screen.tsx が OnlineMasterGate で包んでいる点の検証は、非表示の間は無い
+// (マウントされないため。再表示するときにこのテストを復活させる)。タイプバランスの包みは上のテストが担う。
+// ここでは、判定のタブが無く、オンラインのマスタを判定のために使わないことだけを確かめる。
+test("判定のタブは出ない(ADR-0330)", async () => {
   const { offline, online } = await masters();
   render(
     <App
@@ -175,12 +177,5 @@ test("判定の画面も包まれていて、オフラインのままでもオ�
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByRole("tab", { name: "判定" }));
-
-  const region = await screen.findByRole("region", { name: "自分のポケモン" });
-  const labels = within(within(region).getByRole("combobox", { name: "ポケモン" }))
-    .getAllByRole("option")
-    .map((option) => option.textContent);
-  expect(labels.some((label) => label.startsWith("オンライン"))).toBe(true);
-  expect(labels).not.toContain(offline.species[0]?.nameJa);
+  expect(screen.queryByRole("tab", { name: "判定" })).toBeNull();
 });

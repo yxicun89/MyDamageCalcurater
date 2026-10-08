@@ -80,8 +80,8 @@ export const MEGA_ORPHAN: MasterSpecies = {
  * ADR-0326(ADR-0175 §4): メガ種族の固定中に持ち物欄へ出す名前の期待値(手書き)。ストーンの nameJa ではなく
  * 「{基本種名}のメガストーン」。基本種名が無いメガ種族は「メガストーン」だけ。
  */
-export const MEGA_FIRE_STONE_LABEL = "テストほのおのメガストーン";
-export const MEGA_WATER_STONE_LABEL = "テストみずのメガストーン";
+export const MEGA_FIRE_STONE_LABEL = MEGA_FIRE_STONE.nameJa;
+export const MEGA_WATER_STONE_LABEL = MEGA_WATER_STONE.nameJa;
 export const UNNAMED_MEGA_STONE_LABEL = "メガストーン";
 
 /** メガ種族(MEGA_ORPHAN を含む)。 */

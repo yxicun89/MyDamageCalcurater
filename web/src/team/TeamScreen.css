@@ -25,10 +25,6 @@
   flex-direction: column;
   align-items: flex-start;
   gap: var(--space-2);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
   padding: var(--space-4);
 }
 
@@ -60,36 +56,102 @@
   padding: 0;
 }
 
-.team-screen__item {
+/* 構築のカード(ADR-0332 §4)。見た目は .ui-card、ここは並べ方だけ。 */
+.team-card {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
   padding: var(--space-3) var(--space-4);
 }
 
-.team-screen__item-name {
+.team-card__name {
+  flex-basis: 100%;
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   color: var(--text-primary);
   font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
-.team-screen__item-meta {
+.team-card__icons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  flex-basis: 100%;
+}
+
+.team-card__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+}
+
+/* ポケモン画像(ADR-0325)とタイプ色のエンブレムは同じ寸法。 */
+.team-card__image {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.team-card__emblem {
+  display: inline-block;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-pill);
+  background: var(--card-type, var(--brand-primary));
+}
+
+.team-card__meta {
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
 
-.team-screen__rename {
+.team-card__actions {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
   gap: var(--space-2);
+  margin-left: auto;
+}
+
+/* Showdown 形式の折りたたみ(取り込みは一覧の下、書き出しは編集画面の下。ADR-0332 §3)。 */
+.team-fold {
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-family);
+}
+
+.team-fold > summary {
+  cursor: pointer;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 折りたたみの中の取り込み・書き出しの領域は、外側のカードと二重にしない。 */
+.team-fold .team-showdown {
+  border: none;
+  background: none;
+  backdrop-filter: none;
+  padding: 0;
+}
+
+.team-fold__help {
+  margin: var(--space-2) 0 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.team-fold__example {
+  margin: var(--space-2) 0;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  font-size: var(--font-size-caption);
+  overflow-x: auto;
 }
 
 .team-screen__delete-confirm {
@@ -144,6 +206,12 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.team-showdown__empty {
+  font-family: var(--font-family);
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }
 
 .team-showdown__issues,

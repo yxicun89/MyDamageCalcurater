@@ -74,6 +74,7 @@ function createFakeAdjustClient(): FakeAdjustClient {
     minSpToKo: (request, signal) => record("minSpToKo", [request], signal),
     minSpToSurvive: (request, signal) => record("minSpToSurvive", [request], signal),
     allocation: (request, signal) => record("allocation", [request], signal),
+    goals: (request, signal) => record("goals", [request], signal),
     moveLearners: (moveId: string, page: LearnersPage, signal?: AbortSignal) =>
       record("moveLearners", [moveId, page], signal),
   };
@@ -1083,6 +1084,49 @@ describe("S5 結果の表示", () => {
     expect(within(resultRegion()).getByText(T.koFeasible("atk", 12, 2, "100%"))).toBeInTheDocument();
   });
 
+  test("オンライン相当のマスタ(技・特性の一覧が空)でも、特性名・技名を解決済みの一覧から日本語で出す", async () => {
+    const search = createFakeSpeciesSearch({
+      species: [BIRD, FISH],
+      abilities: [ABILITY],
+      moves: [MOVE_FIRE, MOVE_WATER, MOVE_TACKLE, MOVE_STATUS],
+    });
+    const { user, client } = renderScreen({
+      master: {
+        ...master,
+        species: [],
+        moves: [],
+        abilities: [],
+        capabilities: { speciesList: false, moves: true, effects: true },
+      },
+      masterSearch: search,
+    });
+    await user.type(screen.getByRole("combobox", { name: T.selfSpeciesLabel }), BIRD.nameJa);
+    await user.click(await within(selfRegion()).findByRole("option", { name: BIRD.nameJa }));
+    await user.selectOptions(screen.getByRole("combobox", { name: T.selfNatureLabel }), NATURE_NEUTRAL.id);
+    await user.selectOptions(screen.getByRole("combobox", { name: T.selfMoveLabel }), MOVE_FIRE.id);
+    await chooseMode(user, "minKo");
+    await user.type(screen.getByRole("combobox", { name: T.opponentSpeciesLabel }), FISH.nameJa);
+    await user.click(await screen.findByRole("option", { name: FISH.nameJa }));
+    await user.selectOptions(screen.getByRole("combobox", { name: T.opponentPresetLabel }), "hb");
+    await setGoal(user, 2);
+    await user.click(submitButton());
+    await respond(lastCallOf(client, "indices"), { ok: true, value: indicesResult });
+    const marks: Schemas["UnsupportedMark"][] = [
+      { target: "move", reason: "unsupported_effect", id: MOVE_FIRE.id },
+      { target: "attacker_ability", reason: "unsupported_effect", id: ABILITY.id },
+    ];
+    await respond(lastCallOf(client, "minSpToKo"), {
+      ok: true,
+      value: { stat: "atk", searchLimit: 32, feasible: true, sp: 12, chancePercent: 100, unsupported: marks },
+    } satisfies AdjustResult<Schemas["AdjustKOResult"]>);
+
+    const notice = within(resultRegion()).getByText(/未対応/);
+    expect(notice).toHaveTextContent(MOVE_FIRE.nameJa);
+    expect(notice).toHaveTextContent(ABILITY.nameJa);
+    expect(notice).not.toHaveTextContent(MOVE_FIRE.id);
+    expect(notice).not.toHaveTextContent(ABILITY.id);
+  });
+
   test("未対応の印が無ければ注意を出さない", async () => {
     const { client } = await submitMinKo();
     await respond(lastCallOf(client, "minSpToKo"), {
@@ -1112,7 +1156,7 @@ describe("S6 エラー(code から日本語。サーバーの message は出さ�
     ["invalid_input", "hits must be in 1..10"],
     ["unknown_move", "unknown moveId: test-move-fire"],
     ["master_unavailable", "master is not ready"],
-    ["adjust_unavailable", "調整の API に接続できません"],
+    ["adjust_unavailable", "調整のサーバーに接続できません"],
   ] as const)("%s → adjustErrorText の文言", async (code, message) => {
     const { user, client } = renderScreen();
     await fillSelf(user, { move: MOVE_FIRE });
@@ -1159,7 +1203,7 @@ describe("S6 エラー(code から日本語。サーバーの message は出さ�
     await user.click(submitButton());
     await respond(lastCallOf(client, "indices"), {
       ok: false,
-      error: { code: "adjust_unavailable", message: "調整の API に接続できません" },
+      error: { code: "adjust_unavailable", message: "調整のサーバーに接続できません" },
     });
 
     expect(screen.getByRole("combobox", { name: T.selfSpeciesLabel })).toHaveValue(BIRD.key);
@@ -1481,7 +1525,8 @@ describe("S9 a11y(docs/design.md「入力のラベル」・WCAG 2.2 SC 2.5.3 / 3
     }
   });
 
-  test("モードは「調整の内容」の radio group で、5つの選択肢を持つ", () => {
+  // 段階 B(ADR-0177 §10)で「目標から振り方を決める」を既定で出す(ADR-0331 §結果の仕様の変更。5 → 6 つ)。
+  test("モードは「調整の内容」の radio group で、6つの選択肢を持つ(先頭は目標から振り方を決める)", () => {
     renderScreen();
     const group = screen.getByRole("radiogroup", { name: T.modeGroupLabel });
     expect(
@@ -1489,6 +1534,7 @@ describe("S9 a11y(docs/design.md「入力のラベル」・WCAG 2.2 SC 2.5.3 / 3
         .getAllByRole("radio")
         .map((radio) => accessibleNameOf(radio)),
     ).toEqual([
+      T.modeLabel.goals,
       T.modeLabel.indices,
       T.modeLabel.bulk,
       T.modeLabel.offense,

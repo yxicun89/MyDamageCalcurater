@@ -1,7 +1,8 @@
 package engine
 
 // 素早さの補正(SpeedMods)の型と発動条件の語彙(ADR-0139)。
-// engine は素早さを計算しない。ダメージ計算はこの値を読まない。
+// engine は素早さの補正(SpeedMods)を評価しない(素早さの実数値とランクは RealStats・EffectiveStat が持つ。ADR-0177 §3)。
+// ダメージ計算はこの値を読まない。
 // マスタ(services/internal/master)と判定(services/judge)が同じ語彙を参照する単一の正。
 
 // SpeedCondition は素早さの補正が成立する条件(閉じた語彙)。値は効果定義の JSON にそのまま書く。

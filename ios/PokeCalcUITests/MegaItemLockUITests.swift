@@ -47,7 +47,9 @@ final class MegaItemLockUITests: XCTestCase {
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         let option = app.buttons[name]
         XCTAssertTrue(option.waitForExistence(timeout: Self.existenceTimeout), "種族が無い: \(name)")
-        option.tap()
+        // 最大の文字サイズでは行が高く(約183pt)、画面の大きい機種で結果の行の下端が画面からはみ出す。
+        // 中央をタップすると画面の下端(ホームインジケータ付近)に当たって効かないので、行の上のほうをタップする。
+        option.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
     }
 
     /// 正式名称(日本語の nameJa)があるので、組み立てた「{基本種名}のメガストーン」はどの要素のラベルにも出ていない。

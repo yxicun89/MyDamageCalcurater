@@ -147,7 +147,7 @@ describe("P4-4 計算・逆算の切り替え", () => {
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
   });
 
-  test("逆算画面も App に渡した engine を使う(観測を入れると fake の calcReverse が呼ばれる)", async () => {
+  test("逆算画面も App に渡した engine を使う(ダメージを入れると fake の calcReverse が呼ばれる)", async () => {
     const engine = createFakeEngine();
     const master = await exampleMasterSource.load();
     const [mine, theirs] = master.species;
@@ -159,7 +159,7 @@ describe("P4-4 計算・逆算の切り替え", () => {
     await user.click(await screen.findByRole("tab", { name: "逆算" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), mine.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), theirs.key);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
     await waitFor(() => {
       expect(engine.reverseRequests.length).toBeGreaterThan(0);
@@ -226,11 +226,10 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
 
-    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・判定・素早さ・タイプバランスは End からそれぞれ
-    // 1・2・3・4つ手前(P5-5 PR-A1 の時点では構築、JD5 の時点では判定が末尾だった)。
+    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・素早さ・タイプバランスは End からそれぞれ
+    // 2・3・4つ手前(判定は ADR-0330 で非表示になり巡回の対象外)。
     const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
-    const judgeTab = screen.getByRole("tab", { name: "判定" });
     const teamTab = screen.getByRole("tab", { name: "構築" });
     // P5-3c(ADR-0327): お気に入りは構築と調整の間(order 650)。
     const favoritesTab = screen.getByRole("tab", { name: "お気に入り" });
@@ -247,10 +246,6 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     await user.keyboard("{ArrowLeft}");
     expect(teamTab).toHaveAttribute("aria-selected", "true");
     expect(teamTab).toHaveFocus();
-
-    await user.keyboard("{ArrowLeft}");
-    expect(judgeTab).toHaveAttribute("aria-selected", "true");
-    expect(judgeTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
     expect(speedTab).toHaveAttribute("aria-selected", "true");
@@ -270,7 +265,7 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
   });
 });
 
-// P4-5: 計算モードの切り替え(ADR-0301 §4)。ヘッダーに「オフライン(WASM)/ オンライン(API)」の
+// P4-5: 計算モードの切り替え(ADR-0301 §4)。ヘッダーに「この端末(オフライン)/ サーバー(オンライン)」の
 // radiogroup を置き、既定はオンライン(ADR-0313 で ADR-0301 §4 の「既定はオフライン」を変更)。選択は localStorage に覚える。App は engines(offline・online)を
 // 受け取れ(テストで差し替える)、選択中のモードの engine だけで計算する。自動のフォールバックはしない。
 describe("P4-5 計算モード(オフライン / オンライン)の切り替え", () => {
@@ -293,17 +288,17 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
 
   function modeRadios() {
     const group = within(screen.getByRole("banner")).getByRole("radiogroup", {
-      name: "ダメージ計算の実行場所",
+      name: "計算する場所",
     });
     return {
       group,
-      offline: within(group).getByRole("radio", { name: "オフライン(WASM)" }),
-      online: within(group).getByRole("radio", { name: "オンライン(API)" }),
+      offline: within(group).getByRole("radio", { name: "この端末(オフライン)" }),
+      online: within(group).getByRole("radio", { name: "サーバー(オンライン)" }),
     };
   }
 
   // ADR-0313: 既定を「オンライン」にした(既定オフラインへの機械的な追従。テストの意図は変えない)。
-  test("ヘッダーに「ダメージ計算の実行場所」の radiogroup があり、既定はオンライン(API)", () => {
+  test("ヘッダーに「計算する場所」の radiogroup があり、既定はサーバー(オンライン)", () => {
     render(<App engines={{ offline: createFakeEngine(), online: createFakeEngine() }} />);
     const { offline, online } = modeRadios();
     expect(online).toBeChecked();
@@ -450,7 +445,7 @@ describe("P4-5 計算モード(オフライン / オンライン)の切り替え
     await user.click(await screen.findByRole("tab", { name: "逆算" }));
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "相手のポケモン" }), defender.key);
-    await user.type(screen.getByRole("textbox", { name: "観測1" }), "45");
+    await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
     await waitFor(() => {
       expect(onlineEngine.reverseRequests.length).toBeGreaterThan(0);

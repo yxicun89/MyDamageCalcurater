@@ -20,18 +20,19 @@
   margin: 0;
 }
 
+/* 件数・案内の札は .ui-badge(components.css)に、この画面の寸法と色(既存のトークン)を足す。 */
 .favorites-screen__count,
-.favorites-screen__notice {
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-secondary);
+.favorites-screen__hint {
+  align-self: flex-start;
+  padding: var(--space-1) var(--space-3);
+  background: var(--info-soft);
+  color: var(--info);
+  font-size: var(--font-size-caption);
   margin: 0;
 }
 
-.favorites-screen__error {
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--danger);
+.favorites-screen__error p {
+  margin: 0;
 }
 
 .favorites-screen__list {
@@ -45,18 +46,12 @@
 
 .favorites-screen__item {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: stretch;
   gap: var(--space-2);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
   padding: var(--space-3);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
-  color: var(--text-primary);
 }
 
 .favorites-screen__confirm {
@@ -64,5 +59,22 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  color: var(--danger);
+}
+
+.favorites-screen__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.favorites-screen__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.favorites-screen__title {
+  overflow-wrap: anywhere;
 }
