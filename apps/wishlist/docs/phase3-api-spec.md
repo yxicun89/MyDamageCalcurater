@@ -71,7 +71,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。書き方はフェー
 - **起動時の DB 接続**:Pod の起動直後は NetworkPolicy の許可が反映されず接続が拒否されるため、api(serve・migrate)と refresher は起動時の Ping を再試行する(`internal/dbwait`。1 秒から 2 倍ずつ最大 5 秒、合計 30 秒。ctx の取り消しで止まる。時計と待ちは差し替え可能で `TestRetry_*` で確かめる)
 - **5 秒の間隔の限界と対策**:間隔(`Throttle`)は同じプロセスの中でしか守れない。03:00 JST の CronJob と api の裏の更新が重なると、別のプロセスから同じサイトに 5 秒以内に届きうる。
   軽い対策として、api の裏の更新(GET estimates・POST refresh が起動するもの)は **02:30 以上 04:00 未満 JST には起動しない**(`refresh.InQuietWindow`。時計は `Deps.Now`。起動しないとき `refreshing` は false で、キャッシュだけを返す。refresher の同期の更新は影響を受けない。固定オフセット +09:00 で判定する。境界は `TestBackgroundQuietWindow`)。それでも重なりは完全には防げない(制限)
-- **CronJob**:`schedule: "0 3 * * *"`・`timeZone: Asia/Tokyo`・`concurrencyPolicy: Forbid`・`startingDeadlineSeconds: 600`・Job の `activeDeadlineSeconds: 7200`、イメージは api(`wishlist/api`)、
+- **CronJob**:`schedule: "0 3 * * *"`・`timeZone: Asia/Tokyo`・`concurrencyPolicy: Forbid`・`startingDeadlineSeconds: 43200`(Mac が 03:00 にスリープしていても、12 時間以内に起きればその日の分を 1 回実行する。600 秒では毎回飛ばされた。2026-10-09。このとき api の裏の更新を止める時間帯〈02:30〜04:00〉の外で動くことがあり、同じサイトへの 5 秒の間隔はプロセスをまたいでは守られない〈既知の制限〉)・Job の `activeDeadlineSeconds: 7200`、イメージは api(`wishlist/api`)、
   securityContext は api の Deployment と同じ。DSN と appid は Secret `wishlist-api`(appid はキー `yahoo-appid`、`optional: true`)。
   api の Deployment にも同じ appid を optional で渡す
 
