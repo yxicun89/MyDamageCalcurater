@@ -264,17 +264,22 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             let detail = try await service.species(key: key)
             guard defenderSpeciesKey == key else { return false }
-            speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
-            megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
-            defenderAbilityOptions = detail.abilities
-            defenderAbilityOptionsSpeciesKey = key
-            if let abilityId = defenderAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
-                defenderAbilityId = nil
-            }
+            applyDefenderDetail(detail)
             return defenderItemLock != lockBefore
         } catch {
             // 失敗(キャンセルを含む)は黙って「選択肢なし」のまま(3章「判断」: 計算は指定なしで成り立つ)。
             return false
+        }
+    }
+
+    /// 防御側の詳細(メガ情報・特性の選択肢)を反映する。`loadDefenderDetail` と `loadFavorite` が共有する。
+    private func applyDefenderDetail(_ detail: SpeciesDetail) {
+        speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
+        megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
+        defenderAbilityOptions = detail.abilities
+        defenderAbilityOptionsSpeciesKey = detail.key
+        if let abilityId = defenderAbilityId, !detail.abilities.contains(where: { $0.id == abilityId }) {
+            defenderAbilityId = nil
         }
     }
 
@@ -299,6 +304,72 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// `loadTeams()` 専用の世代の通し番号(`beginInput()` とは別。6章「判断」: 構築の読み込みは
     /// 要求の内容に影響しないので、進行中の計算を追い越したことにしない)。
     private var latestTeamListToken = 0
+
+    // MARK: - お気に入りから個体を読み込む(ADR-0513)
+
+    /// 直近の `loadFavorite` の案内(全部読めたときは nil)。次の入力操作(`beginInput()` を呼ぶ操作)・新しい
+    /// `loadFavorite` の開始・`dismissFavoriteLoadNotice()` で消える。
+    public private(set) var favoriteLoadNotice: FavoriteLoadNotice?
+
+    /// お気に入り1件を攻撃側・防御側に読み込み、計算を**ちょうど1回**呼ぶ(全部読めなかったときは呼ばない)。
+    /// 規則は ADR-0513 §2〜§5。`scheduleLatest { await $0.loadFavorite(...) }` で呼ぶ(`selectTeamIndividual` と同じ)。
+    public func loadFavorite(_ favorite: Favorite, side: FavoriteLoadSide) async {
+        let token = beginInput()
+        favoriteLoadNotice = nil
+        isLoading = true
+        let saved = favorite.individual
+        // 詳細を読む前は何も書き換えない(種族が無い・失敗のとき「何も変えない」を守る)。
+        let detail: SpeciesDetail
+        do {
+            detail = try await service.species(key: saved.speciesKey)
+        } catch {
+            guard token == latestRequestToken else { return }
+            isLoading = false
+            if error is CancellationError { return }
+            favoriteLoadNotice = (error as? PokeCalcError)?.code == "not_found" ? .speciesMissing : .unavailable
+            return
+        }
+        guard token == latestRequestToken else { return }
+        let plan = FavoriteLoad.plan(for: favorite, side: side, species: detail, natures: natureOptions, items: itemOptions)
+
+        switch side {
+        case .attacker:
+            let previousMoveId = moveId
+            attackerSpeciesKey = detail.key
+            applyAttackerDetail(detail)
+            attackerItemId = plan.itemId
+            attackerAbilityId = plan.abilityId
+            if let natureId = plan.natureId, let sp = plan.sp {
+                attackerBuildSource = .team(
+                    TeamIndividualSelection(
+                        teamID: FavoriteLoad.sourceTeamID, memberID: favorite.id,
+                        displayName: favorite.label ?? detail.nameJa,
+                        individual: Individual(
+                            speciesKey: detail.key, natureId: natureId, sp: sp, abilityId: plan.abilityId,
+                            itemId: plan.itemId, teraType: saved.teraType)))
+            }
+            do {
+                try await reselectMove(preferringCurrent: previousMoveId, token: token)
+                guard token == latestRequestToken else { return }
+            } catch {
+                guard token == latestRequestToken else { return }
+                handleInputFailure(error)
+                return
+            }
+        case .defender:
+            defenderSpeciesKey = detail.key
+            resetDefenderAbility()
+            applyDefenderDetail(detail)
+            defenderAbilityId = plan.abilityId
+        }
+        favoriteLoadNotice = plan.dropped.isEmpty ? nil : .partial(plan.dropped)
+        await recalculate(token: token)
+    }
+
+    /// 案内を閉じる。
+    public func dismissFavoriteLoadNotice() {
+        favoriteLoadNotice = nil
+    }
 
     // MARK: - 計算結果
 
@@ -629,6 +700,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 「まだ最新か」を確かめ、途中で失敗しても・古い応答が後から届いても、最新の操作だけが
     /// 画面の状態(`rows` / `error` / `isLoading` / `moveOptions`)を書き換えるようにする(M1・M2)。
     func beginInput() -> Int {
+        favoriteLoadNotice = nil
         latestRequestToken += 1
         return latestRequestToken
     }
@@ -660,6 +732,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     private func reloadAttackerMoveOptions(token: Int) async throws {
         let detail = try await service.species(key: attackerSpeciesKey)
         guard token == latestRequestToken, detail.key == attackerSpeciesKey else { return }
+        applyAttackerDetail(detail)
+    }
+
+    /// 攻撃側の詳細(learnset・特性の選択肢・メガ情報)を反映する。`reloadAttackerMoveOptions` と
+    /// `loadFavorite` が共有する(お気に入りは詳細を1回だけ読んで使い回す)。
+    private func applyAttackerDetail(_ detail: SpeciesDetail) {
         speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
         megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
         attackerLearnsetIds = detail.learnset

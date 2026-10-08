@@ -64,6 +64,7 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
 素早さ比較画面(ホームの「素早さを比べる」。P6-24。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error`、
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
+**判定の入口は既定で非表示**(F-07。再設計まで。`FeatureVisibility`)。環境変数 `POKECALC_SHOW_JUDGE=1` で出る(判定の XCUITest と `make ios-sim-run IOS_SCREEN=judge` が使う)。
 判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks|speed-notes`(`speed-notes` は素早さの反映/無視の文と、状態異常まひの付与を固定値で返す。ADR-0512)、
 起動時に開くのは `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1`(ADR-0504)。
 
@@ -72,7 +73,8 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 モックの挙動は `POKECALC_MOCK_FREQUENT_OPPONENTS=empty|fail` で切り替える(ADR-0501「P6-23」)。
 お気に入り・計算履歴の画面(ADR-0511。ルートの「お気に入り・履歴」)は、お気に入りの一覧と外す操作、「よく計算する相手」(件数・最後に計算した日)を出す。
 計算画面の「攻撃側/防御側をお気に入りに追加」から追加する。取得・保存に失敗しても計算は使える。
-モックの挙動は `POKECALC_MOCK_FAVORITES=list|fail|unavailable|full` で切り替える(未設定は空のストアで、追加・外すが動く)。
+計算画面の「お気に入りから攻撃側/防御側を選ぶ」(「構築から選ぶ」の下。ADR-0513)で読み込める(攻撃側は種族・性格・能力ポイント・特性・持ち物、防御側は種族と特性だけ。マスタに無い分は案内して落とす)。
+モックの挙動は `POKECALC_MOCK_FAVORITES=list|loadable|fail|unavailable|full` で切り替える(未設定は空のストアで、追加・外すが動く)。
 起動時に開くのは `POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH=1`。
 ポケモン画像(ADR-0508)は既定でモックも画像なし(タイプ色エンブレム)。`POKECALC_MOCK_IMAGES=1` で架空キー 9001-000・9003-000 だけ小さな架空 PNG(data URL)が出る。API 接続では gateway の `/images/manifest.json` を起動時に1回だけ取得し、無ければエンブレムのまま。
 

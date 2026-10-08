@@ -34,6 +34,8 @@ final class JudgeSpeedNotesUITests: XCTestCase {
     private func launchJudgeScreen(scenario: String? = "speed-notes") -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        // 判定の入口は既定で非表示(F-07)。画面のテストは環境変数で出す。
+        app.launchEnvironment["POKECALC_SHOW_JUDGE"] = "1"
         if let scenario { app.launchEnvironment["POKECALC_MOCK_JUDGE"] = scenario }
         app.launch()
         let open = element(app, "openJudgeScreen")
