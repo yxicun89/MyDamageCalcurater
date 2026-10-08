@@ -151,3 +151,13 @@ kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refre
   && KUBECONFIG="$kc" argocd --core app sync pokecalc-balance --timeout 180)
 ```
 確認: 出力に `Sync Status: Synced to main (<main の commit>)` と `Phase: Succeeded`。
+
+## 11. うまくいかないとき
+
+- Application の Sync が `Unknown` のまま、`ComparisonError` に `.git/index.lock: File exists` が出る: Argo CD の repo-server のキャッシュに、中断した取得のロックが残っている。repo-server を再起動して再取得させる(キャッシュが作り直されるだけで、データは失われない)。
+  ```sh
+  kubectl -n argocd rollout restart deployment/argocd-repo-server
+  kubectl -n argocd rollout status deployment/argocd-repo-server --timeout=120s
+  kubectl -n argocd annotate application pokecalc-balance argocd.argoproj.io/refresh=hard --overwrite
+  ```
+  確認: `kubectl -n argocd get applications` の `pokecalc-balance` が `Synced`(2026-10-09 に実際に起きて、この手順で解消した)。
