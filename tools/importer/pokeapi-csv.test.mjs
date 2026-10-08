@@ -43,3 +43,19 @@ test('識別子が小文字(ja-hrkt)でも読み仮名の名前を ja-Hrkt の�
   assert.deepEqual(got.get('10'), { 'ja-Hrkt': 'かな', ja: '漢字' });
   assert.deepEqual(got.get('11'), { 'ja-Hrkt': 'だけかな' });
 });
+
+// --- 姿の名前(ADR-0141) ---------------------------------------------------------------------
+
+test('collectFormEntries は完全名と姿の名前を別々に出し、既定の姿は出さない', async () => {
+  const { collectFormEntries } = await import('./pokeapi-csv.mjs');
+  const langs = new Map([['1', 'ja-Hrkt'], ['2', 'en']]);
+  const forms = parseCSV('id,identifier,form_identifier\n1,fake,\n2,fake-alola,alola\n3,fake-own,own\n4,other-x,x\n', 'f.csv');
+  const formNames = parseCSV(
+    'pokemon_form_id,local_language_id,form_name,pokemon_name\n2,1,アローラのすがた,\n2,2,Alolan Form,\n3,1,,フェイク（じぶん）\n1,1,ふつう,\n',
+    'n.csv',
+  );
+  assert.deepEqual(collectFormEntries(forms, formNames, langs, ['ja-Hrkt', 'ja']), [
+    { slug: 'fake-alola', names: { 'ja-Hrkt': '' }, formNames: { 'ja-Hrkt': 'アローラのすがた' } },
+    { slug: 'fake-own', names: { 'ja-Hrkt': 'フェイク（じぶん）' }, formNames: { 'ja-Hrkt': '' } },
+  ]);
+});

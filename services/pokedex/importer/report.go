@@ -61,9 +61,12 @@ const (
 	KindNameFallback FindingKind = "name-fallback"
 	// KindNameGenerated は、上流に日本語名が無いメガ種族の名前を、基本種の日本語名とフォーム識別子から
 	// 生成したとき(issue #515・ADR-0324。止めない。name_ja_source は generated)。
-	KindNameGenerated  FindingKind = "name-generated"
-	KindOverrideUnused FindingKind = "override-unused"
-	KindEffectUnused   FindingKind = "effect-unused"
+	KindNameGenerated FindingKind = "name-generated"
+	// KindFormNameRuleMismatch は、上流に完全名と姿の名前の両方がある姿で、「基本種名（姿の名前）」の規則の結果が
+	// 完全名と違うとき(止めない。名前は上流の完全名を使う。ADR-0141)。ID は種族の showdownId。
+	KindFormNameRuleMismatch FindingKind = "name-form-rule-mismatch"
+	KindOverrideUnused       FindingKind = "override-unused"
+	KindEffectUnused         FindingKind = "effect-unused"
 
 	// KindMoveEffectUnsupportedStat は技の追加効果(命中時のランク変化)が accuracy/evasion しか
 	// 動かさないとき(engine の Ranks に持ち場が無い。ADR-0107 決定6 規則4)。落として警告にする。

@@ -54,6 +54,10 @@ xcrun simctl ui "$simulator" content_size "$content_size"
 xcrun simctl terminate "$simulator" "$bundle_id" 2>/dev/null || true
 
 launch_env=(SIMCTL_CHILD_POKECALC_USE_MOCK=1)
+# 判定の入口は既定で非表示(F-07)。判定画面を開くときだけ環境変数で出す。
+if [ "$screen" = "judge" ]; then
+  launch_env+=("SIMCTL_CHILD_POKECALC_SHOW_JUDGE=1")
+fi
 if [ -n "$open_key" ]; then
   launch_env+=("SIMCTL_CHILD_${open_key}=1")
 fi

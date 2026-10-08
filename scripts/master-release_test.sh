@@ -32,9 +32,9 @@ case "$args" in
   *"applications.argoproj.io pokecalc-speed"*) exit 1 ;;
   *"rollout restart deployment/calc"*) cp "$STATE/db" "$STATE/calc" ;;
   *"rollout status deployment/calc"*) exit "${FAKE_ROLLOUT_RC:-0}" ;;
+  *"services/speed:http/proxy/healthz"*) [ -s "$STATE/speed" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$(cat "$STATE/speed")" || exit 1 ;;
   *"get --raw"*) [ -s "$STATE/calc" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$(cat "$STATE/calc")" || exit 1 ;;
   *"deployment/balance"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "$(cat "$STATE/balance")" ;;
-  *"deployment/speed"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "$(cat "$STATE/speed")" ;;
   *) echo "unexpected kubectl: $args" >&2; exit 99 ;;
 esac
 FAKE
