@@ -153,7 +153,8 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	}
 	slices.Sort(reasons)
 	reasons = slices.Compact(reasons)
-	if in.Move.Power <= 0 {
+	// 威力 0 は、固定ダメージ・一撃必殺の中身があれば正しい(ダメージを技の処理で決める。ADR-0142 §10)。
+	if in.Move.Power <= 0 && in.Move.Params.FixedDamage == nil && in.Move.Params.OHKO == nil {
 		reasons = append(reasons, UnsupportedZeroPower)
 	}
 	if in.Format == FormatDouble && in.Move.Target == "" {
@@ -169,29 +170,28 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	return marks
 }
 
-// mechanismHandled は、機構 m を持つ技がこの入力では通常の式と同じ結果になるかを返す。
-//   - 必ず急所: 入力が急所ありか、防御側が急所に当たらない特性なら同じ。
-//   - 防御側のランク無視: 使う側(物理は防御・特殊は特防)のランクが 0 か、攻撃側が相手のランクを無視する特性なら同じ。
+// mechanismHandled は、機構 m を持つ技がこの入力では正しく計算されるかを返す。
+//   - 必ず急所・防御側のランク無視: engine が機構だけで計算する(ADR-0142 §5)。
+//   - 多段・固定ダメージ・一撃必殺・攻撃/防御に使う能力値: 中身(Params)があるときだけ計算する(ADR-0142 §2)。
 //   - 条件で優先度が変わる: engine が優先度を使うのはサイコフィールドの判定だけ(ADR-0123)。
 //     防御側が浮いていて判定に関係しないときも印を付ける(安全側の過検出)。
 //   - 天候・フィールドが名指しする技: engine が持つ場の状態は天候とフィールドだけで、どちらも無ければ
 //     名指しの処理は起きない。
 func mechanismHandled(in DamageInput, m MoveMechanism) bool {
+	p := in.Move.Params
 	switch m {
-	case MechanismAlwaysCrit:
-		// 急所に当たらない防御側(ADR-0176)には、急所の指定が無くても通常の式で正しい。
-		de := in.Defender.Ability.Effect
-		return in.Critical || (de != nil && de.PreventsCritical)
-	case MechanismIgnoreDefenseRanks:
-		// 攻撃側が相手のランクを無視する(ADR-0176)なら、防御側のランクは計算に入らない。
-		if ae := in.Attacker.Ability.Effect; ae != nil && ae.IgnoresOpponentRanks {
-			return true
-		}
-		defKey := StatDef
-		if in.Move.Category == CategorySpecial {
-			defKey = StatSpD
-		}
-		return in.Defender.Ranks.Get(defKey) == 0
+	case MechanismAlwaysCrit, MechanismIgnoreDefenseRanks:
+		return true
+	case MechanismMultiHit:
+		return p.MultiHit != nil
+	case MechanismFixedDamage:
+		return p.FixedDamage != nil
+	case MechanismOHKO:
+		return p.OHKO != nil
+	case MechanismAltOffenseStat:
+		return p.hasOffenseContent()
+	case MechanismAltDefenseStat:
+		return p.hasDefenseContent()
 	case MechanismPriorityChange:
 		return in.Field.Terrain != TerrainPsychic
 	case MechanismFieldSpecific:

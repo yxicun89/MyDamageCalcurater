@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 
+	"example.com/pokecalc/engine"
 	"example.com/pokecalc/services/internal/master"
 )
 
@@ -77,64 +78,72 @@ var fieldHookAffectsDamage = map[string]bool{
 	"onTryAddVolatile":      false,
 }
 
-// parseMultihit は Showdown の multihit(null・回数・[最小, 最大])を検証する。複数回当たるなら true。
-func parseMultihit(raw json.RawMessage) (bool, error) {
+// parseMultihit は Showdown の multihit(null・回数・[最小, 最大])を検証し、回数の範囲を返す。
+// 複数回当たらない(null)なら max == 0。回数の固定は min == max。上限は engine.MaxMultiHits(ADR-0142 §2)。
+func parseMultihit(raw json.RawMessage) (min, max int, err error) {
 	if isJSONNull(raw) {
-		return false, nil
+		return 0, 0, nil
 	}
 	var n int
 	if err := json.Unmarshal(raw, &n); err == nil {
+		min, max = n, n
 		if n < 2 {
-			return false, fmt.Errorf("multihit の回数が2未満: %d", n)
+			return 0, 0, fmt.Errorf("multihit の回数が2未満: %d", n)
 		}
-		return true, nil
+	} else {
+		var r []int
+		if err := json.Unmarshal(raw, &r); err != nil || len(r) != 2 {
+			return 0, 0, fmt.Errorf("multihit が回数でも [最小, 最大] でもない: %s", raw)
+		}
+		min, max = r[0], r[1]
+		if min < 1 || max < 2 || min > max {
+			return 0, 0, fmt.Errorf("multihit の範囲が不正: %s", raw)
+		}
 	}
-	var r []int
-	if err := json.Unmarshal(raw, &r); err != nil || len(r) != 2 {
-		return false, fmt.Errorf("multihit が回数でも [最小, 最大] でもない: %s", raw)
+	if max > engine.MaxMultiHits {
+		return 0, 0, fmt.Errorf("multihit の最大が上限 %d を超える: %s", engine.MaxMultiHits, raw)
 	}
-	if r[0] < 1 || r[1] < 2 || r[0] > r[1] {
-		return false, fmt.Errorf("multihit の範囲が不正: %s", raw)
-	}
-	return true, nil
+	return min, max, nil
 }
 
-// parseFixedDamage は Showdown の damage(null・正の数値・"level")を検証する。固定ダメージなら true。
-func parseFixedDamage(raw json.RawMessage) (bool, error) {
+// parseFixedDamage は Showdown の damage(null・正の数値・"level")を検証する。
+// 固定ダメージでなければ ok == false。level は攻撃側のレベルと同じ、そうでなければ value が数値。
+func parseFixedDamage(raw json.RawMessage) (level bool, value int, ok bool, err error) {
 	if isJSONNull(raw) {
-		return false, nil
+		return false, 0, false, nil
 	}
 	var n int
 	if err := json.Unmarshal(raw, &n); err == nil {
 		if n < 1 {
-			return false, fmt.Errorf("damage が正でない: %d", n)
+			return false, 0, false, fmt.Errorf("damage が正でない: %d", n)
 		}
-		return true, nil
+		return false, n, true, nil
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil || s != "level" {
-		return false, fmt.Errorf("damage が数値でも \"level\" でもない: %s", raw)
+		return false, 0, false, fmt.Errorf("damage が数値でも \"level\" でもない: %s", raw)
 	}
-	return true, nil
+	return true, 0, true, nil
 }
 
-// parseOHKO は Showdown の ohko(null・true・タイプ名)を検証する。一撃必殺なら true。
-func parseOHKO(raw json.RawMessage) (bool, error) {
+// parseOHKO は Showdown の ohko(null・true・タイプ名)を検証する。一撃必殺でなければ ok == false。
+// immuneType は効かないタイプの名前(取得元の表記。true なら空)。
+func parseOHKO(raw json.RawMessage) (immuneType string, ok bool, err error) {
 	if isJSONNull(raw) {
-		return false, nil
+		return "", false, nil
 	}
 	var b bool
 	if err := json.Unmarshal(raw, &b); err == nil {
 		if !b {
-			return false, fmt.Errorf("ohko が false(取得時に null へ正規化しているはず)")
+			return "", false, fmt.Errorf("ohko が false(取得時に null へ正規化しているはず)")
 		}
-		return true, nil
+		return "", true, nil
 	}
 	var s string
 	if err := json.Unmarshal(raw, &s); err != nil || s == "" {
-		return false, fmt.Errorf("ohko が true でもタイプ名でもない: %s", raw)
+		return "", false, fmt.Errorf("ohko が true でもタイプ名でもない: %s", raw)
 	}
-	return true, nil
+	return s, true, nil
 }
 
 func isJSONNull(raw json.RawMessage) bool {
@@ -146,19 +155,19 @@ func classifyMoveMechanisms(id string, power int, sig ShowdownMoveMechanism) ([]
 	set := map[master.MoveMechanism]bool{}
 	var warnings []Finding
 
-	multiHit, err := parseMultihit(sig.Multihit)
+	_, multiHitMax, err := parseMultihit(sig.Multihit)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: 技 %q: %v", ErrInvalidData, id, err)
 	}
-	fixed, err := parseFixedDamage(sig.Damage)
+	_, _, fixed, err := parseFixedDamage(sig.Damage)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: 技 %q: %v", ErrInvalidData, id, err)
 	}
-	ohko, err := parseOHKO(sig.OHKO)
+	_, ohko, err := parseOHKO(sig.OHKO)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%w: 技 %q: %v", ErrInvalidData, id, err)
 	}
-	set[master.MechanismMultiHit] = multiHit
+	set[master.MechanismMultiHit] = multiHitMax > 0
 	set[master.MechanismFixedDamage] = fixed
 	set[master.MechanismOHKO] = ohko
 	set[master.MechanismAlwaysCrit] = sig.WillCrit

@@ -255,6 +255,7 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 		row := sharedmaster.MoveRow{
 			ID: m.Id, NameJa: m.NameJa, Type: string(m.Type), Category: string(m.Category),
 			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms, Target: derefString(m.Target),
+			Params: mechanismParamsRow(m.MechanismParams),
 		}
 		mv, err := sharedmaster.Move(row, chart)
 		if err != nil {
@@ -263,6 +264,29 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 		out[m.Id] = mv
 	}
 	return out, nil
+}
+
+// mechanismParamsRow は契約の機構の中身(ADR-0142 §8)を共通マスタの行にする。nil(中身なし・キーが無い古い本文)は nil。
+// 値の検証は共通マスタの Move が行う。
+func mechanismParamsRow(p *api.MasterMoveMechanismParams) *sharedmaster.MoveMechanismParamsRow {
+	if p == nil {
+		return nil
+	}
+	row := &sharedmaster.MoveMechanismParamsRow{
+		OffenseStat:    derefString(p.OffenseStat),
+		OffensePokemon: derefString(p.OffensePokemon),
+		DefenseStat:    derefString(p.DefenseStat),
+	}
+	if p.MultiHit != nil {
+		row.MultiHitMin, row.MultiHitMax = p.MultiHit.Min, p.MultiHit.Max
+	}
+	if p.FixedDamage != nil {
+		row.FixedDamageLevel, row.FixedDamageValue = p.FixedDamage.Level, p.FixedDamage.Value
+	}
+	if p.Ohko != nil {
+		row.OHKO, row.OHKOImmuneType = true, derefString(p.Ohko.ImmuneType)
+	}
+	return row
 }
 
 // buildNatures は natures を検証する(ADR-0204 §2。データレーンにまだ natures テーブルが無いため

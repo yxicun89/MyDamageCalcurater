@@ -73,6 +73,7 @@ func TestGoldenMechanismsStage1(t *testing.T) {
 		t.Fatalf("件数 = %d, metadata = %d", len(cases), meta.Files[goldenMechanismsFile].Count)
 	}
 
+	chart := mustTypeChart(t)
 	seen := map[string]int{}
 	for _, v := range cases {
 		seen[scenarioLabel(v.ID)]++
@@ -85,6 +86,7 @@ func TestGoldenMechanismsStage1(t *testing.T) {
 					t.Fatalf("段階1外の機構 %q を持つ技は照合しない", m)
 				}
 			}
+			v.Input.TypeChart = chart
 			got, err := CalcDamage(v.Input)
 			if err != nil {
 				t.Fatal(err)
@@ -121,6 +123,15 @@ func TestGoldenMechanismsStage1(t *testing.T) {
 			t.Errorf("ラベル %q のベクタが無い(ADR-0142 §9)。あるラベル: %s", l, strings.Join(sortedLabelKeys(seen), ", "))
 		}
 	}
+}
+
+func readGoldenMechanismCases(t *testing.T) []goldenMechanismCase {
+	t.Helper()
+	var cases []goldenMechanismCase
+	if err := json.Unmarshal(goldenFile(t, readGoldenMetadata(t), goldenMechanismsFile), &cases); err != nil {
+		t.Fatal(err)
+	}
+	return cases
 }
 
 func sortedLabelKeys(m map[string]int) []string {

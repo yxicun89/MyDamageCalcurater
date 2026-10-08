@@ -61,10 +61,12 @@ export interface CalcSnapshotSpecies {
   readonly abilities: readonly CalcSnapshotSpeciesAbility[];
 }
 
-/** スナップショットの技(MasterMove。例データに追加効果・機構・対象は無いので effect・target は null・mechanisms は空配列)。 */
+/** スナップショットの技(MasterMove。例データに追加効果・機構・対象は無いので effect・mechanismParams・target は null・mechanisms は空配列)。 */
 export interface CalcSnapshotMove extends Move {
   readonly effect: null;
   readonly mechanisms: readonly string[];
+  /** 技の機構の中身(MasterMove.mechanismParams。例データは中身を持たないので null。ADR-0142) */
+  readonly mechanismParams: null;
   /** 技の対象(MasterMove.target。例データは対象を持たないので null。ADR-0223) */
   readonly target: null;
 }
@@ -204,6 +206,7 @@ export function toCalcSnapshot(master: MasterData): CalcSnapshot {
     priority: move.priority,
     effect: null,
     mechanisms: [],
+    mechanismParams: null,
     target: null,
   }));
 

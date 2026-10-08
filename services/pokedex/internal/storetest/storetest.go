@@ -49,6 +49,7 @@ type Querier struct {
 	Moves               []store.Move
 	MoveEffects         []store.MoveEffect
 	MoveMechanisms      []store.MoveMechanism
+	MoveMechanismParams []store.MoveMechanismParam
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
 	Abilities           []store.Ability
@@ -342,6 +343,13 @@ func (q *Querier) ListMoveMechanisms(context.Context) ([]store.MoveMechanism, er
 		return nil, err
 	}
 	return append([]store.MoveMechanism(nil), q.MoveMechanisms...), nil
+}
+
+func (q *Querier) ListMoveMechanismParams(context.Context) ([]store.MoveMechanismParam, error) {
+	if err := q.record("ListMoveMechanismParams", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveMechanismParam(nil), q.MoveMechanismParams...), nil
 }
 
 func (q *Querier) ListItems(context.Context) ([]store.Item, error) {

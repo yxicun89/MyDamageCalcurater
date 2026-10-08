@@ -26,6 +26,10 @@ func TestGoldenCoversStage1AbilityEffects(t *testing.T) {
 	for _, c := range readGoldenFixed(t) {
 		ids = append(ids, c.ID)
 	}
+	// 技の機構と組み合わさる特性(がんじょう等)の breakable は mechanisms.json で照合する(ADR-0142)。
+	for _, c := range readGoldenMechanismCases(t) {
+		ids = append(ids, c.ID)
+	}
 	has := func(prefix, suffix string) bool {
 		for _, id := range ids {
 			if strings.HasPrefix(id, prefix) && strings.HasSuffix(id, suffix) {

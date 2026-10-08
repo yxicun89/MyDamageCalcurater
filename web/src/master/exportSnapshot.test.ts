@@ -230,10 +230,23 @@ describe("toCalcSnapshot(api/openapi.yaml の MasterExport。ADR-0204)", () => {
     snapshot.moves.forEach((move, index) => {
       const source = master.moves[index];
       expect(sortedKeys(move)).toEqual(
-        ["category", "effect", "id", "mechanisms", "nameJa", "power", "priority", "target", "type"].sort(),
+        [
+          "category",
+          "effect",
+          "id",
+          "mechanismParams",
+          "mechanisms",
+          "nameJa",
+          "power",
+          "priority",
+          "target",
+          "type",
+        ].sort(),
       );
       expect(move.effect).toBeNull();
       expect(move.mechanisms).toEqual([]);
+      // 技の機構の中身(MasterMove.mechanismParams。ADR-0142)は必須キーで、例データは中身を持たないので null。
+      expect(move.mechanismParams).toBeNull();
       // 技の対象(MasterMove.target。issue 288・ADR-0223)は必須キーで、例データは対象を持たないので null(不明)。
       expect(move.target).toBeNull();
       expect(move.id).toBe(source?.id);

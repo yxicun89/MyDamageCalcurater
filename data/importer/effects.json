@@ -124,6 +124,8 @@
     "weakarmor": {"UnsupportedDefender": true},
     "moldbreaker": {"IgnoresDefenderAbility": true},
     "unaware": {"IgnoresOpponentRanks": true, "Breakable": true},
+    "skilllink": {"MaxMultiHit": true},
+    "sturdy": {"PreventsOHKO": true, "Breakable": true},
     "merciless": {"UnsupportedAttacker": true},
     "longreach": {"UnsupportedAttacker": true}
   },

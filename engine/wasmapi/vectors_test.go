@@ -277,6 +277,7 @@ type koView struct {
 
 type calcResultView struct {
 	Rolls         [16]int     `json:"rolls"`
+	HitRolls      [][16]int   `json:"hitRolls"` // 多段技の1発ごとの16段階(ADR-0142 §3)。単発は []
 	MinDamage     int         `json:"minDamage"`
 	MaxDamage     int         `json:"maxDamage"`
 	MinPercent    json.Number `json:"minPercent"`
@@ -392,6 +393,15 @@ func assertCalcResult(t *testing.T, got calcResultView, want engine.DamageResult
 	t.Helper()
 	if got.Rolls != want.Rolls {
 		t.Errorf("rolls が engine と違う\n got %v\nwant %v", got.Rolls, want.Rolls)
+	}
+	if len(got.HitRolls) != len(want.HitRolls) {
+		t.Errorf("hitRolls の長さが engine と違う: got %d want %d", len(got.HitRolls), len(want.HitRolls))
+	} else {
+		for h := range want.HitRolls {
+			if got.HitRolls[h] != want.HitRolls[h] {
+				t.Errorf("hitRolls[%d] が engine と違う\n got %v\nwant %v", h, got.HitRolls[h], want.HitRolls[h])
+			}
+		}
 	}
 	if got.MinDamage != want.MinDamage() || got.MaxDamage != want.MaxDamage() {
 		t.Errorf("minDamage/maxDamage: got %d/%d want %d/%d", got.MinDamage, got.MaxDamage, want.MinDamage(), want.MaxDamage())

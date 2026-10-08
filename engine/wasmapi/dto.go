@@ -252,6 +252,8 @@ type moveDTO struct {
 	Priority int    `json:"priority"`
 	// Mechanisms は技の機構(ADR-0121。省略・空は通常の技)。未対応の印に使う(ADR-0123)。
 	Mechanisms []string `json:"mechanisms"`
+	// MechanismParams は機構の中身(ADR-0142 §8)。省略・null は中身なし。
+	MechanismParams *mechanismParamsDTO `json:"mechanismParams"`
 	// Target は技の対象("" | single | spread。ADR-0222)。省略は不明。
 	Target string `json:"target"`
 }
@@ -275,8 +277,83 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	default:
 		return engine.Move{}, enumError(path+".target", m.Target)
 	}
+	params, err := m.MechanismParams.toEngine(path + ".mechanismParams")
+	if err != nil {
+		return engine.Move{}, err
+	}
 	return engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
-		Mechanisms: mechanisms, Target: target}, nil
+		Mechanisms: mechanisms, Params: params, Target: target}, nil
+}
+
+// mechanismParamsDTO は技の機構の中身(ADR-0142 §8)。能力値・ポケモン・タイプが語彙に無ければ invalid_enum。
+// 値域・機構との対応は engine の CalcDamage が検証する(invalid_input)。
+type mechanismParamsDTO struct {
+	MultiHit       *multiHitDTO    `json:"multiHit"`
+	FixedDamage    *fixedDamageDTO `json:"fixedDamage"`
+	Ohko           *ohkoDTO        `json:"ohko"`
+	OffenseStat    string          `json:"offenseStat"`
+	OffensePokemon string          `json:"offensePokemon"`
+	DefenseStat    string          `json:"defenseStat"`
+}
+
+type multiHitDTO struct {
+	Min int `json:"min"`
+	Max int `json:"max"`
+}
+
+type fixedDamageDTO struct {
+	Level bool `json:"level"`
+	Value int  `json:"value"`
+}
+
+type ohkoDTO struct {
+	ImmuneType string `json:"immuneType"`
+}
+
+// parseUsedStatKey は攻撃・防御に使う能力値を検証する(HP は不可)。allowNone のとき "" を許す。
+func parseUsedStatKey(path, v string) (engine.StatKey, error) {
+	k, err := parseStatKey(path, v, true)
+	if err != nil {
+		return "", err
+	}
+	if k == engine.StatHP {
+		return "", enumError(path, v)
+	}
+	return k, nil
+}
+
+func (p *mechanismParamsDTO) toEngine(path string) (engine.MechanismParams, error) {
+	if p == nil {
+		return engine.MechanismParams{}, nil
+	}
+	var out engine.MechanismParams
+	var err error
+	if p.MultiHit != nil {
+		out.MultiHit = &engine.MultiHit{Min: p.MultiHit.Min, Max: p.MultiHit.Max}
+	}
+	if p.FixedDamage != nil {
+		out.FixedDamage = &engine.FixedDamage{Level: p.FixedDamage.Level, Value: p.FixedDamage.Value}
+	}
+	if p.Ohko != nil {
+		immune, err := parseType(path+".ohko.immuneType", p.Ohko.ImmuneType, true)
+		if err != nil {
+			return engine.MechanismParams{}, err
+		}
+		out.OHKO = &engine.OHKO{ImmuneType: immune}
+	}
+	if out.OffenseStat, err = parseUsedStatKey(path+".offenseStat", p.OffenseStat); err != nil {
+		return engine.MechanismParams{}, err
+	}
+	switch engine.OffensePokemon(p.OffensePokemon) {
+	case "", engine.OffensePokemonAttacker, engine.OffensePokemonDefender:
+		out.OffensePokemon = engine.OffensePokemon(p.OffensePokemon)
+	default:
+		return engine.MechanismParams{}, enumError(path+".offensePokemon", p.OffensePokemon)
+	}
+	if out.DefenseStat, err = parseUsedStatKey(path+".defenseStat", p.DefenseStat); err != nil {
+		return engine.MechanismParams{}, err
+	}
+	return out, nil
 }
 
 // parseMechanisms は技の機構を検証する(未知の値は invalid_enum、重複は invalid_input)。
@@ -479,6 +556,8 @@ type abilityEffectDTO struct {
 	IgnoresOpponentRanks   bool                     `json:"ignoresOpponentRanks"`
 	IgnoresDefenderAbility bool                     `json:"ignoresDefenderAbility"`
 	Breakable              bool                     `json:"breakable"`
+	MaxMultiHit            bool                     `json:"maxMultiHit"`         // 範囲のある多段技が常に最大回数(ADR-0142 §3)
+	PreventsOHKO           bool                     `json:"preventsOHKO"`        // 一撃必殺技が効かない(ADR-0142 §4)
 	UnsupportedAttacker    bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
 	UnsupportedDefender    bool                     `json:"unsupportedDefender"`
 }
@@ -520,6 +599,7 @@ func (e abilityEffectDTO) stage1ToEngine(path string, out *engine.AbilityEffect)
 	out.AuraMod, out.CritDamageMod = e.AuraMod, e.CritDamageMod
 	out.PreventsCritical, out.IgnoresOpponentRanks = e.PreventsCritical, e.IgnoresOpponentRanks
 	out.IgnoresDefenderAbility, out.Breakable = e.IgnoresDefenderAbility, e.Breakable
+	out.MaxMultiHit, out.PreventsOHKO = e.MaxMultiHit, e.PreventsOHKO
 	var err error
 	if c := e.TypeConvert; c != nil {
 		tc := &engine.TypeConvert{PowerMod: c.PowerMod}
@@ -766,7 +846,9 @@ type koDTO struct {
 }
 
 type calcResultDTO struct {
-	Rolls         [16]int      `json:"rolls"`
+	Rolls [16]int `json:"rolls"`
+	// HitRolls は多段技の1発ごとの16段階(ADR-0142 §3)。常に配列(単発・ダメージなしは [])。
+	HitRolls      [][16]int    `json:"hitRolls"`
 	MinDamage     int          `json:"minDamage"`
 	MaxDamage     int          `json:"maxDamage"`
 	MinPercent    tenthPercent `json:"minPercent"`
@@ -802,6 +884,7 @@ func calcResultFrom(r engine.DamageResult) calcResultDTO {
 	minTenths, maxTenths := r.DisplayPercentRangeTenths()
 	return calcResultDTO{
 		Rolls:         r.Rolls,
+		HitRolls:      append([][16]int{}, r.HitRolls...),
 		MinDamage:     r.MinDamage(),
 		MaxDamage:     r.MaxDamage(),
 		MinPercent:    tenthPercent(minTenths),

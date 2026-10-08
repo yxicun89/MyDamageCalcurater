@@ -260,6 +260,18 @@ func reverseStat(side ReverseSide, category MoveCategory) StatKey {
 	return StatDef
 }
 
+// reverseStatFor は reverseStat に加えて、技が攻撃・防御に使う能力値を指定している(ADR-0142 §6。
+// ボディプレスの防御・サイコショックの防御 等)ときはそれを返す。
+func reverseStatFor(side ReverseSide, m Move) StatKey {
+	if side == SideAttacker && m.Params.OffenseStat != "" {
+		return m.Params.OffenseStat
+	}
+	if side == SideDefender && m.Params.DefenseStat != "" {
+		return m.Params.DefenseStat
+	}
+	return reverseStat(side, m.Category)
+}
+
 // natureForClass は関連ステータス stat に対する性格クラスの代表 Nature を返す(ADR-0010 §R1)。
 // 上昇補正の相手(下降側)は、この計算で使われない atk / spa に置く。
 func natureForClass(stat StatKey, c NatureClass) Nature {
@@ -350,7 +362,7 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 			ErrMoveDealsNoDamage, in.Move.ID, in.Move.Category, in.Move.Power)
 	}
 
-	stat := reverseStat(in.Side, in.Move.Category)
+	stat := reverseStatFor(in.Side, in.Move)
 
 	items := in.ItemCandidates
 	if len(items) == 0 {
@@ -422,6 +434,11 @@ func CalcReverse(in ReverseInput) (ReverseResult, error) {
 				c := reverseCandidate(in.Observations, &rolls[group[0]][ci][ii])
 				c.NatureClass, c.Nature, c.Item = class, nature, item
 				c.Ability, c.AbilityIDs = abilities[group[0]], slices.Clone(ids)
+				// 防御側を逆算するとき、相手(防御側)の攻撃で攻撃する技は防御側の攻撃の SP・性格を探索しないので印を残す。
+				if in.Side == SideDefender && in.Move.Params.OffensePokemon == OffensePokemonDefender {
+					c.Unsupported = withMoveMark(c.Unsupported, UnsupportedMark{
+						Target: UnsupportedTargetMove, Reason: UnsupportedReason(MechanismAltOffenseStat), ID: in.Move.ID})
+				}
 				if item != nil {
 					c.ItemID = item.ID
 				}
@@ -472,9 +489,10 @@ func reverseCandidate(obs []Observation, rolls *[MaxSPPerStat + 1]DamageResult) 
 	dist := make([]int, MaxSPPerStat+1)
 	for x, res := range rolls {
 		sum := 0
+		totals := res.observableTotals()
 		for _, o := range obs {
 			best := -1
-			for _, r := range res.Rolls {
+			for _, r := range totals {
 				d := o.Distance(r, res.DefenderHP)
 				if best < 0 || d < best {
 					best = d
@@ -496,8 +514,9 @@ func reverseCandidate(obs []Observation, rolls *[MaxSPPerStat + 1]DamageResult) 
 	support, minT, maxT := 0, -1, -1
 	for _, x := range sps {
 		res := rolls[x]
+		totals := res.observableTotals()
 		for _, o := range obs {
-			for _, r := range res.Rolls {
+			for _, r := range totals {
 				if o.Matches(r, res.DefenderHP) {
 					support++
 				}
@@ -522,6 +541,45 @@ func reverseCandidate(obs []Observation, rolls *[MaxSPPerStat + 1]DamageResult) 
 		MaxPercentTenths: maxT,
 		Unsupported:      rolls[0].Unsupported,
 	}
+}
+
+// observableTotals は1回の使用で観測しうるダメージの合計の候補。単発の技は 16 段階そのまま。
+// 多段技は各発の16段階の和の全組合せ(重複は除く)。段の合計(Rolls)だけだと、発ごとに別の段が出る観測を説明できない
+// (ADR-0142 §6)。
+func (r DamageResult) observableTotals() []int {
+	if len(r.HitRolls) < 2 {
+		return r.Rolls[:]
+	}
+	sums := map[int]struct{}{0: {}}
+	for _, hit := range r.HitRolls {
+		next := make(map[int]struct{}, len(sums)*2)
+		for s := range sums {
+			for _, d := range hit {
+				next[s+d] = struct{}{}
+			}
+		}
+		sums = next
+	}
+	out := make([]int, 0, len(sums))
+	for s := range sums {
+		out = append(out, s)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// withMoveMark は技の印 mark を、技の印の並び(機構の値の昇順 → zero_power → move_target_unknown)の
+// 機構の部分に昇順で差し込んだ印の列を返す。既にあれば変えない。
+func withMoveMark(marks []UnsupportedMark, mark UnsupportedMark) []UnsupportedMark {
+	if slices.Contains(marks, mark) {
+		return marks
+	}
+	i := 0
+	for i < len(marks) && marks[i].Target == UnsupportedTargetMove &&
+		MoveMechanism(marks[i].Reason).Known() && marks[i].Reason < mark.Reason {
+		i++
+	}
+	return slices.Insert(slices.Clone(marks), i, mark)
 }
 
 // itemID は Item.ID を返す(nil は空文字)。

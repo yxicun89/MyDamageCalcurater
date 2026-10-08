@@ -151,6 +151,12 @@ func withoutMove(out importer.Output, id string) importer.Output {
 			next.MoveMechanisms = append(next.MoveMechanisms, m)
 		}
 	}
+	next.MoveMechanismParams = nil
+	for _, p := range out.MoveMechanismParams {
+		if p.MoveID != id {
+			next.MoveMechanismParams = append(next.MoveMechanismParams, p)
+		}
+	}
 	next.Learnsets = nil
 	for _, l := range out.Learnsets {
 		if l.MoveID != id {

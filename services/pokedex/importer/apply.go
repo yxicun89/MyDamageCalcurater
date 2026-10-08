@@ -116,7 +116,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 		q.DeleteRegulations,
 		q.DeleteLearnsets,
 		q.DeleteSpeciesAbilities,
-		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms,
+		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms, q.DeleteMoveMechanismParams,
 		q.DeleteMegaSpecies, q.DeleteRemainingSpecies,
 		q.DeleteMoves, q.DeleteItems, q.DeleteAbilities,
 		q.DeleteTypeChart, q.DeleteTypes,
@@ -211,6 +211,11 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 			return err
 		}
 	}
+	for _, p := range out.MoveMechanismParams {
+		if err := q.InsertMoveMechanismParams(ctx, insertMoveMechanismParams(p)); err != nil {
+			return err
+		}
+	}
 	for _, l := range out.Learnsets {
 		if err := q.InsertLearnset(ctx, store.InsertLearnsetParams{SpeciesKey: l.SpeciesKey, MoveID: l.MoveID}); err != nil {
 			return err
@@ -291,4 +296,22 @@ func listExistingIDs(ctx context.Context, q *store.Queries) (ExistingIDs, error)
 // (force なら常に投入)→ Apply の順)。取り込んだら true を返す(ADR-0104 §10)。
 func Run(ctx context.Context, db *sql.DB, out Output, versions []SourceVersion, now time.Time, force bool) (bool, error) {
 	return RunStore(ctx, NewSQLStore(db), out, versions, now, force, ApplyOptions{})
+}
+
+// insertMoveMechanismParams は中身の行を DB の行に写す。無い項目は NULL(ゼロ値の項目は書かない)。
+func insertMoveMechanismParams(p MoveMechanismParamsRow) store.InsertMoveMechanismParamsParams {
+	nullInt := func(v int) sql.NullInt16 { return sql.NullInt16{Int16: int16(v), Valid: v != 0} }
+	nullStr := func(v string) sql.NullString { return sql.NullString{String: v, Valid: v != ""} }
+	return store.InsertMoveMechanismParamsParams{
+		MoveID:           p.MoveID,
+		MultiHitMin:      nullInt(p.MultiHitMin),
+		MultiHitMax:      nullInt(p.MultiHitMax),
+		FixedDamageLevel: sql.NullBool{Bool: true, Valid: p.FixedDamageLevel},
+		FixedDamageValue: nullInt(p.FixedDamageValue),
+		Ohko:             sql.NullBool{Bool: true, Valid: p.OHKO},
+		OhkoImmuneType:   nullStr(p.OHKOImmuneType),
+		OffenseStat:      nullStr(p.OffenseStat),
+		OffensePokemon:   nullStr(p.OffensePokemon),
+		DefenseStat:      nullStr(p.DefenseStat),
+	}
 }

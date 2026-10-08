@@ -85,6 +85,7 @@ type Output struct {
 	Moves               []MoveRow
 	MoveEffects         []EffectRow
 	MoveMechanisms      []MoveMechanismRow
+	MoveMechanismParams []MoveMechanismParamsRow
 	Species             []SpeciesRow
 	Natures             []NatureRow
 	ItemEffects         []EffectRow
@@ -147,6 +148,11 @@ func Convert(in Input) (Output, Report, error) {
 		return Output{}, Report{}, err
 	}
 	warnings = append(warnings, moveMechanismWarnings...)
+
+	moveMechanismParamRows, err := buildMoveMechanismParams(in.Showdown.Moves, moveConv.Rows, typesConv.NameToID)
+	if err != nil {
+		return Output{}, Report{}, err
+	}
 
 	speciesConv, speciesWarnings, speciesBlockers, err := convertSpecies(in, typesConv.NameToID, includedItems, usedOverrideSpecies)
 	if err != nil {
@@ -255,6 +261,7 @@ func Convert(in Input) (Output, Report, error) {
 		Moves:               moveConv.Rows,
 		MoveEffects:         moveEffectRows,
 		MoveMechanisms:      moveMechanismRows,
+		MoveMechanismParams: moveMechanismParamRows,
 		Species:             speciesConv.Rows,
 		Natures:             natureRows,
 		ItemEffects:         itemEffectRows,
@@ -295,6 +302,10 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 	for _, r := range out.MoveMechanisms {
 		moveMechanisms[r.MoveID] = append(moveMechanisms[r.MoveID], r.Mechanism)
 	}
+	moveParams := map[string]*master.MoveMechanismParamsRow{}
+	for _, r := range out.MoveMechanismParams {
+		moveParams[r.MoveID] = r.masterRow()
+	}
 
 	for _, r := range out.Species {
 		if _, err := master.Species(r.SpeciesRow, r.Abilities, chart); err != nil {
@@ -302,7 +313,7 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 		}
 	}
 	for _, r := range out.Moves {
-		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID], Target: r.Target}
+		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID], Target: r.Target, Params: moveParams[r.ID]}
 		if _, err := master.Move(row, chart); err != nil {
 			return fmt.Errorf("%w: 技 %s を engine の型に写像できない: %v", ErrInvalidData, r.ID, err)
 		}

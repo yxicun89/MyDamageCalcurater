@@ -38,6 +38,12 @@ SELECT move_id, mechanism
 FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
+-- name: ListMoveMechanismParams :many
+SELECT move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
+       ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
+FROM move_mechanism_params
+ORDER BY move_id;
+
 -- name: GetMove :one
 SELECT id, name_ja, type, category, power, priority, target
 FROM moves
@@ -151,6 +157,9 @@ DELETE FROM move_effects;
 -- name: DeleteMoveMechanisms :exec
 DELETE FROM move_mechanisms;
 
+-- name: DeleteMoveMechanismParams :exec
+DELETE FROM move_mechanism_params;
+
 -- name: DeleteMegaSpecies :exec
 DELETE FROM species WHERE is_mega = 1;
 
@@ -219,6 +228,12 @@ VALUES (?, ?);
 -- name: InsertMoveMechanism :exec
 INSERT INTO move_mechanisms (move_id, mechanism)
 VALUES (?, ?);
+
+-- name: InsertMoveMechanismParams :exec
+INSERT INTO move_mechanism_params (
+  move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
+  ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertLearnset :exec
 INSERT INTO learnsets (species_key, move_id)
