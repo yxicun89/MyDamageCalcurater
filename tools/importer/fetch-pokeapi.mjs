@@ -7,7 +7,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { exitCodeFor, expectedPokeapiCsvSha256, verifyFileSha256 } from './integrity.mjs';
-import { collectNames, parseCSV } from './pokeapi-csv.mjs';
+import { collectFormEntries, collectNames, parseCSV } from './pokeapi-csv.mjs';
 
 // IMPORTER_ROOT: テスト用にリポジトリのルートを差し替える。
 const root = process.env.IMPORTER_ROOT ? `${process.env.IMPORTER_ROOT.replace(/\/$/, '')}/` : fileURLToPath(new URL('../../', import.meta.url));
@@ -79,15 +79,9 @@ const pokemonForms = await fetchCSV('pokemon_forms.csv');
 const pokemonFormNames = await fetchCSV('pokemon_form_names.csv');
 // pokemon_forms.csv の form_identifier は既定フォームだと空になる(identifier は既定でも
 // 埋まっていることがあるので、既定フォームの判定には使えない)。既定でないフォームだけ出す。
-// pokemon_form_names.csv には name 列が無く、フォーム名は pokemon_name 列に入っている。
-const formEntries = await namedEntries(
-  pokemonForms.filter((f) => f.form_identifier),
-  pokemonFormNames,
-  'id',
-  'identifier',
-  'pokemon_form_id',
-  'pokemon_name',
-);
+// pokemon_form_names.csv には name 列が無く、完全名は pokemon_name 列(一部の姿だけ)、姿の名前は form_name 列に入っている。
+// 完全名が空の姿が大半なので、form_name も出す(取り込みが「基本種名（姿の名前）」を作る。ADR-0141)。
+const formEntries = collectFormEntries(pokemonForms, pokemonFormNames, langIDToIdentifier, LANGUAGES);
 
 const moves = await fetchCSV('moves.csv');
 const moveNames = await fetchCSV('move_names.csv');

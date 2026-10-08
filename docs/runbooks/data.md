@@ -41,7 +41,7 @@ make import-dry-run
 
 ## 3a. 日本語名の無いものを上書きで補う(issue #607・ADR-0140)
 
-上流(PokeAPI の `ja-Hrkt`・`ja`)に日本語名が無い持ち物・特性・種族の姿は、推測で作らず英語名のまま取り込み、
+上流(PokeAPI の `ja-Hrkt`・`ja`)に日本語名が無い持ち物・特性は、推測で作らず英語名のまま取り込み(種族の姿は、上流の姿の名前 form_name から「基本種名（姿の名前）」を作る。ADR-0141。作れない姿だけ英語名のまま)、
 試運転の報告 `names.<種類>.fallbackIds` に ID を出す。日本語にしたいものだけ、上書きファイルで補う。
 
 - 場所: `data/local/name_ja_overrides.json`(**Git に入れない**。`data/local/` は .gitignore。実名をコミット・PR・issue に書かない)
