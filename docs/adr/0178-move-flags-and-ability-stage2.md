@@ -122,7 +122,7 @@ importer の `ShowdownMove`・DB・`services/internal/master`・`engine.Move` �
 - 条件の語彙 `PowerCondition` に `move_flag` を足す(`AllPowerConditions` は `max_base_power`・`move_flag`・`move_type`)。
   `move_flag` は `Flag` が既知・`MaxPower` 0・`MoveType` 空。他の条件は `Flag` 空。
 - 値域: 補正値はすべて `MinEffectModifier..MaxEffectModifier`。`PostAuraPowerMods[].Modifier` は 4096 不可。`FlagTypeConvert` は
-  `Flag`・`To` 必須。`DefImmuneFlags` は空でない・既知・重複なし。`DefFinalModsByFlag` のキーは既知。`Individual.Validate` と
+  `Flag`・`To` 必須。`DefImmuneFlags` は既知・重複なし(engine は空の配列を「効果なし」として受け付ける。共通マスタのデコードは空を拒否する)。`DefFinalModsByFlag` のキーは既知。`Individual.Validate` と
   共通マスタのデコードの両方で拒否する(タイプの存在は engine では ErrUnknownType、マスタでは表で検証)。
 - **未対応の印(フラグが分からないとき)**: `Move.FlagsKnown` が偽(古いマスタ・古いキャッシュ・取り込み前)のとき、フラグに依存する
   項目は「効かない」として計算し、**その特性に `unsupported_effect` の印を付ける**(攻撃側: `PowerMods`/`PostAuraPowerMods` に

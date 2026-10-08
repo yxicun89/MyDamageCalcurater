@@ -127,7 +127,8 @@ func (e AbilityEffect) validateStage2() error {
 			return fmt.Errorf("DefImmuneFlags に %q が重複している", f)
 		}
 	}
-	for _, f := range slices.Sorted(maps.Keys(e.DefFinalModsByFlag)) {
+	// 空の map は整列しない(呼び出しごとの割り当てを避ける)。
+	for _, f := range sortedKeysIfAny(e.DefFinalModsByFlag) {
 		if !f.Known() {
 			return fmt.Errorf("DefFinalModsByFlag のキーが未知: %q", f)
 		}
@@ -135,7 +136,8 @@ func (e AbilityEffect) validateStage2() error {
 			return err
 		}
 	}
-	for _, t := range slices.Sorted(maps.Keys(e.DefFinalModsByType)) {
+	// 空の map は整列しない(呼び出しごとの割り当てを避ける)。
+	for _, t := range sortedKeysIfAny(e.DefFinalModsByType) {
 		if t == TypeNone {
 			return errors.New("DefFinalModsByType のキーが空")
 		}
@@ -144,4 +146,12 @@ func (e AbilityEffect) validateStage2() error {
 		}
 	}
 	return nil
+}
+
+// sortedKeysIfAny は map のキーを昇順で返す。空なら割り当てずに nil を返す。
+func sortedKeysIfAny[K ~string, V any](m map[K]V) []K {
+	if len(m) == 0 {
+		return nil
+	}
+	return slices.Sorted(maps.Keys(m))
 }

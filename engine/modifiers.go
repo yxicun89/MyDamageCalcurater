@@ -395,7 +395,8 @@ func otherModifiers(in DamageInput, eff Effectiveness) []int {
 		mods = append(mods, ae.CritDamageMod)
 	}
 	de := in.Defender.Ability.Effect
-	if de != nil {
+	// 割り当てを避けるため、フラグの最終補正を持つときだけキーを整列する(ADR-0178)。
+	if de != nil && len(de.DefFinalModsByFlag) > 0 {
 		noContact := in.Attacker.Ability.Effect != nil && in.Attacker.Ability.Effect.NoContact
 		for _, f := range slices.Sorted(maps.Keys(de.DefFinalModsByFlag)) {
 			if f == MoveFlagContact && noContact {
