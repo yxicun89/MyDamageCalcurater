@@ -123,13 +123,15 @@ func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	if it := in.Attacker.Item; it != nil && it.Effect != nil && it.Effect.UnsupportedAttacker {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerItem, Reason: UnsupportedEffect, ID: it.ID})
 	}
-	if ae := in.Attacker.Ability.Effect; ae != nil && ae.UnsupportedAttacker {
+	// 技のフラグが不明なら、フラグに依存する特性も「計算に入れていない」(ADR-0178 §5)。変化技には付けない。
+	flagsUnknown := in.Move.Category != CategoryStatus && !in.Move.FlagsKnown
+	if ae := in.Attacker.Ability.Effect; ae != nil && (ae.UnsupportedAttacker || (flagsUnknown && ae.attackerDependsOnFlags())) {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerAbility, Reason: UnsupportedEffect, ID: in.Attacker.Ability.ID})
 	}
 	if it := in.Defender.Item; it != nil && it.Effect != nil && it.Effect.UnsupportedDefender {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderItem, Reason: UnsupportedEffect, ID: it.ID})
 	}
-	if ae := in.Defender.Ability.Effect; ae != nil && ae.UnsupportedDefender {
+	if ae := in.Defender.Ability.Effect; ae != nil && (ae.UnsupportedDefender || (flagsUnknown && ae.defenderDependsOnFlags())) {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetDefenderAbility, Reason: UnsupportedEffect, ID: in.Defender.Ability.ID})
 	}
 	if t := in.Defender.TeraType; t != "" {

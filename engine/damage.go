@@ -130,14 +130,21 @@ type DamageResult struct {
 	Unsupported []UnsupportedMark
 }
 
-// abilityNullification は防御側の特性がその攻撃タイプを無効・吸収するかを返す。
-// 無効(DefImmuneTypes)が吸収(DefAbsorbTypes)に勝つ(ADR-0106 §決定1: 不正な重複入力でも結果を揺らさない)。
-func abilityNullification(e *AbilityEffect, moveType Type) NullifyKind {
+// abilityNullification は防御側の特性がその技を無効・吸収するかを返す。
+// 無効(DefImmuneTypes・技のフラグによる DefImmuneFlags。ADR-0178)が吸収(DefAbsorbTypes)に勝つ
+// (ADR-0106 §決定1: 不正な重複入力でも結果を揺らさない)。
+func abilityNullification(e *AbilityEffect, move Move) NullifyKind {
 	if e == nil {
 		return NullifyNone
 	}
+	moveType := move.Type
 	for _, t := range e.DefImmuneTypes {
 		if t == moveType {
+			return NullifyImmune
+		}
+	}
+	for _, f := range e.DefImmuneFlags {
+		if move.hasFlag(f) {
 			return NullifyImmune
 		}
 	}
@@ -249,6 +256,8 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 //     (無効・浮遊・急所無効・ランク無視・未対応の印を含めて、特性が無いものとして計算する)。
 //   - タイプ変換: 攻撃側の TypeConvert の From タイプの攻撃技(type_change の機構を持たないもの)を To タイプにする。
 //     To が相性表に無ければ ErrUnknownType。converted は変換したか(威力の補正に使う)。
+//   - フラグによるタイプ変換(ADR-0178): 攻撃側の FlagTypeConvert の Flag を持つ攻撃技(type_change の機構を
+//     持たないもの)を To タイプにする。威力の補正は無い。To が相性表に無ければ ErrUnknownType。
 //   - 急所の無効: 防御側が PreventsCritical なら急所の指定を外す。
 func applyAbilityPreconditions(in DamageInput) (out DamageInput, converted bool, err error) {
 	ae := in.Attacker.Ability.Effect
@@ -264,6 +273,12 @@ func applyAbilityPreconditions(in DamageInput) (out DamageInput, converted bool,
 		}
 		in.Move.Type = ae.TypeConvert.To
 		converted = true
+	} else if ae != nil && ae.FlagTypeConvert != nil && in.Move.Category != CategoryStatus &&
+		in.Move.hasFlag(ae.FlagTypeConvert.Flag) && !slices.Contains(in.Move.Mechanisms, MechanismTypeChange) {
+		if err := in.TypeChart.requireKnown("攻撃側の特性のフラグによる変換後のタイプ", ae.FlagTypeConvert.To); err != nil {
+			return DamageInput{}, false, err
+		}
+		in.Move.Type = ae.FlagTypeConvert.To
 	}
 	if de := in.Defender.Ability.Effect; de != nil && de.PreventsCritical {
 		in.Critical = false
@@ -322,6 +337,9 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	default:
 		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
 	}
+	if err := validateMoveFlags(in.Move); err != nil {
+		return DamageResult{}, false, err
+	}
 
 	// 特性の段階1(ADR-0176): 防御側の特性の無視・技のタイプの変換・急所の無効を、計算の最初に1回だけ決める。
 	// 以降は in.Move.Type が変換後のタイプ、in.Defender.Ability.Effect が無視した後の効果になる。
@@ -347,7 +365,7 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	// タイプ由来の無効が先(oracle champions.ts L262 / ADR-0017 §5)。
 	// 同じタイプを特性でも無効にしている場合は、タイプ由来として報告する(Nullified は空のまま)。
 	if !eff.IsImmune() {
-		res.Nullified = abilityNullification(in.Defender.Ability.Effect, moveType)
+		res.Nullified = abilityNullification(in.Defender.Ability.Effect, in.Move)
 	}
 	// サイコフィールドの先制技は、タイプ・特性による無効の後に判定する(oracle champions.js と同じ順)。
 	if !eff.IsImmune() && res.Nullified == NullifyNone && blockedByPsychicTerrain(in) {

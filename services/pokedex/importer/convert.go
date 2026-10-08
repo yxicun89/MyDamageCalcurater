@@ -42,6 +42,12 @@ type MoveRow struct {
 	Target string
 }
 
+// MoveFlagRow は move_flags の行(技1つ・フラグ1つ。ADR-0178)。Flag は master.AllMoveFlags の値。
+type MoveFlagRow struct {
+	MoveID string
+	Flag   string
+}
+
 // SpeciesRow は species + species_abilities の行。
 type SpeciesRow struct {
 	master.SpeciesRow
@@ -85,6 +91,7 @@ type Output struct {
 	Moves               []MoveRow
 	MoveEffects         []EffectRow
 	MoveMechanisms      []MoveMechanismRow
+	MoveFlags           []MoveFlagRow
 	Species             []SpeciesRow
 	Natures             []NatureRow
 	ItemEffects         []EffectRow
@@ -255,6 +262,7 @@ func Convert(in Input) (Output, Report, error) {
 		Moves:               moveConv.Rows,
 		MoveEffects:         moveEffectRows,
 		MoveMechanisms:      moveMechanismRows,
+		MoveFlags:           moveFlagRows(moveConv.Flags),
 		Species:             speciesConv.Rows,
 		Natures:             natureRows,
 		ItemEffects:         itemEffectRows,
@@ -295,6 +303,10 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 	for _, r := range out.MoveMechanisms {
 		moveMechanisms[r.MoveID] = append(moveMechanisms[r.MoveID], r.Mechanism)
 	}
+	moveFlags := map[string][]string{}
+	for _, r := range out.MoveFlags {
+		moveFlags[r.MoveID] = append(moveFlags[r.MoveID], r.Flag)
+	}
 
 	for _, r := range out.Species {
 		if _, err := master.Species(r.SpeciesRow, r.Abilities, chart); err != nil {
@@ -302,7 +314,8 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 		}
 	}
 	for _, r := range out.Moves {
-		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID], Target: r.Target}
+		row := master.MoveRow{ID: r.ID, NameJa: r.NameJa, Type: r.Type, Category: r.Category, Power: r.Power, Priority: r.Priority, Effect: moveEffects[r.ID], Mechanisms: moveMechanisms[r.ID], Target: r.Target,
+			Flags: moveFlags[r.ID], FlagsKnown: true}
 		if _, err := master.Move(row, chart); err != nil {
 			return fmt.Errorf("%w: 技 %s を engine の型に写像できない: %v", ErrInvalidData, r.ID, err)
 		}

@@ -47,6 +47,14 @@ type MoveMechanismSummary struct {
 	ByMechanism   map[string]int `json:"byMechanism"`
 }
 
+// MoveFlagSummary は技のフラグの件数(ADR-0178)。Attack は moves 表の攻撃技の数、WithFlag はフラグを持つ攻撃技の数、
+// ByFlag はフラグごとの攻撃技の数。
+type MoveFlagSummary struct {
+	Attack   int            `json:"attack"`
+	WithFlag int            `json:"withFlag"`
+	ByFlag   map[string]int `json:"byFlag"`
+}
+
 // Summary は件数の要約一式(ADR-0103 §4)。
 type Summary struct {
 	Moves     SetSummary       `json:"moves"`
@@ -56,8 +64,10 @@ type Summary struct {
 	TypeChart TypeChartSummary `json:"typeChart"`
 	// MoveMechanisms は Convert が止まったとき(partial)はゼロ値。
 	MoveMechanisms MoveMechanismSummary `json:"moveMechanisms"`
-	WarningCounts  map[FindingKind]int  `json:"warningCounts"`
-	BlockerCounts  map[FindingKind]int  `json:"blockerCounts"`
+	// MoveFlags は Convert が止まったとき(partial)はゼロ値(ADR-0178)。
+	MoveFlags     MoveFlagSummary     `json:"moveFlags"`
+	WarningCounts map[FindingKind]int `json:"warningCounts"`
+	BlockerCounts map[FindingKind]int `json:"blockerCounts"`
 }
 
 // VerdictCount / MoveVerdicts / Verdicts / ReconcileConfig は snapshot.go(Config の一部)。
@@ -187,6 +197,7 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	summary.TypeChart = TypeChartSummary{Types: len(typesConv.Rows), Rows: len(typesConv.ChartRows)}
 	if !partial {
 		summary.MoveMechanisms = computeMoveMechanismSummary(out)
+		summary.MoveFlags = computeMoveFlagSummary(out)
 	}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)

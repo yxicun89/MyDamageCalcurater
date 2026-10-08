@@ -87,7 +87,12 @@ const MOVE_KEYS = [
   "priority",
 ] as const satisfies readonly (keyof Schemas["Move"])[];
 // 省略可のキー(issue 288・ADR-0223: 対象を取り込んだ技だけが target を伴う。値は single / spread)。
-const MOVE_OPTIONAL_KEYS = ["target"] as const satisfies readonly (keyof Schemas["Move"])[];
+// ADR-0178: mechanisms(古いサーバーは返さない)・flags(取り込み前・古いサーバーは返さない)も省略可。
+const MOVE_OPTIONAL_KEYS = [
+  "target",
+  "mechanisms",
+  "flags",
+] as const satisfies readonly (keyof Schemas["Move"])[];
 export type MoveKeysAreComplete = AssertNever<
   Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number] | (typeof MOVE_OPTIONAL_KEYS)[number]>
 >;

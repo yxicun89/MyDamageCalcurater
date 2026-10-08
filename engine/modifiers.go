@@ -1,5 +1,10 @@
 package engine
 
+import (
+	"maps"
+	"slices"
+)
+
 // 補正(天候・フィールド・壁・持ち物・特性)。
 //
 // 持ち物・特性の補正定義は「マスタから解決した ItemEffect / AbilityEffect」を
@@ -83,6 +88,23 @@ type AbilityEffect struct {
 	// Breakable は防御側: 相手が IgnoresDefenderAbility を持つとき、この特性の効果(印を含む)は無いものとして扱われる。
 	Breakable bool
 
+	// --- 特性の段階2(技のフラグ。ADR-0178)。どれもゼロ値は「その効果なし」 ---
+	// 技のフラグが不明(Move.FlagsKnown が偽)なら、フラグに依存する項目は効かないものとして計算し、印を付ける。
+
+	// PostAuraPowerMods は攻撃側: 条件つきの威力補正のうち、オーラの後・タイプ変換の補正の前に掛けるもの
+	// (かたいツメ・パンクロック・ちからずく 5325、てつのこぶし・すてみ 4915)。語彙は PowerMods と同じ。
+	PostAuraPowerMods []ConditionalPowerMod
+	// FlagTypeConvert は攻撃側: Flag を持つ技を To タイプにする(うるおいボイス)。nil は無し。
+	FlagTypeConvert *FlagTypeConvert
+	// DefImmuneFlags は防御側: そのフラグの技を無効にする(ぼうおん・ぼうだん)。
+	DefImmuneFlags []MoveFlag
+	// DefFinalModsByFlag は防御側: 技がそのフラグを持つとき最終補正に掛ける(もふもふの接触半減・パンクロックの音半減)。
+	DefFinalModsByFlag map[MoveFlag]int
+	// DefFinalModsByType は防御側: 技(変換後)がそのタイプのとき最終補正に掛ける(もふもふの炎 ×2)。
+	DefFinalModsByType map[Type]int
+	// NoContact は攻撃側: 自分の技を接触しない扱いにする(えんかく。防御側の contact の最終補正を受けない)。
+	NoContact bool
+
 	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool
@@ -108,7 +130,7 @@ const (
 
 // AllPowerConditions は語彙のすべてを定義順で返す(呼び出しごとに新しいスライス)。
 func AllPowerConditions() []PowerCondition {
-	return []PowerCondition{PowerConditionMaxBasePower, PowerConditionMoveType}
+	return []PowerCondition{PowerConditionMaxBasePower, PowerConditionMoveFlag, PowerConditionMoveType}
 }
 
 // Known は c が語彙にあるか(大文字小文字を区別する)。
@@ -124,13 +146,16 @@ func (c PowerCondition) Known() bool {
 // ConditionalPowerMod は条件つきの威力補正1つ(ADR-0176)。
 //   - max_base_power: MaxPower(1 以上)を使い、MoveType は空。
 //   - move_type: MoveType(相性表にあるタイプ)を使い、MaxPower は 0。
+//   - move_flag: Flag(既知のフラグ)を使い、MaxPower 0・MoveType 空(ADR-0178)。
 //
 // Modifier は 4096 基準の正の整数で、4096(中立)は不可。
 type ConditionalPowerMod struct {
 	Condition PowerCondition
 	MaxPower  int
 	MoveType  Type
-	Modifier  int
+	// Flag は move_flag の条件のフラグ(ADR-0178)。他の条件では空。
+	Flag     MoveFlag
+	Modifier int
 }
 
 // hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る
@@ -285,7 +310,8 @@ func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 }
 
 // powerModifier は威力の補正(chainMods 済み)を返す。連鎖の順は oracle と同じ
-// フィールド → 攻撃側の条件つき補正 → オーラ → タイプ変換 → 持ち物(ADR-0176)。
+// フィールド → 攻撃側の条件つき補正(PowerMods)→ オーラ → オーラの後の条件つき補正(PostAuraPowerMods。ADR-0178)
+// → タイプ変換 → 持ち物(ADR-0176)。
 // in.Move.Type は変換後のタイプ。converted はタイプ変換したか。
 func powerModifier(in DamageInput, converted bool) int {
 	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type, isGrounded(in.Attacker), isGrounded(in.Defender))}
@@ -299,6 +325,13 @@ func powerModifier(in DamageInput, converted bool) int {
 	}
 	if m := auraMod(in); m != 0 {
 		mods = append(mods, m)
+	}
+	if ae != nil {
+		for _, pm := range ae.PostAuraPowerMods {
+			if powerConditionHolds(pm, in.Move) {
+				mods = append(mods, pm.Modifier)
+			}
+		}
 	}
 	if converted {
 		mods = append(mods, ae.TypeConvert.PowerMod)
@@ -321,6 +354,8 @@ func powerConditionHolds(pm ConditionalPowerMod, m Move) bool {
 		return m.Power <= pm.MaxPower
 	case PowerConditionMoveType:
 		return m.Type == pm.MoveType
+	case PowerConditionMoveFlag:
+		return m.hasFlag(pm.Flag)
 	}
 	return false
 }
@@ -344,7 +379,8 @@ func itemEffect(i *Item) *ItemEffect {
 }
 
 // otherModifiers はやけどの後に chainMods で1回適用する「その他補正」の一覧を返す。
-// 壁・急所の補正の特性・抜群軽減特性・持ち物ダメージ倍率・半減きのみの順。
+// 壁・急所の補正の特性・防御側のフラグの補正(ADR-0178)・抜群軽減特性・防御側のタイプの補正(ADR-0178)・
+// 持ち物ダメージ倍率・半減きのみの順(oracle の calculateFinalModsChampions と同じ)。
 // eff は CalcDamage が1回だけ引いた技のタイプ相性(抜群判定に使う)。
 func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	var mods []int
@@ -358,8 +394,26 @@ func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	if ae := in.Attacker.Ability.Effect; ae != nil && in.Critical && ae.CritDamageMod != 0 {
 		mods = append(mods, ae.CritDamageMod)
 	}
-	if de := in.Defender.Ability.Effect; de != nil && de.ReduceSuperEffective != 0 && superEffective {
+	de := in.Defender.Ability.Effect
+	// 割り当てを避けるため、フラグの最終補正を持つときだけキーを整列する(ADR-0178)。
+	if de != nil && len(de.DefFinalModsByFlag) > 0 {
+		noContact := in.Attacker.Ability.Effect != nil && in.Attacker.Ability.Effect.NoContact
+		for _, f := range slices.Sorted(maps.Keys(de.DefFinalModsByFlag)) {
+			if f == MoveFlagContact && noContact {
+				continue
+			}
+			if in.Move.hasFlag(f) {
+				mods = append(mods, de.DefFinalModsByFlag[f])
+			}
+		}
+	}
+	if de != nil && de.ReduceSuperEffective != 0 && superEffective {
 		mods = append(mods, de.ReduceSuperEffective)
+	}
+	if de != nil {
+		if m, ok := de.DefFinalModsByType[in.Move.Type]; ok {
+			mods = append(mods, m)
+		}
 	}
 	// 攻撃側の持ち物
 	if e := itemEffect(in.Attacker.Item); e != nil {
