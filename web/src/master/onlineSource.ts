@@ -152,6 +152,8 @@ function mapAbility(ability: Schemas["Ability"]): Ability {
 
 /** 技(getMovesByIds の応答をそのまま MasterSpeciesResolution.moves に写す。ADR-0304 A-13)。 */
 function mapMove(move: Schemas["Move"]): Move {
+  // target・mechanisms・flags は応答のまま写す(ADR-0178 §6)。応答に無いキーは作らない
+  // (古いサーバー・取り込み前。WASM がキーなしを「不明」として扱い、未対応の印を付ける)。
   return {
     id: move.id,
     nameJa: move.nameJa,
@@ -159,6 +161,9 @@ function mapMove(move: Schemas["Move"]): Move {
     category: move.category,
     power: move.power,
     priority: move.priority,
+    ...(move.target !== undefined && { target: move.target }),
+    ...(move.mechanisms !== undefined && { mechanisms: move.mechanisms }),
+    ...(move.flags !== undefined && { flags: move.flags }),
   };
 }
 

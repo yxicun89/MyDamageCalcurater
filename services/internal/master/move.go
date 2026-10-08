@@ -25,6 +25,10 @@ type MoveRow struct {
 	// Params は move_mechanism_params の行(ADR-0142)。行が無ければ nil(中身なし)。Move で機構との対応・値域を検証し、
 	// engine.Move.Params に写す。
 	Params *MoveMechanismParamsRow
+	// Flags は move_flags のフラグ(ADR-0178)。FlagsKnown が偽(内部 API がキーを省いた = まだ取り込んでいない・古い
+	// pokedex-svc)のときは空でなければならない。Move で検証し、昇順に並べて engine.Move.Flags / FlagsKnown に載せる。
+	Flags      []string
+	FlagsKnown bool
 }
 
 // MoveMechanismParamsRow は move_mechanism_params の行(1技1行。ADR-0142 §7)。ゼロ値は「その項目なし」。
@@ -106,6 +110,10 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 	if err != nil {
 		return engine.Move{}, err
 	}
+	flags, err := MoveFlagsOf(row)
+	if err != nil {
+		return engine.Move{}, err
+	}
 	var effect *engine.MoveEffect
 	if len(row.Effect) > 0 {
 		e, err := DecodeMoveEffect(row.Effect)
@@ -131,6 +139,8 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 		Mechanisms: mechanisms,
 		Params:     params,
 		Target:     target.Engine(),
+		Flags:      flags,
+		FlagsKnown: row.FlagsKnown,
 	}
 	if err := move.ValidateParams(chart); err != nil {
 		return engine.Move{}, fmt.Errorf("%w: %v", ErrInvalidRow, err)

@@ -515,8 +515,8 @@ func TestStage1AbilityEffectValidation(t *testing.T) {
 
 func TestAllPowerConditionsAreKnown(t *testing.T) {
 	got := AllPowerConditions()
-	if len(got) != 2 {
-		t.Fatalf("AllPowerConditions()=%v, want 2件", got)
+	if len(got) != 3 {
+		t.Fatalf("AllPowerConditions()=%v, want 3件(段階2で move_flag を足した。ADR-0178)", got)
 	}
 	for _, c := range got {
 		if !c.Known() {

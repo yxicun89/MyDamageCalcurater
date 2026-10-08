@@ -157,6 +157,12 @@ func withoutMove(out importer.Output, id string) importer.Output {
 			next.MoveMechanismParams = append(next.MoveMechanismParams, p)
 		}
 	}
+	next.MoveFlags = nil // move_flags(ADR-0178)も技の子の行
+	for _, f := range out.MoveFlags {
+		if f.MoveID != id {
+			next.MoveFlags = append(next.MoveFlags, f)
+		}
+	}
 	next.Learnsets = nil
 	for _, l := range out.Learnsets {
 		if l.MoveID != id {

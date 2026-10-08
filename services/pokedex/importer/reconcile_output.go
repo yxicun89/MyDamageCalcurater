@@ -35,6 +35,15 @@ func FormatSummary(r Reconciliation) string {
 	for _, m := range mechanisms {
 		fmt.Fprintf(&b, "moveMechanism %s: %d\n", m, r.Summary.MoveMechanisms.ByMechanism[m])
 	}
+	fmt.Fprintf(&b, "moveFlags: attack=%d withFlag=%d\n", r.Summary.MoveFlags.Attack, r.Summary.MoveFlags.WithFlag)
+	flags := make([]string, 0, len(r.Summary.MoveFlags.ByFlag))
+	for f := range r.Summary.MoveFlags.ByFlag {
+		flags = append(flags, f)
+	}
+	sort.Strings(flags)
+	for _, f := range flags {
+		fmt.Fprintf(&b, "moveFlag %s: %d\n", f, r.Summary.MoveFlags.ByFlag[f])
+	}
 	writeFindingCounts(&b, "warnings", r.Summary.WarningCounts)
 	writeFindingCounts(&b, "blockers", r.Summary.BlockerCounts)
 	for _, check := range r.VerdictChecks {

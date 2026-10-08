@@ -256,6 +256,8 @@ type moveDTO struct {
 	MechanismParams *mechanismParamsDTO `json:"mechanismParams"`
 	// Target は技の対象("" | single | spread。ADR-0222)。省略は不明。
 	Target string `json:"target"`
+	// Flags は技のフラグ(ADR-0178)。キーが無い・null は不明(FlagsKnown 偽)、配列は既知(空配列 = フラグなし)。
+	Flags *[]string `json:"flags"`
 }
 
 func (m moveDTO) toEngine(path string) (engine.Move, error) {
@@ -281,8 +283,34 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	if err != nil {
 		return engine.Move{}, err
 	}
-	return engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
-		Mechanisms: mechanisms, Params: params, Target: target}, nil
+	out := engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
+		Mechanisms: mechanisms, Params: params, Target: target}
+	if m.Flags != nil {
+		if out.Flags, err = parseMoveFlags(path+".flags", *m.Flags); err != nil {
+			return engine.Move{}, err
+		}
+		out.FlagsKnown = true
+	}
+	return out, nil
+}
+
+// parseMoveFlags は技のフラグを検証する(未知の値は invalid_enum、重複は invalid_input。ADR-0178)。
+func parseMoveFlags(path string, vs []string) ([]engine.MoveFlag, error) {
+	if len(vs) == 0 {
+		return nil, nil
+	}
+	out := make([]engine.MoveFlag, 0, len(vs))
+	for i, v := range vs {
+		f := engine.MoveFlag(v)
+		if !f.Known() {
+			return nil, enumError(fmt.Sprintf("%s[%d]", path, i), v)
+		}
+		if slices.Contains(out, f) {
+			return nil, fail(CodeInvalidInput, "%s にフラグ %q が重複している", path, v)
+		}
+		out = append(out, f)
+	}
+	return out, nil
 }
 
 // mechanismParamsDTO は技の機構の中身(ADR-0142 §8)。能力値・ポケモン・タイプが語彙に無ければ invalid_enum。
@@ -556,10 +584,17 @@ type abilityEffectDTO struct {
 	IgnoresOpponentRanks   bool                     `json:"ignoresOpponentRanks"`
 	IgnoresDefenderAbility bool                     `json:"ignoresDefenderAbility"`
 	Breakable              bool                     `json:"breakable"`
-	MaxMultiHit            bool                     `json:"maxMultiHit"`         // 範囲のある多段技が常に最大回数(ADR-0142 §3)
-	PreventsOHKO           bool                     `json:"preventsOHKO"`        // 一撃必殺技が効かない(ADR-0142 §4)
-	UnsupportedAttacker    bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
-	UnsupportedDefender    bool                     `json:"unsupportedDefender"`
+	MaxMultiHit            bool                     `json:"maxMultiHit"`  // 範囲のある多段技が常に最大回数(ADR-0142 §3)
+	PreventsOHKO           bool                     `json:"preventsOHKO"` // 一撃必殺技が効かない(ADR-0142 §4)
+	// 特性の段階2(技のフラグ。ADR-0178)。入れ子(postAuraPowerMods の要素・flagTypeConvert)は PascalCase も受ける。
+	PostAuraPowerMods   []conditionalPowerModDTO `json:"postAuraPowerMods"`
+	FlagTypeConvert     *flagTypeConvertDTO      `json:"flagTypeConvert"`
+	DefImmuneFlags      []string                 `json:"defImmuneFlags"`
+	DefFinalModsByFlag  map[string]int           `json:"defFinalModsByFlag"`
+	DefFinalModsByType  map[string]int           `json:"defFinalModsByType"`
+	NoContact           bool                     `json:"noContact"`
+	UnsupportedAttacker bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
+	UnsupportedDefender bool                     `json:"unsupportedDefender"`
 }
 
 // typeConvertDTO は技のタイプの変換(ADR-0176)。タイプが語彙に無ければ invalid_enum。
@@ -569,13 +604,98 @@ type typeConvertDTO struct {
 	PowerMod int    `json:"powerMod"`
 }
 
-// conditionalPowerModDTO は条件つきの威力補正1つ(ADR-0176)。条件・タイプが語彙に無ければ invalid_enum。
+// flagTypeConvertDTO はフラグによる技のタイプの変換(ADR-0178)。フラグ・タイプが語彙に無ければ invalid_enum。
+type flagTypeConvertDTO struct {
+	Flag string `json:"flag"`
+	To   string `json:"to"`
+}
+
+// conditionalPowerModDTO は条件つきの威力補正1つ(ADR-0176)。条件・タイプ・フラグが語彙に無ければ invalid_enum。
 // 値域(条件ごとの項目の組・補正値の範囲)は engine の Individual.Validate が見る。
 type conditionalPowerModDTO struct {
 	Condition string `json:"condition"`
 	MaxPower  int    `json:"maxPower"`
 	MoveType  string `json:"moveType"`
+	Flag      string `json:"flag"` // move_flag の条件のフラグ(ADR-0178)
 	Modifier  int    `json:"modifier"`
+}
+
+// conditionalPowerModsToEngine は条件つきの威力補正の並び(powerMods・postAuraPowerMods)を engine の型にする。
+func conditionalPowerModsToEngine(path string, ds []conditionalPowerModDTO) ([]engine.ConditionalPowerMod, error) {
+	if ds == nil {
+		return nil, nil
+	}
+	out := make([]engine.ConditionalPowerMod, 0, len(ds))
+	for i, d := range ds {
+		p := fmt.Sprintf("%s[%d]", path, i)
+		c := engine.PowerCondition(d.Condition)
+		if !c.Known() {
+			return nil, enumError(p+".condition", d.Condition)
+		}
+		mt, err := parseType(p+".moveType", d.MoveType, true)
+		if err != nil {
+			return nil, err
+		}
+		f := engine.MoveFlag(d.Flag)
+		if d.Flag != "" && !f.Known() {
+			return nil, enumError(p+".flag", d.Flag)
+		}
+		out = append(out, engine.ConditionalPowerMod{
+			Condition: c, MaxPower: d.MaxPower, MoveType: mt, Flag: f, Modifier: d.Modifier,
+		})
+	}
+	return out, nil
+}
+
+// stage2ToEngine は特性の段階2の項目(ADR-0178)を out に写す。値域は engine の Individual.Validate が見る。
+func (e abilityEffectDTO) stage2ToEngine(path string, out *engine.AbilityEffect) error {
+	out.NoContact = e.NoContact
+	var err error
+	if out.PostAuraPowerMods, err = conditionalPowerModsToEngine(path+".postAuraPowerMods", e.PostAuraPowerMods); err != nil {
+		return err
+	}
+	if c := e.FlagTypeConvert; c != nil {
+		f := engine.MoveFlag(c.Flag)
+		if !f.Known() {
+			return enumError(path+".flagTypeConvert.flag", c.Flag)
+		}
+		to, err := parseType(path+".flagTypeConvert.to", c.To, false)
+		if err != nil {
+			return err
+		}
+		out.FlagTypeConvert = &engine.FlagTypeConvert{Flag: f, To: to}
+	}
+	if e.DefImmuneFlags != nil {
+		out.DefImmuneFlags = make([]engine.MoveFlag, 0, len(e.DefImmuneFlags))
+		for i, v := range e.DefImmuneFlags {
+			f := engine.MoveFlag(v)
+			if !f.Known() {
+				return enumError(fmt.Sprintf("%s.defImmuneFlags[%d]", path, i), v)
+			}
+			out.DefImmuneFlags = append(out.DefImmuneFlags, f)
+		}
+	}
+	if e.DefFinalModsByFlag != nil {
+		out.DefFinalModsByFlag = make(map[engine.MoveFlag]int, len(e.DefFinalModsByFlag))
+		for _, k := range sortedKeys(e.DefFinalModsByFlag) {
+			f := engine.MoveFlag(k)
+			if !f.Known() {
+				return enumError(path+".defFinalModsByFlag", k)
+			}
+			out.DefFinalModsByFlag[f] = e.DefFinalModsByFlag[k]
+		}
+	}
+	if e.DefFinalModsByType != nil {
+		out.DefFinalModsByType = make(map[engine.Type]int, len(e.DefFinalModsByType))
+		for _, k := range sortedKeys(e.DefFinalModsByType) {
+			t, err := parseType(path+".defFinalModsByType", k, false)
+			if err != nil {
+				return err
+			}
+			out.DefFinalModsByType[t] = e.DefFinalModsByType[k]
+		}
+	}
+	return nil
 }
 
 // abilityStatModsToEngine は特性の実数値の倍率のキーを検証して engine の型にする(未知のキーは invalid_enum)。
@@ -611,22 +731,8 @@ func (e abilityEffectDTO) stage1ToEngine(path string, out *engine.AbilityEffect)
 		}
 		out.TypeConvert = tc
 	}
-	if e.PowerMods != nil {
-		out.PowerMods = make([]engine.ConditionalPowerMod, 0, len(e.PowerMods))
-		for i, d := range e.PowerMods {
-			p := fmt.Sprintf("%s.powerMods[%d]", path, i)
-			c := engine.PowerCondition(d.Condition)
-			if !c.Known() {
-				return enumError(p+".condition", d.Condition)
-			}
-			mt, err := parseType(p+".moveType", d.MoveType, true)
-			if err != nil {
-				return err
-			}
-			out.PowerMods = append(out.PowerMods, engine.ConditionalPowerMod{
-				Condition: c, MaxPower: d.MaxPower, MoveType: mt, Modifier: d.Modifier,
-			})
-		}
+	if out.PowerMods, err = conditionalPowerModsToEngine(path+".powerMods", e.PowerMods); err != nil {
+		return err
 	}
 	if out.AuraType, err = parseType(path+".auraType", e.AuraType, true); err != nil {
 		return err
@@ -650,6 +756,9 @@ func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 		return nil, err
 	}
 	if err = e.stage1ToEngine(path, out); err != nil {
+		return nil, err
+	}
+	if err = e.stage2ToEngine(path, out); err != nil {
 		return nil, err
 	}
 	if out.OffBoostType, err = parseType(path+".offBoostType", e.OffBoostType, true); err != nil {

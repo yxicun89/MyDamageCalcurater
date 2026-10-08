@@ -50,6 +50,7 @@ type Querier struct {
 	MoveEffects         []store.MoveEffect
 	MoveMechanisms      []store.MoveMechanism
 	MoveMechanismParams []store.MoveMechanismParam
+	MoveFlags           []store.MoveFlag // 空 = まだ取り込んでいない(ADR-0178 §3)
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
 	Abilities           []store.Ability
@@ -350,6 +351,54 @@ func (q *Querier) ListMoveMechanismParams(context.Context) ([]store.MoveMechanis
 		return nil, err
 	}
 	return append([]store.MoveMechanismParam(nil), q.MoveMechanismParams...), nil
+}
+
+func (q *Querier) ListMoveMechanismsByMoveIDs(_ context.Context, ids []string) ([]store.MoveMechanism, error) {
+	if err := q.record("ListMoveMechanismsByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var out []store.MoveMechanism
+	for _, m := range q.MoveMechanisms {
+		if want[m.MoveID] {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
+func (q *Querier) ListMoveFlags(context.Context) ([]store.MoveFlag, error) {
+	if err := q.record("ListMoveFlags", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveFlag(nil), q.MoveFlags...), nil
+}
+
+func (q *Querier) ListMoveFlagsByMoveIDs(_ context.Context, ids []string) ([]store.MoveFlag, error) {
+	if err := q.record("ListMoveFlagsByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var out []store.MoveFlag
+	for _, f := range q.MoveFlags {
+		if want[f.MoveID] {
+			out = append(out, f)
+		}
+	}
+	return out, nil
+}
+
+func (q *Querier) HasMoveFlags(context.Context) (bool, error) {
+	if err := q.record("HasMoveFlags", nil); err != nil {
+		return false, err
+	}
+	return len(q.MoveFlags) > 0, nil
 }
 
 func (q *Querier) ListItems(context.Context) ([]store.Item, error) {
@@ -665,6 +714,14 @@ func New() *Querier {
 		MoveMechanisms: []store.MoveMechanism{
 			{MoveID: "testflame", Mechanism: "variable_power"},
 			{MoveID: "testflame", Mechanism: "multi_hit"},
+		},
+		// 技のフラグ(move_flags。ADR-0178): testflame は音・追加効果あり(わざと逆順に入れて、応答が昇順に並び替わることを確認する)、
+		// teststrike は接触・パンチ。testglare・testbanned はフラグなし(表に1行でもあれば、フラグの無い技は空配列)。
+		MoveFlags: []store.MoveFlag{
+			{MoveID: "testflame", Flag: "sound"},
+			{MoveID: "testflame", Flag: "secondary"},
+			{MoveID: "teststrike", Flag: "contact"},
+			{MoveID: "teststrike", Flag: "punch"},
 		},
 		Items: []store.Item{
 			{ID: "testorb", NameJa: "テストだま", NameJaSource: "pokeapi", NameEn: "Test Orb"},

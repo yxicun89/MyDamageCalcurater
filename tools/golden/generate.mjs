@@ -52,6 +52,14 @@ const isUnsupportedEffect = def => unsupportedEffectKeys.some(k => k in def);
 // 上の「ダメージが変わるか」の調査(probe)には現れない。照合は mechanisms.json が担う。
 const mechanismEffectKeys = ['MaxMultiHit','PreventsOHKO'];
 const isMechanismEffect = def => mechanismEffectKeys.some(k => k in def);
+// 技のフラグ(ADR-0178 §1)。oracle の技データ(flags・recoil・hasCrashDamage・secondaries)から engine の語彙(昇順)にする。
+// 本番(Showdown 由来)と同じ規則で、importer の照合(move-value-mismatch/flags)が両者の一致を取り込みのたびに確かめる。
+const sourceMoveFlags = ['bite','bullet','contact','pulse','punch','slicing','sound'];
+const moveFlagsOf = m => [
+  ...sourceMoveFlags.filter(f => m.flags && m.flags[f]),
+  ...(m.recoil || m.hasCrashDamage ? ['recoil'] : []),
+  ...(m.secondaries ? ['secondary'] : []),
+].sort();
 
 // Fixed-power, single-hit reference moves. These probe arithmetic, not learnset legality.
 const moveNames = [
@@ -155,6 +163,8 @@ function vector(gen, label, a, d, moveName, options={}) {
   const expectedKO=ko(rolls,defend.p.rawStats.hp);
   const move={ID:id(moveName),Type:m.type.toLowerCase(),Category:m.category.toLowerCase(),Power:m.bp,Priority:m.priority};
   if (options.moveTarget) move.Target=moveTargetOf(m);
+  // ADR-0178: 技のフラグ。oracle の技データから engine の語彙で書く(既存のベクタのバイト列を変えないため、指定したときだけ)。
+  if (options.moveFlags) { move.Flags=moveFlagsOf(m); move.FlagsKnown=true; }
   return {id:label, oracle:{attacker:a,defender:d,move:moveName}, input:{Format:format,Attacker:attack.input,Defender:defend.input,
     Move:move,
     Field:{Weather:weather,Terrain:terrain,DefenderScreens:{Reflect:screen==='Reflect',LightScreen:screen==='LightScreen',AuroraVeil:screen==='AuroraVeil'}},Critical:!!options.critical},
@@ -382,7 +392,7 @@ const stage1AbilityCases = (name, def) => {
       const t = pm.MoveType, c = otherType(t);
       effectPair(`${slug}/power/${t}/apply`, effectAttacker, defenderFor(t, neutral, slug), physicalMoveOfType(t), {a:{ability:name}}, {}, true);
       effectPair(`${slug}/power/${c}/control`, effectAttacker, defenderFor(c, neutral, slug), physicalMoveOfType(c), {a:{ability:name}}, {}, false);
-    } else {
+    } else if (pm.Condition !== 'move_flag') { // move_flag は段階2(stage2AbilityCases。ADR-0178)
       assert.fail(`${slug}: 未知の威力の条件 ${pm.Condition}`);
     }
   }
@@ -426,9 +436,107 @@ const stage1AbilityCases = (name, def) => {
   }
 };
 
+// --- 特性の段階2(技のフラグ。ADR-0178) ------------------------------------------------------
+// ベクタはすべて moveFlags を付ける(oracle の技のフラグを engine に渡す。FlagsKnown)。
+// 威力固定・単発・優先度 0 の技から、フラグを持つ技と持たない技を選ぶ(名前ではなくフラグで選ぶ)。
+const stage2ExtraMoveNames = ['Boomburst','Fire Fang','Water Pulse','Leaf Blade','Double-Edge','Flare Blitz','High Jump Kick'];
+const stage2Moves = [...moves, ...stage2ExtraMoveNames.map(n => {
+  const m = genC.moves.get(id(n));
+  assert(m && m.basePower > 0, `段階2の技 ${n} が Champions 世代に無い(改名された可能性。列挙を見直す)`);
+  return m;
+})].filter(m => !m.multihit && !m.priority && !m.willCrit);
+const stage2MoveWith = (f, label, pred = () => true) => {
+  const m = stage2Moves.find(m => moveFlagsOf(m).includes(f) && pred(m));
+  assert(m, `${label}: フラグ ${f} を持つ技が無い(stage2ExtraMoveNames を見直す)`);
+  return m;
+};
+const stage2MoveWithout = (f, label, pred = () => true) => {
+  const m = stage2Moves.find(m => !moveFlagsOf(m).includes(f) && pred(m));
+  assert(m, `${label}: フラグ ${f} を持たない技が無い`);
+  return m;
+};
+const withFlags = options => ({...options, moveFlags:true});
+// 特性による無効(ダメージ 0)は effectPair の「ダメージが0」の検査に掛かるので、専用に比べる。
+function immuneCase(label, a, d, moveName, options) {
+  const v = vector(genC, label, a, d, moveName, withFlags(options));
+  const base = vector(genC, `${label}/base`, a, d, moveName, withFlags(withoutEffect(options)));
+  assert(v.expected.rolls.every(r => r === 0), `${label}: 無効のはずなのにダメージがある`);
+  assert(base.expected.rolls.some(r => r > 0), `${label}: 特性なしでもダメージが0(相性で無効な組を選んだ)`);
+  championsFixed.push(v);
+}
+const stage2AbilityCases = (name, def) => {
+  const slug = `effects/${id(name)}`;
+  const powerCases = (mods, stage) => {
+    for (const pm of mods || []) {
+      if (pm.Condition !== 'move_flag') continue;
+      const f = pm.Flag;
+      const m = stage2MoveWith(f, slug), c = stage2MoveWithout(f, slug);
+      effectPair(`${slug}/${stage}/${f}/apply`, effectAttacker, defenderFor(id(m.type), neutral, slug), m.name,
+        withFlags({a:{ability:name}}), withFlags({}), true);
+      effectPair(`${slug}/${stage}/${f}/control`, effectAttacker, defenderFor(id(c.type), neutral, slug), c.name,
+        withFlags({a:{ability:name}}), withFlags({}), false);
+    }
+  };
+  powerCases(def.PowerMods, 'power');
+  powerCases(def.PostAuraPowerMods, 'postaura');
+  if (def.FlagTypeConvert) {
+    const {Flag, To} = def.FlagTypeConvert;
+    const m = stage2MoveWith(Flag, slug, m => m.type === 'Normal');
+    const toName = typeNameById[To];
+    // 変換で相性が変わる相手(ノーマルは等倍・変換後は抜群)。
+    const d = species.find(s => effectiveness('Normal', s) === 1 && effectiveness(toName, s) > 1);
+    assert(d, `${slug}: ${To} が抜群でノーマルが等倍の相手が無い`);
+    effectPair(`${slug}/flagconvert/${Flag}/apply`, effectAttacker, d.name, m.name, withFlags({a:{ability:name}}), withFlags({}), true);
+    const c = stage2MoveWithout(Flag, slug, m => m.type === 'Normal');
+    effectPair(`${slug}/flagconvert/${Flag}/control`, effectAttacker, d.name, c.name, withFlags({a:{ability:name}}), withFlags({}), false);
+  }
+  for (const f of def.DefImmuneFlags || []) {
+    const m = stage2MoveWith(f, slug), c = stage2MoveWithout(f, slug);
+    const d = defenderFor(id(m.type), neutral, slug);
+    immuneCase(`${slug}/immune/${f}/apply`, effectAttacker, d, m.name, {d:{ability:name}});
+    effectPair(`${slug}/immune/${f}/control`, effectAttacker, defenderFor(id(c.type), neutral, slug), c.name,
+      withFlags({d:{ability:name}}), withFlags({}), false);
+    if (def.Breakable) breakableCase(`${slug}/immune/${f}/breakable`, effectAttacker, d, m.name, withFlags({d:{ability:name}}));
+  }
+  for (const f of Object.keys(def.DefFinalModsByFlag || {}).sort()) {
+    // 炎の ×2 等のタイプの補正と混ざらないよう、タイプの補正の対象でない技を選ぶ。
+    const typed = new Set(Object.keys(def.DefFinalModsByType || {}).map(t => typeNameById[t]));
+    const m = stage2MoveWith(f, slug, m => !typed.has(m.type)), c = stage2MoveWithout(f, slug, m => !typed.has(m.type));
+    const d = defenderFor(id(m.type), neutral, slug);
+    effectPair(`${slug}/final/${f}/apply`, effectAttacker, d, m.name, withFlags({d:{ability:name}}), withFlags({}), true);
+    effectPair(`${slug}/final/${f}/control`, effectAttacker, defenderFor(id(c.type), neutral, slug), c.name,
+      withFlags({d:{ability:name}}), withFlags({}), false);
+    if (def.Breakable) breakableCase(`${slug}/final/${f}/breakable`, effectAttacker, d, m.name, withFlags({d:{ability:name}}));
+  }
+  for (const t of Object.keys(def.DefFinalModsByType || {}).sort()) {
+    // フラグの補正と混ざらないよう、その特性のフラグを持たない技を選ぶ。
+    const flags = Object.keys(def.DefFinalModsByFlag || {});
+    const m = stage2Moves.find(m => id(m.type) === t && !moveFlagsOf(m).some(f => flags.includes(f)));
+    assert(m, `${slug}: ${t} タイプでフラグの補正の対象でない技が無い`);
+    const ct = otherType(t);
+    const c = stage2Moves.find(m => id(m.type) === ct && !moveFlagsOf(m).some(f => flags.includes(f)));
+    assert(c, `${slug}: ${ct} タイプでフラグの補正の対象でない技が無い`);
+    effectPair(`${slug}/finaltype/${t}/apply`, effectAttacker, defenderFor(t, neutral, slug), m.name, withFlags({d:{ability:name}}), withFlags({}), true);
+    effectPair(`${slug}/finaltype/${t}/control`, effectAttacker, defenderFor(ct, neutral, slug), c.name, withFlags({d:{ability:name}}), withFlags({}), false);
+    if (def.Breakable) breakableCase(`${slug}/finaltype/${t}/breakable`, effectAttacker, defenderFor(t, neutral, slug), m.name, withFlags({d:{ability:name}}));
+  }
+  if (def.NoContact) {
+    // 接触の最終補正を持つ防御側の特性(効果データから引く)に対して、接触しない扱いで補正が外れる。
+    const halver = Object.keys(effects.abilities).sort().find(n => (effects.abilities[n].DefFinalModsByFlag || {}).contact);
+    assert(halver, `${slug}: 接触の最終補正を持つ特性が effects.json に無い`);
+    const typed = new Set(Object.keys(effects.abilities[halver].DefFinalModsByType || {}).map(t => typeNameById[t]));
+    const m = stage2MoveWith('contact', slug, m => !typed.has(m.type));
+    const d = defenderFor(id(m.type), neutral, slug);
+    effectPair(`${slug}/nocontact/${id(halver)}/apply`, effectAttacker, d, m.name,
+      withFlags({a:{ability:name}, d:{ability:halver}}), withFlags({d:{ability:halver}}), true);
+    effectPair(`${slug}/nocontact/control`, effectAttacker, d, m.name, withFlags({a:{ability:name}}), withFlags({}), false);
+  }
+};
+
 const typedEffectCases = (kind, name, def) => {
   const slug = `effects/${id(name)}`;
   if (kind === 'abilities') stage1AbilityCases(name, def);
+  if (kind === 'abilities') stage2AbilityCases(name, def);
   if (kind === 'items' && def.BoostType) {
     const t = def.BoostType;
     effectCase(`${slug}/boost/${t}/apply`, t, neutral, {a:{item:name}}, true);

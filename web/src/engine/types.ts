@@ -82,6 +82,16 @@ export interface Move {
   readonly category: MoveCategory;
   readonly power: number;
   readonly priority: number;
+  /**
+   * 技の対象(single | spread。ADR-0222・ADR-0223)。省略・null は不明(WASM はダブルで単体として計算し、未対応の印を付ける)。
+   */
+  readonly target?: string | null;
+  /** 技の機構(ADR-0121。昇順)。省略・空は通常の技。WASM が未対応の印に使う(ADR-0123)。 */
+  readonly mechanisms?: readonly string[];
+  /**
+   * 技のフラグ(ADR-0178。昇順)。省略は不明(フラグに依存する特性に未対応の印が付く)、空配列は既知のフラグなし。
+   */
+  readonly flags?: readonly string[];
 }
 
 /** 持ち物の効果(4096 基準の固定小数。CLAUDE.md ドメイン規約)。すべて省略可(省略はengineの既定値)。 */

@@ -149,6 +149,14 @@ func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) er
 	if err != nil {
 		return unavailable("SearchMoves", err)
 	}
+	ids := make([]string, 0, len(rows))
+	for _, r := range rows {
+		ids = append(ids, r.ID)
+	}
+	extras, err := s.publicMoveExtras(reqCtx, ids)
+	if err != nil {
+		return err
+	}
 	out := make([]api.Move, 0, len(rows))
 	for _, r := range rows {
 		priority := int(r.Priority)
@@ -159,9 +167,80 @@ func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) er
 		out = append(out, api.Move{
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
+			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)
+}
+
+// moveExtras は公開 API の技の機構・フラグ(ADR-0178 §4)。値は昇順・検証済み。
+type moveExtras struct {
+	mechanismsByID map[string][]string
+	flagsKnown     bool
+	flagsByID      map[string][]api.MoveFlag
+}
+
+// mechanisms は技の機構を返す(常に返す。通常の技は空配列)。
+func (e moveExtras) mechanisms(id string) *[]string {
+	m := e.mechanismsByID[id]
+	if m == nil {
+		m = []string{}
+	}
+	return &m
+}
+
+// flags は技のフラグを返す。まだ取り込んでいない(move_flags が空)なら nil でキーを省く。
+func (e moveExtras) flags(id string) *[]api.MoveFlag {
+	if !e.flagsKnown {
+		return nil
+	}
+	f := e.flagsByID[id]
+	if f == nil {
+		f = []api.MoveFlag{}
+	}
+	return &f
+}
+
+// publicMoveExtras は技の ID で機構・フラグを引く。語彙に無い値(CHECK をすり抜けた値)は黙って捨てず
+// 503 master_unavailable(target と同じ扱い。ADR-0178 §4)。
+func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras, error) {
+	out := moveExtras{mechanismsByID: map[string][]string{}, flagsByID: map[string][]api.MoveFlag{}}
+	if len(ids) == 0 {
+		return out, nil
+	}
+	mechanisms, err := s.q.ListMoveMechanismsByMoveIDs(ctx, ids)
+	if err != nil {
+		return moveExtras{}, unavailable("ListMoveMechanismsByMoveIDs", err)
+	}
+	for _, m := range mechanisms {
+		if !engine.MoveMechanism(m.Mechanism).Known() {
+			return moveExtras{}, unavailable("move mechanism: "+m.MoveID, fmt.Errorf("未知の技の機構: %q", m.Mechanism))
+		}
+		out.mechanismsByID[m.MoveID] = append(out.mechanismsByID[m.MoveID], m.Mechanism)
+	}
+	for id := range out.mechanismsByID {
+		sort.Strings(out.mechanismsByID[id])
+	}
+	if out.flagsKnown, err = s.q.HasMoveFlags(ctx); err != nil {
+		return moveExtras{}, unavailable("HasMoveFlags", err)
+	}
+	if !out.flagsKnown {
+		return out, nil
+	}
+	flags, err := s.q.ListMoveFlagsByMoveIDs(ctx, ids)
+	if err != nil {
+		return moveExtras{}, unavailable("ListMoveFlagsByMoveIDs", err)
+	}
+	for _, f := range flags {
+		if !master.IsMoveFlag(f.Flag) {
+			return moveExtras{}, unavailable("move flag: "+f.MoveID, fmt.Errorf("未知の技のフラグ: %q", f.Flag))
+		}
+		out.flagsByID[f.MoveID] = append(out.flagsByID[f.MoveID], api.MoveFlag(f.Flag))
+	}
+	for id := range out.flagsByID {
+		sort.Slice(out.flagsByID[id], func(i, j int) bool { return out.flagsByID[id][i] < out.flagsByID[id][j] })
+	}
+	return out, nil
 }
 
 // publicMoveTarget は技の対象を公開 API の分類(single/spread)にする。NULL はキーを省く(nil)。
@@ -321,9 +400,14 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 	if err != nil {
 		return err
 	}
+	extras, err := s.publicMoveExtras(ctx.Request().Context(), []string{row.ID})
+	if err != nil {
+		return err
+	}
 	move := api.Move{
 		Id: row.ID, NameJa: row.NameJa, Type: api.PokeType(row.Type), Category: api.MoveCategory(row.Category),
 		Power: int(row.Power), Priority: &priority, Target: target,
+		Mechanisms: extras.mechanisms(row.ID), Flags: extras.flags(row.ID),
 	}
 	return ctx.JSON(http.StatusOK, move)
 }
@@ -344,8 +428,14 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 		return unavailable("GetMovesByIDs", err)
 	}
 	byID := make(map[string]store.GetMovesByIDsRow, len(rows))
+	found := make([]string, 0, len(rows))
 	for _, r := range rows {
 		byID[r.ID] = r
+		found = append(found, r.ID)
+	}
+	extras, err := s.publicMoveExtras(ctx.Request().Context(), found)
+	if err != nil {
+		return err
 	}
 	out := make([]api.Move, 0, len(params.Ids))
 	for _, id := range params.Ids {
@@ -361,6 +451,7 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 		out = append(out, api.Move{
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
+			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)

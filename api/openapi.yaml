@@ -1421,6 +1421,29 @@ components:
             pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
             対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
             クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+        mechanisms:
+          type: array
+          items: { type: string }
+          description: |
+            技の機構(ADR-0121・ADR-0178 §4)。値は engine の `MoveMechanism`(UnsupportedMark.reason の技側と同じ。昇順・重複なし)。
+            通常の技は空配列。pokedex-svc は常に返す。Web のオフライン計算(WASM の技の `mechanisms`)にそのまま渡すと、
+            多段・威力変動などの技に未対応の印が付く。古いサーバーは返さないため、省略は「不明」(印を付けられない)と読む。
+            enum は付けない(値の検証は WASM の境界と engine が行う)。
+        flags:
+          type: array
+          items: { $ref: '#/components/schemas/MoveFlag' }
+          description: |
+            技のフラグ(move_flags。ADR-0178)。昇順・重複なし。フラグの無い技は空配列。
+            フラグがまだ取り込まれていない(古いサーバー・取り込み前)ときは**キーごと省く**。クライアントは「キーが無い」を不明として
+            WASM に渡さない(フラグに依存する特性には未対応の印が付く)。WASM の技の `flags` にそのまま渡せる。
+
+    MoveFlag:
+      type: string
+      description: |
+        技のフラグ(ADR-0178 §1)。contact・sound・punch・bite・slicing・pulse・bullet は Showdown の技データの flags、
+        recoil は反動(recoil・hasCrashDamage)、secondary は追加効果あり(secondary・secondaries)。値の正は engine の AllMoveFlags。
+      enum: [bite, bullet, contact, pulse, punch, recoil, secondary, slicing, sound]
+      x-enum-varnames: [MoveFlagBite, MoveFlagBullet, MoveFlagContact, MoveFlagPulse, MoveFlagPunch, MoveFlagRecoil, MoveFlagSecondary, MoveFlagSlicing, MoveFlagSound]
 
     Item:
       type: object
@@ -2452,6 +2475,14 @@ components:
             まだ取り込んでいない行)。キーは省かない(null を返す)。calc-svc は engine.Move.Params に写す
             (検証は `services/internal/master.Move`)。古い pokedex-svc(このキーを返さない版)からの取り込みは、
             キーが無いことを null と同じに扱う(ADR-0223 §3 と同じ)。
+        flags:
+          type: array
+          items: { type: string }
+          description: |
+            技のフラグ(move_flags。ADR-0178)。昇順・重複なし。フラグの無い技は空配列。値の正は engine の AllMoveFlags
+            (公開 API の MoveFlag と同じ 9 種)。enum は付けない(mechanisms と同じ理由。検証は calc-svc の `master.Move`)。
+            **省略可**: フラグがまだ取り込まれていない(move_flags が空)ときは全技でキーを省く。calc-svc は省略を「不明」として
+            engine.Move.FlagsKnown を偽にする(フラグに依存する特性に未対応の印が付く)。古い pokedex-svc も返さない。
 
     MasterMoveMechanismParams:
       type: object

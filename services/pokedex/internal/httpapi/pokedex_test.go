@@ -301,7 +301,11 @@ func TestGetMove(t *testing.T) {
 	decodeStrict(t, rec.Body.Bytes(), &m)
 	// target: fixture の teststrike は単体技(Showdown の normal)なので single(issue 288・ADR-0223)。
 	single := api.MoveTargetSingle
-	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Target: &single}
+	// mechanisms(常に返す)・flags(取り込み済みなら返す。fixture の teststrike は接触・パンチ)は ADR-0178 §4。
+	noMechanisms := []string{}
+	strikeFlags := []api.MoveFlag{api.MoveFlagContact, api.MoveFlagPunch}
+	want := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Target: &single,
+		Mechanisms: &noMechanisms, Flags: &strikeFlags}
 	priority := 1
 	want.Priority = &priority
 	if !reflect.DeepEqual(m, want) {
@@ -352,7 +356,11 @@ func TestGetMovesByIds(t *testing.T) {
 	}
 	priority := 1
 	single := api.MoveTargetSingle // issue 288・ADR-0223(fixture の teststrike は単体技)
-	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority, Target: &single}
+	// mechanisms・flags は ADR-0178 §4(fixture の teststrike は機構なし・接触・パンチ)。
+	noMechanisms := []string{}
+	strikeFlags := []api.MoveFlag{api.MoveFlagContact, api.MoveFlagPunch}
+	wantStrike := api.Move{Id: "teststrike", NameJa: "テストうちこみ", Type: api.PokeTypeNormal, Category: api.Physical, Power: 40, Priority: &priority, Target: &single,
+		Mechanisms: &noMechanisms, Flags: &strikeFlags}
 	if !reflect.DeepEqual(moves[1], wantStrike) {
 		t.Errorf("moves[1] = %+v, want %+v", moves[1], wantStrike)
 	}

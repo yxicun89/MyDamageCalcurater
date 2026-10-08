@@ -2,7 +2,7 @@ package db
 
 // move_mechanism_params 表(技の機構の中身。ADR-0142 §7)の静的な確認。DB は使わない。
 // 1技1行(主キー move_id)・moves への外部キー ON DELETE CASCADE・列はすべて NULL 可(中身の無い項目)・
-// 能力値と攻撃に使うポケモンの値は CHECK で固定する。既存の migration は書き換えず 000013 で足す。
+// 能力値と攻撃に使うポケモンの値は CHECK で固定する。既存の migration は書き換えず 000014 で足す。
 
 import (
 	"regexp"
@@ -10,8 +10,8 @@ import (
 	"testing"
 )
 
-// moveMechanismParamsMigrationVersion は move_mechanism_params を作る migration の版(000012 の次)。
-const moveMechanismParamsMigrationVersion = 13
+// moveMechanismParamsMigrationVersion は move_mechanism_params を作る migration の版(000013 move_flags の次)。
+const moveMechanismParamsMigrationVersion = 14
 
 func moveMechanismParamsDDL(t *testing.T) (ddl, down string) {
 	t.Helper()

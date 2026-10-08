@@ -151,7 +151,7 @@ type MechanismParams struct {
    (`MoveMechanismParamsRow`。1技1行、中身を持つ攻撃技だけ)を作る。`ohko` のタイプ名は相性表のタイプ ID に写し、
    無ければ `ErrInvalidData`。`overrideOffensivePokemon` は `target` → `defender`・`source` → `attacker`、他は
    `ErrInvalidData`。能力値は `atk`/`def`/`spa`/`spd`/`spe` 以外を `ErrInvalidData`。
-3. DB: migration **000013** `move_mechanism_params`(主キー `move_id`・`moves` への外部キー ON DELETE CASCADE・
+3. DB: migration **000014** `move_mechanism_params`(主キー `move_id`・`moves` への外部キー ON DELETE CASCADE・
    列はすべて NULL 可・値の CHECK)。既存の migration は書き換えない。sqlc に
    `ListMoveMechanismParams`・`DeleteMoveMechanismParams`・`InsertMoveMechanismParams`。
 4. `services/internal/master`: `MoveRow.Params *MoveMechanismParamsRow` を `Move` で検証し `engine.Move.Params` に写す
@@ -229,7 +229,7 @@ enum は付けない(ADR-0121 の `mechanisms` と同じ理由。検証は受け
 - 先に取り込むと、新しい効果定義のキー(`MaxMultiHit`・`PreventsOHKO`)を古い calc-svc の厳格なデコードが拒否し、
   マスタの読み込みに失敗する。
 - 新しいアプリ + 取り込み前の DB は、`move_mechanism_params` が空なので印が残るだけ(従来どおり。誤った数値を出さない)。
-- migration 000013 はアプリの起動時(または取り込み前)に適用する。表を足すだけで既存の行・列に触らない。
+- migration 000014 はアプリの起動時(または取り込み前)に適用する。表を足すだけで既存の行・列に触らない。
 
 ## 実装の手順(implementer 向け。テストは spec-writer が先に置いた)
 
@@ -248,7 +248,7 @@ enum は付けない(ADR-0121 の `mechanisms` と同じ理由。検証は受け
 3. importer: `MoveMechanismParamsRow`・`Output.MoveMechanismParams`・変換(`convert_move_mechanisms.go` の parse 関数が値を返す)・
    `Apply`(Delete → Insert。`move_mechanisms` と同じ場所)・`storetest`・照合の要約(任意で `moveMechanismParams: <行数>`)。
    テスト: `convert_move_mechanism_params_test.go`。
-4. DB: `migrations/000013_create_move_mechanism_params.{up,down}.sql`・`query/pokedex.sql` の3クエリ・`make gen`(sqlc)。
+4. DB: `migrations/000014_create_move_mechanism_params.{up,down}.sql`・`query/pokedex.sql` の3クエリ・`make gen`(sqlc)。
    テスト: `services/pokedex/db/move_mechanism_params_layout_test.go`(`-tags mysql` の投入テストも既存に倣って足す)。
 5. pokedex-svc `internal/httpapi/master.go`: `ListMoveMechanismParams` を技 ID ごとに `MechanismParams` に写す(行が無ければ null)。
    calc-svc `internal/master/export.go` `buildMoves`: `MechanismParams` → `MoveRow.Params`。テスト:
@@ -267,3 +267,29 @@ enum は付けない(ADR-0121 の `mechanisms` と同じ理由。検証は受け
 - 注意: oracle と実機の差(ボディプレスの防御の補正)は oracle に合わせた。一撃必殺は oracle で照合できない。
 - 注意: 逆算でイカサマを防御側から求めるとき、調整の目標探索・配分で参照する能力値が違う技を使うときは印が残る(段階2)。
 - 既存のゴールデンは全件そのまま一致すること(新しいファイルの追加だけ)。
+
+## ADR-0178 との関係(2026-10-09 追記。main の PR #652 を取り込んだとき)
+
+ADR-0178(技のフラグと特性の段階2)が先に main に入ったので、重なる箇所を確かめて次のとおりにした。
+
+- **migration の版**: ADR-0178 が 000013(`move_flags`)を使ったので、この ADR の表は **000014**
+  (`move_mechanism_params`)にした。どちらも表を足すだけで、互いの行・列に触らない。投入(`Apply`)の削除は
+  `move_mechanism_params` → `move_flags` の順に並べ、どちらも `moves` より先に消す(外部キー)。
+- **公開 API の `Move.mechanisms`(ADR-0178 §4)**: 意味は「機構の分類」(ADR-0121)のままにする。段階1で印を外した機構
+  (`always_crit`・`ignore_defense_ranks`・中身のある `multi_hit` 等)も値からは消さない。印を付けるかどうかは engine の
+  `mechanismHandled`(§10)が入力ごとに決める。公開 API は `mechanismParams` をまだ返さない(段階2)ので、Web のオンラインの
+  WASM 計算では `multi_hit`・`fixed_damage`・`ohko`・`alt_offense_stat`・`alt_defense_stat` は中身が無いため印が残り
+  (誤った数値は出さない)、中身の要らない `always_crit`・`ignore_defense_ranks` は計算に入って印が消える。
+  公開 API の説明文(「多段・威力変動などの技に未対応の印が付く」)はこの挙動と矛盾しない。
+- **無効の判定と一撃必殺・固定ダメージの順序**: ADR-0178 の `DefImmuneFlags`(ぼうおん・ぼうだん)は
+  `abilityNullification` の中で判定され、`calcDamageNoKO` の一撃必殺・固定ダメージの分岐(§4)はその後
+  (`res.Nullified == NullifyNone` のときだけ)に来る。oracle(champions.js の `calculateChampions`)も
+  Bulletproof・Soundproof の無効を `handleFixedDamageMoves` より前に判定しており、同じ順。
+- **多段と新しい最終補正**: `DefFinalModsByFlag`・`DefFinalModsByType`(もふもふ・パンクロック・Aura Guard)は
+  `otherModifiers` の最終補正に入り、多段は「1発を計算して回数ぶん並べる」(§3)ので、1発ごとに掛かる。oracle も
+  `calculateFinalModsChampions` を1発ごとに呼び、これらの補正は何発目か(`hitCount`)に依存しない(依存するのは
+  マルチスケイル等で、ADR-0123 のまま)。`PostAuraPowerMods`・`FlagTypeConvert` も1発の計算の中で効く。
+- **effects.json**: `data/importer/effects.json`・`testdata/golden/effects.json` に、この ADR のスキルリンク
+  (`MaxMultiHit`)・がんじょう(`PreventsOHKO`・`Breakable`)と ADR-0178 の 14 特性を両方入れた。キーは重ならない。
+  `services/internal/master/effects.go` の許すキーにも両方の項目を入れた。
+- **ゴールデン**: 既存のベクタ(ADR-0178 が足した 38 件を含む)は変えず、`mechanisms.json` の追加だけ(§9 のまま)。

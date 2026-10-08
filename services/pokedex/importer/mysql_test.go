@@ -28,7 +28,7 @@ import (
 // species_key_ledger は置き換えずに追記だけする台帳(ADR-0131)。止めた投入で変わらないことも比べる。
 var masterTables = []string{
 	"types", "type_chart", "abilities", "items", "moves", "species", "species_abilities",
-	"item_effects", "ability_effects", "move_effects", "move_mechanisms", "move_mechanism_params", "learnsets", "natures",
+	"item_effects", "ability_effects", "move_effects", "move_mechanisms", "move_mechanism_params", "move_flags", "learnsets", "natures",
 	"regulations", "regulation_species", "regulation_moves", "regulation_items", "regulation_abilities",
 	"data_versions", "species_key_ledger",
 }
@@ -140,7 +140,7 @@ func TestApplyWritesOutput(t *testing.T) {
 	counts := map[string]int{
 		"types": len(out.Types), "type_chart": len(out.TypeChart), "abilities": len(out.Abilities), "items": len(out.Items),
 		"moves": len(out.Moves), "species": len(out.Species), "item_effects": len(out.ItemEffects),
-		"ability_effects": len(out.AbilityEffects), "move_mechanisms": len(out.MoveMechanisms), "move_mechanism_params": len(out.MoveMechanismParams), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
+		"ability_effects": len(out.AbilityEffects), "move_mechanisms": len(out.MoveMechanisms), "move_mechanism_params": len(out.MoveMechanismParams), "move_flags": len(out.MoveFlags), "learnsets": len(out.Learnsets), "natures": len(out.Natures),
 		"regulations":        len(out.Regulations),
 		"regulation_species": len(out.RegulationSpecies), "regulation_moves": len(out.RegulationMoves),
 		"regulation_items": len(out.RegulationItems), "regulation_abilities": len(out.RegulationAbilities),

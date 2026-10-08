@@ -257,6 +257,10 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms, Target: derefString(m.Target),
 			Params: mechanismParamsRow(m.MechanismParams),
 		}
+		// flags のキーが無い = 不明(古い pokedex-svc・取り込み前。ADR-0178 §4)。配列(空を含む)は既知。
+		if m.Flags != nil {
+			row.Flags, row.FlagsKnown = *m.Flags, true
+		}
 		mv, err := sharedmaster.Move(row, chart)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidMaster, err)
