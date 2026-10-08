@@ -80,7 +80,7 @@ test-services: gen-go-all ## services のユニットテスト
 .PHONY: test-tools
 test-tools:
 	@cd tools && $(GO) test ./...
-	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs tools/importer/fetch-showdown-megastone.test.mjs
+	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs tools/importer/fetch-showdown-megastone.test.mjs tools/importer/fetch-move-flags.test.mjs
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@node --test tools/assets/convert.test.mjs
 

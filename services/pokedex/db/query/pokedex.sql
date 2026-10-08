@@ -38,6 +38,20 @@ SELECT move_id, mechanism
 FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
+-- name: ListMoveFlags :many
+SELECT move_id, flag
+FROM move_flags
+ORDER BY move_id, flag;
+
+-- name: ListMoveFlagsByMoveIDs :many
+SELECT move_id, flag
+FROM move_flags
+WHERE move_id IN (sqlc.slice(ids))
+ORDER BY move_id, flag;
+
+-- name: HasMoveFlags :one
+SELECT EXISTS (SELECT 1 FROM move_flags) AS has_flags;
+
 -- name: GetMove :one
 SELECT id, name_ja, type, category, power, priority, target
 FROM moves
@@ -151,6 +165,9 @@ DELETE FROM move_effects;
 -- name: DeleteMoveMechanisms :exec
 DELETE FROM move_mechanisms;
 
+-- name: DeleteMoveFlags :exec
+DELETE FROM move_flags;
+
 -- name: DeleteMegaSpecies :exec
 DELETE FROM species WHERE is_mega = 1;
 
@@ -218,6 +235,10 @@ VALUES (?, ?);
 
 -- name: InsertMoveMechanism :exec
 INSERT INTO move_mechanisms (move_id, mechanism)
+VALUES (?, ?);
+
+-- name: InsertMoveFlag :exec
+INSERT INTO move_flags (move_id, flag)
 VALUES (?, ?);
 
 -- name: InsertLearnset :exec

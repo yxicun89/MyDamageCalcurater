@@ -83,6 +83,23 @@ type AbilityEffect struct {
 	// Breakable は防御側: 相手が IgnoresDefenderAbility を持つとき、この特性の効果(印を含む)は無いものとして扱われる。
 	Breakable bool
 
+	// --- 特性の段階2(技のフラグ。ADR-0178)。どれもゼロ値は「その効果なし」 ---
+	// TODO(ADR-0178 実装): spec-writer のスタブ。検証・計算・印はまだ読まない。
+
+	// PostAuraPowerMods は攻撃側: 条件つきの威力補正のうち、オーラの後・タイプ変換の補正の前に掛けるもの
+	// (かたいツメ・パンクロック・ちからずく 5325、てつのこぶし・すてみ 4915)。語彙は PowerMods と同じ。
+	PostAuraPowerMods []ConditionalPowerMod
+	// FlagTypeConvert は攻撃側: Flag を持つ技を To タイプにする(うるおいボイス)。nil は無し。
+	FlagTypeConvert *FlagTypeConvert
+	// DefImmuneFlags は防御側: そのフラグの技を無効にする(ぼうおん・ぼうだん)。
+	DefImmuneFlags []MoveFlag
+	// DefFinalModsByFlag は防御側: 技がそのフラグを持つとき最終補正に掛ける(もふもふの接触半減・パンクロックの音半減)。
+	DefFinalModsByFlag map[MoveFlag]int
+	// DefFinalModsByType は防御側: 技(変換後)がそのタイプのとき最終補正に掛ける(もふもふの炎 ×2)。
+	DefFinalModsByType map[Type]int
+	// NoContact は攻撃側: 自分の技を接触しない扱いにする(えんかく。防御側の contact の最終補正を受けない)。
+	NoContact bool
+
 	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool
@@ -130,7 +147,9 @@ type ConditionalPowerMod struct {
 	Condition PowerCondition
 	MaxPower  int
 	MoveType  Type
-	Modifier  int
+	// Flag は move_flag の条件のフラグ(ADR-0178)。他の条件では空。
+	Flag     MoveFlag
+	Modifier int
 }
 
 // hasType は「そのタイプを持つか」を返す。テラスタル中(TeraType 指定あり)は TeraType だけを見る

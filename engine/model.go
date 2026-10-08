@@ -34,6 +34,10 @@ type Move struct {
 	Mechanisms []MoveMechanism
 	// Target は技の対象(ADR-0222)。ダブルの全体技の補正に使う。"" は不明(マスタが持つまでの既定。単体扱い)。
 	Target MoveTarget
+	// Flags は技のフラグ(ADR-0178)。FlagsKnown が偽(マスタが持たない・古いキャッシュ)のときは空でなければならず、
+	// フラグに依存する特性の効果は効かないものとして計算し、その特性に未対応の印を付ける。
+	Flags      []MoveFlag
+	FlagsKnown bool
 }
 
 // MoveTarget は技の対象の分類。oracle の allAdjacent・allAdjacentFoes が spread、それ以外が single。

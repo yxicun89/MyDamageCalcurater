@@ -22,6 +22,10 @@ type MoveRow struct {
 	// Target は技の対象(Showdown の文字列。ADR-0136)。空は不明(取り込み前の行・内部 API がまだ運ばない経路)。
 	// Move で検証し、engine.Move.Target(single/spread)に分類して載せる(ADR-0223)。
 	Target string
+	// Flags は move_flags のフラグ(ADR-0178)。FlagsKnown が偽(内部 API がキーを省いた = まだ取り込んでいない・古い
+	// pokedex-svc)のときは空でなければならない。Move で検証し、昇順に並べて engine.Move.Flags / FlagsKnown に載せる。
+	Flags      []string
+	FlagsKnown bool
 }
 
 // moveCategories は moves.category として許される値(ADR-0100 §3)。

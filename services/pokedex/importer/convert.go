@@ -42,6 +42,13 @@ type MoveRow struct {
 	Target string
 }
 
+// MoveFlagRow は move_flags の行(技1つ・フラグ1つ。ADR-0178)。
+// TODO(ADR-0178 実装): spec-writer のスタブ。変換(Output.MoveFlags を作る)・投入は実装者が書く。
+type MoveFlagRow struct {
+	MoveID string
+	Flag   string
+}
+
 // SpeciesRow は species + species_abilities の行。
 type SpeciesRow struct {
 	master.SpeciesRow
@@ -85,6 +92,7 @@ type Output struct {
 	Moves               []MoveRow
 	MoveEffects         []EffectRow
 	MoveMechanisms      []MoveMechanismRow
+	MoveFlags           []MoveFlagRow
 	Species             []SpeciesRow
 	Natures             []NatureRow
 	ItemEffects         []EffectRow
