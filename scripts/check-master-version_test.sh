@@ -22,9 +22,10 @@ cat > "$work/bin/kubectl" <<'FAKE'
 args="$*"
 case "$args" in
   "config current-context") echo "k3d-pokecalc" ;;
-  *"get --raw"*) [ -n "${FAKE_CALC:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_CALC" || exit 1 ;;
+  *"services/calc:http/proxy/readyz"*) [ -n "${FAKE_CALC:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_CALC" || exit 1 ;;
+  *"services/speed:http/proxy/healthz"*) [ -n "${FAKE_SPEED:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_SPEED" || exit 1 ;;
   *"deployment/balance"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "${FAKE_BALANCE:-}" ;;
-  *"deployment/speed"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "${FAKE_SPEED:-}" ;;
+  *"deployment/speed"*) echo "speed の Deployment 注釈は見ないはず" >&2; exit 98 ;;
   *) echo "unexpected kubectl: $args" >&2; exit 99 ;;
 esac
 FAKE
@@ -51,6 +52,7 @@ run 0 "3つとも期待と同じ版なら成功" "版が一致" FAKE_CALC="$V" F
 run 1 "calc だけ旧版なら失敗し、calc を名指しする" "STALE calc" FAKE_CALC="pokeapi=v0@bbbbbbbb" FAKE_BALANCE="$V" FAKE_SPEED="$V"
 run 1 "balance が注釈無し(未配備)なら失敗し、balance を名指しする" "STALE balance" FAKE_CALC="$V" FAKE_BALANCE="" FAKE_SPEED="$V"
 run 1 "speed が旧版なら失敗し、speed を名指しする" "STALE speed" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED="old"
+run 1 "speed の /healthz が取れなければ、注釈へ戻らず失敗する" "STALE speed" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED=""
 run 1 "calc に届かない(dataVersion が取れない)なら失敗する" "STALE calc" FAKE_CALC="" FAKE_BALANCE="$V" FAKE_SPEED="$V"
 run 1 "metadata.json が無ければ失敗する" "metadata.json" READMODEL_DIR="$work/none" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED="$V"
 

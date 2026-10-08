@@ -41,7 +41,7 @@ make import-dry-run
 
 ## 3a. 日本語名の無いものを上書きで補う(issue #607・ADR-0140)
 
-上流(PokeAPI の `ja-Hrkt`・`ja`)に日本語名が無い持ち物・特性・種族の姿は、推測で作らず英語名のまま取り込み、
+上流(PokeAPI の `ja-Hrkt`・`ja`)に日本語名が無い持ち物・特性は、推測で作らず英語名のまま取り込み(種族の姿は、上流の姿の名前 form_name から「基本種名（姿の名前）」を作る。ADR-0141。作れない姿だけ英語名のまま)、
 試運転の報告 `names.<種類>.fallbackIds` に ID を出す。日本語にしたいものだけ、上書きファイルで補う。
 
 - 場所: `data/local/name_ja_overrides.json`(**Git に入れない**。`data/local/` は .gitignore。実名をコミット・PR・issue に書かない)
@@ -120,6 +120,8 @@ make master-release
 importer の Pod には Kubernetes API の書き込み権限を与えていない。この反映は手元の make から行う。
 
 calc の起動ログ(`kubectl -n pokecalc logs deployment/calc | grep dataVersion`)と `GET /readyz` の本文にも、読み込んだ `dataVersion` が出る。
+speed も起動ログと `GET /healthz` の `dataVersion` に、読み込んだ版を出す。版の一致確認は calc を `/readyz`、speed を `/healthz` から取る
+(プロセスが読んだ版。取れなければ注釈へ戻らず `STALE speed`。ADR-0809)。balance は配備時の Deployment 注釈で比べる。
 
 ## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)
 
