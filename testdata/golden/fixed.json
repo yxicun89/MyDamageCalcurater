@@ -42918,6 +42918,445 @@
     }
   },
   {
+    "id": "effects/auraguard/final/contact/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Aura Guard",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        33,
+        33,
+        34,
+        34,
+        35,
+        35,
+        36,
+        36,
+        36,
+        36,
+        37,
+        37,
+        38,
+        38,
+        39,
+        39
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/auraguard/final/contact/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Aura Guard",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/auraguard/final/contact/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Aura Guard",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
     "id": "effects/battlearmor/nocrit/apply",
     "oracle": {
       "attacker": "Snorlax",
@@ -43331,6 +43770,442 @@
       },
       "ko": {
         "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/bulletproof/immune/bullet/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Seed Bomb"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Bulletproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "bullet"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "seedbomb",
+        "Type": "grass",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Flags": [
+          "bullet"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/bulletproof/immune/bullet/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Bulletproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "bullet"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/bulletproof/immune/bullet/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Seed Bomb"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Bulletproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "bullet"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "seedbomb",
+        "Type": "grass",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Flags": [
+          "bullet"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        50,
+        50,
+        51,
+        51,
+        52,
+        53,
+        53,
+        54,
+        54,
+        55,
+        56,
+        56,
+        57,
+        57,
+        58,
+        59
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 3,
         "Guaranteed": true,
         "ChancePercent": 0
       }
@@ -45306,6 +46181,898 @@
     }
   },
   {
+    "id": "effects/fluffy/final/contact/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        33,
+        33,
+        34,
+        34,
+        35,
+        35,
+        36,
+        36,
+        36,
+        36,
+        37,
+        37,
+        38,
+        38,
+        39,
+        39
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 5,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/fluffy/final/contact/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/fluffy/final/contact/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/fluffy/finaltype/fire/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        74,
+        74,
+        76,
+        76,
+        78,
+        78,
+        80,
+        80,
+        80,
+        82,
+        82,
+        84,
+        84,
+        86,
+        86,
+        88
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/fluffy/finaltype/fire/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/fluffy/finaltype/fire/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Flamethrower"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Fluffy",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "DefFinalModsByType": {
+              "fire": 8192
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "flamethrower",
+        "Type": "fire",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        37,
+        37,
+        38,
+        38,
+        39,
+        39,
+        40,
+        40,
+        40,
+        41,
+        41,
+        42,
+        42,
+        43,
+        43,
+        44
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
     "id": "effects/furcoat/stat/def/apply",
     "oracle": {
       "attacker": "Snorlax",
@@ -46714,6 +48481,1182 @@
     }
   },
   {
+    "id": "effects/ironfist/postaura/punch/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Fire Punch"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Iron Fist",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "punch",
+                "Modifier": 4915
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "firepunch",
+        "Type": "fire",
+        "Category": "physical",
+        "Power": 75,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "punch",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        56,
+        56,
+        57,
+        58,
+        58,
+        59,
+        60,
+        60,
+        61,
+        62,
+        62,
+        63,
+        64,
+        64,
+        65,
+        66
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/ironfist/postaura/punch/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Iron Fist",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "punch",
+                "Modifier": 4915
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/liquidvoice/flagconvert/sound/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Arcanine",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Liquid Voice",
+          "Effect": {
+            "FlagTypeConvert": {
+              "Flag": "sound",
+              "To": "water"
+            }
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "arcanine",
+          "Types": [
+            "fire"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 110,
+            "def": 80,
+            "spa": 100,
+            "spd": 80,
+            "spe": 95
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        58,
+        60,
+        60,
+        60,
+        62,
+        62,
+        62,
+        64,
+        64,
+        64,
+        66,
+        66,
+        66,
+        68,
+        68,
+        70
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 130,
+        "def": 100,
+        "spa": 120,
+        "spd": 100,
+        "spe": 115
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/liquidvoice/flagconvert/sound/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Arcanine",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Liquid Voice",
+          "Effect": {
+            "FlagTypeConvert": {
+              "Flag": "sound",
+              "To": "water"
+            }
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "arcanine",
+          "Types": [
+            "fire"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 110,
+            "def": 80,
+            "spa": 100,
+            "spd": 80,
+            "spe": 95
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        63,
+        64,
+        64,
+        66,
+        66,
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 130,
+        "def": 100,
+        "spa": 120,
+        "spd": 100,
+        "spe": 115
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/longreach/nocontact/auraguard/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Long Reach",
+          "Effect": {
+            "NoContact": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Aura Guard",
+          "Effect": {
+            "DefFinalModsByFlag": {
+              "contact": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/longreach/nocontact/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Long Reach",
+          "Effect": {
+            "NoContact": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/megalauncher/power/pulse/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Aerodactyl",
+      "move": "Aura Sphere"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mega Launcher",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "pulse",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "aerodactyl",
+          "Types": [
+            "rock",
+            "flying"
+          ],
+          "BaseStats": {
+            "hp": 80,
+            "atk": 105,
+            "def": 65,
+            "spa": 60,
+            "spd": 75,
+            "spe": 130
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "aurasphere",
+        "Type": "fighting",
+        "Category": "special",
+        "Power": 80,
+        "Priority": 0,
+        "Flags": [
+          "bullet",
+          "pulse"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        41,
+        42,
+        42,
+        43,
+        43,
+        44,
+        44,
+        45,
+        45,
+        46,
+        46,
+        47,
+        47,
+        48,
+        48,
+        49
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 155,
+        "atk": 125,
+        "def": 85,
+        "spa": 80,
+        "spd": 95,
+        "spe": 150
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/megalauncher/power/pulse/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mega Launcher",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "pulse",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
     "id": "effects/moldbreaker/ignore/heatproof/apply",
     "oracle": {
       "attacker": "Snorlax",
@@ -47845,6 +50788,770 @@
     }
   },
   {
+    "id": "effects/punkrock/postaura/sound/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Punk Rock",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "sound",
+                "Modifier": 5325
+              }
+            ],
+            "DefFinalModsByFlag": {
+              "sound": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        54,
+        54,
+        55,
+        55,
+        57,
+        57,
+        58,
+        58,
+        58,
+        60,
+        60,
+        61,
+        61,
+        63,
+        63,
+        64
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": false,
+        "ChancePercent": 98.6328125
+      }
+    }
+  },
+  {
+    "id": "effects/punkrock/postaura/sound/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Punk Rock",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "sound",
+                "Modifier": 5325
+              }
+            ],
+            "DefFinalModsByFlag": {
+              "sound": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/punkrock/final/sound/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Punk Rock",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "sound",
+                "Modifier": 5325
+              }
+            ],
+            "DefFinalModsByFlag": {
+              "sound": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        21,
+        21,
+        21,
+        21,
+        22,
+        22,
+        22,
+        23,
+        23,
+        23,
+        24,
+        24,
+        24,
+        24,
+        24,
+        25
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 7,
+        "Guaranteed": false,
+        "ChancePercent": 6.318868696689606
+      }
+    }
+  },
+  {
+    "id": "effects/punkrock/final/sound/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Punk Rock",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "sound",
+                "Modifier": 5325
+              }
+            ],
+            "DefFinalModsByFlag": {
+              "sound": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/punkrock/final/sound/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Punk Rock",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "sound",
+                "Modifier": 5325
+              }
+            ],
+            "DefFinalModsByFlag": {
+              "sound": 2048
+            },
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
     "id": "effects/purepower/stat/atk/apply",
     "oracle": {
       "attacker": "Snorlax",
@@ -48495,6 +52202,304 @@
         "Category": "physical",
         "Power": 85,
         "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/reckless/postaura/recoil/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Double-Edge"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Reckless",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "recoil",
+                "Modifier": 4915
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "doubleedge",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 120,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "recoil"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        111,
+        112,
+        114,
+        115,
+        117,
+        118,
+        120,
+        120,
+        121,
+        123,
+        124,
+        126,
+        127,
+        129,
+        130,
+        132
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/reckless/postaura/recoil/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Reckless",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "recoil",
+                "Modifier": 4915
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
       },
       "Field": {
         "Weather": "none",
@@ -49257,6 +53262,600 @@
         "Hits": 3,
         "Guaranteed": false,
         "ChancePercent": 0.09765625
+      }
+    }
+  },
+  {
+    "id": "effects/sharpness/power/slicing/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Absol",
+      "move": "Air Slash"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sharpness",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "slicing",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "absol",
+          "Types": [
+            "dark"
+          ],
+          "BaseStats": {
+            "hp": 65,
+            "atk": 130,
+            "def": 60,
+            "spa": 75,
+            "spd": 60,
+            "spe": 75
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "airslash",
+        "Type": "flying",
+        "Category": "special",
+        "Power": 75,
+        "Priority": 0,
+        "Flags": [
+          "secondary",
+          "slicing"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        45,
+        46,
+        46,
+        47,
+        48,
+        48,
+        49,
+        49,
+        50,
+        50,
+        51,
+        51,
+        52,
+        52,
+        53,
+        54
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 140,
+        "atk": 150,
+        "def": 80,
+        "spa": 95,
+        "spd": 80,
+        "spe": 95
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": false,
+        "ChancePercent": 97.7294921875
+      }
+    }
+  },
+  {
+    "id": "effects/sharpness/power/slicing/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sharpness",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "slicing",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/sheerforce/postaura/secondary/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sheer Force",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "secondary",
+                "Modifier": 5325
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        85,
+        87,
+        88,
+        88,
+        90,
+        91,
+        91,
+        93,
+        94,
+        94,
+        96,
+        97,
+        97,
+        99,
+        100,
+        102
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/sheerforce/postaura/secondary/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Sheer Force",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "secondary",
+                "Modifier": 5325
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
       }
     }
   },
@@ -50375,6 +54974,444 @@
     }
   },
   {
+    "id": "effects/soundproof/immune/sound/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Soundproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "sound"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 0,
+        "Guaranteed": false,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/soundproof/immune/sound/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Soundproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "sound"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/soundproof/immune/sound/breakable",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Mold Breaker",
+          "Effect": {
+            "IgnoresDefenderAbility": true
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Soundproof",
+          "Effect": {
+            "DefImmuneFlags": [
+              "sound"
+            ],
+            "Breakable": true
+          }
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
     "id": "effects/steelyspirit/power/steel/apply",
     "oracle": {
       "attacker": "Snorlax",
@@ -50607,6 +55644,305 @@
         "Category": "physical",
         "Power": 85,
         "Priority": 0
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        67,
+        67,
+        69,
+        69,
+        70,
+        70,
+        72,
+        72,
+        73,
+        73,
+        75,
+        75,
+        76,
+        76,
+        78,
+        79
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/strongjaw/power/bite/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Crunch"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Strong Jaw",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "bite",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "crunch",
+        "Type": "dark",
+        "Category": "physical",
+        "Power": 80,
+        "Priority": 0,
+        "Flags": [
+          "bite",
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        62,
+        63,
+        64,
+        65,
+        65,
+        66,
+        67,
+        68,
+        68,
+        69,
+        70,
+        71,
+        71,
+        72,
+        73,
+        74
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/strongjaw/power/bite/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Strong Jaw",
+          "Effect": {
+            "PowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "bite",
+                "Modifier": 6144
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
       },
       "Field": {
         "Weather": "none",
@@ -51511,6 +56847,303 @@
       },
       "ko": {
         "Hits": 3,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/toughclaws/postaura/contact/apply",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Body Slam"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Tough Claws",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "contact",
+                "Modifier": 5325
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "bodyslam",
+        "Type": "normal",
+        "Category": "physical",
+        "Power": 85,
+        "Priority": 0,
+        "Flags": [
+          "contact",
+          "secondary"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        85,
+        87,
+        88,
+        88,
+        90,
+        91,
+        91,
+        93,
+        94,
+        94,
+        96,
+        97,
+        97,
+        99,
+        100,
+        102
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 2,
+        "Guaranteed": true,
+        "ChancePercent": 0
+      }
+    }
+  },
+  {
+    "id": "effects/toughclaws/postaura/contact/control",
+    "oracle": {
+      "attacker": "Snorlax",
+      "defender": "Abomasnow",
+      "move": "Hyper Voice"
+    },
+    "input": {
+      "Format": "single",
+      "Attacker": {
+        "Species": {
+          "Key": "snorlax",
+          "Types": [
+            "normal"
+          ],
+          "BaseStats": {
+            "hp": 160,
+            "atk": 110,
+            "def": 65,
+            "spa": 65,
+            "spd": 110,
+            "spe": 30
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "Tough Claws",
+          "Effect": {
+            "PostAuraPowerMods": [
+              {
+                "Condition": "move_flag",
+                "Flag": "contact",
+                "Modifier": 5325
+              }
+            ]
+          }
+        },
+        "Item": null
+      },
+      "Defender": {
+        "Species": {
+          "Key": "abomasnow",
+          "Types": [
+            "grass",
+            "ice"
+          ],
+          "BaseStats": {
+            "hp": 90,
+            "atk": 92,
+            "def": 75,
+            "spa": 92,
+            "spd": 85,
+            "spe": 60
+          }
+        },
+        "Level": 50,
+        "Nature": {},
+        "SP": {
+          "hp": 0,
+          "atk": 0,
+          "def": 0,
+          "spa": 0,
+          "spd": 0,
+          "spe": 0
+        },
+        "Ranks": {},
+        "Status": "none",
+        "Ability": {
+          "ID": "",
+          "Effect": null
+        },
+        "Item": null
+      },
+      "Move": {
+        "ID": "hypervoice",
+        "Type": "normal",
+        "Category": "special",
+        "Power": 90,
+        "Priority": 0,
+        "Flags": [
+          "sound"
+        ],
+        "FlagsKnown": true
+      },
+      "Field": {
+        "Weather": "none",
+        "Terrain": "none",
+        "DefenderScreens": {
+          "Reflect": false,
+          "LightScreen": false,
+          "AuroraVeil": false
+        }
+      },
+      "Critical": false
+    },
+    "expected": {
+      "rolls": [
+        42,
+        43,
+        43,
+        43,
+        45,
+        45,
+        45,
+        46,
+        46,
+        46,
+        48,
+        48,
+        48,
+        49,
+        49,
+        51
+      ],
+      "attackerStats": {
+        "hp": 235,
+        "atk": 130,
+        "def": 85,
+        "spa": 85,
+        "spd": 130,
+        "spe": 50
+      },
+      "defenderStats": {
+        "hp": 165,
+        "atk": 112,
+        "def": 95,
+        "spa": 112,
+        "spd": 105,
+        "spe": 80
+      },
+      "ko": {
+        "Hits": 4,
         "Guaranteed": true,
         "ChancePercent": 0
       }

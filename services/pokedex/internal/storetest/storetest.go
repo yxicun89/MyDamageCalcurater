@@ -345,6 +345,23 @@ func (q *Querier) ListMoveMechanisms(context.Context) ([]store.MoveMechanism, er
 	return append([]store.MoveMechanism(nil), q.MoveMechanisms...), nil
 }
 
+func (q *Querier) ListMoveMechanismsByMoveIDs(_ context.Context, ids []string) ([]store.MoveMechanism, error) {
+	if err := q.record("ListMoveMechanismsByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var out []store.MoveMechanism
+	for _, m := range q.MoveMechanisms {
+		if want[m.MoveID] {
+			out = append(out, m)
+		}
+	}
+	return out, nil
+}
+
 func (q *Querier) ListMoveFlags(context.Context) ([]store.MoveFlag, error) {
 	if err := q.record("ListMoveFlags", nil); err != nil {
 		return nil, err

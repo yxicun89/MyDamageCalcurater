@@ -116,7 +116,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 		q.DeleteRegulations,
 		q.DeleteLearnsets,
 		q.DeleteSpeciesAbilities,
-		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms,
+		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms, q.DeleteMoveFlags,
 		q.DeleteMegaSpecies, q.DeleteRemainingSpecies,
 		q.DeleteMoves, q.DeleteItems, q.DeleteAbilities,
 		q.DeleteTypeChart, q.DeleteTypes,
@@ -208,6 +208,11 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 	}
 	for _, m := range out.MoveMechanisms {
 		if err := q.InsertMoveMechanism(ctx, store.InsertMoveMechanismParams{MoveID: m.MoveID, Mechanism: m.Mechanism}); err != nil {
+			return err
+		}
+	}
+	for _, f := range out.MoveFlags {
+		if err := q.InsertMoveFlag(ctx, store.InsertMoveFlagParams{MoveID: f.MoveID, Flag: f.Flag}); err != nil {
 			return err
 		}
 	}

@@ -49,7 +49,6 @@ type CalcMove struct {
 	Target *string `json:"target"`
 	// Flags・Recoil・HasCrashDamage・Secondaries は技のフラグの判定材料(ADR-0178)。calc の技データの表現のまま
 	// (Flags は真のフラグ名の昇順)。Flags は必須: キーが無い古い取得物はデコードで拒否する(nil と空を区別するため *[]string)。
-	// TODO(ADR-0178 実装): spec-writer のスタブ。必須の検査・照合は実装者が書く。
 	Flags          *[]string       `json:"flags"`
 	Recoil         json.RawMessage `json:"recoil"`
 	HasCrashDamage bool            `json:"hasCrashDamage"`
@@ -120,7 +119,6 @@ type ShowdownMove struct {
 	// Flags は Showdown の技データの flags のうち真のキーの昇順(取得元の名前のまま。語彙に無いものも含む)。
 	// Recoil は recoil([分子, 分母] か null)、HasCrashDamage は hasCrashDamage。技のフラグの判定材料(ADR-0178)。
 	// Flags は必須: キーが無い古い取得物はデコードで拒否する(nil と空を区別するため *[]string)。
-	// TODO(ADR-0178 実装): spec-writer のスタブ。必須の検査・変換は実装者が書く。
 	Flags          *[]string       `json:"flags"`
 	Recoil         json.RawMessage `json:"recoil"`
 	HasCrashDamage bool            `json:"hasCrashDamage"`

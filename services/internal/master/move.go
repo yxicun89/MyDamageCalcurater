@@ -70,6 +70,10 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 	if err != nil {
 		return engine.Move{}, err
 	}
+	flags, err := MoveFlagsOf(row)
+	if err != nil {
+		return engine.Move{}, err
+	}
 	var effect *engine.MoveEffect
 	if len(row.Effect) > 0 {
 		e, err := DecodeMoveEffect(row.Effect)
@@ -88,5 +92,7 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 		Effect:     effect,
 		Mechanisms: mechanisms,
 		Target:     target.Engine(),
+		Flags:      flags,
+		FlagsKnown: row.FlagsKnown,
 	}, nil
 }

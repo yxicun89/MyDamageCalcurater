@@ -82,6 +82,9 @@ func (s *MemoryStore) Move(id string) (engine.Move, bool) {
 		return engine.Move{}, false
 	}
 	mv.Effect = copyMoveEffect(mv.Effect)
+	// スライスも複製する(呼び出し側の書き換えが Store に漏れない。ADR-0178)。
+	mv.Mechanisms = slices.Clone(mv.Mechanisms)
+	mv.Flags = slices.Clone(mv.Flags)
 	return mv, true
 }
 
@@ -168,6 +171,15 @@ func copyAbilityEffect(e *engine.AbilityEffect) *engine.AbilityEffect {
 	out.PowerMods = slices.Clone(e.PowerMods)
 	out.StatMods = maps.Clone(e.StatMods)
 	out.SeparateStatMods = maps.Clone(e.SeparateStatMods)
+	// 特性の段階2(ADR-0178)の参照型も複製する。
+	out.PostAuraPowerMods = slices.Clone(e.PostAuraPowerMods)
+	if e.FlagTypeConvert != nil {
+		fc := *e.FlagTypeConvert
+		out.FlagTypeConvert = &fc
+	}
+	out.DefImmuneFlags = slices.Clone(e.DefImmuneFlags)
+	out.DefFinalModsByFlag = maps.Clone(e.DefFinalModsByFlag)
+	out.DefFinalModsByType = maps.Clone(e.DefFinalModsByType)
 	return &out
 }
 

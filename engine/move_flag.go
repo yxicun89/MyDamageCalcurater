@@ -4,11 +4,13 @@ package engine
 //
 // 値の一覧の正はここ。マスタ(services/internal/master)・migration の CHECK(chk_move_flags_flag)・
 // 公開 API の MoveFlag はこれと一致させる。
-//
-// TODO(ADR-0178 実装): このファイルは spec-writer のスタブ。語彙の定義(定数と AllMoveFlags)だけを置き、
-// Known と計算・検証の処理は実装者が書く。
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
+)
 
 // MoveFlag は技のフラグ1つ。
 type MoveFlag string
@@ -49,28 +51,97 @@ var allMoveFlags = []MoveFlag{
 
 // AllMoveFlags はフラグの一覧(値の昇順)のコピーを返す。
 func AllMoveFlags() []MoveFlag {
-	out := make([]MoveFlag, len(allMoveFlags))
-	copy(out, allMoveFlags)
-	return out
+	return slices.Clone(allMoveFlags)
 }
 
 // Known は f が既知のフラグかどうか(大文字小文字を区別する)。
-//
-// TODO(ADR-0178 実装): スタブ。
 func (f MoveFlag) Known() bool {
-	return false
+	return slices.Contains(allMoveFlags, f)
 }
 
 // ErrInvalidMoveFlags は技のフラグの入力が不正(未知の値・FlagsKnown が偽なのに値がある)。
 var ErrInvalidMoveFlags = errors.New("技のフラグが不正")
 
 // PowerConditionMoveFlag は技が Flag を持つ(ADR-0178)。ConditionalPowerMod.Flag を使い、MaxPower 0・MoveType 空。
-//
-// TODO(ADR-0178 実装): AllPowerConditions に足し、validateStage1・powerConditionHolds で扱う。
 const PowerConditionMoveFlag PowerCondition = "move_flag"
 
 // FlagTypeConvert は攻撃側: Flag を持つ技を To タイプにする(うるおいボイス。威力補正なし。ADR-0178)。
 type FlagTypeConvert struct {
 	Flag MoveFlag
 	To   Type
+}
+
+// validateMoveFlags は技のフラグの入力を確かめる: 値はすべて既知で、FlagsKnown が偽なら空。
+func validateMoveFlags(m Move) error {
+	if !m.FlagsKnown && len(m.Flags) > 0 {
+		return fmt.Errorf("%w: FlagsKnown が偽なのに値がある: %v", ErrInvalidMoveFlags, m.Flags)
+	}
+	for _, f := range m.Flags {
+		if !f.Known() {
+			return fmt.Errorf("%w: 未知のフラグ %q", ErrInvalidMoveFlags, f)
+		}
+	}
+	return nil
+}
+
+// hasFlag は技がフラグ f を持つかを返す。フラグが不明(FlagsKnown が偽)なら持たないものとする。
+func (m Move) hasFlag(f MoveFlag) bool {
+	return m.FlagsKnown && slices.Contains(m.Flags, f)
+}
+
+// attackerDependsOnFlags は攻撃側の特性の効果が技のフラグに依存するか(フラグが不明なときの印に使う。ADR-0178 §5)。
+func (e *AbilityEffect) attackerDependsOnFlags() bool {
+	if e == nil {
+		return false
+	}
+	if e.FlagTypeConvert != nil {
+		return true
+	}
+	isFlag := func(pm ConditionalPowerMod) bool { return pm.Condition == PowerConditionMoveFlag }
+	return slices.ContainsFunc(e.PowerMods, isFlag) || slices.ContainsFunc(e.PostAuraPowerMods, isFlag)
+}
+
+// defenderDependsOnFlags は防御側の特性の効果が技のフラグに依存するか(ADR-0178 §5)。
+func (e *AbilityEffect) defenderDependsOnFlags() bool {
+	return e != nil && (len(e.DefImmuneFlags) > 0 || len(e.DefFinalModsByFlag) > 0)
+}
+
+// validateStage2 は特性の段階2の項目(ADR-0178)の値域を確かめる。
+func (e AbilityEffect) validateStage2() error {
+	if err := validateConditionalPowerMods("PostAuraPowerMods", e.PostAuraPowerMods); err != nil {
+		return err
+	}
+	if c := e.FlagTypeConvert; c != nil {
+		if !c.Flag.Known() {
+			return fmt.Errorf("FlagTypeConvert.Flag が未知: %q", c.Flag)
+		}
+		if c.To == TypeNone {
+			return errors.New("FlagTypeConvert.To は必須")
+		}
+	}
+	for i, f := range e.DefImmuneFlags {
+		if !f.Known() {
+			return fmt.Errorf("DefImmuneFlags[%d] が未知: %q", i, f)
+		}
+		if slices.Contains(e.DefImmuneFlags[:i], f) {
+			return fmt.Errorf("DefImmuneFlags に %q が重複している", f)
+		}
+	}
+	for _, f := range slices.Sorted(maps.Keys(e.DefFinalModsByFlag)) {
+		if !f.Known() {
+			return fmt.Errorf("DefFinalModsByFlag のキーが未知: %q", f)
+		}
+		if err := validateModifier("DefFinalModsByFlag["+string(f)+"]", e.DefFinalModsByFlag[f], false); err != nil {
+			return err
+		}
+	}
+	for _, t := range slices.Sorted(maps.Keys(e.DefFinalModsByType)) {
+		if t == TypeNone {
+			return errors.New("DefFinalModsByType のキーが空")
+		}
+		if err := validateModifier("DefFinalModsByType["+string(t)+"]", e.DefFinalModsByType[t], false); err != nil {
+			return err
+		}
+	}
+	return nil
 }

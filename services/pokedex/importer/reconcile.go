@@ -49,7 +49,6 @@ type MoveMechanismSummary struct {
 
 // MoveFlagSummary は技のフラグの件数(ADR-0178)。Attack は moves 表の攻撃技の数、WithFlag はフラグを持つ攻撃技の数、
 // ByFlag はフラグごとの攻撃技の数。
-// TODO(ADR-0178 実装): spec-writer のスタブ。集計と要約への出力は実装者が書く。
 type MoveFlagSummary struct {
 	Attack   int            `json:"attack"`
 	WithFlag int            `json:"withFlag"`
@@ -198,6 +197,7 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	summary.TypeChart = TypeChartSummary{Types: len(typesConv.Rows), Rows: len(typesConv.ChartRows)}
 	if !partial {
 		summary.MoveMechanisms = computeMoveMechanismSummary(out)
+		summary.MoveFlags = computeMoveFlagSummary(out)
 	}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)

@@ -38,6 +38,12 @@ SELECT move_id, mechanism
 FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
+-- name: ListMoveMechanismsByMoveIDs :many
+SELECT move_id, mechanism
+FROM move_mechanisms
+WHERE move_id IN (sqlc.slice(ids))
+ORDER BY move_id, mechanism;
+
 -- name: ListMoveFlags :many
 SELECT move_id, flag
 FROM move_flags

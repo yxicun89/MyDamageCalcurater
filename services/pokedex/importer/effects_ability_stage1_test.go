@@ -48,7 +48,8 @@ func TestRepoEffectsStage1Abilities(t *testing.T) {
 		"unaware":      {IgnoresOpponentRanks: true, Breakable: true},
 		// 段階1で計算に入れないもの(oracle の調査で新たに見つかった漏れ)は印を付ける。
 		"merciless": {UnsupportedAttacker: true},
-		"longreach": {UnsupportedAttacker: true},
+		// longreach は段階2(ADR-0178 §5)で技のフラグ(接触)を持てるようになり、計算に入った。
+		"longreach": {NoContact: true},
 	}
 	for id, w := range want {
 		def, ok := file.Abilities[id]

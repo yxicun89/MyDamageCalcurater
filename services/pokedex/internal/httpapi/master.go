@@ -82,6 +82,10 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	if err != nil {
 		return api.MasterExport{}, err
 	}
+	moveFlags, err := q.ListMoveFlags(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
 	items, err := q.ListItems(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
@@ -125,6 +129,16 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	}
 	for id := range mechanismsByMoveID {
 		sort.Strings(mechanismsByMoveID[id])
+	}
+	// flagsByMoveID: 契約(MasterMove.flags)の「昇順」もここでソートする(ADR-0178)。
+	// move_flags が空ならまだ取り込んでいない(不明)ので、全技で flags キーを省く(ADR-0178 §3)。
+	flagsKnown := len(moveFlags) > 0
+	flagsByMoveID := map[string][]string{}
+	for _, f := range moveFlags {
+		flagsByMoveID[f.MoveID] = append(flagsByMoveID[f.MoveID], f.Flag)
+	}
+	for id := range flagsByMoveID {
+		sort.Strings(flagsByMoveID[id])
 	}
 	itemEffectByID := map[string]store.ItemEffect{}
 	for _, e := range itemEffects {
@@ -171,9 +185,18 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		if mechanisms == nil {
 			mechanisms = []string{} // 通常の技は空配列(null にしない。ADR-0121)
 		}
+		var flags *[]string
+		if flagsKnown {
+			f := flagsByMoveID[m.ID]
+			if f == nil {
+				f = []string{} // フラグの無い技は空配列(既知のフラグなし)
+			}
+			flags = &f
+		}
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
 			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms, Target: nullStringPtr(m.Target),
+			Flags: flags,
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))

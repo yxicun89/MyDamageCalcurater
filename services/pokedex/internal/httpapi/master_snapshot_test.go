@@ -18,7 +18,7 @@ import (
 // masterReads は内部 API が読むクエリ(buildMasterExport の全 SELECT)。
 var masterReads = []string{
 	"ListDataVersions", "ListTypes", "ListTypeChart", "ListSpecies", "ListAllSpeciesAbilities",
-	"ListMoves", "ListMoveEffects", "ListMoveMechanisms", "ListItems", "ListItemEffects",
+	"ListMoves", "ListMoveEffects", "ListMoveMechanisms", "ListMoveFlags", "ListItems", "ListItemEffects",
 	"ListAbilities", "ListAbilityEffects", "ListNatures",
 }
 

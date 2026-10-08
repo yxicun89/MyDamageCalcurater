@@ -4,6 +4,7 @@ package importer
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -64,6 +65,8 @@ func moveTargetOf(m ShowdownMove) (string, error) {
 type moveConversion struct {
 	Rows     []MoveRow
 	Included map[string]bool
+	// Flags は moves 表に採る技ごとのフラグ(Showdown 由来。昇順。ADR-0178)。フラグの無い技はキーを持たない。
+	Flags map[string][]string
 }
 
 func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []Finding, []Finding, error) {
@@ -91,6 +94,7 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 
 	var warnings, blockers []Finding
 	included := map[string]bool{}
+	flags := map[string][]string{}
 	rows := make([]MoveRow, 0, len(ids))
 
 	for _, id := range ids {
@@ -143,6 +147,27 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 					blockers = append(blockers, f)
 				}
 			}
+			// 技のフラグ(ADR-0178): 値は Showdown を採り、calc から同じ規則で導いた集合と照合する。
+			// 攻撃技の食い違いはダメージに効くので Blocker、変化技は警告(target と同じ扱い)。
+			sdFlags, err := showdownMoveFlags(sm)
+			if err != nil {
+				return moveConversion{}, nil, nil, err
+			}
+			cFlags, err := calcMoveFlags(id, cm)
+			if err != nil {
+				return moveConversion{}, nil, nil, err
+			}
+			if !slices.Equal(sdFlags, cFlags) {
+				f := Finding{Kind: KindMoveValueMismatch, ID: id, Detail: "flags"}
+				if finalCategory == "status" {
+					warnings = append(warnings, f)
+				} else {
+					blockers = append(blockers, f)
+				}
+			}
+			if len(sdFlags) > 0 {
+				flags[id] = sdFlags
+			}
 			included[id] = true
 			rows = append(rows, MoveRow{
 				ID: id, NameEn: sm.Name, Type: typeID, Category: finalCategory,
@@ -162,6 +187,13 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 			if err != nil {
 				return moveConversion{}, nil, nil, err
 			}
+			sdFlags, err := showdownMoveFlags(sm)
+			if err != nil {
+				return moveConversion{}, nil, nil, err
+			}
+			if len(sdFlags) > 0 {
+				flags[id] = sdFlags
+			}
 			warnings = append(warnings, Finding{Kind: KindMoveShowdownOnly, ID: id})
 			included[id] = true
 			rows = append(rows, MoveRow{
@@ -174,5 +206,5 @@ func convertMoves(in Input, typeNameToID map[string]string) (moveConversion, []F
 	}
 
 	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
-	return moveConversion{Rows: rows, Included: included}, warnings, blockers, nil
+	return moveConversion{Rows: rows, Included: included, Flags: flags}, warnings, blockers, nil
 }
