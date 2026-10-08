@@ -313,6 +313,50 @@ func (s *TiDBStore) ListFavorites(ctx context.Context, deviceID string) ([]Favor
 	return out, nil
 }
 
+// calcHistorySQL は ListCalcHistory の SQL と引数を組み立てる(EXPLAIN のテストも同じ SQL を使う)。
+func calcHistorySQL(deviceID string, q CalcHistoryQuery) (string, []any) {
+	query := `SELECT event_id, occurred_at, payload FROM calc_events
+		WHERE device_id = ? AND operation = 'calc'
+		AND occurred_at > COALESCE((SELECT purged_at FROM devices WHERE device_id = ?), '0001-01-01 00:00:00')`
+	args := []any{deviceID, deviceID}
+	if !q.Since.IsZero() {
+		query += ` AND occurred_at >= ?`
+		args = append(args, q.Since.UTC())
+	}
+	if q.Before != nil {
+		query += ` AND (occurred_at < ? OR (occurred_at = ? AND event_id < ?))`
+		at := q.Before.OccurredAt.UTC()
+		args = append(args, at, at, q.Before.EventID)
+	}
+	query += ` ORDER BY occurred_at DESC, event_id DESC LIMIT ?`
+	args = append(args, q.Limit)
+	return query, args
+}
+
+// ListCalcHistory は ADR-0230 §8。墓石(devices.purged_at)は相関サブクエリで除く(行が無ければ下限なし)。
+// SQL はすべてプレースホルダ。索引 idx_calc_events_device_history (device_id, operation, occurred_at, event_id)。
+func (s *TiDBStore) ListCalcHistory(ctx context.Context, deviceID string, q CalcHistoryQuery) ([]CalcHistoryRow, error) {
+	query, args := calcHistorySQL(deviceID, q)
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, wrapUnavailable(err)
+	}
+	defer rows.Close()
+	out := make([]CalcHistoryRow, 0)
+	for rows.Next() {
+		var r CalcHistoryRow
+		if err := rows.Scan(&r.EventID, &r.OccurredAt, &r.Payload); err != nil {
+			return nil, wrapUnavailable(err)
+		}
+		r.OccurredAt = r.OccurredAt.UTC()
+		out = append(out, r)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, wrapUnavailable(err)
+	}
+	return out, nil
+}
+
 // CreateFavorite は同じ Snapshot があれば updated_at を進めて返し、無ければ上限を確かめて挿入する。
 // 端末ごとの直列化は devices 行のロックで行う(ADR-0227 §3)。
 func (s *TiDBStore) CreateFavorite(ctx context.Context, deviceID string, fav Favorite, now time.Time) (Favorite, FavoriteOutcome, error) {

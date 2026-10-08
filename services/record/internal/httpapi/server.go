@@ -30,17 +30,32 @@ const (
 // Server は api.ServerInterface を実装する。record の2操作だけを本実装し、他は stubs.go に置く。
 type Server struct {
 	store store.Store
+	// calcEventsRetention は計算履歴の下限(これより古い行は返さない。ADR-0230 §4)。0 なら下限なし。
+	calcEventsRetention time.Duration
+}
+
+// Option は NewHandler / NewServer の設定。
+type Option func(*Server)
+
+// WithCalcEventsRetention は計算履歴に返す行の保持期間を設定する(cmd/record が設定値を渡す。
+// httpapi に既定の日数を持たせない。ADR-0211 §7)。
+func WithCalcEventsRetention(d time.Duration) Option {
+	return func(s *Server) { s.calcEventsRetention = d }
 }
 
 var _ api.ServerInterface = (*Server)(nil)
 
 // NewServer は Store を使う Server を作る。
-func NewServer(st store.Store) *Server {
-	return &Server{store: st}
+func NewServer(st store.Store, opts ...Option) *Server {
+	s := &Server{store: st}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 // NewHandler は record-svc の HTTP ハンドラ全体を組み立てる(fixture_test.go の申し送りどおり)。
-func NewHandler(st store.Store) http.Handler {
+func NewHandler(st store.Store, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()
@@ -48,7 +63,7 @@ func NewHandler(st store.Store) http.Handler {
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerRecordRoutes(e, NewServer(st))
+	registerRecordRoutes(e, NewServer(st, opts...))
 	e.GET("/healthz", healthzHandler)
 	e.GET("/readyz", readyzHandler(st))
 	return e
@@ -60,6 +75,7 @@ func NewHandler(st store.Store) http.Handler {
 func registerRecordRoutes(e *echo.Echo, srv *Server) {
 	wrapper := api.ServerInterfaceWrapper{Handler: srv}
 	e.GET("/api/record/frequent-opponents", wrapper.ListFrequentOpponents)
+	e.GET("/api/record/calc-history", wrapper.ListCalcHistory)
 	e.DELETE("/api/record/device-data", wrapper.DeleteRecordDeviceData)
 	e.GET("/api/record/favorites", wrapper.ListFavorites)
 	e.POST("/api/record/favorites", wrapper.CreateFavorite)
