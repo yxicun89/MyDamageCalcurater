@@ -60,7 +60,8 @@ func TestRefresherCronJob(t *testing.T) {
 		"schedule":           `(?m)^\s+schedule: "?0 3 \* \* \*"?\s*$`,
 		"timeZone":           `(?m)^\s+timeZone: "?Asia/Tokyo"?\s*$`,
 		"concurrencyPolicy":  `(?m)^\s+concurrencyPolicy: Forbid\s*$`,
-		"image":              `(?m)^\s+image: wishlist/refresher:`, // Chromium 入りの専用イメージ(AC-K4。api のイメージには Chromium を載せない)
+		"startingDeadline":   `(?m)^\s+startingDeadlineSeconds: 43200\s*$`, // 夜間スリープ後に起きたら、その日の分を実行する
+		"image":              `(?m)^\s+image: wishlist/refresher:`,         // Chromium 入りの専用イメージ(AC-K4。api のイメージには Chromium を載せない)
 		"command":            `/wishlist-refresher`,
 		"automount":          `automountServiceAccountToken: false`,
 		"noPrivEsc":          `allowPrivilegeEscalation: false`,

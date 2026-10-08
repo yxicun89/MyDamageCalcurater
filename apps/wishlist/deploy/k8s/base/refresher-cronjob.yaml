@@ -15,7 +15,9 @@ spec:
   schedule: "0 3 * * *"
   timeZone: Asia/Tokyo
   concurrencyPolicy: Forbid
-  startingDeadlineSeconds: 600
+  # Mac が夜間スリープしていると 03:00 に起動できない。12 時間以内に起きれば、その日の分を 1 回だけ実行する
+  # (600 秒では毎回飛ばされていた。2026-10-09 に確認)
+  startingDeadlineSeconds: 43200
   successfulJobsHistoryLimit: 1
   failedJobsHistoryLimit: 3
   jobTemplate:
