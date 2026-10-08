@@ -10,6 +10,10 @@ public enum MockFavoritesScenario: Equatable, Sendable {
     case emptyStore
     /// 2件: id "102"(label「HB特化」・9002-000・新しい方)、id "101"(label なし・9003-000)。
     case list
+    /// 4件(読み込みの確認用。ADR-0513): id "304"(label「読み込める」・9002-000・攻撃上昇・特性/持ち物がマスタにある・最も新しい)、
+    /// "303"(label「一部だけ」・9004-000・特性と持ち物がマスタに無い)、"302"(label「種族なし」・9999-000 = マスタに無い)、
+    /// "301"(label なし・9003-000・特性あり・持ち物なし)。
+    case loadable
     /// すべての操作が transport エラー。
     case failure
     /// すべての操作が 503 `store_unavailable`。
@@ -21,6 +25,7 @@ public enum MockFavoritesScenario: Equatable, Sendable {
     public init(environmentValue: String?) {
         switch environmentValue {
         case "list": self = .list
+        case "loadable": self = .loadable
         case "fail": self = .failure
         case "unavailable": self = .unavailable
         case "full": self = .full
@@ -51,6 +56,22 @@ public actor MockFavoritesService: FavoritesService {
             ]
             nextID = 103
             clock = Self.baseTime + 100
+        case .loadable:
+            let neutral = "test-nature-neutral"
+            stored = [
+                Self.make(
+                    "304", label: "読み込める", key: "9002-000", nature: "test-nature-atk-up", at: Self.baseTime + 300,
+                    sp: StatBlock(hp: 0, atk: 32, def: 0, spa: 0, spd: 2, spe: 32),
+                    ability: "test-ability-beta", item: "test-item-berry"),
+                Self.make(
+                    "303", label: "一部だけ", key: "9004-000", nature: neutral, at: Self.baseTime + 200,
+                    ability: "test-ability-gone", item: "test-item-gone"),
+                Self.make("302", label: "種族なし", key: "9999-000", nature: neutral, at: Self.baseTime + 100),
+                Self.make(
+                    "301", label: nil, key: "9003-000", nature: neutral, at: Self.baseTime, ability: "test-ability-gamma"),
+            ]
+            nextID = 305
+            clock = Self.baseTime + 300
         case .full:
             let count = RequestLimits.maxFavorites
             // id が大きいほど新しい。内容はすべて違う(natureId で区別)。
@@ -72,11 +93,14 @@ public actor MockFavoritesService: FavoritesService {
         self.init(scenario: MockFavoritesScenario(environmentValue: environment[Self.scenarioEnvironmentKey]))
     }
 
-    private static func make(_ id: String, label: String?, key: String, nature: String, at time: TimeInterval) -> Favorite {
+    private static func make(
+        _ id: String, label: String?, key: String, nature: String, at time: TimeInterval,
+        sp: StatBlock = StatBlock(hp: 32, atk: 0, def: 32, spa: 0, spd: 2, spe: 0),
+        ability: String? = nil, item: String? = nil
+    ) -> Favorite {
         Favorite(
             id: id, label: label,
-            individual: Individual(
-                speciesKey: key, natureId: nature, sp: StatBlock(hp: 32, atk: 0, def: 32, spa: 0, spd: 2, spe: 0)),
+            individual: Individual(speciesKey: key, natureId: nature, sp: sp, abilityId: ability, itemId: item),
             createdAt: Date(timeIntervalSince1970: time), updatedAt: Date(timeIntervalSince1970: time))
     }
 
@@ -86,7 +110,7 @@ public actor MockFavoritesService: FavoritesService {
             throw PokeCalcError(code: PokeCalcError.Code.transport, message: "モックの通信エラー")
         case .unavailable:
             throw PokeCalcError(code: "store_unavailable", message: "モックの保存先の障害")
-        case .emptyStore, .list, .full:
+        case .emptyStore, .list, .loadable, .full:
             return
         }
     }

@@ -15,6 +15,9 @@ struct CalcScreenView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var frequentOpponents: FrequentOpponentsViewModel
     @State private var favoritePin: FavoritePinViewModel
+    @State private var favoriteLoadTarget: FavoriteLoadTarget?
+    private let service: any PokeCalcService
+    private let favoritesService: (any FavoritesService)?
     private let backendDescription: String
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
@@ -32,6 +35,8 @@ struct CalcScreenView: View {
         _frequentOpponents = State(
             initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
         _favoritePin = State(initialValue: FavoritePinViewModel(service: favoritesService))
+        self.service = service
+        self.favoritesService = favoritesService
         self.backendDescription = backendDescription
     }
 
@@ -68,6 +73,12 @@ struct CalcScreenView: View {
                 cardsRow
                 presetSegmentedRow
                 teamSourceRow
+                if favoritesService != nil {
+                    FavoriteLoadEntryRows { favoriteLoadTarget = FavoriteLoadTarget(side: $0) }
+                }
+                if let notice = viewModel.favoriteLoadNotice {
+                    FavoriteLoadNoticeView(notice: notice)
+                }
                 moveSelector
                 CalcConditionsSection(viewModel: viewModel)
                 loadingSlot
@@ -80,6 +91,11 @@ struct CalcScreenView: View {
         }
         .background(ColorToken.bgBase.color.ignoresSafeArea())
         .accessibilityIdentifier("calcScreen")
+        .sheet(item: $favoriteLoadTarget) { target in
+            FavoriteLoadSheet(side: target.side, service: favoritesService, resolver: service) { favorite in
+                viewModel.scheduleLatest { await $0.loadFavorite(favorite, side: target.side) }
+            }
+        }
         .task { await viewModel.load() }
         // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
         .onDisappear { viewModel.cancelPendingWork() }

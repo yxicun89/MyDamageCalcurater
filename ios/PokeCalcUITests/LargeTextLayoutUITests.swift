@@ -939,4 +939,60 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(app, identifiers: ["judgeOptionSheet"])
         assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeOption-"])
     }
+
+    // MARK: - お気に入りの読み込み(ADR-0513)
+
+    private func launchFavoriteLoadWithMock(contentSizeCategory: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        app.launchEnvironment["POKECALC_MOCK_FAVORITES"] = "loadable"
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
+        app.launch()
+        openCalcScreen(app)
+        return app
+    }
+
+    /// 前方(swipeUp)に進めて届かなければ、通り越した場合のために下(swipeDown)へ戻る。画面の高さが機種で違うため両方向を持つ。
+    private func scrollCalcUntilHittable(_ app: XCUIApplication, _ target: XCUIElement) {
+        XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "要素が無い: \(target)")
+        for _ in 0..<14 where !(target.exists && target.isHittable) { element(app, "calcScreen").swipeUp() }
+        for _ in 0..<14 where !(target.exists && target.isHittable) { element(app, "calcScreen").swipeDown() }
+        XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)")
+    }
+
+    /// AX5 で、お気に入りの入口2つ・選択シート(注記・行・閉じる)が横にはみ出さず、タップ範囲が 36pt 以上。
+    func testFavoriteLoadEntriesAndSheetNoHorizontalOverflowAtAX5() {
+        let app = launchFavoriteLoadWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let attackerEntry = element(app, "attackerFavoriteSourceButton")
+        scrollCalcUntilHittable(app, attackerEntry)
+        assertNoHorizontalOverflow(app, identifiers: ["attackerFavoriteSourceButton", "defenderFavoriteSourceButton"])
+        XCTAssertGreaterThanOrEqual(attackerEntry.frame.height, 36, "タップ範囲 36pt 以上")
+        attackerEntry.tap()
+        XCTAssertTrue(element(app, "favoriteLoadSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "favoriteLoadSheet", "favoriteLoadNote", "favoriteLoadRow-304", "favoriteLoadRow-303", "favoriteLoadRow-302",
+                "favoriteLoadRow-301", "favoriteLoadClose",
+            ])
+        let close = element(app, "favoriteLoadClose")
+        XCTAssertTrue(close.isHittable, "閉じるが画面内にあり押せる")
+        XCTAssertGreaterThanOrEqual(close.frame.height, 36)
+    }
+
+    /// AX5 で、読み込み後の案内(一部だけ読めた)が横にはみ出さず、画面を壊さない。
+    func testFavoriteLoadNoticeNoHorizontalOverflowAtAX5() {
+        let app = launchFavoriteLoadWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let entry = element(app, "attackerFavoriteSourceButton")
+        scrollCalcUntilHittable(app, entry)
+        entry.tap()
+        let row = element(app, "favoriteLoadRow-303")
+        XCTAssertTrue(row.waitForExistence(timeout: Self.existenceTimeout))
+        for _ in 0..<14 where !row.isHittable { element(app, "favoriteLoadSheet").swipeUp() }
+        for _ in 0..<14 where !row.isHittable { element(app, "favoriteLoadSheet").swipeDown() }
+        row.tap()
+        let notice = element(app, "favoriteLoadNotice")
+        XCTAssertTrue(notice.waitForExistence(timeout: Self.existenceTimeout), "案内が出ない")
+        assertNoHorizontalOverflow(app, identifiers: ["favoriteLoadNotice", "attackerFavoriteSourceButton", "defenderFavoriteSourceButton"])
+    }
 }
