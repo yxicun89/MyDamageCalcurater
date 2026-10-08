@@ -49,3 +49,16 @@ export function collectNames(rows, ownerCol, nameCol, langIDToIdentifier, langua
   }
   return byOwner;
 }
+
+// collectFormEntries は既定でない姿(form_identifier がある行)ごとに、完全名 names(pokemon_name 列)と
+// 姿の名前 formNames(form_name 列。「ヒスイのすがた」など。ADR-0141)を出す。上流の完全名は一部の姿にしか無く、
+// 姿の名前だけがある姿が大半なので、両方を渡し、取り込み側(Go)が「基本種名（姿の名前）」を組み立てる。
+// formNames は必ずオブジェクトで出す(キーが無い古い取得物は取り込みが拒否する)。どちらも言語行が無い姿は出さない。
+export function collectFormEntries(formRows, formNameRows, langIDToIdentifier, languages) {
+  const names = collectNames(formNameRows, 'pokemon_form_id', 'pokemon_name', langIDToIdentifier, languages);
+  const formNames = collectNames(formNameRows, 'pokemon_form_id', 'form_name', langIDToIdentifier, languages);
+  return formRows
+    .filter((f) => f.form_identifier)
+    .map((f) => ({ slug: f.identifier, names: names.get(f.id) ?? {}, formNames: formNames.get(f.id) ?? {} }))
+    .filter((e) => Object.keys(e.names).length > 0 || Object.keys(e.formNames).length > 0);
+}

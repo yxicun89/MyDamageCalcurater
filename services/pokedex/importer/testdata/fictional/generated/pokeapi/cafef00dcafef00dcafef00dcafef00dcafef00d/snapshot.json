@@ -7,8 +7,8 @@
     {"slug": "testleaf", "names": {"ja": "テストリーフ"}}
   ],
   "forms": [
-    {"slug": "testmon-mega", "names": {"ja-Hrkt": "テストメガモン"}},
-    {"slug": "testleaf-rain", "names": {"ja-Hrkt": "テストリーフ雨"}}
+    {"slug": "testmon-mega", "names": {"ja-Hrkt": "テストメガモン"}, "formNames": {}},
+    {"slug": "testleaf-rain", "names": {"ja-Hrkt": "テストリーフ雨"}, "formNames": {}}
   ],
   "moves": [
     {"slug": "test-flame", "names": {"ja-Hrkt": "テストほのおわざ"}},

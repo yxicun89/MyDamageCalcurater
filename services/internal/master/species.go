@@ -57,6 +57,18 @@ func MegaNameJa(baseNameJa, forme string) string {
 	return MegaNamePrefix + baseNameJa + suffix
 }
 
+// FormNameJa は基本種の日本語名と上流の姿の名前(PokeAPI の form_name。「ヒスイのすがた」など)から、
+// 姿の種族の日本語名「基本種名（姿の名前）」を作る(ADR-0141)。括弧は上流の完全名(イワンコ（マイペース）)と同じ全角。
+// どちらかが空(空白だけ)なら "" を返す(生成しない)。この規則は、上流に完全名がある姿で結果が一致するかを
+// 取り込みのたびに確かめる(importer の name-form-rule-mismatch)。
+func FormNameJa(baseNameJa, formName string) string {
+	base, form := strings.TrimSpace(baseNameJa), strings.TrimSpace(formName)
+	if base == "" || form == "" {
+		return ""
+	}
+	return base + "（" + form + "）"
+}
+
 // SpeciesAbilityRow は species_abilities テーブルの行。
 type SpeciesAbilityRow struct {
 	Slot      int
