@@ -121,6 +121,12 @@ func DecodePokeAPISnapshot(raw []byte) (PokeAPISnapshot, error) {
 	if err := checkSource(s.Source, "pokeapi"); err != nil {
 		return PokeAPISnapshot{}, err
 	}
+	// 姿の名前は必須(ADR-0141)。無いまま読むと、姿の日本語名が全件英語名のままになり原因が分かりにくい。
+	for _, f := range s.Forms {
+		if f.FormNames == nil {
+			return PokeAPISnapshot{}, fmt.Errorf("%w: PokeAPI のフォーム %q に formNames が無い(ADR-0141 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, f.Slug)
+		}
+	}
 	return s, nil
 }
 

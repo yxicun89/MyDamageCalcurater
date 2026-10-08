@@ -21,7 +21,7 @@ tags:
     description: ダメージ計算・一括計算・逆算・調整(指数・最小 SP・SP 配分。ADR-0250)
   - name: record
     description: |
-      計算の記録(自動保存された計算イベントから作る「よく使う相手」の集計・お気に入り)と、
+      計算の記録(自動保存された計算イベントの履歴・それから作る「よく使う相手」の集計・お気に入り)と、
       端末単位の全削除(ADR-0209 §5)。すべて `X-Device-Id` の端末の中だけを見る(ADR-0209 §6)。
       端末 ID はボディ・クエリ・パスで受け取らない(送られたら 400 `unknown_field`)。
   - name: team
@@ -718,6 +718,60 @@ paths:
               schema:
                 type: array
                 items: { $ref: '#/components/schemas/FrequentOpponent' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+            (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
+  /api/record/calc-history:
+    get:
+      tags: [record]
+      operationId: listCalcHistory
+      summary: この端末の計算履歴(1件の計算 POST /api/calc)を新しい順に返す
+      description: |
+        `X-Device-Id` の端末で成功した1件の計算(`POST /api/calc`)の履歴を、計算した時刻の新しい順に返す
+        (requirements.md §2「計算結果の自動保存」・ADR-0209 §3「calc_events の目的: 履歴表示」・ADR-0230)。他端末の履歴は混ざらない。
+
+        - 各行の `calc` は計算の入力全体で、`POST /api/calc` の本文 `CalcRequest` と同じ形(既定値を補った形。
+          お気に入りの `Favorite.calc` と同じ正規化。ADR-0228)。行を選んだらそのまま `POST /api/calc` に渡して結果を出し直せる
+          (マスタとは照合していないので、マスタの更新後に `unknown_move` 等で 400 になることはある)。
+        - 一括計算(`POST /api/calc/bulk`)・逆算(`POST /api/calc/reverse`)は**載らない**(計算イベントが入力を持たない。ADR-0212 §7.1)。
+        - 返すのは計算の入力と結果の要約(表示%の幅)だけで、端末 ID・セッション ID・イベントの内部情報は返さない(ADR-0230 §2)。
+        - 保存は非同期(calc-svc → NATS → record-svc)なので、計算した直後の行はまだ載っていないことがある。
+        - 生の履歴は**計算した時刻から90日**(record-svc の保持期間の設定。ADR-0209 §4)で消える。
+          保持期間を過ぎた行は、失効ジョブが消す前でも返さない。
+          端末単位の全削除(`DELETE /api/record/device-data`)の後は、削除より前の行を返さない(`partial` の途中でも)。
+        - 記録が1件も無い端末は `items` が空配列(404 にしない)。
+        - ページング: `nextCursor` が null でなければ続きがある。同じ `limit` で `cursor` にその値を入れて次のページを取る。
+          カーソルは不透明な文字列で、クライアントは中身を解釈しない。ページの間に新しい計算が保存されても、
+          取得済みの行が次のページに重複して出ることも、抜けることもない(時刻とイベントの順序によるカーソル。ADR-0230 §1)。
+        - 個別の行の削除は持たない(端末単位の全削除だけ。ADR-0230 §5)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: limit
+          in: query
+          description: 1ページの上限。範囲外・整数でない値は 400 `invalid_input`
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: cursor
+          in: query
+          description: |
+            前のページの `nextCursor`。省略すると先頭(最新)から。形式が違う・読めない値は 400 `invalid_input`
+            (他端末のカーソルを渡しても、その端末の行は返らない。カーソルは位置だけを持ち、端末を指さない)。
+          schema: { $ref: '#/components/schemas/CalcHistoryCursor' }
+      responses:
+        '200':
+          description: 計算した時刻の新しい順(同時刻は event_id の降順(文字列の比較。一意に決まる順で、ページをまたいでも重複・欠落しない))。記録が無ければ `items` が空配列
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalcHistoryPage' }
         '400':
           $ref: '#/components/responses/Error'
         '503':
@@ -2607,6 +2661,64 @@ components:
           description: |
             最終更新(作成時と、同じ内容の再ピン留め〈`createFavorite` の 200〉で進む)。一覧の並びと失効の判定に使う
             (`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+
+    CalcHistoryCursor:
+      type: string
+      description: |
+        計算履歴のページの位置(ADR-0230 §1)。サーバーが作る不透明な文字列(URL にそのまま入る文字だけ)で、
+        クライアントは中身を解釈せず、受け取った `nextCursor` をそのまま次の要求の `cursor` に渡す。
+      minLength: 1
+      maxLength: 200
+      pattern: '^[A-Za-z0-9_-]+$'
+
+    CalcHistoryResult:
+      type: object
+      description: |
+        計算結果の要約(ADR-0230 §2)。計算した時点の表示%(`CalcResult.minPercent` / `maxPercent` と同じ値・同じ丸め。ADR-0010 §3)。
+        乱数の16段階・確定数は持たない(必要なら `calc` で計算し直す)。
+      required: [minPercent, maxPercent]
+      properties:
+        minPercent: { type: number, format: double, description: 最小ダメージの表示%(切り捨て。CalcResult.minPercent) }
+        maxPercent: { type: number, format: double, description: 最大ダメージの表示%(四捨五入。100 を超えうる。CalcResult.maxPercent) }
+
+    CalcHistoryEntry:
+      type: object
+      description: |
+        計算履歴の1行(1回の `POST /api/calc`。ADR-0230 §2)。返す項目はこの3つだけ(端末 ID・セッション ID・
+        イベントの内部情報は返さない)。行の ID は持たない(個別の削除・取得が無いため。並びの位置は `CalcHistoryPage.nextCursor`)。
+
+        `calc` は計算の入力全体で、`POST /api/calc` の本文 `CalcRequest` そのもの(`$ref` だけで参照し、生成型も `CalcRequest`)。
+        `Favorite.calc` と同じ正規化(既定値を補った形。ADR-0228)で返す: `format` は必ず入り、`attacker` / `defender` は
+        `level`・`ranks`(すべてのキー)・`status` を持ち、`field` は `weather`・`terrain`・`attackerScreens`・`defenderScreens` をすべて、
+        `options` は `critical` を必ず持つ。
+      required: [occurredAt, calc, result]
+      properties:
+        occurredAt:
+          type: string
+          format: date-time
+          description: 計算した時刻(calc-svc の時計。record-svc が受け取った時刻ではない。ADR-0209 §7)
+        calc: { $ref: '#/components/schemas/CalcRequest' }
+        result: { $ref: '#/components/schemas/CalcHistoryResult' }
+
+    CalcHistoryPage:
+      type: object
+      description: 計算履歴の1ページ(ADR-0230 §1)
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          description: 計算した時刻の新しい順。`limit` 件以下(空のこともある)
+          items: { $ref: '#/components/schemas/CalcHistoryEntry' }
+        nextCursor:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: |
+            続きがあれば次のページの位置(`CalcHistoryCursor` と同じ形式)、無ければ null。最後のページは null で、空のページを余計に1回返さない
+            (残りがちょうど `limit` 件のときも、そのページで null になる)。
 
     # --- team-svc(ADR-0209 §5.3 から移した契約 + ADR-0213 の CRUD。P5-4)---------
 

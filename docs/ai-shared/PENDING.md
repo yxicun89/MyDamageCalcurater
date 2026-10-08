@@ -39,7 +39,9 @@
 
 ## 未回答の提案
 
-(いまは無し。新しい提案を `decisions/` に書いたら、ここに 1 行足す)
+| 内容 | 場所 | 起票 | 宛先レーン |
+|---|---|---|---|
+| pokedex-import の CronJob が Mac の夜間スリープで飛ばされる(startingDeadlineSeconds を長く) | `decisions/2026-10-09-wishlist-cronjob-sleep.md` | 2026-10-09 | データ |
 
 ## 直近で回答済み(行は消してよい。2026-10-03 ユーザー「既定案で OK」)
 

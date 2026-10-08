@@ -92,6 +92,12 @@ func (s *Server) ListFrequentOpponents(ctx *echo.Context, params api.ListFrequen
 
 // お気に入り(record-svc の担当。ADR-0227)。
 
+// 計算履歴(record-svc の担当。ADR-0230)。
+
+func (s *Server) ListCalcHistory(ctx *echo.Context, params api.ListCalcHistoryParams) error {
+	return notFoundForOtherServices()
+}
+
 func (s *Server) ListFavorites(ctx *echo.Context, params api.ListFavoritesParams) error {
 	return notFoundForOtherServices()
 }

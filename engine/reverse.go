@@ -222,6 +222,7 @@ type ReverseCandidate struct {
 	// Mismatch は min_SP Σ_観測 min_ロール Distance(0.1% 単位)。
 	Mismatch int
 	// Support は Ranges の各 SP で、各観測を説明できるロールの延べ数。
+	// 多段技では、各観測を説明できる「1回の使用の合計」の種類の数(重複を除く。ADR-0142)。
 	Support int
 
 	// MinPercentTenths / MaxPercentTenths は Ranges 全体での想定ダメージ幅(表示%。0.1% 単位)。

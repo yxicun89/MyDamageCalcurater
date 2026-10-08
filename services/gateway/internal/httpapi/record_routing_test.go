@@ -28,6 +28,9 @@ func TestRecordPathsAreRouted(t *testing.T) {
 		{"お気に入り一覧", http.MethodGet, "/api/record/favorites"},
 		{"お気に入り作成", http.MethodPost, "/api/record/favorites"},
 		{"お気に入り削除", http.MethodDelete, "/api/record/favorites/42"},
+		// 計算履歴(ADR-0230)。同じく gateway の変更は要らない(前方一致の既存ルート。クエリはそのまま上流へ)。
+		{"計算履歴", http.MethodGet, "/api/record/calc-history"},
+		{"計算履歴(続きのページ)", http.MethodGet, "/api/record/calc-history?limit=20&cursor=abc"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

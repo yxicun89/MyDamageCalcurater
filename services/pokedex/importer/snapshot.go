@@ -185,6 +185,9 @@ type PokeAPISnapshot struct {
 type PokeAPIName struct {
 	Slug  string            `json:"slug"`
 	Names map[string]string `json:"names"`
+	// FormNames は forms だけが持つ姿の名前(pokemon_form_names.csv の form_name。「ヒスイのすがた」。ADR-0141)。
+	// Names(完全名 pokemon_name)が空の姿の名前の生成に使う。forms では必須(無い古いスナップショットは拒否)。
+	FormNames map[string]string `json:"formNames,omitempty"`
 }
 
 // NameOverrides は日本語名の人手の上書き(data/local/name_ja_overrides.json。実データなので Git 管理外)。
