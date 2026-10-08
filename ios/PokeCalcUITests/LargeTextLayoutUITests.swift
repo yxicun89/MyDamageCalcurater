@@ -728,6 +728,13 @@ final class LargeTextLayoutUITests: XCTestCase {
         "speedResultMovesAfter",
     ]
 
+    private static let speedBoundaryMaxScrolls = 60
+
+    /// 遅い速度で 1 回送る。既定の `swipeUp` は勢いで 1 画面以上動き、途中の段(同速の段など)を描かずに飛ばすことがある。
+    private func scrollDownSlowly(_ app: XCUIApplication) {
+        app.swipeUp(velocity: .slow)
+    }
+
     private func openSpeedScreen(_ app: XCUIApplication) {
         let openButton = app.buttons["openSpeedScreen"]
         XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
@@ -759,8 +766,39 @@ final class LargeTextLayoutUITests: XCTestCase {
         field.typeText("1")
         XCTAssertTrue(element(app, "speedResultSpeed").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
 
-        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedBoundary", "speedRawValueField"])
-        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedTier-", "speedTierTie-"])
+        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedRawValueField"])
+
+        // 表は遅延描画(ADR-0517)なので、段・境界線は表までスクロールしてから現れる。
+        // 境界線が出るまでスクロールし(上限あり。出なければ失敗)、その途中で描かれた段を毎回検査する。
+        // 段(speedTier-)・同速の段(speedTierTie-)がそれぞれ一度も描かれなければ失敗にする(検証は弱めない)。
+        let tierPrefixes = ["speedTier-", "speedTierTie-"]
+        var seenPrefixes: Set<String> = []
+        let boundary = element(app, "speedBoundary")
+        func checkRenderedTiers() {
+            for prefix in tierPrefixes {
+                let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+                if first.exists {
+                    seenPrefixes.insert(prefix)
+                    assertNoHorizontalOverflowForPrefixes(app, prefixes: [prefix])
+                }
+            }
+        }
+        var boundaryChecked = false
+        func checkBoundary() {
+            guard !boundaryChecked, boundary.exists else { return }
+            boundaryChecked = true
+            assertNoHorizontalOverflow(app, identifiers: ["speedBoundary"])
+        }
+        checkRenderedTiers()
+        checkBoundary()
+        // 境界線・段・同速の段のすべてが一度は描かれるまで送る(トリックルーム中は境界線が表の上側に出る)。
+        for _ in 0..<Self.speedBoundaryMaxScrolls where !(boundaryChecked && seenPrefixes.count == tierPrefixes.count) {
+            scrollDownSlowly(app)
+            checkRenderedTiers()
+            checkBoundary()
+        }
+        XCTAssertTrue(boundaryChecked, "境界線(speedBoundary)が表のどこにも描かれない")
+        XCTAssertEqual(seenPrefixes, Set(tierPrefixes), "スクロール中に描かれなかった段の種類がある: \(Set(tierPrefixes).subtracting(seenPrefixes))")
     }
 
     /// P6-24: AX5 でポケモンのシート(名前の一覧・検索欄)が横にはみ出さない。
@@ -902,5 +940,61 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "judgeOptionSheet").waitForExistence(timeout: Self.existenceTimeout), "選択シートが開かない")
         assertNoHorizontalOverflow(app, identifiers: ["judgeOptionSheet"])
         assertNoHorizontalOverflowForPrefixes(app, prefixes: ["judgeOption-"])
+    }
+
+    // MARK: - お気に入りの読み込み(ADR-0513)
+
+    private func launchFavoriteLoadWithMock(contentSizeCategory: String) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        app.launchEnvironment["POKECALC_MOCK_FAVORITES"] = "loadable"
+        app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
+        app.launch()
+        openCalcScreen(app)
+        return app
+    }
+
+    /// 前方(swipeUp)に進めて届かなければ、通り越した場合のために下(swipeDown)へ戻る。画面の高さが機種で違うため両方向を持つ。
+    private func scrollCalcUntilHittable(_ app: XCUIApplication, _ target: XCUIElement) {
+        XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "要素が無い: \(target)")
+        for _ in 0..<14 where !(target.exists && target.isHittable) { element(app, "calcScreen").swipeUp() }
+        for _ in 0..<14 where !(target.exists && target.isHittable) { element(app, "calcScreen").swipeDown() }
+        XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)")
+    }
+
+    /// AX5 で、お気に入りの入口2つ・選択シート(注記・行・閉じる)が横にはみ出さず、タップ範囲が 36pt 以上。
+    func testFavoriteLoadEntriesAndSheetNoHorizontalOverflowAtAX5() {
+        let app = launchFavoriteLoadWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let attackerEntry = element(app, "attackerFavoriteSourceButton")
+        scrollCalcUntilHittable(app, attackerEntry)
+        assertNoHorizontalOverflow(app, identifiers: ["attackerFavoriteSourceButton", "defenderFavoriteSourceButton"])
+        XCTAssertGreaterThanOrEqual(attackerEntry.frame.height, 36, "タップ範囲 36pt 以上")
+        attackerEntry.tap()
+        XCTAssertTrue(element(app, "favoriteLoadSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
+        assertNoHorizontalOverflow(
+            app,
+            identifiers: [
+                "favoriteLoadSheet", "favoriteLoadNote", "favoriteLoadRow-304", "favoriteLoadRow-303", "favoriteLoadRow-302",
+                "favoriteLoadRow-301", "favoriteLoadClose",
+            ])
+        let close = element(app, "favoriteLoadClose")
+        XCTAssertTrue(close.isHittable, "閉じるが画面内にあり押せる")
+        XCTAssertGreaterThanOrEqual(close.frame.height, 36)
+    }
+
+    /// AX5 で、読み込み後の案内(一部だけ読めた)が横にはみ出さず、画面を壊さない。
+    func testFavoriteLoadNoticeNoHorizontalOverflowAtAX5() {
+        let app = launchFavoriteLoadWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        let entry = element(app, "attackerFavoriteSourceButton")
+        scrollCalcUntilHittable(app, entry)
+        entry.tap()
+        let row = element(app, "favoriteLoadRow-303")
+        XCTAssertTrue(row.waitForExistence(timeout: Self.existenceTimeout))
+        for _ in 0..<14 where !row.isHittable { element(app, "favoriteLoadSheet").swipeUp() }
+        for _ in 0..<14 where !row.isHittable { element(app, "favoriteLoadSheet").swipeDown() }
+        row.tap()
+        let notice = element(app, "favoriteLoadNotice")
+        XCTAssertTrue(notice.waitForExistence(timeout: Self.existenceTimeout), "案内が出ない")
+        assertNoHorizontalOverflow(app, identifiers: ["favoriteLoadNotice", "attackerFavoriteSourceButton", "defenderFavoriteSourceButton"])
     }
 }
