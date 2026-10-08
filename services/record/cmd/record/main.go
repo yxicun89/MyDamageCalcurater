@@ -87,7 +87,7 @@ func runServe(ctx context.Context, getenv func(string) string, stderr io.Writer)
 	sub := events.New(cfg.NATSURL, events.NewHandler(st))
 	defer sub.Shutdown()
 
-	handler := httpapi.NewHandler(st)
+	handler := httpapi.NewHandler(st, httpapi.WithCalcEventsRetention(cfg.CalcEventsRetention))
 	if err := serve(ctx, cfg.Addr, handler); err != nil {
 		fmt.Fprintln(stderr, "record serve:", err)
 		return 1

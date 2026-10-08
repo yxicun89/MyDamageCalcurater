@@ -57,8 +57,8 @@ type recordingStore struct {
 	lastSeenAt  map[string]time.Time
 	saveCalls   int
 	unavailable bool
-	// favoriteCalls はお気に入りのメソッドが呼ばれた回数(イベント経路からは0のまま。ADR-0227 §5)。
-	favoriteCalls int
+	// unexpectedCalls はイベント経路の担当外のメソッド(お気に入り・計算履歴)が呼ばれた回数(イベント経路からは0のまま。ADR-0227 §5)。
+	unexpectedCalls int
 }
 
 func newRecordingStore() *recordingStore {
@@ -117,25 +117,33 @@ func (s *recordingStore) storedCount() int {
 	return n
 }
 
+// 計算履歴(ADR-0230)もイベント経路の担当外。呼ばれたら回数だけ数える。
+func (s *recordingStore) ListCalcHistory(ctx context.Context, deviceID string, q store.CalcHistoryQuery) ([]store.CalcHistoryRow, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.unexpectedCalls++
+	return nil, nil
+}
+
 // お気に入り(ADR-0227)はイベント経路の担当外。呼ばれたら回数だけ数える。
 func (s *recordingStore) ListFavorites(ctx context.Context, deviceID string) ([]store.Favorite, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.favoriteCalls++
+	s.unexpectedCalls++
 	return nil, nil
 }
 
 func (s *recordingStore) CreateFavorite(ctx context.Context, deviceID string, fav store.Favorite, now time.Time) (store.Favorite, store.FavoriteOutcome, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.favoriteCalls++
+	s.unexpectedCalls++
 	return fav, store.FavoriteCreated, nil
 }
 
 func (s *recordingStore) DeleteFavorite(ctx context.Context, deviceID string, favoriteID int64) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.favoriteCalls++
+	s.unexpectedCalls++
 	return nil
 }
 
@@ -153,8 +161,8 @@ func TestEventsDoNotTouchFavorites(t *testing.T) {
 	h.Handle(context.Background(), EventID(8), data) // 墓石
 	st.mu.Lock()
 	defer st.mu.Unlock()
-	if st.favoriteCalls != 0 {
-		t.Errorf("イベントの消費でお気に入りのメソッドが %d 回呼ばれた, want 0", st.favoriteCalls)
+	if st.unexpectedCalls != 0 {
+		t.Errorf("イベントの消費で担当外のメソッド(お気に入り・計算履歴)が %d 回呼ばれた, want 0", st.unexpectedCalls)
 	}
 }
 
