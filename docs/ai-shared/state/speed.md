@@ -51,3 +51,6 @@ Next: F-12(ビジュアルの基盤)が入ったら、素早さ画面の見た�
 Status(追記): 2026-10-04 iOS の素早さ表の遅延描画と自分の位置の表示(F-06 の iOS 分。I-speed-2。ADR-0517)を実装(PR 参照)。
 
 Status(追記): 2026-10-04 main の `make ios-test` が #628 以降赤だった件を直した(AX5 の素早さ表のテスト。原因はテストの操作のみ。実装の欠落なし。ADR-0517 追記)。
+
+Status(追記): 2026-10-09 #108 の素早さ分を完了。speed 本体の loader・起動ログ・`/healthz` の dataVersion は ADR-0138 で実装済みだったため、残りだった `scripts/check-master-version.sh` の speed 判定を、Deployment 注釈から `/healthz`(サービスプロキシ経由。プロセスが読んだ版)に切り替えた(ADR-0809)。取れなければ注釈へ戻らず STALE。balance は注釈のまま(タイプバランスレーン)。
+Next: k3d 上の実地確認(`make check-master-version`)は未実施。balance の healthz 参照への切り替えはタイプバランスレーンで(ADR-0809 §影響)。
