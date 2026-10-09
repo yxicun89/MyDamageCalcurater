@@ -53,6 +53,8 @@ var (
 		"TypeConvert": true, "PowerMods": true, "AuraType": true, "AuraMod": true,
 		"StatMods": true, "SeparateStatMods": true, "CritDamageMod": true,
 		"PreventsCritical": true, "IgnoresOpponentRanks": true, "IgnoresDefenderAbility": true, "Breakable": true,
+		// 技の機構の段階1(ADR-0142)
+		"MaxMultiHit": true, "PreventsOHKO": true,
 		// 特性の段階2(技のフラグ。ADR-0178)
 		"PostAuraPowerMods": true, "FlagTypeConvert": true, "DefImmuneFlags": true,
 		"DefFinalModsByFlag": true, "DefFinalModsByType": true, "NoContact": true,
@@ -675,6 +677,8 @@ func decodeAbilityStage1(fields map[string]json.RawMessage, chart engine.TypeCha
 		{"IgnoresOpponentRanks", &e.IgnoresOpponentRanks},
 		{"IgnoresDefenderAbility", &e.IgnoresDefenderAbility},
 		{"Breakable", &e.Breakable},
+		{"MaxMultiHit", &e.MaxMultiHit},
+		{"PreventsOHKO", &e.PreventsOHKO},
 	} {
 		if v, ok := fields[f.key]; ok {
 			if *f.dst, err = decodeTrueLiteral(v); err != nil {
@@ -872,6 +876,8 @@ func (w *effectWriter) encodeAbilityStage1(e engine.AbilityEffect) {
 		{"IgnoresOpponentRanks", e.IgnoresOpponentRanks},
 		{"IgnoresDefenderAbility", e.IgnoresDefenderAbility},
 		{"Breakable", e.Breakable},
+		{"MaxMultiHit", e.MaxMultiHit},
+		{"PreventsOHKO", e.PreventsOHKO},
 	} {
 		if f.v {
 			w.field(f.key, []byte("true"))

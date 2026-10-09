@@ -114,11 +114,15 @@ const (
 	NullifyAbsorb NullifyKind = "absorb"
 	// NullifyPsychicTerrain はサイコフィールドで、優先度が正の技が接地した防御側に当たらない(ADR-0123)。
 	NullifyPsychicTerrain NullifyKind = "psychic_terrain"
+	// NullifyOHKOImmune は一撃必殺技が効かない理由(無効タイプを持つ・一撃必殺を防ぐ特性。ADR-0142 §4)。
+	NullifyOHKOImmune NullifyKind = "ohko_immune"
 )
 
 // DamageResult はダメージ計算の結果。確定数は P1-5 で付与する。
 type DamageResult struct {
-	Rolls         [16]int // 16段階の乱数ダメージ(非減少)
+	Rolls [16]int // 16段階の乱数ダメージ(非減少)。多段技は1回の使用の同じ段の合計(Σ HitRolls[h][i])
+	// HitRolls は多段技の1発ごとの16段階(長さ = 回数。ADR-0142 §3)。単発の技・ダメージなしは nil。
+	HitRolls      [][16]int
 	Effectiveness float64 // タイプ相性(0, 0.25, 0.5, 1, 2, 4)
 	STAB          bool    // タイプ一致
 	Category      MoveCategory
@@ -212,14 +216,28 @@ func burnModifier(in DamageInput) int {
 
 // attackDefenseStats は使用する攻撃・防御の実効値を返す。
 // 急所時は攻撃側の不利なランク(負)と防御側の有利なランク(正)を無視する。
+//
+// 参照する能力値(ADR-0142 §5): 攻撃は OffensePokemon の個体の OffenseStat(空なら技の分類)の実数値とランク、
+// 防御は DefenseStat(空なら技の分類)の実数値・ランク・天候の補正・防御側の実数値の補正を使う。
+// 攻撃側の実数値の補正(持ち物・特性)は技の分類のキーで引く(oracle と同じ)。防御ランク無視の技は防御側のランクを 0 にする。
 func attackDefenseStats(in DamageInput) (atk, def int) {
-	var atkKey, defKey StatKey
-	if in.Move.Category == CategoryPhysical {
-		atkKey, defKey = StatAtk, StatDef
-	} else {
-		atkKey, defKey = StatSpA, StatSpD
+	// 補正を引くキー(技の分類)と、実数値・ランクを引くキー。
+	atkModKey, defModKey := StatAtk, StatDef
+	if in.Move.Category != CategoryPhysical {
+		atkModKey, defModKey = StatSpA, StatSpD
 	}
-	atkStage := in.Attacker.Ranks.Get(atkKey)
+	atkKey, defKey := atkModKey, defModKey
+	if k := in.Move.Params.OffenseStat; k != "" {
+		atkKey = k
+	}
+	if k := in.Move.Params.DefenseStat; k != "" {
+		defKey = k
+	}
+	offender := in.Attacker
+	if in.Move.Params.OffensePokemon == OffensePokemonDefender {
+		offender = in.Defender
+	}
+	atkStage := offender.Ranks.Get(atkKey)
 	defStage := in.Defender.Ranks.Get(defKey)
 	if in.Critical {
 		if atkStage < 0 {
@@ -236,17 +254,20 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 	if de := in.Defender.Ability.Effect; de != nil && de.IgnoresOpponentRanks {
 		atkStage = 0
 	}
-	atk = applyStatStage(RealStats(in.Attacker).Get(atkKey), atkStage)
+	if slices.Contains(in.Move.Mechanisms, MechanismIgnoreDefenseRanks) {
+		defStage = 0
+	}
+	atk = applyStatStage(RealStats(offender).Get(atkKey), atkStage)
 	def = applyStatStage(RealStats(in.Defender).Get(defKey), defStage)
 	// ランクの直後に単独で丸める攻撃側の実数値補正(はりきり。ADR-0176)。他の補正と連鎖しない。
 	if ae := in.Attacker.Ability.Effect; ae != nil {
-		if m, ok := ae.SeparateStatMods[atkKey]; ok {
+		if m, ok := ae.SeparateStatMods[atkModKey]; ok {
 			atk = pokeRound(atk, m)
 		}
 	}
 	// 天候の防御補正は持ち物より先に独立して丸める。
 	def = pokeRound(def, weatherDefenseMod(in, defKey))
-	atk = max(1, pokeRound(atk, offensiveStatMod(in, atkKey)))
+	atk = max(1, pokeRound(atk, offensiveStatMod(in, atkModKey)))
 	def = max(1, pokeRound(def, defensiveStatMod(in, defKey)))
 	return atk, def
 }
@@ -258,6 +279,7 @@ func attackDefenseStats(in DamageInput) (atk, def int) {
 //     To が相性表に無ければ ErrUnknownType。converted は変換したか(威力の補正に使う)。
 //   - フラグによるタイプ変換(ADR-0178): 攻撃側の FlagTypeConvert の Flag を持つ攻撃技(type_change の機構を
 //     持たないもの)を To タイプにする。威力の補正は無い。To が相性表に無ければ ErrUnknownType。
+//   - 必ず急所: always_crit の攻撃技は急所として計算する(ADR-0142 §5)。急所の無効より前に立てる。
 //   - 急所の無効: 防御側が PreventsCritical なら急所の指定を外す。
 func applyAbilityPreconditions(in DamageInput) (out DamageInput, converted bool, err error) {
 	ae := in.Attacker.Ability.Effect
@@ -279,6 +301,9 @@ func applyAbilityPreconditions(in DamageInput) (out DamageInput, converted bool,
 			return DamageInput{}, false, err
 		}
 		in.Move.Type = ae.FlagTypeConvert.To
+	}
+	if in.Move.Category != CategoryStatus && slices.Contains(in.Move.Mechanisms, MechanismAlwaysCrit) {
+		in.Critical = true
 	}
 	if de := in.Defender.Ability.Effect; de != nil && de.PreventsCritical {
 		in.Critical = false
@@ -314,7 +339,7 @@ func CalcDamage(in DamageInput) (DamageResult, error) {
 		return DamageResult{}, err
 	}
 	if hasKO {
-		res.KO = ComputeKO(res.Rolls, res.DefenderHP)
+		res.KO = res.computeKO()
 	}
 	return res, nil
 }
@@ -338,6 +363,10 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		return DamageResult{}, false, fmt.Errorf("%w: %q", ErrUnknownMoveTarget, in.Move.Target)
 	}
 	if err := validateMoveFlags(in.Move); err != nil {
+		return DamageResult{}, false, err
+	}
+
+	if err := in.Move.ValidateParams(in.TypeChart); err != nil {
 		return DamageResult{}, false, err
 	}
 
@@ -370,6 +399,27 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	// サイコフィールドの先制技は、タイプ・特性による無効の後に判定する(oracle champions.js と同じ順)。
 	if !eff.IsImmune() && res.Nullified == NullifyNone && blockedByPsychicTerrain(in) {
 		res.Nullified = NullifyPsychicTerrain
+	}
+
+	// 一撃必殺・固定ダメージ(ADR-0142 §4)。無効の判定の後、威力 0 の早期 return より前。
+	if in.Move.Category != CategoryStatus && !eff.IsImmune() && res.Nullified == NullifyNone {
+		if o := in.Move.Params.OHKO; o != nil {
+			if (o.ImmuneType != TypeNone && hasType(in.Defender, o.ImmuneType)) ||
+				(in.Defender.Ability.Effect != nil && in.Defender.Ability.Effect.PreventsOHKO) {
+				res.Nullified = NullifyOHKOImmune
+				return res, false, nil
+			}
+			res.Rolls = filledRolls(res.DefenderHP)
+			return res, true, nil
+		}
+		if fd := in.Move.Params.FixedDamage; fd != nil {
+			v := fd.Value
+			if fd.Level {
+				v = in.Attacker.EffectiveLevel()
+			}
+			res.Rolls = filledRolls(v)
+			return res, true, nil
+		}
 	}
 
 	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。
@@ -412,5 +462,24 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		}
 		res.Rolls[i] = d
 	}
+	// 多段技: 1発は同じ計算で、回数ぶん並べる。Rolls は同じ段の合計(ADR-0142 §3)。
+	if hits := multiHitCount(in); hits > 1 {
+		per := res.Rolls
+		res.HitRolls = make([][16]int, hits)
+		for h := range res.HitRolls {
+			res.HitRolls[h] = per
+		}
+		for i := range res.Rolls {
+			res.Rolls[i] = per[i] * hits
+		}
+	}
 	return res, true, nil
+}
+
+// filledRolls は全 16 段が v の結果(固定ダメージ・一撃必殺)。
+func filledRolls(v int) (r [16]int) {
+	for i := range r {
+		r[i] = v
+	}
+	return r
 }

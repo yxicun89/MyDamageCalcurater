@@ -2430,7 +2430,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target, mechanismParams]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -2468,6 +2468,13 @@ components:
             null を不明("")として engine.Move.Target に写す(ダブルで不明の攻撃技には move_target_unknown の印。ADR-0222)。
             古い pokedex-svc(このキーを返さない版)からの取り込みは、キーが無いことを null と同じ「不明」として受け付ける
             (入れ替えの順序に依存させない。ADR-0223 §3)。
+        mechanismParams:
+          allOf: [ { $ref: '#/components/schemas/MasterMoveMechanismParams' } ]
+          description: |
+            技の機構の中身(move_mechanism_params。ADR-0142)。null は中身なし(通常の技・中身を持たない機構だけの技・
+            まだ取り込んでいない行)。キーは省かない(null を返す)。calc-svc は engine.Move.Params に写す
+            (検証は `services/internal/master.Move`)。古い pokedex-svc(このキーを返さない版)からの取り込みは、
+            キーが無いことを null と同じに扱う(ADR-0223 §3 と同じ)。
         flags:
           type: array
           items: { type: string }
@@ -2476,6 +2483,56 @@ components:
             (公開 API の MoveFlag と同じ 9 種)。enum は付けない(mechanisms と同じ理由。検証は calc-svc の `master.Move`)。
             **省略可**: フラグがまだ取り込まれていない(move_flags が空)ときは全技でキーを省く。calc-svc は省略を「不明」として
             engine.Move.FlagsKnown を偽にする(フラグに依存する特性に未対応の印が付く)。古い pokedex-svc も返さない。
+
+    MasterMoveMechanismParams:
+      type: object
+      nullable: true
+      description: |
+        技の機構の中身(ADR-0142 §2・§8)。機構(MasterMove.mechanisms)ごとの値で、対応する機構の無い項目は持たない。
+        enum は付けない(mechanisms と同じ理由。値の検証は受け取った calc-svc の `services/internal/master.Move`)。
+      required: [multiHit, fixedDamage, ohko, offenseStat, offensePokemon, defenseStat]
+      properties:
+        multiHit: { $ref: '#/components/schemas/MasterMoveMultiHit' }
+        fixedDamage: { $ref: '#/components/schemas/MasterMoveFixedDamage' }
+        ohko: { $ref: '#/components/schemas/MasterMoveOHKO' }
+        offenseStat:
+          type: string
+          nullable: true
+          description: alt_offense_stat で攻撃に使う能力値(atk・def・spa・spd・spe)。null は技の分類どおり。
+        offensePokemon:
+          type: string
+          nullable: true
+          description: alt_offense_stat で攻撃に使うポケモン(attacker・defender)。null は攻撃側。
+        defenseStat:
+          type: string
+          nullable: true
+          description: alt_defense_stat で防御に使う能力値(atk・def・spa・spd・spe)。null は技の分類どおり。
+
+    MasterMoveMultiHit:
+      type: object
+      nullable: true
+      description: multi_hit の回数(ADR-0142)。min == max は固定回数。範囲の既定の回数は engine が決める(ADR-0142 §3)。null は中身なし。
+      required: [min, max]
+      properties:
+        min: { type: integer }
+        max: { type: integer }
+
+    MasterMoveFixedDamage:
+      type: object
+      nullable: true
+      description: fixed_damage のダメージ(ADR-0142)。level(攻撃側のレベル)か value(正の整数)のちょうど一方。null は中身なし。
+      required: [level, value]
+      properties:
+        level: { type: boolean }
+        value: { type: integer }
+
+    MasterMoveOHKO:
+      type: object
+      nullable: true
+      description: 一撃必殺(ADR-0142)。immuneType はそのタイプの相手に効かないタイプ ID(null はなし)。null は中身なし。
+      required: [immuneType]
+      properties:
+        immuneType: { type: string, nullable: true }
 
     MasterEffect:
       type: object

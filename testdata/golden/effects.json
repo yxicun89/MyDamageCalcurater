@@ -124,6 +124,8 @@
     "Weak Armor":{"UnsupportedDefender":true},
     "Mold Breaker":{"IgnoresDefenderAbility":true},
     "Unaware":{"IgnoresOpponentRanks":true,"Breakable":true},
+    "Skill Link":{"MaxMultiHit":true},
+    "Sturdy":{"PreventsOHKO":true,"Breakable":true},
     "Merciless":{"UnsupportedAttacker":true},
     "Long Reach":{"NoContact":true}
   }

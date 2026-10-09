@@ -347,7 +347,7 @@ func CalcBulk(in BulkInput) (BulkResult, error) {
 					Result:      results[group[0]][pi][vi],
 				}
 				if hasKO[group[0]][pi][vi] {
-					row.Result.KO = ComputeKO(row.Result.Rolls, row.Result.DefenderHP)
+					row.Result.KO = row.Result.computeKO()
 				}
 				if item != nil {
 					row.ItemID = item.ID

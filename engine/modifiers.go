@@ -87,6 +87,10 @@ type AbilityEffect struct {
 	IgnoresDefenderAbility bool
 	// Breakable は防御側: 相手が IgnoresDefenderAbility を持つとき、この特性の効果(印を含む)は無いものとして扱われる。
 	Breakable bool
+	// MaxMultiHit は攻撃側: 回数に範囲のある多段技が常に最大回数になる(スキルリンク。ADR-0142 §3)。
+	MaxMultiHit bool
+	// PreventsOHKO は防御側: 一撃必殺技が効かない(がんじょう。Breakable ならかたやぶりで無視される。ADR-0142 §4)。
+	PreventsOHKO bool
 
 	// --- 特性の段階2(技のフラグ。ADR-0178)。どれもゼロ値は「その効果なし」 ---
 	// 技のフラグが不明(Move.FlagsKnown が偽)なら、フラグに依存する項目は効かないものとして計算し、印を付ける。

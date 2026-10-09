@@ -211,19 +211,24 @@ func TestCalcBulkDefenderStatusDoesNotChangeDamage(t *testing.T) {
 	}
 }
 
-// 防御ランクを無視する機構の技は、上書きで防御ランクが付いた行にだけ「未対応」の印が付く(ADR-0123 の規則と同じ)。
+// 防御ランクを無視する機構の技は、上書きで防御ランクが付いても印を付けず、ランクを無視した結果になる
+// (ADR-0142 §5・§10。ADR-0123 の「付いた行にだけ印」は段階1で engine が計算するようになり廃止)。
 func TestCalcBulkDefenderOverrideMarksIgnoreDefenseRanks(t *testing.T) {
 	in := bulkInput(CategoryPhysical, TypeWater)
 	in.Move.Mechanisms = []MoveMechanism{MechanismIgnoreDefenseRanks}
-	for _, row := range checkedBulk(t, in).Rows {
+	plain := checkedBulk(t, in)
+	for _, row := range plain.Rows {
 		if len(row.Result.Unsupported) != 0 {
 			t.Fatalf("上書きなしで印が付いた: %+v", row.Result.Unsupported)
 		}
 	}
 	in.DefenderOverride = DefenderOverride{Ranks: Ranks{Def: 1}}
 	for i, row := range overrideBulk(t, in).Rows {
-		if len(row.Result.Unsupported) == 0 {
-			t.Errorf("rows[%d] 防御+1 の上書きで印が付かない", i)
+		if len(row.Result.Unsupported) != 0 {
+			t.Errorf("rows[%d] 防御+1 の上書きで印が付いた: %+v", i, row.Result.Unsupported)
+		}
+		if row.Result.Rolls != plain.Rows[i].Result.Rolls {
+			t.Errorf("rows[%d] 防御ランクを無視していない: %v, want %v", i, row.Result.Rolls, plain.Rows[i].Result.Rolls)
 		}
 	}
 }

@@ -74,6 +74,8 @@ func TestUnsupportedMoveMechanismsAlwaysMarked(t *testing.T) {
 }
 
 // 条件によっては通常の式で正しい機構は、誤るときだけ印を付ける。
+// 必ず急所・防御ランク無視は段階1(ADR-0142 §10)で engine が計算するようになったので、どの入力でも印を付けない
+// (数値の正しさは move_mechanism_stage1_test.go が見る)。
 func TestUnsupportedConditionalMechanisms(t *testing.T) {
 	base := func(cat MoveCategory, m MoveMechanism) DamageInput {
 		in := ctrlInput([]Type{TypeWater}, []Type{TypePsychic}, cat, TypeNormal)
@@ -85,22 +87,22 @@ func TestUnsupportedConditionalMechanisms(t *testing.T) {
 		in     func() DamageInput
 		marked bool
 	}{
-		{"必ず急所 × 急所なしの入力は誤る", func() DamageInput { return base(CategoryPhysical, MechanismAlwaysCrit) }, true},
+		{"必ず急所 × 急所なしの入力も計算するので印なし(ADR-0142)", func() DamageInput { return base(CategoryPhysical, MechanismAlwaysCrit) }, false},
 		{"必ず急所 × 急所ありの入力は正しい", func() DamageInput {
 			in := base(CategoryPhysical, MechanismAlwaysCrit)
 			in.Critical = true
 			return in
 		}, false},
-		{"防御ランク無視 × 防御側の防御ランクあり(物理)", func() DamageInput {
+		{"防御ランク無視 × 防御側の防御ランクあり(物理)も計算するので印なし(ADR-0142)", func() DamageInput {
 			in := base(CategoryPhysical, MechanismIgnoreDefenseRanks)
 			in.Defender.Ranks.Def = 1
 			return in
-		}, true},
-		{"防御ランク無視 × 防御側の特防ランクあり(特殊)", func() DamageInput {
+		}, false},
+		{"防御ランク無視 × 防御側の特防ランクあり(特殊)も計算するので印なし(ADR-0142)", func() DamageInput {
 			in := base(CategorySpecial, MechanismIgnoreDefenseRanks)
 			in.Defender.Ranks.SpD = -2
 			return in
-		}, true},
+		}, false},
 		{"防御ランク無視 × 使わない側のランクだけ(物理で特防)", func() DamageInput {
 			in := base(CategoryPhysical, MechanismIgnoreDefenseRanks)
 			in.Defender.Ranks.SpD = 3

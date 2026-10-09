@@ -21,8 +21,8 @@ type Species struct {
 // Move は技データ(マスタから解決済み)。
 // Effect は追加効果(命中時のランク変化)の定義(マスタから解決)。nil は追加効果なし。
 // CalcDamage は Effect を読まない(ADR-0107 決定2)。
-// Mechanisms は技の機構(ADR-0121)。空は通常の技。CalcDamage は数値の計算には使わず、
-// 通常の式で誤る機構に「未対応」の印を付けるためだけに読む(ADR-0123)。
+// Mechanisms は技の機構(ADR-0121)。空は通常の技。Params に中身がある機構(ADR-0142)は計算し、
+// 中身が無い・計算しない機構は通常の式で計算して「未対応」の印を付ける(ADR-0123)。
 type Move struct {
 	ID         string
 	NameJa     string
@@ -32,6 +32,8 @@ type Move struct {
 	Priority   int
 	Effect     *MoveEffect
 	Mechanisms []MoveMechanism
+	// Params は機構の中身(ADR-0142)。ゼロ値は中身なし(通常の式 + 印)。
+	Params MechanismParams `json:"mechanismParams"` // JSON のキーは WASM の入力(wasmapi)と同じ
 	// Target は技の対象(ADR-0222)。ダブルの全体技の補正に使う。"" は不明(マスタが持つまでの既定。単体扱い)。
 	Target MoveTarget
 	// Flags は技のフラグ(ADR-0178)。FlagsKnown が偽(マスタが持たない・古いキャッシュ)のときは空でなければならず、

@@ -38,6 +38,12 @@ SELECT move_id, mechanism
 FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
+-- name: ListMoveMechanismParams :many
+SELECT move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
+       ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
+FROM move_mechanism_params
+ORDER BY move_id;
+
 -- name: ListMoveMechanismsByMoveIDs :many
 SELECT move_id, mechanism
 FROM move_mechanisms
@@ -171,6 +177,9 @@ DELETE FROM move_effects;
 -- name: DeleteMoveMechanisms :exec
 DELETE FROM move_mechanisms;
 
+-- name: DeleteMoveMechanismParams :exec
+DELETE FROM move_mechanism_params;
+
 -- name: DeleteMoveFlags :exec
 DELETE FROM move_flags;
 
@@ -242,6 +251,12 @@ VALUES (?, ?);
 -- name: InsertMoveMechanism :exec
 INSERT INTO move_mechanisms (move_id, mechanism)
 VALUES (?, ?);
+
+-- name: InsertMoveMechanismParams :exec
+INSERT INTO move_mechanism_params (
+  move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
+  ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertMoveFlag :exec
 INSERT INTO move_flags (move_id, flag)

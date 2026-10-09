@@ -48,6 +48,10 @@ const legacyAbilities = new Set(legacyAbilityNames);
 // 未対応の印(補正を計算できない持ち物・特性。issue #270 案 B / ADR-0123)。印だけの定義はベクタで使わない。
 const unsupportedEffectKeys = ['UnsupportedAttacker','UnsupportedDefender'];
 const isUnsupportedEffect = def => unsupportedEffectKeys.some(k => k in def);
+// 技の機構(多段・一撃必殺)と組み合わさって初めて効く特性の効果(ADR-0142)。通常の技のダメージは変えないので、
+// 上の「ダメージが変わるか」の調査(probe)には現れない。照合は mechanisms.json が担う。
+const mechanismEffectKeys = ['MaxMultiHit','PreventsOHKO'];
+const isMechanismEffect = def => mechanismEffectKeys.some(k => k in def);
 // 技のフラグ(ADR-0178 §1)。oracle の技データ(flags・recoil・hasCrashDamage・secondaries)から engine の語彙(昇順)にする。
 // 本番(Showdown 由来)と同じ規則で、importer の照合(move-value-mismatch/flags)が両者の一致を取り込みのたびに確かめる。
 const sourceMoveFlags = ['bite','bullet','contact','pulse','punch','slicing','sound'];
@@ -673,7 +677,7 @@ for (const kind of ['items','abilities']) {
   const names = Object.keys(effects[kind]).filter(n => !legacy.has(n));
   // 「未対応」の印だけの定義(UnsupportedAttacker / UnsupportedDefender。ADR-0123)は補正の定義に数えない。
   const marked = names.filter(n => isUnsupportedEffect(effects[kind][n]));
-  const defined = new Set(names.filter(n => !isUnsupportedEffect(effects[kind][n])).map(id));
+  const defined = new Set(names.filter(n => !isUnsupportedEffect(effects[kind][n]) && !isMechanismEffect(effects[kind][n])).map(id));
   const changing = new Set(damageChanging[kind]);
   const undefinedChanging = [...changing].filter(x => !defined.has(x)).sort();
   assert.deepEqual(undefinedChanging, Object.keys(unsupportedEffects[kind]).sort(),
@@ -693,6 +697,14 @@ for (const kind of ['items','abilities']) {
   effectCoverage[kind] = {damageChanging:changing.size, defined:defined.size, unsupported:undefinedChanging.length};
 }
 
+// oracle(champions.js)の defenderAbilityIgnored: 攻撃側の特性が Mold Breaker のとき、防御側の特性として無視される名前の一覧。
+function oracleDefenderAbilityIgnored() {
+  const src = readFileSync(new URL('node_modules/@smogon/calc/dist/mechanics/champions.js', import.meta.url), 'utf8');
+  const m = /var defenderAbilityIgnored = defender\.hasAbility\(([^)]*)\);/.exec(src);
+  assert(m, 'champions.js の defenderAbilityIgnored を読めない(oracle の版を確認する)');
+  return [...m[1].matchAll(/'([^']+)'/g)].map(x => x[1]);
+}
+
 // --- Breakable の導出(ADR-0176) ------------------------------------------------------------
 // 防御側でダメージを変える特性のうち、攻撃側に防御側の特性を無視する特性(effects.json の IgnoresDefenderAbility)を
 // 持たせると「防御側の特性なし」と同じダメージになるものが Breakable。手で列挙せず oracle から導き、
@@ -709,7 +721,13 @@ const breakableCoverage = {derived:[], defined:[]};
   }
   breakableCoverage.derived.sort();
   const names = Object.keys(effects.abilities).filter(n => !legacyAbilities.has(n));
-  breakableCoverage.defined = names.filter(n => effects.abilities[n].Breakable).map(id).sort();
+  // 技の機構と組み合わさって効く特性(がんじょう等)は通常のダメージを変えないので上の導出に現れない。
+  // oracle の defenderAbilityIgnored(防御側の特性を無視する攻撃側に効かない特性の一覧)に入っていることで確かめる。
+  const oracleIgnored = oracleDefenderAbilityIgnored();
+  for (const n of names.filter(n => isMechanismEffect(effects.abilities[n]) && effects.abilities[n].Breakable)) {
+    assert(oracleIgnored.includes(n), `${n}: Breakable だが oracle の defenderAbilityIgnored に無い`);
+  }
+  breakableCoverage.defined = names.filter(n => effects.abilities[n].Breakable && !isMechanismEffect(effects.abilities[n])).map(id).sort();
   const derivedDefined = breakableCoverage.derived.filter(x => names.some(n => id(n) === x && !isUnsupportedEffect(effects.abilities[n])));
   assert.deepEqual(breakableCoverage.defined, derivedDefined,
     'abilities: effects.json の Breakable が oracle(防御側の特性を無視する攻撃側に効かない特性)と一致しない');
@@ -1056,6 +1074,222 @@ for(const s of species) {
     statCases.push({id:`stats/${s.id}/${k}/${sp}/${modifier}`,individual:p.input,expected:p.p.rawStats});
   }
 }
+
+// --- 技の機構の段階1(ADR-0142 §9): mechanisms.json -----------------------------------------------
+// 多段・固定ダメージ(レベル)・必ず急所・防御ランク無視・攻撃に使う能力値(ボディプレス・イカサマ)・防御に使う能力値
+// (サイコショック)を、oracle(Champions 世代)の値と照合する。一撃必殺は oracle が扱わない(威力 0 のままダメージ 0)ので
+// 入れない。既存のファイル・プール・乱数列には足さない(新しいファイルだけ。乱数も使わない)。
+// 技の機構と中身は oracle の技データ(Showdown 由来)から導く。技の名前で機構を決めない。ただし oracle が技名で
+// 分岐する固定ダメージ(レベル)だけは、oracle のデータに無いので技名の一覧で与える。
+const levelDamageMoves = ['Seismic Toss','Night Shade'];
+function mechanismsOf(moveName) {
+  const data = genC.moves.get(id(moveName));
+  assert(data, `機構の調査用の技 ${moveName} が Champions 世代に無い`);
+  const mechanisms = [];
+  const params = {};
+  if (data.multihit) {
+    mechanisms.push('multi_hit');
+    params.MultiHit = Array.isArray(data.multihit) ? {Min:data.multihit[0],Max:data.multihit[1]} : {Min:data.multihit,Max:data.multihit};
+  }
+  if (levelDamageMoves.includes(moveName)) {
+    mechanisms.push('fixed_damage');
+    params.FixedDamage = {Level:true,Value:0};
+  }
+  if (data.willCrit) mechanisms.push('always_crit');
+  if (data.ignoreDefensive) mechanisms.push('ignore_defense_ranks');
+  if (data.overrideOffensiveStat || data.overrideOffensivePokemon) {
+    mechanisms.push('alt_offense_stat');
+    if (data.overrideOffensiveStat) params.OffenseStat = data.overrideOffensiveStat;
+    if (data.overrideOffensivePokemon) {
+      assert.equal(data.overrideOffensivePokemon, 'target', `${moveName}: 想定外の overrideOffensivePokemon`);
+      params.OffensePokemon = 'defender';
+    }
+  }
+  if (data.overrideDefensiveStat) {
+    mechanisms.push('alt_defense_stat');
+    params.DefenseStat = data.overrideDefensiveStat;
+  }
+  assert(mechanisms.length > 0, `${moveName}: 段階1の機構を持たない`);
+  return {mechanisms: mechanisms.sort(), params};
+}
+// 多段技の確定数(ADR-0142 §3): 1回の使用 = 発ごとの16段階の独立な乱数。n = ceil(HP / Σ最大)、n 回の使用の合計が HP 以上になる確率。
+function koUses(hitRolls, hp) {
+  const max = hitRolls.reduce((s, r) => s + r[15], 0), min = hitRolls.reduce((s, r) => s + r[0], 0);
+  if (!max) return {Hits:0,Guaranteed:false,ChancePercent:0};
+  const n = Math.ceil(hp/max);
+  if (min*n >= hp) return {Hits:n,Guaranteed:true,ChancePercent:0};
+  const budget = n*max-hp;
+  let p = new Float64Array(budget+1); p[0] = 1;
+  for (let use = 0; use < n; use++) for (const rolls of hitRolls) {
+    const hmax = rolls[15];
+    const next = new Float64Array(budget+1);
+    for (let short = 0; short <= budget; short++) if (p[short]) {
+      for (const roll of rolls) if (short+hmax-roll <= budget) next[short+hmax-roll] += p[short]/16;
+    }
+    p = next;
+  }
+  return {Hits:n,Guaranteed:false,ChancePercent:p.reduce((a,b) => a+b,0)*100};
+}
+// options は vector と同じ(a / d / critical / screen / weather / terrain)。攻撃側の特性は oracle の Move にも渡す
+// (スキルリンクは Move の構築時に回数を決める。calculate() は決め直さない)。
+function mechVector(label, a, d, moveName, options = {}) {
+  const attack = individual(genC, a, options.a), defend = individual(genC, d, options.d);
+  const weather = options.weather || 'none', terrain = options.terrain || 'none', screen = options.screen;
+  const {mechanisms, params} = mechanismsOf(moveName);
+  const m = new Move(genC, moveName, {isCrit:!!options.critical, ability:attack.p.ability || undefined});
+  const f = new Field({gameType:'Singles',weather:weatherNames[weather],terrain:terrainNames[terrain],
+    defenderSide:{isReflect:screen==='Reflect',isLightScreen:screen==='LightScreen',isAuroraVeil:screen==='AuroraVeil'}});
+  const result = calculate(genC, attack.p, defend.p, m, f);
+  const matrix = typeof result.damage === 'number' ? [Array(16).fill(result.damage)]
+    : Array.isArray(result.damage[0]) ? result.damage : [result.damage];
+  assert(matrix.every(r => r.length === 16 && r.every(Number.isInteger)));
+  assert.equal(matrix.length, m.hits || 1, `${label}: 回数が oracle の Move と違う`);
+  const rolls = matrix[0].map((_, i) => matrix.reduce((s, r) => s + r[i], 0));
+  const hp = defend.p.rawStats.hp;
+  const move = {ID:id(moveName),Type:m.type.toLowerCase(),Category:m.category.toLowerCase(),Power:m.bp,Priority:m.priority,Mechanisms:mechanisms};
+  if (Object.keys(params).length) move.mechanismParams = params;
+  const expected = {rolls,attackerStats:attack.p.rawStats,defenderStats:defend.p.rawStats,ko:koUses(matrix,hp)};
+  if (matrix.length > 1) expected.hitRolls = matrix;
+  return {id:label, oracle:{attacker:a,defender:d,move:moveName,ability:attack.p.ability || ''}, input:{Format:'single',Attacker:attack.input,Defender:defend.input,
+    Move:move,
+    Field:{Weather:weather,Terrain:terrain,DefenderScreens:{Reflect:screen==='Reflect',LightScreen:screen==='LightScreen',AuroraVeil:screen==='AuroraVeil'}},Critical:!!options.critical},
+    expected};
+}
+const mechanismsFixed = [];
+const addMech = (label, a, d, moveName, options) => {
+  const v = mechVector(label, a, d, moveName, options);
+  mechanismsFixed.push(v);
+  return v;
+};
+// 比べる条件との oracle のダメージが変わる/変わらないを確かめてから足す(定義の取り違えで効かないケースだけを照合しない)。
+function mechPair(label, a, d, moveName, options, baseOptions, expectChange) {
+  const v = addMech(label, a, d, moveName, options);
+  const base = mechVector(`${label}/base`, a, d, moveName, baseOptions);
+  assert(v.expected.rolls.some(r => r > 0), `${label}: ダメージが0`);
+  assert.equal(JSON.stringify(v.expected.rolls) !== JSON.stringify(base.expected.rolls), expectChange,
+    `${label}: 比べた条件と oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
+}
+{
+  // 多段: 固定回数(2回)・範囲 [2,5] の既定(最小+1=3)・スキルリンク(最大 5)・10 回。
+  const multiPairs = [['Snorlax','Corviknight'],['Garchomp','Snorlax'],['Tyranitar','Metagross']];
+  const multiVariants = [['', {}], ['crit', {critical:true}], ['reflect', {screen:'Reflect'}], ['light-screen', {screen:'LightScreen'}],
+    ['burn', {a:{burn:true}}], ['life-orb', {a:{item:'Life Orb'}}], ['sun', {weather:'sun'}], ['ranks', {a:{ranks:{atk:2,spa:2}}, d:{ranks:{def:-1,spd:-1}}}]];
+  const addAll = (label, moveName, pairs, variants, extra = {}) => {
+    for (const [a, d] of pairs) for (const [vl, o] of variants) {
+      addMech(`${label}/${a}/${d}/${vl || 'plain'}`, a, d, moveName, {...o, a:{...(o.a || {}),...(extra.a || {})}, d:{...(o.d || {}),...(extra.d || {})}});
+    }
+  };
+  addAll('multi-hit-fixed', 'Dragon Darts', multiPairs, multiVariants);
+  addAll('multi-hit-fixed', 'Twin Beam', multiPairs.slice(0, 2), multiVariants.slice(0, 3));
+  addAll('multi-hit-range', 'Bullet Seed', multiPairs, multiVariants);
+  addAll('multi-hit-range', 'Water Shuriken', multiPairs.slice(0, 2), multiVariants.slice(0, 3));
+  addAll('multi-hit-skill-link', 'Bullet Seed', multiPairs, multiVariants, {a:{ability:'Skill Link'}});
+  addAll('multi-hit-skill-link', 'Icicle Spear', multiPairs.slice(0, 2), multiVariants.slice(0, 3), {a:{ability:'Skill Link'}});
+  // スキルリンクは固定回数の技を変えない。
+  addAll('multi-hit-skill-link-fixed', 'Dragon Darts', multiPairs.slice(0, 2), multiVariants.slice(0, 2), {a:{ability:'Skill Link'}});
+  addAll('multi-hit-ten', 'Population Bomb', multiPairs, multiVariants.slice(0, 4));
+}
+{
+  // 必ず急所: 急所の指定なしで急所 / 急所に当たらない特性 / 急所の無効を無視する特性 / 急所のときに無視されるランク。
+  const critMoves = ['Frost Breath','Storm Throw'];
+  const pairs = [['Typhlosion','Snorlax'],['Scizor','Garchomp']];
+  for (const mv of critMoves) for (const [a, d] of pairs) {
+    addMech(`always-crit/${a}/${d}/${id(mv)}`, a, d, mv, {});
+    addMech(`always-crit/${a}/${d}/${id(mv)}/ranks`, a, d, mv, {a:{ranks:{atk:-2,spa:-2}}, d:{ranks:{def:2,spd:2}}});
+    addMech(`always-crit/${a}/${d}/${id(mv)}/reflect`, a, d, mv, {screen:'Reflect'});
+    addMech(`always-crit-shell-armor/${a}/${d}/${id(mv)}`, a, d, mv, {d:{ability:'Shell Armor'}});
+    addMech(`always-crit-shell-armor/${a}/${d}/${id(mv)}/mold-breaker`, a, d, mv, {a:{ability:ignorer}, d:{ability:'Shell Armor'}});
+    addMech(`always-crit/${a}/${d}/${id(mv)}/sniper`, a, d, mv, {a:{ability:'Sniper'}});
+  }
+  // 防御ランク無視: 防御側の +6 / -6(物理)。
+  for (const mv of ['Sacred Sword','Darkest Lariat']) for (const [a, d] of [['Garchomp','Snorlax'],['Scizor','Tyranitar']]) {
+    for (const rank of [6, -6, 2, 0]) addMech(`ignore-defense-ranks/${a}/${d}/${id(mv)}/def${rank}`, a, d, mv, {d:{ranks:{def:rank}}});
+    addMech(`ignore-defense-ranks/${a}/${d}/${id(mv)}/crit`, a, d, mv, {critical:true, d:{ranks:{def:6}}});
+    addMech(`ignore-defense-ranks/${a}/${d}/${id(mv)}/reflect`, a, d, mv, {screen:'Reflect', d:{ranks:{def:-3}}});
+    addMech(`ignore-defense-ranks/${a}/${d}/${id(mv)}/unaware`, a, d, mv, {d:{ability:'Unaware', ranks:{def:3}}});
+  }
+}
+{
+  // 攻撃に使う能力値: ボディプレス(攻撃側の防御とそのランク)・イカサマ(防御側の攻撃とそのランク)。
+  const bodyPress = [['Corviknight','Snorlax'],['Toxapex','Garchomp']];
+  for (const [a, d] of bodyPress) {
+    const base = {a:{sp:{def:20,atk:4}}};
+    addMech(`alt-offense-def/${a}/${d}/plain`, a, d, 'Body Press', base);
+    addMech(`alt-offense-def/${a}/${d}/def-plus`, a, d, 'Body Press', {a:{sp:{def:20}, ranks:{def:2,atk:-3}}});
+    addMech(`alt-offense-def/${a}/${d}/def-minus-crit`, a, d, 'Body Press', {critical:true, a:{sp:{def:20}, ranks:{def:-2,atk:4}}});
+    addMech(`alt-offense-def/${a}/${d}/def-minus`, a, d, 'Body Press', {a:{sp:{def:20}, ranks:{def:-2}}});
+    addMech(`alt-offense-def/${a}/${d}/burn`, a, d, 'Body Press', {a:{sp:{def:20}, burn:true}});
+    addMech(`alt-offense-def/${a}/${d}/huge-power`, a, d, 'Body Press', {a:{sp:{def:20}, ability:'Huge Power'}});
+    addMech(`alt-offense-def/${a}/${d}/muscle-band`, a, d, 'Body Press', {a:{sp:{def:20}, item:'Muscle Band'}});
+    addMech(`alt-offense-def/${a}/${d}/unaware`, a, d, 'Body Press', {a:{sp:{def:20}, ranks:{def:2}}, d:{ability:'Unaware'}});
+    addMech(`alt-offense-def/${a}/${d}/reflect`, a, d, 'Body Press', {screen:'Reflect', a:{sp:{def:20}}});
+  }
+  for (const [a, d] of [['Gengar','Snorlax'],['Scizor','Tyranitar']]) {
+    const tgt = {d:{sp:{atk:32}, nature:'Adamant'}};
+    addMech(`alt-offense-target/${a}/${d}/plain`, a, d, 'Foul Play', tgt);
+    addMech(`alt-offense-target/${a}/${d}/target-plus`, a, d, 'Foul Play', {d:{...tgt.d, ranks:{atk:2}}, a:{ranks:{atk:-3}}});
+    addMech(`alt-offense-target/${a}/${d}/target-minus-crit`, a, d, 'Foul Play', {critical:true, d:{...tgt.d, ranks:{atk:-2}}});
+    addMech(`alt-offense-target/${a}/${d}/attacker-rank`, a, d, 'Foul Play', {...tgt, a:{ranks:{atk:6}}});
+    addMech(`alt-offense-target/${a}/${d}/huge-power`, a, d, 'Foul Play', {...tgt, a:{ability:'Huge Power'}});
+    addMech(`alt-offense-target/${a}/${d}/unaware`, a, d, 'Foul Play', {d:{...tgt.d, ranks:{atk:3}, ability:'Unaware'}});
+    addMech(`alt-offense-target/${a}/${d}/burn`, a, d, 'Foul Play', {...tgt, a:{burn:true}});
+  }
+}
+{
+  // 防御に使う能力値: サイコショック(特殊技が防御を参照)。壁・やけどは分類(特殊)で決まる。
+  const shockPairs = [['Gengar','Snorlax'],['Pikachu','Tyranitar'],['Gengar','Abomasnow']];
+  for (const [a, d] of shockPairs) {
+    const sp = {d:{sp:{def:20}, ranks:{def:1,spd:-2}}};
+    addMech(`alt-defense-def/${a}/${d}/plain`, a, d, 'Psyshock', sp);
+    addMech(`alt-defense-def/${a}/${d}/light-screen`, a, d, 'Psyshock', {...sp, screen:'LightScreen'});
+    addMech(`alt-defense-def/${a}/${d}/reflect`, a, d, 'Psyshock', {...sp, screen:'Reflect'});
+    addMech(`alt-defense-def/${a}/${d}/aurora-veil`, a, d, 'Psyshock', {...sp, screen:'AuroraVeil'});
+    addMech(`alt-defense-def/${a}/${d}/crit`, a, d, 'Psyshock', {...sp, critical:true});
+    addMech(`alt-defense-def/${a}/${d}/sand`, a, d, 'Psyshock', {...sp, weather:'sand'});
+    addMech(`alt-defense-def/${a}/${d}/snow`, a, d, 'Psyshock', {...sp, weather:'snow'});
+    addMech(`alt-defense-def/${a}/${d}/fur-coat`, a, d, 'Psyshock', {d:{...sp.d, ability:'Fur Coat'}});
+    addMech(`alt-defense-def/${a}/${d}/unaware`, a, d, 'Psyshock', {a:{ranks:{spa:2}}, d:{...sp.d, ability:'Unaware'}});
+  }
+  // 氷タイプの防御側 × ゆきは防御が上がる(分類でなく参照する能力値で決まる)。
+  assert(species.some(s => s.name === 'Abomasnow' && s.types.includes('Ice')), 'サイコショックのゆきの対照に使う氷タイプが居ない');
+}
+{
+  // 固定ダメージ(レベル): Lv50 のダメージ。一致・相性・急所・やけど・壁・持ち物・ランクで変わらない。タイプ相性で無効。
+  for (const mv of levelDamageMoves) {
+    const [a, d, im] = mv === 'Seismic Toss' ? ['Snorlax','Garchomp','Gengar'] : ['Gengar','Snorlax','Snorlax'];
+    addMech(`fixed-damage-level/${a}/${d}/${id(mv)}/plain`, a, d, mv, {});
+    addMech(`fixed-damage-level/${a}/${d}/${id(mv)}/crit-burn-reflect`, a, d, mv, {critical:true, screen:'Reflect', a:{burn:true, item:'Life Orb', ranks:{atk:6,spa:6}}, d:{ranks:{def:-6,spd:-6}}});
+    addMech(`fixed-damage-level/${a}/${d}/${id(mv)}/stab-weather`, a, d, mv, {weather:'sun'});
+    addMech(`fixed-damage-level/${a}/${d}/${id(mv)}/tough`, a, d, mv, {d:{sp:{hp:32,def:17,spd:17}}});
+    // タイプ相性の無効(かくとう → ゴースト・ゴースト → ノーマル)。
+    const imm = mv === 'Seismic Toss' ? 'Gengar' : 'Snorlax';
+    const v = addMech(`fixed-damage-immune/${a}/${imm}/${id(mv)}`, a, imm, mv, {});
+    assert(v.expected.rolls.every(r => r === 0), `fixed-damage-immune/${mv}: oracle が無効になっていない`);
+    // 特性による無効・吸収は技のタイプで決まる(かくとう技を無効にする特性は Champions に無いのでゴースト技で確かめる)。
+  }
+}
+// --- 機構と組み合わさる特性の効果(ADR-0142 §3・§4): effects.json の定義から apply / control / breakable を作る ----------------
+for (const name of Object.keys(effects.abilities).sort()) {
+  const def = effects.abilities[name];
+  if (!isMechanismEffect(def)) continue;
+  const slug = `effects/${id(name)}`;
+  if (def.MaxMultiHit) {
+    // 範囲のある多段技で最大回数になる。固定回数の技は変えない。
+    mechPair(`${slug}/range/apply`, 'Snorlax', 'Corviknight', 'Bullet Seed', {a:{ability:name}}, {}, true);
+    mechPair(`${slug}/fixed/control`, 'Snorlax', 'Corviknight', 'Dragon Darts', {a:{ability:name}}, {}, false);
+    // 防御側が持っても効かない。
+    mechPair(`${slug}/defender/control`, 'Snorlax', 'Corviknight', 'Bullet Seed', {d:{ability:name}}, {}, false);
+  }
+  if (def.PreventsOHKO) {
+    // 一撃必殺は oracle が扱わない。ここでは通常の多段技のダメージを変えないこと(対照)と、Breakable の照合だけを置く。
+    mechPair(`${slug}/control`, 'Snorlax', 'Corviknight', 'Bullet Seed', {d:{ability:name}}, {}, false);
+    if (def.Breakable) {
+      const withIgnorer = {a:{ability:ignorer}, d:{ability:name}};
+      mechPair(`${slug}/breakable`, 'Snorlax', 'Corviknight', 'Bullet Seed', withIgnorer, {a:{ability:ignorer}}, false);
+    }
+  }
+}
+
 mkdirSync(out,{recursive:true});
 const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
@@ -1063,6 +1297,7 @@ save('fixed.json',championsFixed);save('random.jsonl.gz',randomCases,true);save(
 save('legacy-effects.jsonl.gz',legacyEffectsCases,true);
 save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCases,true);
 save('tera.json',teraFixed);save('tera-random.jsonl.gz',teraRandomCases,true);
+save('mechanisms.json',mechanismsFixed);
 
 // ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
 // 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
@@ -1098,7 +1333,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -1117,7 +1352,7 @@ const metadata={
   exclusions:[
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
-    {scope:'moves',reason:'Only the listed fixed-power single-hit moves; excludes variable/fixed damage, multi-hit, forced criticals, alternate attack/defense stats, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
+    {scope:'moves',reason:'The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Excluded everywhere: OHKO (the oracle does not compute it), variable power, other fixed damage, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect (issue #270 / ADR-0120) or a stage-1 ability field (TypeConvert, PowerMods, AuraType/AuraMod, StatMods, SeparateStatMods, CritDamageMod, PreventsCritical, IgnoresOpponentRanks, IgnoresDefenderAbility; ADR-0176) has an apply/control pair (effects/<id>/...), and every Breakable definition has a breakable vector showing that an IgnoresDefenderAbility attacker (Mold Breaker) gets the same damage as against no ability (ADR-0176). The coverage survey also uses both-side +/-2 ranks, a poisoned defender and attacker-only probes against a defender ability (Thick Fat, Fur Coat, Fluffy, Multiscale, Levitate, critical hit x Shell Armor), so abilities that change damage only in combination (Mold Breaker, Unaware, Merciless, Long Reach) must be either defined or marked; Breakable is checked against the oracle in both directions, not listed by hand (ADR-0176). Champions items/abilities that change damage but are not representable by the effect schema (move-flag and HP-dependent abilities are later stages) are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors; unsupported-mark definitions carry no Breakable in stage 1, so Mold Breaker against a marked defender ability keeps the mark (ADR-0176)'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
     {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},

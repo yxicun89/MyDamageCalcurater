@@ -103,6 +103,14 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 		}
 		ids = append(ids, c.ID)
 	}
+	// 技の機構と組み合わさって効く特性(スキルリンク等。ADR-0142)は mechanisms.json で照合する。
+	for _, c := range readGoldenMechanismCases(t) {
+		items, abilities := caseEffects(goldenCase{Input: c.Input})
+		for _, n := range append(items, abilities...) {
+			used[n]++
+		}
+		ids = append(ids, c.ID)
+	}
 	hasID := func(prefix, suffix string) bool {
 		for _, id := range ids {
 			if strings.HasPrefix(id, prefix) && strings.HasSuffix(id, suffix) {
@@ -128,7 +136,7 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 			}
 			checked++
 			if used[name] == 0 {
-				t.Errorf("%s: fixed.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
+				t.Errorf("%s: fixed.json・mechanisms.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
 				continue
 			}
 			if !hasTypedEffect(group[name]) {

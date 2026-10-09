@@ -49,6 +49,7 @@ type Querier struct {
 	Moves               []store.Move
 	MoveEffects         []store.MoveEffect
 	MoveMechanisms      []store.MoveMechanism
+	MoveMechanismParams []store.MoveMechanismParam
 	MoveFlags           []store.MoveFlag // 空 = まだ取り込んでいない(ADR-0178 §3)
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
@@ -343,6 +344,13 @@ func (q *Querier) ListMoveMechanisms(context.Context) ([]store.MoveMechanism, er
 		return nil, err
 	}
 	return append([]store.MoveMechanism(nil), q.MoveMechanisms...), nil
+}
+
+func (q *Querier) ListMoveMechanismParams(context.Context) ([]store.MoveMechanismParam, error) {
+	if err := q.record("ListMoveMechanismParams", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveMechanismParam(nil), q.MoveMechanismParams...), nil
 }
 
 func (q *Querier) ListMoveMechanismsByMoveIDs(_ context.Context, ids []string) ([]store.MoveMechanism, error) {

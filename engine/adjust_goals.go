@@ -259,7 +259,8 @@ func (s *goalsSearch) unsupportedMarks() ([]UnsupportedMark, error) {
 		if err != nil {
 			return nil, err
 		}
-		for _, m := range res.Unsupported {
+		// 参照する能力値が技と合わない機構(段階2)の印は、探索する能力が違うので結果に残す(ADR-0142 §6)。
+		for _, m := range append(slices.Clone(res.Unsupported), altStatMarks(g.Move)...) {
 			if !slices.Contains(out, m) {
 				out = append(out, m)
 			}
@@ -307,7 +308,7 @@ func (s *goalsSearch) damageEval(i int, self Individual, cacheKey [2]int) (goalE
 	if g.Kind == SPGoalSurvive {
 		chance = certainPercent - chance
 	}
-	count := goalEventCount(chance, len(res.Rolls), g.Hits)
+	count := goalEventCount(chance, goalDraws(res, g.Hits))
 	threshold := s.thresholds[i]
 	var met bool
 	switch {
@@ -316,7 +317,7 @@ func (s *goalsSearch) damageEval(i int, self Individual, cacheKey [2]int) (goalE
 	case threshold == certainPercent:
 		met = meetsSurviveThreshold(res, g.Hits, chance, threshold)
 	default:
-		met = float64(count)*certainPercent/float64(goalEventTotal(len(res.Rolls), g.Hits)) >= threshold
+		met = float64(count)*certainPercent/float64(goalEventTotal(goalDraws(res, g.Hits))) >= threshold
 	}
 	e := goalEval{met: met, progress: count, outcome: SPGoalOutcome{Kind: g.Kind, Met: met, ChancePercent: chance}}
 	if met {
@@ -325,11 +326,12 @@ func (s *goalsSearch) damageEval(i int, self Individual, cacheKey [2]int) (goalE
 	return e, nil
 }
 
-// goalEventTotal は事象の全組数(ロール数^hits)。
-func goalEventTotal(rolls, hits int) int64 {
+// goalEventTotal は事象の全組数(16^draws)。多段技で乱数の個数が MaxAdjustHits を超えるときは、
+// int64 に収めるため 16^MaxAdjustHits を全組数の尺度にする(確率を丸めた組数で比べるので、尺度が粗くなるだけ)。
+func goalEventTotal(draws int) int64 {
 	total := int64(1)
-	for range hits {
-		total *= int64(rolls)
+	for range min(draws, MaxAdjustHits) {
+		total *= 16
 	}
 	return total
 }
