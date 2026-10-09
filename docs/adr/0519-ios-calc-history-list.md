@@ -60,3 +60,10 @@ ADR-0230 の `GET /api/record/calc-history`(`listCalcHistory`)が main に入っ
   `CalcViewModel.loadHistoryCalc`、`FavoritesScreenView` の節、`CalcScreenView(restoring:)`。
 - テスト: `CalcHistoryViewModelTests`・`CalcViewModelHistoryLoadTests`・`APICalcHistoryServiceTests`・`MockCalcHistoryServiceTests`、
   XCUITest `CalcHistoryUITests`、`FavoritesScreenUITests` の変更(ADR-0501「計算履歴の一覧の接続」に前後を記録)。
+
+## 追記: F-01(ADR-0518)との統合
+
+F-01 で計算画面は変化技を計算しなくなった(変化技を選ぶと要求を送らず結果を出さない)。履歴の行の技が変化技のときも同じ扱いにする:
+入力(技を含む)は履歴どおりに戻し、計算の要求は送らず、古い結果も残さない。
+`CalcViewModelHistoryLoadTests.testMoveNotInLearnsetIsStillRestored` は「要求に変化技が載る」確認から、
+「技は履歴どおりに戻る・要求は増えない・結果は空・エラーなし」の確認に変えた(仕様変更に必然。守りたい「黙って別の技に置き換えない」は残している)。

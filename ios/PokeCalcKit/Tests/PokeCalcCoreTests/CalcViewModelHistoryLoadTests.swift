@@ -134,10 +134,14 @@ final class CalcViewModelHistoryLoadTests: XCTestCase {
         let stub = makeStub()
         let viewModel = await loadedViewModel(stub)
         // gamma の learnset は physical・special。変化技は覚えないが、履歴の技は黙って別の技に置き換えない。
+        // 計算画面は変化技を計算しない(F-01。ADR-0518 §1・§3)ので、入力は履歴どおりに戻し、要求は送らず結果は出さない。
+        let before = await bulkCount(stub)
         await viewModel.loadHistoryCalc(calc(move: StubMaster.statusMove.id))
         XCTAssertEqual(viewModel.moveId, StubMaster.statusMove.id)
-        let request = try await lastRequest(stub)
-        XCTAssertEqual(request.moveId, StubMaster.statusMove.id)
+        let after = await bulkCount(stub)
+        XCTAssertEqual(after, before, "変化技は計算の要求を送らない")
+        XCTAssertTrue(viewModel.rows.isEmpty, "古い結果を残さない")
+        XCTAssertNil(viewModel.error)
     }
 
     // MARK: - 失敗(計算の失敗として表示し、入力は書き換えない)
