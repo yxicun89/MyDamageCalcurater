@@ -54,6 +54,7 @@ function fakeRecord(favorites: Favorite[]) {
       return Promise.resolve<RecordResult<Favorite[]>>({ ok: true, value: favorites });
     },
     deleteFavorite,
+    listCalcHistory: () => new Promise(() => undefined),
   };
   return { record, deleteFavorite, listCount: () => listCount };
 }

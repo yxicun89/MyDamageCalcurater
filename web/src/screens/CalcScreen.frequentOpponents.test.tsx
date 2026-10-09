@@ -58,6 +58,7 @@ function fakeRecord(result: () => Promise<RecordResult<Opponent[]>>): FakeRecord
     listFavorites: () => Promise.reject(new Error("このテストでは使わない")),
     createFavorite: () => Promise.reject(new Error("このテストでは使わない")),
     deleteFavorite: () => Promise.reject(new Error("このテストでは使わない")),
+    listCalcHistory: () => Promise.reject(new Error("このテストでは使わない")),
     listMock,
   };
 }
