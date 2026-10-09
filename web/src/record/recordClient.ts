@@ -38,6 +38,8 @@ export interface RecordClient {
   createFavorite(input: Schemas["FavoriteInput"]): Promise<RecordResult<CreatedFavorite>>;
   /** お気に入りを外す(204 は本文なしの成功。404 も ok: false で返す。冪等とみなすのは画面の仕事)。 */
   deleteFavorite(id: string): Promise<RecordResult<void>>;
+  /** この端末の計算履歴の1ページ(新しい順。サーバーの順のまま。cursor は解釈せず渡す。ADR-0230・ADR-0338)。 */
+  listCalcHistory(cursor?: string, signal?: AbortSignal): Promise<RecordResult<Schemas["CalcHistoryPage"]>>;
 }
 
 /** createFavorite の成功値。 */
@@ -51,7 +53,11 @@ export const RECORD_PATHS = {
   frequentOpponents: "api/record/frequent-opponents",
   deviceData: "api/record/device-data",
   favorites: "api/record/favorites",
+  calcHistory: "api/record/calc-history",
 } as const;
+
+/** 計算履歴の1ページの件数(ADR-0338 §2。固定)。 */
+export const CALC_HISTORY_PAGE_LIMIT = 20;
 
 /** 1端末のお気に入りの上限(api/openapi.yaml の /api/record/favorites の maxItems)。 */
 export const MAX_FAVORITES_PER_DEVICE = 100;
@@ -88,6 +94,25 @@ function isFavorite(value: unknown): value is Schemas["Favorite"] {
   }
   const record = value as Record<string, unknown>;
   return typeof record.id === "string" && typeof record.individual === "object" && record.individual !== null;
+}
+
+function isCalcHistoryPage(value: unknown): value is Schemas["CalcHistoryPage"] {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const cursorOk = record.nextCursor === null || typeof record.nextCursor === "string";
+  return (
+    cursorOk &&
+    Array.isArray(record.items) &&
+    record.items.every(
+      (item: unknown) =>
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as Record<string, unknown>).calc === "object" &&
+        (item as Record<string, unknown>).calc !== null,
+    )
+  );
 }
 
 function unavailableResult<T>(): RecordResult<T> {
@@ -221,6 +246,27 @@ export function createRecordClient(input: CreateRecordClientInput): RecordClient
       }
       const parsed = await readJson(response);
       return response.ok ? unavailableResult() : errorResult(parsed);
+    },
+    async listCalcHistory(cursor, signal) {
+      const query = new URLSearchParams({ limit: String(CALC_HISTORY_PAGE_LIMIT) });
+      if (cursor !== undefined) {
+        query.set("cursor", cursor);
+      }
+      let response: Response;
+      try {
+        response = await fetchImpl(`${baseUrl}${RECORD_PATHS.calcHistory}?${query.toString()}`, {
+          method: "GET",
+          headers: idHeaders,
+          signal,
+        });
+      } catch {
+        return unavailableResult();
+      }
+      const parsed = await readJson(response);
+      if (!response.ok) {
+        return errorResult(parsed);
+      }
+      return isCalcHistoryPage(parsed) ? { ok: true, value: parsed } : unavailableResult();
     },
   };
 }

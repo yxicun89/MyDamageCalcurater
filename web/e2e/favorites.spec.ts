@@ -37,6 +37,14 @@ const FAVORITES_PATH = /\/api\/record\/favorites(?:\/([^/?]+))?$/;
 async function installRecordBackend(page: Page, options: { down?: boolean } = {}): Promise<RecordBackend> {
   const backend: RecordBackend = { favorites: [], postBodies: [], postHeaders: [] };
   let sequence = 0;
+  // 計算履歴(ADR-0338)は常に空の1ページ(この spec はお気に入りを見る)。
+  await page.route("**/api/record/calc-history*", (route: Route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], nextCursor: null }),
+    }),
+  );
   await page.route(FAVORITES_PATH, async (route: Route) => {
     const request = route.request();
     const id = FAVORITES_PATH.exec(new URL(request.url()).pathname)?.[1];

@@ -46,6 +46,7 @@ function fakeRecord(create: () => Promise<RecordResult<CreateValue>>): FakeRecor
     deleteDeviceData: unused,
     listFavorites: unused,
     deleteFavorite: unused,
+    listCalcHistory: unused,
   };
 }
 

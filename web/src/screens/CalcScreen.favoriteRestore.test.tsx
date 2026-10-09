@@ -138,6 +138,7 @@ function okRecord(): FakeRecord {
     deleteDeviceData: unused,
     listFavorites: unused,
     deleteFavorite: unused,
+    listCalcHistory: unused,
   };
 }
 

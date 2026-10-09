@@ -40,6 +40,7 @@ function createRecord(list: ListResult | "pending"): RecordClient {
     createFavorite: unused,
     listFavorites: () => (list === "pending" ? new Promise(() => undefined) : Promise.resolve(list)),
     deleteFavorite: () => new Promise(() => undefined),
+    listCalcHistory: () => new Promise(() => undefined),
   };
 }
 

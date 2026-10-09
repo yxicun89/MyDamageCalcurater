@@ -78,3 +78,23 @@ export const favoritesCalcText = {
   alreadyNotice: "すでにお気に入りに入っています",
   addErrorHeading: "お気に入りに追加できませんでした",
 } as const;
+
+/** 計算履歴の節(favorites/CalcHistorySection.tsx。ADR-0338)。サーバーの message は見出しの後ろにそのまま出す。 */
+export const calcHistoryText = {
+  /** 節の名前(role="region")。 */
+  regionLabel: "計算履歴",
+  /** 一覧(`<ul>`)の名前。 */
+  listLabel: "計算履歴の一覧",
+  loadingNotice: "計算履歴を読み込み中…",
+  emptyNotice: "計算履歴はまだありません。計算すると、ここに残ります。",
+  errorHeading: "計算履歴を読み込めませんでした",
+  moreLabel: "もっと見る",
+  /** 各行の主ボタン(見える文字 = 名前)。 */
+  useLabel: "この計算を使う",
+  /** 行の見出し(攻撃側 → 防御側)。お気に入りに包むときの label にも使う。 */
+  pairLabel: (attacker: string, defender: string): string => `${attacker} → ${defender}`,
+  /** 技の表示。 */
+  moveLabel: (moveId: string): string => `技: ${moveId}`,
+  /** ダメージの幅(割合)。 */
+  rangeLabel: (min: number, max: number): string => `${String(min)}〜${String(max)}%`,
+} as const;

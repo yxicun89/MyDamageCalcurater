@@ -379,6 +379,48 @@ final class LargeTextLayoutUITests: XCTestCase {
         }
     }
 
+    /// 攻撃側の「攻撃」「特攻」2ブロック(ADR-0518)を AX5 で出したとき、横にはみ出さず、性格補正の3つの選択肢が
+    /// 縦に積まれ(`calcScreenAttackerPresetPillsStackVerticallyAtAX5` と同じ考え方)、SP 欄と選択肢がタップできること。
+    /// ブロックは技セレクタと「詳細」の間にある。画面の高さは機種で違うので、前方に届かなければ戻る。
+    /// 足場(spec-writer): 実装前なので失敗する。
+    func testCalcScreenAttackerStatBlocksNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openCalcScreen(app)
+        assertAX5TookEffect(app, attackerIdentifier: "attackerCard", defenderIdentifier: "defenderCard")
+
+        let blockIdentifiers = [
+            "attackerStatBlock-atk", "attackerStatBlock-spa",
+            "attackerStatHeading-atk", "attackerStatHeading-spa",
+            "attackerSPField-atk", "attackerSPField-spa",
+            "attackerNature-atk-up", "attackerNature-atk-neutral", "attackerNature-atk-down",
+            "attackerNature-spa-up", "attackerNature-spa-neutral", "attackerNature-spa-down",
+        ]
+        assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + blockIdentifiers)
+
+        for stat in ["atk", "spa"] {
+            let buttons = ["up", "neutral", "down"].map { element(app, "attackerNature-\(stat)-\($0)") }
+            let minYs = buttons.map(\.frame.minY)
+            XCTAssertEqual(minYs, minYs.sorted(), "AX5 では 上昇 → 補正なし → 下降 の順に縦へ積まれる (\(stat)): \(minYs)")
+            XCTAssertEqual(Set(minYs).count, buttons.count, "3つが縦に並ぶ(同じ高さにならない) (\(stat)): \(minYs)")
+        }
+
+        let screen = element(app, "calcScreen")
+        for identifier in ["attackerSPField-atk", "attackerNature-atk-up", "attackerSPField-spa", "attackerNature-spa-down"] {
+            let target = element(app, identifier)
+            var attempts = 0
+            while !target.isHittable && attempts < 12 {
+                screen.swipeUp()
+                attempts += 1
+            }
+            attempts = 0
+            while !target.isHittable && attempts < 24 {
+                screen.swipeDown()
+                attempts += 1
+            }
+            XCTAssertTrue(target.isHittable, "AX5 でもタップできる: \(identifier)")
+        }
+    }
+
     /// P6-15 (3): 既定サイズで%表示(`calcResultPercent-*`)が `minimumScaleFactor` によって
     /// 不要に縮んでいないこと。`ResultRowView.percentRangeTextView` は `.lineLimit(1) +
     /// .minimumScaleFactor(0.7)`(`CalcScreenMetrics.compactMinimumScaleFactor`)を使っている

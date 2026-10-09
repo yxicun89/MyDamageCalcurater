@@ -8,6 +8,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
+import { CalcHistorySection } from "./CalcHistorySection";
 import { favoritesScreenText } from "../i18n/favorites";
 import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordError } from "../record/recordClient";
 import "./FavoritesScreen.css";
@@ -220,6 +221,7 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
           })}
         </ul>
       )}
+      <CalcHistorySection recordClient={recordClient} reloadToken={reloadToken} onUse={onUse} />
     </section>
   );
 }

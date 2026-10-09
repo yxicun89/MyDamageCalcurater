@@ -49,6 +49,39 @@ for (const scheme of ["light", "dark"] as const) {
       });
     }
 
+    test("計算履歴が並んだお気に入り画面に axe の違反が無い(ADR-0338)", async ({ page }) => {
+      await page.route("**/api/record/calc-history*", (route) =>
+        route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            items: [
+              {
+                occurredAt: "2026-10-09T03:00:00Z",
+                calc: {
+                  attacker: {
+                    speciesKey: "garchomp",
+                    sp: { hp: 0, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 },
+                  },
+                  defender: {
+                    speciesKey: "corviknight",
+                    sp: { hp: 32, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 },
+                  },
+                  moveId: "earthquake",
+                },
+                result: { minPercent: 41.2, maxPercent: 48.9 },
+              },
+            ],
+            nextCursor: "cursor-1",
+          }),
+        }),
+      );
+      await openScreen(page, "/favorites", "お気に入り");
+      await expect(page.getByRole("region", { name: "計算履歴" })).toBeVisible();
+      await expect(page.getByRole("button", { name: "もっと見る" })).toBeVisible();
+      await expectNoAxeViolations(page);
+    });
+
     test("/about(出典リスト・データの扱い・ボタン)に axe の違反が無い", async ({ page }) => {
       await page.goto("/about");
       await expect(

@@ -174,14 +174,17 @@ final class CalcViewModelDefenderRanksTests: XCTestCase {
         XCTAssertEqual(request.defenderRanks, RankBlock(atk: 0, def: 0, spa: 0, spd: 5, spe: 0))
     }
 
-    func testStatusMoveEditsDef() async throws {
-        // 変化技は物理と同じ def〈B〉(攻撃側の「変化技は atk」と同じ規則)。
+    func testPhysicalMoveEditsDefAndStatusMoveCannotBeSelected() async throws {
+        // 物理技は def〈B〉。変化技は計算画面の選択肢に無く選べない(ADR-0518 §3。変化技が def になる規則は
+        // 変化技を選べなくなったので、ここでは物理技で同じ性質〔def・B 表記・def だけが変わる〕を確かめる)。
         let stub = makeStub()
         let viewModel = await loadedViewModel(stub)
         await viewModel.selectMove(id: StubMaster.specialMove.id)
         XCTAssertEqual(viewModel.defenderRankStat, .spd)
         await viewModel.selectMove(id: StubMaster.statusMove.id)
-        XCTAssertEqual(viewModel.selectedMove?.category, .status)
+        XCTAssertEqual(viewModel.selectedMove?.id, StubMaster.specialMove.id, "変化技は選べない(無視される)")
+        await viewModel.selectMove(id: StubMaster.alphaOnlyMove.id)
+        XCTAssertEqual(viewModel.selectedMove?.category, .physical)
         XCTAssertEqual(viewModel.defenderRankStat, .def)
         XCTAssertEqual(viewModel.defenderRankText, "B ±0")
         await viewModel.setDefenderRank(1)

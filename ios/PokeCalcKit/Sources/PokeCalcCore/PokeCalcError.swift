@@ -38,6 +38,9 @@ public struct PokeCalcError: Error, Equatable, Sendable {
         /// 選択中の `moveId` が `moveOptions` に無い(内部の不整合。`moveUnavailable` とは原因が違う。
         /// `moveOptions` にある技だけを選べるはずなので、通常は起きない防御的なエラー)。
         public static let selectedMoveMissing = "client_selected_move_missing"
+        /// 攻撃側の「攻撃」「特攻」の SP の入力が 0〜32 の整数でない(ADR-0518。お気に入りへ入れる個体を
+        /// 作れないときなど、要求を組み立てる経路が使う。画面には `AttackerStatLabels.spInvalid` を出す)。
+        public static let attackerSPInvalid = "client_attacker_sp_invalid"
 
         // MARK: - MockPokeCalcService が使う値
 

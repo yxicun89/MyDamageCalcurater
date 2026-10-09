@@ -11,6 +11,8 @@ import SwiftUI
 struct CalcScreenView: View {
     @State private var viewModel: CalcViewModel
     @State private var isMoveSearchPresented = false
+    /// 攻撃側の SP 欄(数値キーボード)のフォーカス。ツールバーの「完了」で外す(ADR-0518)。
+    @FocusState private var focusedAttackerStat: AttackStat?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var frequentOpponents: FrequentOpponentsViewModel
@@ -84,6 +86,7 @@ struct CalcScreenView: View {
                     FavoriteLoadNoticeView(notice: notice)
                 }
                 moveSelector
+                CalcAttackerStatBlocksView(viewModel: viewModel, focus: $focusedAttackerStat)
                 CalcConditionsSection(viewModel: viewModel)
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
@@ -95,6 +98,14 @@ struct CalcScreenView: View {
         }
         .background(ColorToken.bgBase.color.ignoresSafeArea())
         .accessibilityIdentifier("calcScreen")
+        .toolbar {
+            // 数値キーボードには確定キーが無いので、閉じる手段をキーボードのツールバーに置く。
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button(AttackerStatLabels.keyboardDone) { focusedAttackerStat = nil }
+                    .accessibilityIdentifier("calcKeyboardDone")
+            }
+        }
         .sheet(item: $favoriteLoadTarget) { target in
             FavoriteLoadSheet(side: target.side, service: favoritesService, resolver: service) { favorite in
                 viewModel.scheduleLatest { await $0.loadFavorite(favorite, side: target.side) }
@@ -188,6 +199,8 @@ struct CalcScreenView: View {
     private var presetSegmentedRowPills: some View {
         ForEach(AttackerPreset.allCases, id: \.self) { preset in
             let isSelected = viewModel.attackerPreset == preset
+            // もう一方のブロックが上昇のときの「特化」は同じ向きになるので選べない(理由はブロック側に出す。ADR-0518 §1)。
+            let isEnabled = viewModel.isPresetSelectable(preset, for: viewModel.usedAttackStat ?? .atk)
             Button {
                 viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
             } label: {
@@ -204,6 +217,8 @@ struct CalcScreenView: View {
                     .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
             .buttonStyle(.plain)
+            .disabled(!isEnabled)
+            .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
             .accessibilityIdentifier("attackerPreset-\(preset.rawValue)")
             .accessibilityAddTraits(isSelected ? .isSelected : [])
         }

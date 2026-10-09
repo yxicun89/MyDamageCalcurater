@@ -72,22 +72,26 @@ final class CalcViewModelTests: XCTestCase {
 
     func testMoveOptionsAreAttackerLearnsetOnlyInLearnsetOrder() async {
         let viewModel = await loadedViewModel(StubMaster.makeService())
-        // alpha の learnset: [変化, アルファ専用, 特殊, マスタに無い ID]。マスタに無いものは出さない。
+        // alpha の learnset: [変化, アルファ専用, 特殊, マスタに無い ID]。マスタに無いものと変化技は出さない
+        // (ADR-0518 §3: 計算画面の選択肢はダメージ技だけ)。
         // 物理技 stub-move-physical は alpha の learnset に無いので出ない。
         XCTAssertEqual(viewModel.moveOptions.map(\.id),
-                       [StubMaster.statusMove.id, StubMaster.alphaOnlyMove.id, StubMaster.specialMove.id])
+                       [StubMaster.alphaOnlyMove.id, StubMaster.specialMove.id])
     }
 
-    func testAttackerWithOnlyStatusMovesFallsBackToFirstLearnsetMove() async throws {
-        // ダメージ技が無ければ learnset の最初の技(計算自体はサーバーに任せる)
+    func testAttackerWithOnlyStatusMovesHasNoMoveAndDoesNotCalculate() async throws {
+        // ダメージ技が無い種族は技欄が空になり、計算しない(ADR-0518 §3。従来は learnset の最初の技にフォールバックして
+        // いたが、計算画面は変化技を選ばない)。「変化技は atk に振る」の確認は `AttackerPresetTests` が持つ。
         let stub = StubMaster.makeService(species: [StubMaster.statusOnly, StubMaster.beta])
         let viewModel = await loadedViewModel(stub)
-        XCTAssertEqual(viewModel.moveId, StubMaster.statusMove.id)
-        // 変化技は物理と同じく atk に振る(AttackerPreset.relevantStat)。既定の無振り(P6-12)では
-        // SP が 0 で振り先が見えないので、A特化を選んでから確かめる(ADR-0501「P6-12」5章)。
+        XCTAssertEqual(viewModel.moveId, "")
+        XCTAssertTrue(viewModel.hasNoDamagingMoves)
+        let count = await stub.bulkRequests.count
+        XCTAssertEqual(count, 0)
         await viewModel.selectAttackerPreset(.aFull)
-        let request = try await lastRequest(stub)
-        XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP))
+        XCTAssertEqual(viewModel.attackerStatInputs.atk, AttackStatInput(spText: "32", modifier: .up), "入力は受け付ける")
+        let after = await stub.bulkRequests.count
+        XCTAssertEqual(after, 0, "ダメージ技が無い間は計算しない")
     }
 
     // MARK: - 入力が変わるたびに1回だけ計算する
@@ -99,28 +103,30 @@ final class CalcViewModelTests: XCTestCase {
         // この選択で計算が1回増えるので、以下の件数は P6-12 より前の値から +1 している(ADR-0501「P6-12」5章)。
         await viewModel.selectAttackerPreset(.aFull)
 
-        // 特殊技にすると関連ステータスが spa になり、A特化の性格は (+spa, -atk)
+        // 特殊技にしても入力の値は消えない(ADR-0518: 攻撃と特攻の SP を両方載せる)。攻撃の 32・上昇は残り、
+        // 使う側(特攻)が補正なしなので性格は無補正になる。ピルの行は使う側(特攻)の値で判定する。
         await viewModel.selectMove(id: StubMaster.specialMove.id)
         var count = await stub.bulkRequests.count
         XCTAssertEqual(count, 3)
         var request = try await lastRequest(stub)
         XCTAssertEqual(request.moveId, StubMaster.specialMove.id)
-        XCTAssertEqual(request.attacker.sp, sp(spa: maxStatSP))
-        XCTAssertEqual(request.attacker.natureId, StubMaster.spaUpNature.id)
+        XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP))
+        XCTAssertEqual(request.attacker.natureId, StubMaster.neutralNature.id)
 
+        // ピルの行は使う側(特攻)のブロックに値を入れる。攻撃の 32・上昇は残る。
         await viewModel.selectAttackerPreset(.aMax)
         count = await stub.bulkRequests.count
         XCTAssertEqual(count, 4)
         request = try await lastRequest(stub)
         XCTAssertEqual(viewModel.attackerPreset, .aMax)
-        XCTAssertEqual(request.attacker.sp, sp(spa: maxStatSP))
+        XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP, spa: maxStatSP))
         XCTAssertEqual(request.attacker.natureId, StubMaster.neutralNature.id)
 
         await viewModel.selectAttackerPreset(.none)
         count = await stub.bulkRequests.count
         XCTAssertEqual(count, 5)
         request = try await lastRequest(stub)
-        XCTAssertEqual(request.attacker.sp, sp())
+        XCTAssertEqual(request.attacker.sp, sp(atk: maxStatSP))
         XCTAssertEqual(request.attacker.natureId, StubMaster.neutralNature.id)
 
         await viewModel.selectAttackerItem(id: StubMaster.itemA.id)
@@ -221,7 +227,8 @@ final class CalcViewModelTests: XCTestCase {
         let viewModel = await loadedViewModel(stub)
         // 既定は無振り(P6-12)。入れ替えでプリセットが残ることと A特化の組み立てを見るため、先に A特化を選ぶ
         // (ADR-0501「P6-12」5章)。
-        await viewModel.selectAttackerPreset(.aFull)
+        // 入れ替え後の beta の既定の技は特殊技なので、使う側になる特攻のブロックに特化を入れておく(値は技で消えない。ADR-0518)。
+        await viewModel.selectAttackerPreset(.aFull, for: .spa)
         await viewModel.selectAttackerItem(id: StubMaster.itemA.id)
         await viewModel.toggleDefenderItemComparison(itemId: StubMaster.itemB.id)
         let before = await stub.bulkRequests.count
@@ -229,10 +236,10 @@ final class CalcViewModelTests: XCTestCase {
         await viewModel.swapSides()
         XCTAssertEqual(viewModel.attackerSpeciesKey, StubMaster.beta.key)
         XCTAssertEqual(viewModel.defenderSpeciesKey, StubMaster.alpha.key)
-        // アルファ専用技を beta は覚えない → beta の learnset の最初のダメージ技(先頭の変化技を飛ばして特殊技)
+        // アルファ専用技を beta は覚えない → beta の learnset の最初のダメージ技(変化技は選択肢に出ない)
         XCTAssertEqual(viewModel.moveId, StubMaster.specialMove.id)
         XCTAssertEqual(viewModel.moveOptions.map(\.id),
-                       [StubMaster.statusMove.id, StubMaster.specialMove.id, StubMaster.physicalMove.id])
+                       [StubMaster.specialMove.id, StubMaster.physicalMove.id])
         // 入れ替えるのは種族だけ。プリセット・攻撃側の持ち物・比較トグルは画面の設定として残す
         XCTAssertEqual(viewModel.attackerPreset, .aFull)
         XCTAssertEqual(viewModel.attackerItemId, StubMaster.itemA.id)
@@ -459,7 +466,7 @@ final class CalcViewModelTests: XCTestCase {
         await selectBeta.value
         XCTAssertEqual(viewModel.attackerSpeciesKey, StubMaster.beta.key)
         XCTAssertEqual(viewModel.moveOptions.map(\.id),
-                       [StubMaster.statusMove.id, StubMaster.specialMove.id, StubMaster.physicalMove.id])
+                       [StubMaster.specialMove.id, StubMaster.physicalMove.id])
         var lastRequestSoFar = try await lastRequest(stub)
         XCTAssertEqual(lastRequestSoFar.attacker.speciesKey, StubMaster.beta.key)
 
@@ -469,7 +476,7 @@ final class CalcViewModelTests: XCTestCase {
         await selectGamma.value
         XCTAssertEqual(viewModel.attackerSpeciesKey, StubMaster.beta.key, "古い species 応答で攻撃側を上書きしない")
         XCTAssertEqual(viewModel.moveOptions.map(\.id),
-                       [StubMaster.statusMove.id, StubMaster.specialMove.id, StubMaster.physicalMove.id],
+                       [StubMaster.specialMove.id, StubMaster.physicalMove.id],
                        "古い species 応答で moveOptions を上書きしない")
         lastRequestSoFar = try await lastRequest(stub)
         XCTAssertEqual(lastRequestSoFar.attacker.speciesKey, StubMaster.beta.key, "最後の要求は beta のまま")
