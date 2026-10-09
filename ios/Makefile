@@ -51,3 +51,7 @@ ios-swift-test: ios-gen ## PokeCalcKit の XCTest を macOS で実行(Xcode 無�
 .PHONY: ios-sim-run
 ios-sim-run: ios-gen ## アプリをシミュレータでモック起動(IOS_SCREEN=root|calc|reverse|team|adjust|speed|judge IOS_APPEARANCE IOS_CONTENT_SIZE)
 	@./ios/scripts/sim-run.sh "$(IOS_SIMULATOR)" "$(IOS_SCREEN)" "$(IOS_APPEARANCE)" "$(IOS_CONTENT_SIZE)"
+
+.PHONY: ios-run
+ios-run: ios-gen ## アプリをビルドしてシミュレータで起動(POKECALC_API_BASE_URL=... で実 API、IOS_RUN_MOCK=1 でモック強制。手順 docs/verify-m3.md)
+	@./ios/scripts/ios-run.sh "$(IOS_SIMULATOR)"

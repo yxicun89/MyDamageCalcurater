@@ -3,6 +3,27 @@
 上から順に実行する。各コマンドの下の「→」が成功の見え方。M1 の確認([verify-m1.md](verify-m1.md))が済んでいて、k3d が動いていることが前提。
 `xcrun simctl` が使えない環境(Xcode 未選択・CI など)では、§3〜§5 の目視と `make ios-test` は人間の作業になる。
 
+## 0. Xcode のシミュレータでアプリを起動して見る(最短。人間の作業)
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+make ios-run IOS_RUN_MOCK=1
+```
+→ 数分(初回は長め)でシミュレータの画面が開き、アプリが起動する(最後の行が `ios-run: … で起動しました(モック強制)`)。画面に「モックデータで動作中」とテスト用の名前が出る。
+
+実 API(k3d。[verify-m1.md](verify-m1.md) §3 のとおり `make up` 済み)につなぐときは、モックを外して URL を渡す。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make ios-run POKECALC_API_BASE_URL=http://localhost:8080
+```
+→ 計算画面に「APIに接続中(localhost)」のバッジが出る。
+
+- 機種を変えるときは `make ios-run IOS_SIMULATOR="iPhone 18 Pro Max"`(既定は `iPhone 18 Pro`)。
+- 起動済みのシミュレータはそのまま使う(shutdown しない)。画面を指定して開き、スクリーンショットも撮るときは `make ios-sim-run IOS_SCREEN=calc`([runbooks/ios.md](runbooks/ios.md))。
+- Xcode の画面からビルドしたいときは `make ios-gen` を1回流してから `ios/PokeCalc.xcodeproj` を開き、スキーム PokeCalc・機種 iPhone 18 Pro で Run(▶)する。
+
 ## 1. 自動テスト(シミュレータ不要)
 
 ```sh
@@ -53,6 +74,7 @@ xcodebuild build -project ios/PokeCalc.xcodeproj -scheme PokeCalc \
 cd "$(git rev-parse --show-toplevel)"
 make ios-test
 ```
+所要時間の目安は 20〜50 分(UI テストが約 190 件。他のレーンがテスト中なら順番待ちで延びる。待たされるのは正常)。
 → lint・生成物の一致・XCTest・XCUITest・Info.plist 検査がすべて成功する。
 
 ## 6. 結果の記録
