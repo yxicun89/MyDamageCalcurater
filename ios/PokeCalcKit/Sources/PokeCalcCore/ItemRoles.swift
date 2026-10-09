@@ -68,8 +68,8 @@ public enum MegaItemLock: Equatable, Sendable {
     /// `MegaSpeciesInfo` 版(VM が覚えている情報から作る)。
     public static func make(for info: MegaSpeciesInfo?, allItems: [Item]) -> MegaItemLock {
         guard let info, info.isMega else { return .none }
-        guard let stoneId = info.requiredItemId, allItems.contains(where: { $0.id == stoneId }) else { return .missing }
-        return .locked(itemId: stoneId, displayName: MegaItemText.stoneName(baseSpeciesNameJa: info.baseSpeciesNameJa))
+        guard let stoneId = info.requiredItemId, let stone = allItems.first(where: { $0.id == stoneId }) else { return .missing }
+        return .locked(itemId: stoneId, displayName: ItemDisplayName.megaStoneName(for: stone, baseSpeciesNameJa: info.baseSpeciesNameJa))
     }
 
     /// 固定中なら要求に載せる持ち物 ID(`.locked` はストーン、`.missing` は nil)。`.none` は nil。
@@ -113,15 +113,35 @@ public enum MegaItemCorrection: Equatable, Sendable {
     case cleared
 }
 
-/// 持ち物の表示名の唯一の関数(ADR-0509 §6)。メガストーンの `nameJa` は画面に出さない。
+/// 持ち物の表示名の唯一の関数(ADR-0509 §6。2026-10-04 に更新)。メガストーンは、マスタの `nameJa` が日本語の正式名称ならそのまま出し、
+/// 英語名のフォールバックのときだけ「{基本種名}のメガストーン」を組み立てる(`megaStoneName`)。
 public enum ItemDisplayName {
-    /// nil →「持ち物なし」/ `megaStoneNames` にある → その名前 / `isMegaStone == true` →「メガストーン」/
+    /// nil →「持ち物なし」/ `megaStoneNames` にある → その名前 / `isMegaStone == true` → `megaStoneName(for:baseSpeciesNameJa: nil)`(正式名称、無ければ「メガストーン」)/
     /// それ以外 → `nameJa`(マスタに無い ID は ID のまま)。
     public static func text(itemId: String?, items: [Item], megaStoneNames: [String: String] = [:]) -> String {
         guard let itemId else { return noItemLabel }
         if let name = megaStoneNames[itemId] { return name }
         guard let item = items.first(where: { $0.id == itemId }) else { return itemId }
-        return item.isMegaStone == true ? MegaItemText.stoneName(baseSpeciesNameJa: nil) : item.nameJa
+        return item.isMegaStone == true ? megaStoneName(for: item, baseSpeciesNameJa: nil) : item.nameJa
+    }
+
+    /// `text` に日本語の文字(ひらがな・カタカナ・漢字・長音「ー」)が1文字以上あるか(ADR-0509 追記 §6')。純粋関数。
+    /// 英数字・全角英数字・記号・空文字だけなら false(マスタの英語名のフォールバックを見分ける)。
+    public static func containsJapanese(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x3041...0x30FF, 0x3400...0x4DBF, 0x4E00...0x9FFF, 0xFF66...0xFF9F: return true
+            default: return false
+            }
+        }
+    }
+
+    /// メガストーンの表示名の唯一の関数(ADR-0509 追記 §6')。`item.nameJa` が日本語の文字を含む(正式名称)ならそのまま、
+    /// 含まない(英語名のフォールバック)なら従来の `MegaItemText.stoneName(baseSpeciesNameJa:)`。
+    /// `baseSpeciesNameJa` が nil でも正式名称ならそれを出す。
+    public static func megaStoneName(for item: Item, baseSpeciesNameJa: String?) -> String {
+        if containsJapanese(item.nameJa) { return item.nameJa }
+        return MegaItemText.stoneName(baseSpeciesNameJa: baseSpeciesNameJa)
     }
 
     /// 「持ち物なし」の表示(`id` に持ち物が無いとき)。
