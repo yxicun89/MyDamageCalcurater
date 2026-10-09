@@ -296,3 +296,25 @@ func TestProductionMoveRulesMatchADR(t *testing.T) {
 		}
 	}
 }
+
+// 重さだけ違う姿は、性能が同じでも畳まない(重さで威力が決まる技の計算が変わるため。ADR-0143)。
+func TestConvertDoesNotFoldFormsThatDifferOnlyInWeight(t *testing.T) {
+	in := loadFixture(t)
+	base := *calcSpecies(t, &in, "Testleaf")
+	base.Name = "Testleaf-Bloom"
+	in.Calc.Species = append(in.Calc.Species, base)
+	var err error
+	if in.Calc, err = importer.DecodeCalcSnapshot(editSnapshotWeight(t, in.Calc, "name", "Testleaf-Bloom", "7")); err != nil {
+		t.Fatal(err)
+	}
+	if in.Showdown, err = importer.DecodeShowdownSnapshot(editSnapshotWeight(t, in.Showdown, "id", "testleafbloom", "7")); err != nil {
+		t.Fatal(err)
+	}
+	out, rep := convertOK(t, in)
+	if got := speciesWeightByShowdownID(out)["testleafbloom"]; got != 70 {
+		t.Errorf("重さだけ違う testleafbloom が別の行にならない(重さ %d hg)", got)
+	}
+	if hasFinding(rep.Warnings, importer.KindFormFolded, "testleafbloom") {
+		t.Errorf("重さだけ違う姿が畳まれた")
+	}
+}

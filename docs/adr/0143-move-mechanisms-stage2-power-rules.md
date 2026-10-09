@@ -62,6 +62,7 @@ Showdown では技ごとの関数(ハンドラ)で、取得物には**ハンド�
 | フォルム依存(タイプ・威力が種族のフォルムで変わる。使用不可のフォルムだけで効くものを含む) | 3 | 種族のフォルムの語彙 |
 | 分類の切り替え(攻撃と特攻の比較) | 1 | 語彙の追加 |
 | タイプなし(わるあがき) | 1 | 選べない技。対象外のままでよい |
+| 攻撃側のくろいてっきゅうによる接地(ADR-0116 からの穴。engine は持ち物による接地を持たず、テラバースト型・ワイドフォース・ミストバーストの攻撃側の接地判定に影響する) | — | 持ち物による接地の語彙(段階3) |
 | 多段の回数を利用者が選ぶ入力(公開 API `CalcRequest`・Web・iOS) | — | 段階1の既定(oracle と同じ 最小+1 / スキルリンクで最大)で誤った値は出ない。UI の設計とともに段階3 |
 
 ## oracle(@smogon/calc 0.12.0 champions.js / util.js)で確かめた挙動
@@ -139,7 +140,7 @@ type MoveRule struct {
 	MoveSpecificResolved     bool             // move_specific のハンドラは上の中身以外にダメージへ効かない(oracle で確かめた)
 }
 // Move.Rule *MoveRule(nil は定義なし)。Species.WeightHg int(hg。0 は不明)。Item.MegaStone bool。
-// AbilityEffect.WeightMod int(4096 基準。重さ = max(1, trunc(hg × WeightMod / 4096)))。
+// AbilityEffect.WeightMod int(4096 基準。重さ = max(1, trunc(hg × WeightMod / 4096)))。値域は 1..32 倍(`engine.MaxWeightModifier` = 32 × 4096)。
 // NullifyMoveFailed NullifyKind = "move_failed"。ErrInvalidMoveRule。
 // AllPowerFormulas()・AllMoveConditions()(定義順のコピー)・Known()。
 ```
@@ -157,7 +158,7 @@ type MoveRule struct {
 
 ### 2. 計算の順(oracle と同じ)
 
-1. 前処理(特性の段階1の後): `PriorityBoost` を優先度に足す(サイコフィールドの判定に使う。グラスフィールドとサイコフィールドは同時に無いので結果は常に変わらない)。
+1. 前処理(特性の段階1の後): `PriorityBoost` を優先度に足す(サイコフィールドの判定に使う。グラスフィールドとサイコフィールドは同時に無いので、グラススライダー型では結果は変わらない。優先度が上がると、じょおうのいげん・テイルアーマーを持つ防御側には当たらなくなる(engine は優先度による無効を表せないが、この2特性は effects.json で `UnsupportedDefender` の印が付いているので、黙って誤らず印で守られる)。
    `TypeByWeather`(場の天候)・`TypeByTerrain`(攻撃側が接地)で技のタイプを変える(type_change の機構を持つのでスキン系では変えない。既存)。
    `SpreadInTerrain` が成立すれば `Target = spread`。
 2. 相性: `SuperEffectiveAgainst` のタイプは 2、`ExtraEffectivenessType` は各タイプで掛ける。
@@ -327,3 +328,4 @@ engine の golden テスト `TestGoldenMechanismsStage2` が、印が残らな�
   1 回の掛け算が現実の重さを大きく超えるため)。(3) Showdown の取得物は使用不可の巨大化フォーム等に `weightkg: 0` を持つので、取得時は 0 以上を
   通し、取り込む種族の 0 だけを Go 側(`ErrInvalidData`)で止める。(4) メガストーンを防御側が持つときの `isMegaStone` は、Web が防御側の個体にだけ
   残す(攻撃側には要らず、既存の「要求の持ち物は engine の Item の形」の確認も変えない)。
+- 種族の畳み込み(ADR-0101 §5)の「性能」の署名に重さ(hg)を含める: 重さだけ違う姿(実データの maushold 2.3kg と mausholdfour 2.8kg)を畳むと、重さで威力が決まる技の計算が黙って誤るため。実データの dry-run(exit 0・blockers: none)で取り込む種族は 349 → 350 件、`form-folded` は 34 → 33 件。
