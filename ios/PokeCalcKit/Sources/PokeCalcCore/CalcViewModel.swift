@@ -362,6 +362,75 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         favoriteLoadNotice = nil
     }
 
+    // MARK: - 計算履歴から入力を復元する(ADR-0519)
+
+    /// 履歴の1行の `calc` を画面の入力に復元し、計算を**ちょうど1回**呼ぶ(`scheduleLatest { await $0.loadHistoryCalc(...) }`
+    /// または画面を開いたときの `.task` から呼ぶ)。
+    ///
+    /// - 復元するもの: 攻撃側の個体(種族・性格・SP・特性・持ち物・ランク・やけど・テラスタイプ。構築の個体と同じ `.team` の出どころ)、
+    ///   技、防御側の種族・特性・ランク、天候・フィールド・防御側の壁・急所。
+    /// - 画面が表せないもの: 防御側の性格・SP・持ち物(画面は防御側を種族と代表調整の一括で計算する)、攻撃側の壁(シングルでは効かない)、
+    ///   `format`(画面はシングルのみ)。防御側の比較する持ち物は空に戻す。
+    /// - マスタに無い種族・技・性格などは「読めなかった項目を黙って落とす」のではなく計算の失敗として表示する(既存の失敗経路)。
+    ///   詳細・技の取得に失敗したら、画面の入力は何も書き換えない。
+    public func loadHistoryCalc(_ calc: CalcHistoryCalc) async {
+        await load()
+        let token = beginInput()
+        isLoading = true
+        let attackerDetail: SpeciesDetail
+        let defenderDetail: SpeciesDetail
+        let move: Move
+        do {
+            attackerDetail = try await service.species(key: calc.attacker.speciesKey)
+            defenderDetail =
+                calc.defender.speciesKey == attackerDetail.key
+                ? attackerDetail : try await service.species(key: calc.defender.speciesKey)
+            if let known = moveDictionary[calc.moveId] {
+                move = known
+            } else if let resolved = try await resolveMove(id: calc.moveId) {
+                move = resolved
+            } else {
+                throw PokeCalcError(
+                    code: PokeCalcError.Code.moveUnavailable, message: "履歴の技がマスタに見つかりません: \(calc.moveId)")
+            }
+        } catch {
+            guard token == latestRequestToken else { return }
+            handleInputFailure(error)
+            return
+        }
+        guard token == latestRequestToken else { return }
+
+        let saved = calc.attacker
+        attackerSpeciesKey = attackerDetail.key
+        applyAttackerDetail(attackerDetail)
+        attackerItemId = saved.itemId
+        applyAttackerItemLock(previous: .none)
+        attackerAbilityId = attackerDetail.abilities.contains(where: { $0.id == saved.abilityId }) ? saved.abilityId : nil
+        attackerRanks = saved.ranks
+        isAttackerBurned = saved.status == .burn
+        attackerBuildSource = .team(
+            TeamIndividualSelection(
+                teamID: CalcHistory.sourceTeamID, memberID: CalcHistory.sourceTeamID, displayName: attackerDetail.nameJa,
+                individual: Individual(
+                    speciesKey: attackerDetail.key, natureId: saved.natureId, sp: saved.sp, abilityId: attackerAbilityId,
+                    itemId: attackerItemId, teraType: saved.teraType)))
+        moveId = move.id
+
+        defenderSpeciesKey = defenderDetail.key
+        resetDefenderAbility()
+        applyDefenderDetail(defenderDetail)
+        defenderAbilityId = defenderDetail.abilities.contains(where: { $0.id == calc.defender.abilityId }) ? calc.defender.abilityId : nil
+        defenderRanks = calc.defender.ranks
+        toggledDefenderItemIds = []
+        comparedDefenderItemIds = []
+
+        weather = calc.field.weather
+        terrain = calc.field.terrain
+        defenderScreens = calc.field.defenderScreens
+        isCritical = calc.critical
+        await recalculate(token: token)
+    }
+
     // MARK: - 計算結果
 
     public private(set) var rows: [BulkRowDisplay] = []

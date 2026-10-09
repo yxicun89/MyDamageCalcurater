@@ -19,6 +19,9 @@ struct CalcScreenView: View {
     private let service: any PokeCalcService
     private let favoritesService: (any FavoritesService)?
     private let backendDescription: String
+    /// 計算履歴の行から開いたときの、復元する計算(ADR-0519)。nil は通常の起動(既定の入力)。
+    private let restoring: CalcHistoryCalc?
+    @State private var didRestore = false
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
     private static let swapAnimationDuration: Double = 0.35
@@ -29,7 +32,7 @@ struct CalcScreenView: View {
     init(
         service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
-        favoritesService: (any FavoritesService)? = nil
+        favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil
     ) {
         _viewModel = State(initialValue: CalcViewModel(service: service, teamStore: teamStore))
         _frequentOpponents = State(
@@ -38,6 +41,7 @@ struct CalcScreenView: View {
         self.service = service
         self.favoritesService = favoritesService
         self.backendDescription = backendDescription
+        self.restoring = restoring
     }
 
     /// ダメージバー・相性の色に使う、選択中の技のタイプ色。技が無い(読み込み中)ときは無彩色にする。
@@ -96,7 +100,14 @@ struct CalcScreenView: View {
                 viewModel.scheduleLatest { await $0.loadFavorite(favorite, side: target.side) }
             }
         }
-        .task { await viewModel.load() }
+        .task {
+            if let restoring, !didRestore {
+                didRestore = true
+                await viewModel.loadHistoryCalc(restoring)
+            } else {
+                await viewModel.load()
+            }
+        }
         // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
         .onDisappear { viewModel.cancelPendingWork() }
     }

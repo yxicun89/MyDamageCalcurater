@@ -4631,3 +4631,28 @@ XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で�
 - XCUITest(iPhone 17e・iPhone 18 Pro の両方で各々全件成功): `FavoriteLoadUITests` 12 件、`LargeTextLayoutUITests` の AX5 追加 2 本、既存の `CalcScreenUITests`・`CalcConditionsUITests`・`CalcDefenderRanksUITests`・`FavoritesScreenUITests` 計 27 件。テスト・既存 identifier は変えていない。
 - 実装の判断: 攻撃側・防御側とも、詳細(`species(key:)`)を1回読んで成功が確かになってから状態を書く(`reloadAttackerMoveOptions`・`loadDefenderDetail` の反映部分を `applyAttackerDetail`・`applyDefenderDetail` に切り出して共有)。
   案内は `beginInput()` で消す。画面は `FavoriteLoadViews.swift`(入口2行・案内・シート)。`CalcFeature` は `FavoritesService` を任意で渡していたので受け渡しは変えていない。
+
+## 計算履歴の一覧の接続(ADR-0519。2026-10-09)
+
+判断と範囲は ADR-0519。ここには受け入れ条件と既存テストの変更だけを残す。
+
+### 受け入れ条件
+
+- AC-1: 画面を開くと `limit=20`・cursor なしで1回取得し、新しい順に行を出す。行に種族名(攻撃側 → 防御側)・技名・%幅・日付。
+  引けない種族・技は「不明」で行を残す。
+- AC-2: `nextCursor` があるときだけ「もっと見る」。押すと同じ `limit` で `nextCursor` をそのまま渡し、末尾に足す。null なら消える。
+- AC-3: 先頭ページの失敗・続きの失敗とも、履歴の節の中だけにエラーを出す(計算画面・他の節は塞がない)。先頭は再読み込み、続きは「もっと見る」で再試行。
+  続きの 400 は先頭から読み直す。空は案内。失敗を空と見せない。
+- AC-4: 古い応答を捨てる(読み直しの後に届いた先頭/続きの応答)。読み込み中の「もっと見る」は要求を重ねない。
+- AC-5: 行のタップで計算画面が開き、攻撃側・技・防御側・条件が復元されて計算が1回出る。マスタに無い技・種族は入力を書き換えず計算の失敗。
+- AC-6: 「契約待ち」の注記を出さない。AX5 で横にはみ出さない。行・ボタンは 36pt 以上。
+
+### 既存テストの変更(絶対ルール6: 仕様変更に必然な箇所だけ。弱めていない)
+
+| テスト | 前 | 後 |
+|---|---|---|
+| `FavoritesScreenUITests.testDefaultShowsEmptyFavoritesAndOpponentHistory` | `opponentHistoryPendingNote` が**ある**ことを確かめる | 注記が**無い**ことと、計算履歴の節・先頭行(`calcHistoryRow-0-1790000000`)が**ある**ことを確かめる |
+| `FavoritesScreenUITests.testScreenNoHorizontalOverflowAtAX5AndRemoveStillWorks` | はみ出し検査の対象に `opponentHistoryPendingNote` | 同じ位置に `calcHistorySection`・`calcHistoryRow-0-1790000000`(注記が消えたため。検査自体は同じ) |
+| `FavoritesScreenUITests.testFailureStateNoHorizontalOverflowAtAX5` | 対象はお気に入りと相手履歴のエラー | 計算履歴のエラー・再読み込みも対象に追加(減らしていない) |
+
+`FavoritesLabels.pendingHistoryNote` は削除(参照していたテストは上の UITests だけ)。`CalcHistoryContractTests` は変更なし。
