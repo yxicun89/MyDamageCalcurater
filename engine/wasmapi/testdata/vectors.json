@@ -588,6 +588,115 @@
       }
     },
     {
+      "name": "calc/move-rule-target-weight",
+      "fn": "calc",
+      "tags": [
+        "mechanism",
+        "move-rule",
+        "weight"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            },
+            "weightHg": 4600
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            },
+            "weightHg": 999
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "testheavy",
+            "nameJa": "テストおもい",
+            "effect": {
+              "weightMod": 8192,
+              "breakable": true
+            }
+          },
+          "item": null
+        },
+        "move": {
+          "id": "testweight",
+          "type": "fighting",
+          "category": "physical",
+          "power": 0,
+          "priority": 0,
+          "mechanisms": [
+            "move_specific",
+            "variable_power"
+          ],
+          "rule": {
+            "powerFormula": "target_weight",
+            "moveSpecificResolved": true
+          }
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
       "name": "calc/psychic-terrain-priority",
       "fn": "calc",
       "tags": [

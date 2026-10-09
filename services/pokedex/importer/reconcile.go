@@ -65,7 +65,9 @@ type Summary struct {
 	// MoveMechanisms は Convert が止まったとき(partial)はゼロ値。
 	MoveMechanisms MoveMechanismSummary `json:"moveMechanisms"`
 	// MoveFlags は Convert が止まったとき(partial)はゼロ値(ADR-0178)。
-	MoveFlags     MoveFlagSummary     `json:"moveFlags"`
+	MoveFlags MoveFlagSummary `json:"moveFlags"`
+	// MoveRules は取り込んだ技の処理の定義の行数(ADR-0143)。Convert が止まったとき(partial)は 0。
+	MoveRules     int                 `json:"moveRules"`
 	WarningCounts map[FindingKind]int `json:"warningCounts"`
 	BlockerCounts map[FindingKind]int `json:"blockerCounts"`
 }
@@ -198,6 +200,7 @@ func Reconcile(in Input) (Output, Reconciliation, error) {
 	if !partial {
 		summary.MoveMechanisms = computeMoveMechanismSummary(out)
 		summary.MoveFlags = computeMoveFlagSummary(out)
+		summary.MoveRules = len(out.MoveRules)
 	}
 
 	warnings := append(append([]Finding{}, convReport.Warnings...), verdictWarnings...)

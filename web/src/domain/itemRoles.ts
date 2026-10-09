@@ -119,12 +119,21 @@ export function megaStoneLabel(species: MasterSpecies, stoneNameJa?: string | nu
   return megaStoneDisplayName(stoneNameJa, species.baseSpeciesNameJa);
 }
 
-/** engine・calc-svc に渡す持ち物の形(id・nameJa・effect だけ。境界は未知のフィールドを拒否する)。 */
-export function toEngineItem(item: MasterItem): Item {
+/**
+ * engine に渡す持ち物の形(id・nameJa・effect だけ。境界は未知のフィールドを拒否する)。roles・isMegaStone は画面のための
+ * 項目なので落とす。ただし防御側の持ち物(keepMegaStone)のメガストーンは isMegaStone: true を残す: 防御側の持ち物を払い落とす技が
+ * メガストーンを除くため(ADR-0143)。攻撃側の持ち物には要らない。偽・省略は作らない。
+ */
+export function toEngineItem(item: MasterItem, keepMegaStone = false): Item {
   if (item.roles === undefined && item.isMegaStone === undefined) {
     return item;
   }
-  return { id: item.id, nameJa: item.nameJa, effect: item.effect };
+  return {
+    id: item.id,
+    nameJa: item.nameJa,
+    effect: item.effect,
+    ...(keepMegaStone && item.isMegaStone === true ? { isMegaStone: true } : {}),
+  };
 }
 
 /**

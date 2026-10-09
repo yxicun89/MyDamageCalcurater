@@ -223,6 +223,8 @@ type speciesDTO struct {
 	// engine.Species には渡さず、境界の持ち物検証(mega.go)だけが使う。省略は通常の種族。
 	IsMega         bool   `json:"isMega"`
 	RequiredItemID string `json:"requiredItemId"`
+	// WeightHg は種族の重さ(hg。ADR-0143)。省略・0 は不明(重さで威力が決まる技に未対応の印が付く)。
+	WeightHg int `json:"weightHg"`
 }
 
 func (s speciesDTO) toEngine(path string) (engine.Species, error) {
@@ -239,7 +241,7 @@ func (s speciesDTO) toEngine(path string) (engine.Species, error) {
 	}
 	return engine.Species{
 		Key: s.Key, DexNo: s.DexNo, Form: s.Form, NameJa: s.NameJa,
-		Types: types, BaseStats: s.BaseStats.toEngine(), Abilities: s.Abilities,
+		Types: types, BaseStats: s.BaseStats.toEngine(), Abilities: s.Abilities, WeightHg: s.WeightHg,
 	}, nil
 }
 
@@ -258,6 +260,8 @@ type moveDTO struct {
 	Target string `json:"target"`
 	// Flags は技のフラグ(ADR-0178)。キーが無い・null は不明(FlagsKnown 偽)、配列は既知(空配列 = フラグなし)。
 	Flags *[]string `json:"flags"`
+	// Rule は技の処理の定義(ADR-0143)。省略・null は定義なし。キーは camelCase(PascalCase も受ける)。
+	Rule *moveRuleDTO `json:"rule"`
 }
 
 func (m moveDTO) toEngine(path string) (engine.Move, error) {
@@ -285,6 +289,9 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	}
 	out := engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
 		Mechanisms: mechanisms, Params: params, Target: target}
+	if out.Rule, err = m.Rule.toEngine(path + ".rule"); err != nil {
+		return engine.Move{}, err
+	}
 	if m.Flags != nil {
 		if out.Flags, err = parseMoveFlags(path+".flags", *m.Flags); err != nil {
 			return engine.Move{}, err
@@ -479,6 +486,8 @@ type itemDTO struct {
 	ID     string         `json:"id"`
 	NameJa string         `json:"nameJa"`
 	Effect *itemEffectDTO `json:"effect"`
+	// IsMegaStone はメガストーンか(ADR-0143。防御側の持ち物を払い落とす技の補正に使う)。省略は偽。
+	IsMegaStone bool `json:"isMegaStone"`
 }
 
 // itemToEngine は nil(持ち物なし)を nil のまま返す。
@@ -486,7 +495,7 @@ func itemToEngine(path string, d *itemDTO) (*engine.Item, error) {
 	if d == nil {
 		return nil, nil
 	}
-	item := &engine.Item{ID: d.ID, NameJa: d.NameJa}
+	item := &engine.Item{ID: d.ID, NameJa: d.NameJa, MegaStone: d.IsMegaStone}
 	if d.Effect != nil {
 		eff, err := d.Effect.toEngine(path + ".effect")
 		if err != nil {
@@ -593,6 +602,7 @@ type abilityEffectDTO struct {
 	DefFinalModsByFlag  map[string]int           `json:"defFinalModsByFlag"`
 	DefFinalModsByType  map[string]int           `json:"defFinalModsByType"`
 	NoContact           bool                     `json:"noContact"`
+	WeightMod           int                      `json:"weightMod"`           // 重さの補正(ADR-0143)
 	UnsupportedAttacker bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
 	UnsupportedDefender bool                     `json:"unsupportedDefender"`
 }
@@ -748,7 +758,7 @@ func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 	out := &engine.AbilityEffect{
 		StabMod: e.StabMod, OffBoostTypeMod: e.OffBoostTypeMod,
 		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
-		Airborne: e.Airborne, IgnoresParalysisSpeedDrop: e.IgnoresParalysisSpeedDrop,
+		Airborne: e.Airborne, IgnoresParalysisSpeedDrop: e.IgnoresParalysisSpeedDrop, WeightMod: e.WeightMod,
 		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
 	}
 	var err error

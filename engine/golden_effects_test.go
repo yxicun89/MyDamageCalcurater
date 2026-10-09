@@ -25,11 +25,14 @@ import (
 )
 
 // goldenTypedEffectFields は、生成器が効く/対照の組を作る効果のフィールド。
-var goldenTypedEffectFields = []string{"BoostType", "ResistBerryType", "OffBoostType", "DefResistType", "ReduceSuperEffective"}
+var goldenTypedEffectFields = []string{"BoostType", "ResistBerryType", "OffBoostType", "DefResistType", "ReduceSuperEffective", "WeightMod"}
 
 type goldenEffectsFile struct {
 	Items     map[string]map[string]json.RawMessage `json:"items"`
 	Abilities map[string]map[string]json.RawMessage `json:"abilities"`
+	// 素早さの効果定義(ADR-0139)。キーの名前だけ使う。
+	SpeedItems     map[string]json.RawMessage `json:"speedItems"`
+	SpeedAbilities map[string]json.RawMessage `json:"speedAbilities"`
 }
 
 func readGoldenEffects(t *testing.T) goldenEffectsFile {
@@ -111,6 +114,26 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 		}
 		ids = append(ids, c.ID)
 	}
+	// 技の機構の段階2(重さの補正の特性。ADR-0143)は mechanisms-stage2.json で照合する。素早さの補正を持つ持ち物
+	// (speedItems の名前。防御側の印だけの定義のくろいてっきゅうを攻撃側が持つ)だけは「印だけの定義を使っていない」の
+	// 検査に数えず、網羅(1件以上ある)にだけ数える。それ以外は fixed.json・mechanisms.json と同じく数える。
+	speedNames := map[string]bool{}
+	for _, m := range []map[string]json.RawMessage{effects.SpeedItems, effects.SpeedAbilities} {
+		for n := range m {
+			speedNames[n] = true
+		}
+	}
+	usedStage2 := map[string]int{}
+	for _, c := range readGoldenMechanismStage2Cases(t) {
+		items, abilities := caseEffects(goldenCase{Input: c.Input})
+		for _, n := range append(items, abilities...) {
+			usedStage2[n]++
+			if !speedNames[n] {
+				used[n]++
+			}
+		}
+		ids = append(ids, c.ID)
+	}
 	hasID := func(prefix, suffix string) bool {
 		for _, id := range ids {
 			if strings.HasPrefix(id, prefix) && strings.HasSuffix(id, suffix) {
@@ -135,8 +158,8 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 				continue
 			}
 			checked++
-			if used[name] == 0 {
-				t.Errorf("%s: fixed.json・mechanisms.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
+			if used[name]+usedStage2[name] == 0 {
+				t.Errorf("%s: fixed.json・mechanisms.json・mechanisms-stage2.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
 				continue
 			}
 			if !hasTypedEffect(group[name]) {

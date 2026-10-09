@@ -29,6 +29,9 @@ type MoveRow struct {
 	// pokedex-svc)のときは空でなければならない。Move で検証し、昇順に並べて engine.Move.Flags / FlagsKnown に載せる。
 	Flags      []string
 	FlagsKnown bool
+	// Rule は move_rules の rule(JSON。ADR-0143)。行が無ければ nil(定義なし)。Move で DecodeMoveRule・
+	// engine.Move.ValidateRule(機構との対応)を通し、engine.Move.Rule に写す。
+	Rule []byte
 }
 
 // MoveMechanismParamsRow は move_mechanism_params の行(1技1行。ADR-0142 §7)。ゼロ値は「その項目なし」。
@@ -128,6 +131,12 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 			return engine.Move{}, err
 		}
 	}
+	var rule *engine.MoveRule
+	if len(row.Rule) > 0 {
+		if rule, err = DecodeMoveRule(row.Rule, chart); err != nil {
+			return engine.Move{}, fmt.Errorf("%w: 技 %q の処理の定義: %v", ErrInvalidRow, row.ID, err)
+		}
+	}
 	move := engine.Move{
 		ID:         row.ID,
 		NameJa:     row.NameJa,
@@ -141,8 +150,12 @@ func Move(row MoveRow, chart engine.TypeChart) (engine.Move, error) {
 		Target:     target.Engine(),
 		Flags:      flags,
 		FlagsKnown: row.FlagsKnown,
+		Rule:       rule,
 	}
 	if err := move.ValidateParams(chart); err != nil {
+		return engine.Move{}, fmt.Errorf("%w: %v", ErrInvalidRow, err)
+	}
+	if err := move.ValidateRule(chart); err != nil {
 		return engine.Move{}, fmt.Errorf("%w: %v", ErrInvalidRow, err)
 	}
 	return move, nil

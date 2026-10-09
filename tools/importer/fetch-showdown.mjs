@@ -88,7 +88,16 @@ const species = [...dex.species.all()].map((s) => ({
   formeOrder: s.formeOrder ?? [],
   isNonstandard: toNonstandard(s),
   prevo: s.prevo ?? '',
+  // 種族の重さ(kg。ADR-0143 §4)。取得元の数値のまま出す(hg への変換・calc との照合は Go 側)。
+  weightkg: s.weightkg,
 }));
+for (const s of species) {
+  // 数値でない・負の値は黙って 0 にせず止める。0 は取得元がそのまま持つ(使用不可の巨大化フォーム等)ので止めない:
+  // 取り込む種族かどうかは Go 側が決め、取り込む種族の 0 は ErrInvalidData にする。
+  if (typeof s.weightkg !== 'number' || !Number.isFinite(s.weightkg) || s.weightkg < 0) {
+    throw new Error(`fetch-showdown: 種族 ${s.id} の weightkg が 0 以上の数でない: ${s.weightkg}`);
+  }
+}
 
 // 技の機構(ADR-0121)。技のデータオブジェクトが持つ関数のプロパティ名の昇順
 // (on で始まるハンドラと basePowerCallback 等の *Callback。どれがダメージに効くかの判断は Go 側)。

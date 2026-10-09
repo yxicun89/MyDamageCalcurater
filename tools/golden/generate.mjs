@@ -85,14 +85,28 @@ const nature = (gen, name) => {const n = gen.natures.get(id(name));return n.plus
 //   - gen9: 努力値へ換算する max(0,8*SP-4)(spInput: max(0,8*SP-4))
 // Champions のベクタで legacy 効果(genC に無い持ち物・特性)を使おうとしたら、ここで止める
 // (ADR-0002 §決定2「Champions のベクタはこれらを使わない」)。
+// 状態異常(ADR-0143。options.status は段階2のベクタだけが使う。options.burn は従来どおり)。oracle の記号 → engine の語彙。
+const statusNames = {brn:'burn',par:'paralysis',psn:'poison',tox:'badly_poison',slp:'sleep',frz:'freeze'};
 function individual(gen, name, options = {}) {
   const sp = {...stats(),...options.sp};
   assert(Object.values(sp).every(v => v >= 0 && v <= 32));
   assert(Object.values(sp).reduce((a,b) => a+b,0) <= 66);
   const ability = options.ability || '';
   const item = options.item || '';
-  if (ability) assert(effects.abilities[ability] && !isUnsupportedEffect(effects.abilities[ability]));
-  if (item) assert(effects.items[item] && !isUnsupportedEffect(effects.items[item]));
+  // options.stage2(技の機構の段階2。ADR-0143)のベクタは、素早さの補正(speedItems / speedAbilities)を持ち物・特性の効果に合わせ、
+  // 種族の重さ(WeightHg)を入力に載せる。それ以外のベクタは従来と同じ入力(バイト列を変えない)。
+  // stage2 は持ち主の側('a': 攻撃側 / 'd': 防御側)。未対応の印(ADR-0123)は、その側で効く印を持つ定義だけをベクタで使わない
+  // (くろいてっきゅうは防御側の印だけ持つので、攻撃側なら使える)。
+  const stage2 = options.stage2 || '';
+  assert(['', 'a', 'd'].includes(stage2), `未知の側 ${stage2}`);
+  const markedUnsupported = def => stage2 ? def[stage2 === 'a' ? 'UnsupportedAttacker' : 'UnsupportedDefender'] === true : isUnsupportedEffect(def);
+  const effectOf = (damage, speed, key) => stage2 && (damage[key] || speed[key]) ? {...(damage[key] || {}), ...(speed[key] || {})} : damage[key];
+  const abilityEffect = ability ? effectOf(effects.abilities, effects.speedAbilities, ability) : undefined;
+  const itemEffect = item ? effectOf(effects.items, effects.speedItems, item) : undefined;
+  if (ability) assert(abilityEffect && !markedUnsupported(abilityEffect));
+  if (item) assert(itemEffect && !markedUnsupported(itemEffect));
+  assert(!(options.status && options.burn) && (!options.status || statusNames[options.status]), `未知の状態 ${options.status}`);
+  const status = options.status || (options.burn ? 'brn' : '');
   if (gen.num === 0) {
     assert(!item || !legacyItems.has(item), `Champions ベクタが legacy 持ち物 ${item} を使おうとした`);
     assert(!ability || !legacyAbilities.has(ability), `Champions ベクタが legacy 特性 ${ability} を使おうとした`);
@@ -108,14 +122,15 @@ function individual(gen, name, options = {}) {
   // Empty ability alone is insufficient: Pokemon.clone() otherwise restores the species default.
   const p = new Pokemon(gen, name, {level:50, ivs:stats(31),
     evs, nature:options.nature || 'Serious', boosts:options.ranks || {}, ability, item,
-    status:options.burn ? 'brn' : '', overrides:{abilities:{0:''}}, ...(tera ? {teraType:tera} : {})});
+    status, overrides:{abilities:{0:''}}, ...(tera ? {teraType:tera} : {})});
   assert.equal(p.ability || '', ability);
   assert.equal(p.clone().ability || '', ability);
   assert.equal(p.clone().teraType || '', tera);
   const input={Species:{Key:p.species.id,Types:p.types.map(t => t.toLowerCase()),BaseStats:p.species.baseStats},
-    Level:50, Nature:nature(gen, p.nature), SP:sp, Ranks:options.ranks || {}, Status:options.burn ? 'burn':'none',
-    Ability:{ID:ability,Effect:effects.abilities[ability] || null},
-    Item:item ? {ID:item,Effect:effects.items[item]} : null};
+    Level:50, Nature:nature(gen, p.nature), SP:sp, Ranks:options.ranks || {}, Status:status ? statusNames[status] : 'none',
+    Ability:{ID:ability,Effect:abilityEffect || null},
+    Item:item ? {ID:item,Effect:itemEffect} : null};
+  if (stage2) input.Species.WeightHg=Math.round(p.species.weightkg*10);
   // テラス無しのベクタは従来と同じバイト列にするため、キー自体を出さない。
   if (tera) input.TeraType=tera.toLowerCase();
   return {p, input};
@@ -599,9 +614,15 @@ const probeExtraMoveNames = [
   'Vacuum Wave','Double-Edge','Flare Blitz','Brave Bird','Wild Charge','Head Smash','Bullet Seed','Rock Blast',
   'Icicle Spear','Boomburst','Leaf Blade','Psycho Cut','Water Pulse','Thunder Fang','Fire Fang',
 ];
+// 重さで威力が決まる技(威力は 0 で登録されている。ADR-0143)。重さの補正の特性(ヘヴィメタル・ライトメタル)を拾う。
+const probeWeightMoveNames = ['Low Kick','Grass Knot','Heavy Slam','Heat Crash'];
 const probeMoves = [...moves, ...probeExtraMoveNames.map(n => {
   const m = genC.moves.get(id(n));
   assert(m && m.basePower > 0, `調査用の技 ${n} が Champions 世代に無い(改名された可能性。列挙を見直す)`);
+  return m;
+}), ...probeWeightMoveNames.map(n => {
+  const m = genC.moves.get(id(n));
+  assert(m && m.basePower === 0, `調査用の重さの技 ${n} が Champions 世代に無い、または威力が 0 でない(列挙を見直す)`);
   return m;
 })];
 {
@@ -1290,6 +1311,499 @@ for (const name of Object.keys(effects.abilities).sort()) {
   }
 }
 
+// --- 技の機構の段階2(ADR-0143 §7): mechanisms-stage2.json ---------------------------------------------
+// 既存の入力(状態異常・持ち物・天候・フィールド・ランク・壁)と種族の重さ・素早さだけで決まる技の処理を、
+// effects.json の moveRules(技 → engine の MoveRule)をベクタの入力(Move.Rule)に載せて oracle(Champions 世代)と照合する。
+// 技の名前で機構や結果を決めない(機構は moveRules の中身から導く)。既存のファイルのバイト列・乱数列は変えない
+// (新しいファイルだけ。乱数も使わない)。ベクタは種族の重さ(WeightHg = oracle の weightkg × 10)と、
+// 持ち物・特性の効果(素早さの補正 speedItems / speedAbilities を含む)を入力に載せる。
+const stage2Rules = effects.moveRules;
+assert(stage2Rules && Object.keys(stage2Rules).length > 0, 'testdata/golden/effects.json に moveRules が無い');
+assert(effects.speedItems && effects.speedAbilities, 'testdata/golden/effects.json に speedItems / speedAbilities が無い');
+const stage2Fixed = [];
+const stage2CoveredMoves = new Set();
+// moveRules の中身から、engine の検証(機構との対応)を満たしつつ未対応の印が付かない機構の一覧を作る。
+function stage2Mechanisms(rule) {
+  const mechanisms = [];
+  if (rule.PowerFormula || rule.PowerBoosts || rule.IgnoresBurn) mechanisms.push('variable_power');
+  if (rule.PowerFormula === 'hit_index') mechanisms.push('multi_hit');
+  if (rule.MoveSpecificResolved) mechanisms.push('move_specific');
+  if (rule.TypeByWeather || rule.TypeByTerrain) mechanisms.push('type_change');
+  if (rule.ExtraEffectivenessType || rule.SuperEffectiveAgainst) mechanisms.push('effectiveness_change');
+  if (rule.TerrainPowerMods) mechanisms.push('field_specific');
+  if (rule.PriorityBoost) mechanisms.push('priority_change');
+  assert(mechanisms.length > 0, '技の処理の定義が機構を持たない');
+  return mechanisms.sort();
+}
+// options は vector と同じ(a / d / critical / screen / weather / terrain / format)。技のデータ(タイプ・威力・対象)は
+// calculate() が書き換える(ウェザーボールのタイプ等)ので、呼ぶ前に写しておく。
+function stage2Vector(label, a, d, moveName, options = {}) {
+  const rule = stage2Rules[moveName];
+  assert(rule, `${label}: moveRules に ${moveName} が無い`);
+  const attack = individual(genC, a, {...options.a, stage2:'a'}), defend = individual(genC, d, {...options.d, stage2:'d'});
+  const weather = options.weather || 'none', terrain = options.terrain || 'none', screen = options.screen;
+  const format = options.format || 'single';
+  assert(gameTypeNames[format], `未知の形式 ${format}`);
+  const m = new Move(genC, moveName, {isCrit:!!options.critical, ability:attack.p.ability || undefined});
+  const data = {type:m.type, category:m.category, bp:m.bp, priority:m.priority, hits:m.hits || 1, target:moveTargetOf(m), multihit:genC.moves.get(id(moveName)).multihit};
+  const f = new Field({gameType:gameTypeNames[format],weather:weatherNames[weather],terrain:terrainNames[terrain],
+    defenderSide:{isReflect:screen==='Reflect',isLightScreen:screen==='LightScreen',isAuroraVeil:screen==='AuroraVeil'}});
+  const result = calculate(genC, attack.p, defend.p, m, f);
+  const matrix = typeof result.damage === 'number' ? [Array(16).fill(result.damage)]
+    : Array.isArray(result.damage[0]) ? result.damage : [result.damage];
+  assert(matrix.every(r => r.length === 16 && r.every(Number.isInteger)), `${label}: oracle のダメージが16段階の整数でない`);
+  assert.equal(matrix.length, data.hits, `${label}: 回数が oracle の Move と違う`);
+  const rolls = matrix[0].map((_, i) => matrix.reduce((s, r) => s + r[i], 0));
+  const hp = defend.p.rawStats.hp;
+  const move = {ID:id(moveName),Type:data.type.toLowerCase(),Category:data.category.toLowerCase(),Power:data.bp,Priority:data.priority,
+    Mechanisms:stage2Mechanisms(rule),Rule:rule};
+  if (rule.PowerFormula === 'hit_index') {
+    assert(data.multihit, `${label}: hit_index の技が多段でない`);
+    move.mechanismParams = {MultiHit:Array.isArray(data.multihit) ? {Min:data.multihit[0],Max:data.multihit[1]} : {Min:data.multihit,Max:data.multihit}};
+  }
+  if (format === 'double') move.Target = data.target; // 未指定だとダブルで「対象が不明」の印が付く
+  const expected = {rolls,attackerStats:attack.p.rawStats,defenderStats:defend.p.rawStats,ko:matrix.length > 1 ? koUses(matrix,hp) : ko(rolls,hp)};
+  if (matrix.length > 1) expected.hitRolls = matrix;
+  return {id:label, oracle:{attacker:a,defender:d,move:moveName}, input:{Format:format,Attacker:attack.input,Defender:defend.input,
+    Move:move,
+    Field:{Weather:weather,Terrain:terrain,DefenderScreens:{Reflect:screen==='Reflect',LightScreen:screen==='LightScreen',AuroraVeil:screen==='AuroraVeil'}},Critical:!!options.critical},
+    expected};
+}
+const addStage2 = (label, a, d, moveName, options) => {
+  const v = stage2Vector(label, a, d, moveName, options);
+  stage2Fixed.push(v);
+  stage2CoveredMoves.add(moveName);
+  return v;
+};
+const hasDamage = v => v.expected.rolls.some(r => r > 0);
+// pair は apply(label)と control(controlLabel。省略時は足さず比べるだけ)を作り、oracle のダメージが
+// 変わる/変わらないが想定どおりであることを確かめる(定義の取り違えで効かない・効きすぎるケースを照合しない)。
+function stage2Pair(label, controlLabel, a, d, moveName, options, controlOptions, expectChange = true) {
+  const v = addStage2(label, a, d, moveName, options);
+  const control = controlLabel ? addStage2(controlLabel, a, d, moveName, controlOptions) : stage2Vector(`${label}/base`, a, d, moveName, controlOptions);
+  assert(hasDamage(v) || hasDamage(control), `${label}: ダメージが0(相性で無効な組を選んだ)`);
+  assert.equal(JSON.stringify(v.expected.rolls) !== JSON.stringify(control.expected.rolls), expectChange,
+    `${label}: 比べた条件と oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
+  return v;
+}
+// 比べる相手のベクタを足さない pair(同じ control を複数の apply で共有するとき、control は1度だけ addStage2 で足す)。
+const compareStage2 = (label, a, d, moveName, options, control, expectChange = true) => {
+  const v = addStage2(label, a, d, moveName, options);
+  assert(hasDamage(v) || hasDamage(control), `${label}: ダメージが0(相性で無効な組を選んだ)`);
+  if (expectChange !== 'any') {
+    assert.equal(JSON.stringify(v.expected.rolls) !== JSON.stringify(control.expected.rolls), expectChange,
+      `${label}: 比べた条件と oracle のダメージが${expectChange ? '変わらない' : '変わる'}`);
+  }
+  return v;
+};
+// グループ単位の保証: 比べた条件で oracle のダメージが変わった組が1つ以上あること(素早さの補正は表の段をまたがないと変わらないため、
+// 組ごとには問わない)。
+const changedGroups = {};
+const trackChange = (group, v, control) => {
+  changedGroups[group] ||= false;
+  if (JSON.stringify(v.expected.rolls) !== JSON.stringify(control.expected.rolls)) changedGroups[group] = true;
+};
+const slugOf = name => id(name);
+
+// 状態異常: 攻撃側(からげんき)・防御側(たたりめ型・ベノムショック型・ベノムトラップ型)。
+{
+  const facadePairs = [['Snorlax','Garchomp'],['Typhlosion','Tyranitar']];
+  for (const [a, d] of facadePairs) {
+    const none = addStage2(`status-none/facade/${a}/${d}/none`, a, d, 'Facade', {});
+    for (const st of ['brn','par','psn','tox']) compareStage2(`status-attacker/facade/${a}/${d}/${st}`, a, d, 'Facade', {a:{status:st}}, none);
+    // こおり・ねむりは一覧に無い(Showdown はこおりを含むが oracle に従う)。状態なしと同じダメージ。
+    for (const st of ['slp','frz']) compareStage2(`status-none/facade/${a}/${d}/${st}`, a, d, 'Facade', {a:{status:st}}, none, false);
+    // やけどの攻撃半減を受けない: やけど × からげんきは、まひ × からげんきと同じダメージ(2倍のみ)。
+    const par = stage2Vector(`status-attacker/facade/${a}/${d}/par-ref`, a, d, 'Facade', {a:{status:'par'}});
+    compareStage2(`status-attacker/facade/${a}/${d}/brn-no-halving`, a, d, 'Facade', {a:{status:'brn'}}, par, false);
+    // 補正の連鎖: 8192 とこだわり系でない持ち物(ライフオーブ)。
+    addStage2(`status-attacker/facade/${a}/${d}/brn-life-orb`, a, d, 'Facade', {a:{status:'brn', item:'Life Orb'}});
+    addStage2(`status-attacker/facade/${a}/${d}/tox-reflect-crit`, a, d, 'Facade', {a:{status:'tox'}, screen:'Reflect', critical:true});
+  }
+  const statusAll = ['brn','par','psn','tox','slp','frz'];
+  const defenderMoves = [
+    ['Hex', [['Gengar','Garchomp'],['Gengar','Metagross']], statusAll],
+    ['Infernal Parade', [['Gengar','Garchomp'],['Gengar','Metagross']], statusAll],
+    ['Venoshock', [['Gengar','Garchomp'],['Gengar','Snorlax']], ['psn','tox']],
+    ['Barb Barrage', [['Garchomp','Snorlax'],['Tyranitar','Garchomp']], ['psn','tox']],
+  ];
+  for (const [moveName, pairs, statuses] of defenderMoves) for (const [a, d] of pairs) {
+    const slug = slugOf(moveName);
+    const none = addStage2(`status-none/${slug}/${a}/${d}/none`, a, d, moveName, {});
+    for (const st of statuses) compareStage2(`status-defender/${slug}/${a}/${d}/${st}`, a, d, moveName, {d:{status:st}}, none);
+    // 一覧に無い状態は状態なしと同じダメージ(ベノムショック・ベノムトラップ型は毒だけ)。
+    if (statuses.length === 2) for (const st of ['brn','par']) compareStage2(`status-none/${slug}/${a}/${d}/${st}`, a, d, moveName, {d:{status:st}}, none, false);
+    addStage2(`status-defender/${slug}/${a}/${d}/tox-technician`, a, d, moveName, {a:{ability:'Technician'}, d:{status:'tox'}});
+    addStage2(`status-defender/${slug}/${a}/${d}/psn-crit-reflect`, a, d, moveName, {d:{status:'psn'}, critical:true, screen:moveName === 'Barb Barrage' ? 'Reflect' : 'LightScreen'});
+  }
+}
+// 持ち物: アクロバット型(攻撃側が持ち物なし)・はたきおとす型(防御側が持ち物あり)・ポルターガイスト型(防御側が持ち物なしで失敗)。
+{
+  for (const [a, d] of [['Corviknight','Garchomp'],['Charizard','Snorlax']]) {
+    const held = addStage2(`item-held/acrobatics/${a}/${d}/muscle-band`, a, d, 'Acrobatics', {a:{item:'Muscle Band'}});
+    compareStage2(`item-none/acrobatics/${a}/${d}/none`, a, d, 'Acrobatics', {}, held);
+    addStage2(`item-held/acrobatics/${a}/${d}/life-orb`, a, d, 'Acrobatics', {a:{item:'Life Orb'}});
+    addStage2(`item-none/acrobatics/${a}/${d}/technician`, a, d, 'Acrobatics', {a:{ability:'Technician'}});
+    addStage2(`item-none/acrobatics/${a}/${d}/crit-reflect`, a, d, 'Acrobatics', {critical:true, screen:'Reflect'});
+  }
+  for (const [a, d] of [['Tyranitar','Snorlax'],['Scizor','Garchomp'],['Weavile','Clefable']]) {
+    const plain = addStage2(`item-none/knockoff/${a}/${d}/none`, a, d, 'Knock Off', {});
+    compareStage2(`item-removable/knockoff/${a}/${d}/muscle-band`, a, d, 'Knock Off', {d:{item:'Muscle Band'}}, plain);
+    compareStage2(`item-removable/knockoff/${a}/${d}/life-orb`, a, d, 'Knock Off', {d:{item:'Life Orb'}}, plain);
+    addStage2(`item-removable/knockoff/${a}/${d}/muscle-band-technician`, a, d, 'Knock Off', {a:{ability:'Technician'}, d:{item:'Muscle Band'}});
+    addStage2(`item-removable/knockoff/${a}/${d}/muscle-band-crit`, a, d, 'Knock Off', {d:{item:'Muscle Band'}, critical:true});
+  }
+  for (const [a, d] of [['Gengar','Garchomp'],['Gengar','Metagross']]) {
+    const failed = addStage2(`item-failed/poltergeist/${a}/${d}/none`, a, d, 'Poltergeist', {});
+    assert(!hasDamage(failed), `item-failed/poltergeist/${a}/${d}: 持ち物なしで失敗していない`);
+    const held = addStage2(`item-held/poltergeist/${a}/${d}/muscle-band`, a, d, 'Poltergeist', {d:{item:'Muscle Band'}});
+    assert(hasDamage(held), `item-held/poltergeist/${a}/${d}: 持ち物ありで当たっていない`);
+    addStage2(`item-held/poltergeist/${a}/${d}/life-orb-crit`, a, d, 'Poltergeist', {a:{item:'Life Orb'}, d:{item:'Muscle Band'}, critical:true});
+  }
+}
+// 天候: ウェザーボール型(タイプと威力)・ソーラービーム型(雨・砂・雪で半減)。
+{
+  for (const [a, d] of [['Typhlosion','Snorlax'],['Blastoise','Tyranitar']]) {
+    const none = addStage2(`weather/weatherball/${a}/${d}/none`, a, d, 'Weather Ball', {});
+    for (const w of ['sun','rain','sand','snow']) compareStage2(`weather/weatherball/${a}/${d}/${w}`, a, d, 'Weather Ball', {weather:w}, none);
+    addStage2(`weather/weatherball/${a}/${d}/rain-reflect-crit`, a, d, 'Weather Ball', {weather:'rain', critical:true, screen:'LightScreen'});
+    addStage2(`weather/weatherball/${a}/${d}/sun-life-orb`, a, d, 'Weather Ball', {weather:'sun', a:{item:'Life Orb'}});
+  }
+  for (const [moveName, a, d] of [['Solar Beam','Venusaur','Snorlax'],['Solar Beam','Sceptile','Garchomp'],['Solar Blade','Sceptile','Snorlax'],['Solar Blade','Venusaur','Tyranitar']]) {
+    const slug = slugOf(moveName);
+    const none = addStage2(`weather/${slug}/${a}/${d}/none`, a, d, moveName, {});
+    for (const w of ['rain','sand','snow']) compareStage2(`weather/${slug}/${a}/${d}/${w}`, a, d, moveName, {weather:w}, none);
+    compareStage2(`weather/${slug}/${a}/${d}/sun`, a, d, moveName, {weather:'sun'}, none, false);
+    addStage2(`weather/${slug}/${a}/${d}/snow-technician`, a, d, moveName, {weather:'snow', a:{ability:'Technician'}});
+  }
+}
+// フィールド: テラバースト型(攻撃側が接地のときだけタイプと威力)・ミストバースト型・ワイドフォース型・ライジングボルト型(防御側が接地)・
+// じしん型(グラスフィールドで防御側が接地なら半減)。浮いている側(ひこう)は変わらない。
+{
+  const terrains = ['electric','grassy','misty','psychic'];
+  for (const [a, d] of [['Gardevoir','Snorlax'],['Clefable','Tyranitar']]) {
+    const none = addStage2(`terrain-attacker/terrainpulse/${a}/${d}/none`, a, d, 'Terrain Pulse', {});
+    for (const t of terrains) compareStage2(`terrain-attacker/terrainpulse/${a}/${d}/${t}`, a, d, 'Terrain Pulse', {terrain:t}, none);
+    addStage2(`terrain-attacker/terrainpulse/${a}/${d}/electric-crit-reflect`, a, d, 'Terrain Pulse', {terrain:'electric', critical:true, screen:'LightScreen'});
+  }
+  for (const [a, d] of [['Corviknight','Snorlax'],['Charizard','Garchomp']]) {
+    const none = stage2Vector(`terrain-airborne/terrainpulse/${a}/${d}/none-ref`, a, d, 'Terrain Pulse', {});
+    for (const t of terrains) compareStage2(`terrain-airborne/terrainpulse/${a}/${d}/${t}`, a, d, 'Terrain Pulse', {terrain:t}, none, false);
+  }
+  for (const [a, d] of [['Gardevoir','Garchomp'],['Clefable','Tyranitar']]) {
+    const none = addStage2(`terrain-attacker/mistyexplosion/${a}/${d}/none`, a, d, 'Misty Explosion', {});
+    compareStage2(`terrain-attacker/mistyexplosion/${a}/${d}/misty`, a, d, 'Misty Explosion', {terrain:'misty'}, none);
+    compareStage2(`terrain-attacker/mistyexplosion/${a}/${d}/electric`, a, d, 'Misty Explosion', {terrain:'electric'}, none, false);
+    addStage2(`terrain-attacker/mistyexplosion/${a}/${d}/misty-life-orb-crit`, a, d, 'Misty Explosion', {terrain:'misty', a:{item:'Life Orb'}, critical:true});
+  }
+  for (const [a, d] of [['Charizard','Garchomp'],['Corviknight','Tyranitar']]) {
+    const none = stage2Vector(`terrain-airborne/mistyexplosion/${a}/${d}/none-ref`, a, d, 'Misty Explosion', {});
+    compareStage2(`terrain-airborne/mistyexplosion/${a}/${d}/misty`, a, d, 'Misty Explosion', {terrain:'misty'}, none, false);
+  }
+  for (const [a, d] of [['Gardevoir','Snorlax'],['Gengar','Garchomp']]) {
+    const none = addStage2(`terrain-attacker/expandingforce/${a}/${d}/none`, a, d, 'Expanding Force', {});
+    compareStage2(`terrain-attacker/expandingforce/${a}/${d}/psychic`, a, d, 'Expanding Force', {terrain:'psychic'}, none);
+    addStage2(`terrain-attacker/expandingforce/${a}/${d}/psychic-technician-crit`, a, d, 'Expanding Force', {terrain:'psychic', a:{ability:'Technician'}, critical:true});
+    // 他のフィールドでは変わらない。
+    compareStage2(`terrain-attacker/expandingforce/${a}/${d}/grassy`, a, d, 'Expanding Force', {terrain:'grassy'}, none, false);
+    // ダブル: サイコフィールドで攻撃側が接地なら全体技。浮いている側は単体のまま。
+    const doubleNone = addStage2(`terrain-spread/expandingforce/${a}/${d}/double-none`, a, d, 'Expanding Force', {format:'double'});
+    compareStage2(`terrain-spread/expandingforce/${a}/${d}/double-psychic`, a, d, 'Expanding Force', {format:'double', terrain:'psychic'}, doubleNone);
+    addStage2(`terrain-spread/expandingforce/${a}/${d}/double-psychic-reflect`, a, d, 'Expanding Force', {format:'double', terrain:'psychic', screen:'LightScreen'});
+  }
+  {
+    const doubleNone = stage2Vector('terrain-airborne/expandingforce/Charizard/Snorlax/double-none-ref', 'Charizard', 'Snorlax', 'Expanding Force', {format:'double'});
+    const airborne = addStage2('terrain-airborne/expandingforce/Charizard/Snorlax/double-psychic', 'Charizard', 'Snorlax', 'Expanding Force', {format:'double', terrain:'psychic'});
+    // 浮いていて全体技にならず、サイコフィールドの威力の補正も受けない: 単体のまま(フィールドなしと同じダメージ)。
+    assert.equal(JSON.stringify(airborne.expected.rolls), JSON.stringify(doubleNone.expected.rolls), '浮いた攻撃側のワイドフォース型がフィールドなしと違う');
+  }
+  for (const [a, d] of [['Pikachu','Snorlax'],['Jolteon','Blastoise']]) {
+    const none = addStage2(`terrain-defender/risingvoltage/${a}/${d}/none`, a, d, 'Rising Voltage', {});
+    compareStage2(`terrain-defender/risingvoltage/${a}/${d}/electric`, a, d, 'Rising Voltage', {terrain:'electric'}, none);
+    addStage2(`terrain-defender/risingvoltage/${a}/${d}/electric-crit-reflect`, a, d, 'Rising Voltage', {terrain:'electric', critical:true, screen:'LightScreen'});
+    compareStage2(`terrain-defender/risingvoltage/${a}/${d}/grassy`, a, d, 'Rising Voltage', {terrain:'grassy'}, none, false);
+  }
+  for (const [a, d] of [['Pikachu','Corviknight'],['Jolteon','Charizard']]) {
+    const none = stage2Vector(`terrain-airborne/risingvoltage/${a}/${d}/none-ref`, a, d, 'Rising Voltage', {});
+    // 防御側が浮いていれば ×2 を受けない。攻撃側のエレキフィールドの 1.3 倍は掛かるので、それだけの差。
+    addStage2(`terrain-airborne/risingvoltage/${a}/${d}/electric`, a, d, 'Rising Voltage', {terrain:'electric'});
+    assert(hasDamage(none), `terrain-airborne/risingvoltage/${a}/${d}: ダメージが0`);
+  }
+  for (const [moveName, pairs] of [['Earthquake', [['Garchomp','Snorlax'],['Excadrill','Typhlosion']]], ['Bulldoze', [['Garchomp','Tyranitar'],['Excadrill','Typhlosion']]]]) {
+    for (const [a, d] of pairs) {
+      const slug = slugOf(moveName);
+      const none = addStage2(`terrain-defender/${slug}/${a}/${d}/none`, a, d, moveName, {});
+      compareStage2(`terrain-defender/${slug}/${a}/${d}/grassy`, a, d, moveName, {terrain:'grassy'}, none);
+      compareStage2(`terrain-defender/${slug}/${a}/${d}/electric`, a, d, moveName, {terrain:'electric'}, none, false);
+      addStage2(`terrain-defender/${slug}/${a}/${d}/grassy-crit-reflect`, a, d, moveName, {terrain:'grassy', critical:true, screen:'Reflect'});
+      addStage2(`terrain-defender/${slug}/${a}/${d}/double-grassy`, a, d, moveName, {format:'double', terrain:'grassy'});
+    }
+  }
+  // 地面技を受けない浮いた防御側(ひこう)に当てる組は、タイプ相性で無効(oracle が 0)。グラスフィールドの半減は関係しない。
+  for (const [a, d] of [['Garchomp','Corviknight']]) {
+    const v = addStage2(`terrain-airborne/earthquake/${a}/${d}/grassy`, a, d, 'Earthquake', {terrain:'grassy'});
+    assert(!hasDamage(v), `terrain-airborne/earthquake/${a}/${d}: 無効になっていない`);
+  }
+}
+// 優先度: グラススライダー型はグラスフィールドで +1。サイコフィールドと同時には起きないので、どちらでも当たる。
+{
+  for (const [a, d] of [['Sceptile','Snorlax'],['Venusaur','Garchomp']]) {
+    for (const t of ['none','psychic','grassy']) {
+      const v = addStage2(`priority-terrain/grassyglide/${a}/${d}/${t}`, a, d, 'Grassy Glide', {terrain:t});
+      assert(hasDamage(v), `priority-terrain/grassyglide/${a}/${d}/${t}: ダメージが0`);
+    }
+    addStage2(`priority-terrain/grassyglide/${a}/${d}/psychic-crit`, a, d, 'Grassy Glide', {terrain:'psychic', critical:true});
+  }
+}
+// ランク: アシストパワー型(攻撃側の正のランクだけを数える)。
+{
+  for (const [moveName, a, d] of [['Stored Power','Gardevoir','Snorlax'],['Stored Power','Gengar','Garchomp'],['Power Trip','Tyranitar','Snorlax'],['Power Trip','Weavile','Gardevoir']]) {
+    const slug = slugOf(moveName);
+    const none = addStage2(`ranks/${slug}/${a}/${d}/none`, a, d, moveName, {});
+    compareStage2(`ranks/${slug}/${a}/${d}/plus2`, a, d, moveName, {a:{ranks:{atk:2}}}, none);
+    compareStage2(`ranks/${slug}/${a}/${d}/mixed`, a, d, moveName, {a:{ranks:{atk:2,def:1,spa:-1,spe:3}}}, none);
+    compareStage2(`ranks/${slug}/${a}/${d}/max`, a, d, moveName, {a:{ranks:{atk:6,def:6,spa:6,spd:6,spe:6}}}, none);
+    // 負のランクは数えない: 威力は変わらず、攻撃の実数値だけが変わる。ランクなしと違うのは実数値の分。
+    addStage2(`ranks/${slug}/${a}/${d}/negative-only`, a, d, moveName, {a:{ranks:{def:-2,spd:-6}}});
+    addStage2(`ranks/${slug}/${a}/${d}/plus1-defender-ranks`, a, d, moveName, {a:{ranks:{spe:1}}, d:{ranks:{def:2,spd:2}}});
+    addStage2(`ranks/${slug}/${a}/${d}/plus3-crit-reflect`, a, d, moveName, {a:{ranks:{def:3}}, critical:true, screen:'Reflect'});
+  }
+}
+// 素早さ: エレキボール型(比の表)・ジャイロボール型(式)。ランク・まひ・素早さの補正(特性・持ち物)を入れた素早さで決まる。
+{
+  const speedPairs = [['Jolteon','Snorlax'],['Pikachu','Tyranitar'],['Gengar','Garchomp'],['Snorlax','Weavile']];
+  const ball = (moveName, slug, label) => {
+    for (const [a, d] of speedPairs) {
+      // a が電気・鋼でなくても威力の式は同じ(タイプ相性・一致の有無はダメージの差になるだけ)。無効の組は除く。
+      const probe = stage2Vector(`${label}/${slug}/${a}/${d}/probe`, a, d, moveName, {});
+      if (!hasDamage(probe)) continue;
+      addStage2(`${label}/${slug}/${a}/${d}/plain`, a, d, moveName, {});
+      addStage2(`${label}/${slug}/${a}/${d}/atk-spe-plus1`, a, d, moveName, {a:{ranks:{spe:1}}});
+      addStage2(`${label}/${slug}/${a}/${d}/atk-spe-minus2`, a, d, moveName, {a:{ranks:{spe:-2}}});
+      addStage2(`${label}/${slug}/${a}/${d}/def-spe-minus1`, a, d, moveName, {d:{ranks:{spe:-1}}});
+      addStage2(`${label}/${slug}/${a}/${d}/def-spe-plus6`, a, d, moveName, {d:{ranks:{spe:6}}});
+      addStage2(`${label}/${slug}/${a}/${d}/atk-max-spe-sp`, a, d, moveName, {a:{sp:{spe:32}, nature:'Jolly'}, d:{sp:{spe:0}, nature:'Brave'}});
+      addStage2(`${label}/${slug}/${a}/${d}/crit-reflect`, a, d, moveName, {critical:true, screen:'Reflect'});
+    }
+  };
+  ball('Electro Ball', 'electroball', 'speed-ratio');
+  ball('Gyro Ball', 'gyroball', 'speed-inverse');
+  for (const [moveName, slug, pair] of [['Electro Ball','electroball',['Jolteon','Snorlax']],['Gyro Ball','gyroball',['Snorlax','Weavile']],['Gyro Ball','gyroball',['Scizor','Garchomp']]]) {
+    const [a, d] = pair;
+    const plain = addStage2(`speed-paralysis/${slug}/${a}/${d}/none`, a, d, moveName, {});
+    if (!hasDamage(plain)) continue;
+    trackChange('speed-paralysis', compareStage2(`speed-paralysis/${slug}/${a}/${d}/atk-par`, a, d, moveName, {a:{status:'par'}}, plain, 'any'), plain);
+    trackChange('speed-paralysis', compareStage2(`speed-paralysis/${slug}/${a}/${d}/def-par`, a, d, moveName, {d:{status:'par'}}, plain, 'any'), plain);
+    addStage2(`speed-paralysis/${slug}/${a}/${d}/both-par`, a, d, moveName, {a:{status:'par'}, d:{status:'par'}});
+    addStage2(`speed-paralysis/${slug}/${a}/${d}/atk-par-spe-plus2`, a, d, moveName, {a:{status:'par', ranks:{spe:2}}});
+    // まひの半減は切り捨て(素早さが奇数になる組)。
+    addStage2(`speed-paralysis/${slug}/${a}/${d}/atk-par-odd`, a, d, moveName, {a:{status:'par', sp:{spe:1}}, d:{sp:{spe:3}}});
+  }
+  assert.equal(changedGroups['speed-paralysis'], true, 'speed-paralysis: まひで oracle のダメージが変わった組が1つも無い');
+  // 素早さの補正(特性): ようりょくそ・すいすい・すなかき・ゆきかき・サーフテール(エレキフィールド)・はやあし(状態異常)・かるわざ(item_lost は入力に無いので効かない)。
+  const speedAbilityCases = [
+    ['Chlorophyll', {weather:'sun'}, true], ['Swift Swim', {weather:'rain'}, true], ['Sand Rush', {weather:'sand'}, true],
+    ['Slush Rush', {weather:'snow'}, true], ['Surge Surfer', {terrain:'electric'}, true],
+  ];
+  for (const [moveName, slug, a, d] of [['Gyro Ball','gyroball','Scizor','Garchomp'],['Gyro Ball','gyroball','Snorlax','Weavile'],['Electro Ball','electroball','Pikachu','Tyranitar'],['Electro Ball','electroball','Snorlax','Weavile']]) {
+    for (const [ability, cond] of speedAbilityCases) {
+      const slug2 = slugOf(ability);
+      // 攻撃側が持つ。条件が成立する場(on)と成立しない場(off)。
+      const onBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/${slug2}/on-base`, a, d, moveName, cond);
+      const on = compareStage2(`speed-ability/${slug}/${a}/${d}/${slug2}/on`, a, d, moveName, {...cond, a:{ability}}, onBase, 'any');
+      trackChange(`speed-ability/${slug2}`, on, onBase);
+      const offBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/${slug2}/off-base`, a, d, moveName, {});
+      compareStage2(`speed-ability/${slug}/${a}/${d}/${slug2}/off`, a, d, moveName, {a:{ability}}, offBase, false);
+      // 防御側が持つ。
+      const defBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/${slug2}/defender-base`, a, d, moveName, cond);
+      const def = compareStage2(`speed-ability/${slug}/${a}/${d}/${slug2}/defender`, a, d, moveName, {...cond, d:{ability}}, defBase, 'any');
+      trackChange(`speed-ability/${slug2}`, def, defBase);
+    }
+    // はやあし: 状態異常で ×1.5・まひの半減を受けない。
+    const qf = 'Quick Feet';
+    const parBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/quickfeet/par-base`, a, d, moveName, {a:{status:'par'}});
+    trackChange('speed-ability/quickfeet', compareStage2(`speed-ability/${slug}/${a}/${d}/quickfeet/par`, a, d, moveName, {a:{ability:qf, status:'par'}}, parBase, 'any'), parBase);
+    const brnBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/quickfeet/brn-base`, a, d, moveName, {a:{status:'brn'}});
+    trackChange('speed-ability/quickfeet', compareStage2(`speed-ability/${slug}/${a}/${d}/quickfeet/brn`, a, d, moveName, {a:{ability:qf, status:'brn'}}, brnBase, 'any'), brnBase);
+    const defPsnBase = stage2Vector(`speed-ability/${slug}/${a}/${d}/quickfeet/def-psn-base`, a, d, moveName, {d:{status:'psn'}});
+    trackChange('speed-ability/quickfeet', compareStage2(`speed-ability/${slug}/${a}/${d}/quickfeet/def-psn`, a, d, moveName, {d:{ability:qf, status:'psn'}}, defPsnBase, 'any'), defPsnBase);
+    addStage2(`speed-ability/${slug}/${a}/${d}/quickfeet/none`, a, d, moveName, {a:{ability:qf}});
+    // かるわざ: 入力に「持ち物を失った」状態が無いので素早さは変わらない(oracle も既定は効かない)。
+    compareStage2(`speed-ability/${slug}/${a}/${d}/unburden`, a, d, moveName, {a:{ability:'Unburden'}}, stage2Vector(`speed-ability/${slug}/${a}/${d}/unburden-base`, a, d, moveName, {}), false);
+    // くろいてっきゅう: 素早さ半減。
+    const base = stage2Vector(`speed-item/${slug}/${a}/${d}/base`, a, d, moveName, {});
+    trackChange('speed-item/ironball', compareStage2(`speed-item/${slug}/${a}/${d}/ironball`, a, d, moveName, {a:{item:'Iron Ball'}}, base, 'any'), base);
+    addStage2(`speed-item/${slug}/${a}/${d}/ironball-par-swiftswim`, a, d, moveName, {weather:'rain', a:{item:'Iron Ball', ability:'Swift Swim', status:'par'}});
+    addStage2(`speed-item/${slug}/${a}/${d}/ironball-ranks`, a, d, moveName, {a:{item:'Iron Ball', ranks:{spe:3}}});
+  }
+  for (const group of ['speed-ability/chlorophyll','speed-ability/swiftswim','speed-ability/sandrush','speed-ability/slushrush','speed-ability/surgesurfer','speed-ability/quickfeet','speed-item/ironball']) {
+    assert.equal(changedGroups[group], true, `${group}: 素早さの補正で oracle のダメージが変わった組が1つも無い(組を選び直す)`);
+  }
+}
+// 2タイプの相性(フライングプレス型)・特定タイプへの相性(フリーズドライ型)。
+{
+  const defenders = ['Garchomp','Venusaur','Gengar','Corviknight','Azumarill','Gyarados','Charizard','Snorlax','Scizor','Tyranitar','Blastoise','Typhlosion','Abomasnow'];
+  for (const d of defenders) {
+    addStage2(`effectiveness/flyingpress/Lucario/${d}`, 'Lucario', d, 'Flying Press', {});
+    addStage2(`effectiveness/freezedry/Weavile/${d}`, 'Weavile', d, 'Freeze-Dry', {});
+  }
+  addStage2('effectiveness/flyingpress/Lucario/Venusaur/crit-reflect', 'Lucario', 'Venusaur', 'Flying Press', {critical:true, screen:'Reflect'});
+  addStage2('effectiveness/freezedry/Weavile/Gyarados/light-screen', 'Weavile', 'Gyarados', 'Freeze-Dry', {screen:'LightScreen'});
+  addStage2('effectiveness/freezedry/Weavile/Blastoise/life-orb', 'Weavile', 'Blastoise', 'Freeze-Dry', {a:{item:'Life Orb'}});
+  addStage2('effectiveness/flyingpress/Lucario/Azumarill/life-orb', 'Lucario', 'Azumarill', 'Flying Press', {a:{item:'Life Orb'}});
+}
+// 壁を壊す: かわらわり型・サイコファング型は防御側の壁を外してから計算する。
+{
+  for (const [moveName, a, d] of [['Brick Break','Lucario','Snorlax'],['Brick Break','Tyranitar','Garchomp'],['Psychic Fangs','Gardevoir','Snorlax'],['Psychic Fangs','Gengar','Garchomp']]) {
+    const slug = slugOf(moveName);
+    const none = addStage2(`screens-broken/${slug}/${a}/${d}/none`, a, d, moveName, {});
+    for (const screen of ['Reflect','AuroraVeil','LightScreen']) {
+      compareStage2(`screens-broken/${slug}/${a}/${d}/${id(screen)}`, a, d, moveName, {screen}, none, false);
+    }
+    compareStage2(`screens-broken/${slug}/${a}/${d}/reflect-double`, a, d, moveName, {screen:'Reflect', format:'double'},
+      stage2Vector(`screens-broken/${slug}/${a}/${d}/double-none`, a, d, moveName, {format:'double'}), false);
+    addStage2(`screens-broken/${slug}/${a}/${d}/reflect-crit`, a, d, moveName, {screen:'Reflect', critical:true});
+  }
+}
+// 何発目か: トリプルアクセル型は h 発目の威力が 威力 × h。特性の条件(テクニシャン)は発ごとの威力で判定する。
+{
+  for (const [a, d] of [['Weavile','Garchomp'],['Weavile','Snorlax'],['Gardevoir','Tyranitar']]) {
+    for (const [vl, o] of [['plain', {}], ['technician', {a:{ability:'Technician'}}], ['crit', {critical:true}], ['reflect', {screen:'Reflect'}],
+      ['life-orb', {a:{item:'Life Orb'}}], ['burn', {a:{status:'brn'}}], ['sun', {weather:'sun'}], ['ranks', {a:{ranks:{atk:2}}, d:{ranks:{def:-1}}}]]) {
+      const v = addStage2(`hit-index/tripleaxel/${a}/${d}/${vl}`, a, d, 'Triple Axel', o);
+      assert.equal(v.expected.hitRolls.length, 3, `hit-index/${a}/${d}/${vl}: 3 発でない`);
+    }
+  }
+}
+// ハンドラがダメージに効かない技(命中・味方への処理・天候による命中・眠りを覚ます等)は通常の式と同じ。
+{
+  for (const [moveName, pairs] of [['Blizzard', [['Weavile','Garchomp'],['Abomasnow','Snorlax']]], ['Hurricane', [['Charizard','Venusaur'],['Corviknight','Garchomp']]],
+    ['Thunder', [['Jolteon','Blastoise'],['Pikachu','Snorlax']]], ['Pollen Puff', [['Scizor','Gardevoir'],['Venusaur','Snorlax']]], ['Uproar', [['Snorlax','Garchomp'],['Gardevoir','Tyranitar']]]]) {
+    for (const [a, d] of pairs) {
+      const slug = slugOf(moveName);
+      addStage2(`resolved/${slug}/${a}/${d}/plain`, a, d, moveName, {});
+      addStage2(`resolved/${slug}/${a}/${d}/crit-reflect`, a, d, moveName, {critical:true, screen:'LightScreen'});
+      addStage2(`resolved/${slug}/${a}/${d}/rain`, a, d, moveName, {weather:'rain'});
+      addStage2(`resolved/${slug}/${a}/${d}/double`, a, d, moveName, {format:'double'});
+    }
+  }
+}
+// 重さ: けたぐり型(防御側の重さの表)・ヘビーボンバー型(攻撃側 / 防御側の比。整数で比べる)・特性の重さの補正。
+// 重さの比がちょうど整数(2〜5)になる組・浮動小数で整数の比較とずれる組は使わない(oracle は kg の浮動小数で割る。ADR-0143)。
+const weightHgOf = (name, ability = '') => {
+  const w = Math.round(genC.species.get(id(name)).weightkg * 10);
+  if (ability === 'Heavy Metal') return Math.max(Math.trunc(w * 2), 1);
+  if (ability === 'Light Metal') return Math.max(Math.trunc(w * 0.5), 1);
+  return w;
+};
+function ratioSafe(attackerHg, defenderHg) {
+  for (let k = 2; k <= 5; k++) {
+    if (attackerHg === defenderHg * k) return false;
+    if ((attackerHg / defenderHg >= k) !== (attackerHg >= defenderHg * k)) return false;
+  }
+  return true;
+}
+{
+  const targets = ['Rotom-Wash','Pikachu','Toxapex','Azumarill','Clefable','Excadrill','Gardevoir','Lucario','Typhlosion','Blastoise','Charizard','Garchomp','Venusaur','Scizor','Goodra','Tyranitar','Dragonite','Gyarados','Snorlax','Metagross'];
+  for (const [moveName, a] of [['Low Kick','Lucario'],['Grass Knot','Venusaur']]) {
+    const slug = slugOf(moveName);
+    for (const d of targets) {
+      if (d === a) continue;
+      const v = addStage2(`weight-target/${slug}/${a}/${d}`, a, d, moveName, {});
+      if (!hasDamage(v)) stage2Fixed.pop(); // 無効になる組は照合にならないので足さない
+    }
+    addStage2(`weight-target/${slug}/${a}/Garchomp/crit-reflect`, a, 'Garchomp', moveName, {critical:true, screen:moveName === 'Low Kick' ? 'Reflect' : 'LightScreen'});
+    addStage2(`weight-target/${slug}/${a}/Tyranitar/life-orb`, a, 'Tyranitar', moveName, {a:{item:'Life Orb'}});
+  }
+  // 比の境界を避けながら、段(40・60・80・100・120)をまたぐ組を集める。
+  const heavy = ['Metagross','Snorlax','Aggron','Tyranitar','Scizor','Gyarados'];
+  const ratioTargets = ['Rotom-Wash','Pikachu','Toxapex','Azumarill','Gengar','Gardevoir','Lucario','Typhlosion','Garchomp','Goodra','Snorlax','Aggron'];
+  for (const [moveName, attackers] of [['Heavy Slam', heavy], ['Heat Crash', ['Typhlosion','Charizard','Goodra','Snorlax','Aggron']]]) {
+    const slug = slugOf(moveName);
+    const seenBands = new Set();
+    for (const a of attackers) for (const d of ratioTargets) {
+      if (a === d) continue;
+      const aw = weightHgOf(a), dw = weightHgOf(d);
+      if (!ratioSafe(aw, dw)) continue;
+      const band = `${a}:${aw >= dw * 5 ? 5 : aw >= dw * 4 ? 4 : aw >= dw * 3 ? 3 : aw >= dw * 2 ? 2 : 1}`;
+      if (seenBands.has(band)) continue; // 攻撃側ごとに、表の段(5以上・4・3・2・それ未満)につき1組
+      seenBands.add(band);
+      const v = addStage2(`weight-ratio/${slug}/${a}/${d}`, a, d, moveName, {});
+      if (!hasDamage(v)) stage2Fixed.pop();
+    }
+    addStage2(`weight-ratio/${slug}/${attackers[0]}/Pikachu/crit-reflect`, attackers[0], 'Pikachu', moveName, {critical:true, screen:'Reflect'});
+    addStage2(`weight-ratio/${slug}/${attackers[0]}/Pikachu/life-orb`, attackers[0], 'Pikachu', moveName, {a:{item:'Life Orb'}});
+  }
+  // ヘヴィメタル(×2)・ライトメタル(×0.5)。段をまたぐ組を選ぶ。かたやぶりで防御側の補正を無視する(Breakable)。
+  const weightAbilityCases = [
+    // 防御側が持つ(けたぐり型): Garchomp 95.0kg → 190.0kg(80 → 100)・47.5kg(80 → 60)。
+    {kind:'target', moveName:'Low Kick', a:'Lucario', d:'Garchomp', holder:'d'},
+    {kind:'target', moveName:'Grass Knot', a:'Venusaur', d:'Typhlosion', holder:'d'},
+    // 攻撃側が持つ(ヘビーボンバー型)・防御側が持つ(比が変わる)。
+    {kind:'ratio', moveName:'Heavy Slam', a:'Scizor', d:'Garchomp', holder:'a'},
+    {kind:'ratio', moveName:'Heavy Slam', a:'Scizor', d:'Garchomp', holder:'d'},
+    {kind:'ratio', moveName:'Heat Crash', a:'Goodra', d:'Gardevoir', holder:'a'},
+    {kind:'ratio', moveName:'Heat Crash', a:'Goodra', d:'Gardevoir', holder:'d'},
+  ];
+  for (const abilityName of Object.keys(effects.abilities).filter(n => effects.abilities[n].WeightMod).sort()) {
+    const def = effects.abilities[abilityName];
+    const slug = id(abilityName);
+    for (const c of weightAbilityCases) {
+      const holderName = c[c.holder];
+      const withAbility = {[c.holder]:{ability:abilityName}};
+      const label = `${c.kind === 'target' ? 'weight-target' : 'weight-ratio'}/${slugOf(c.moveName)}/${c.a}/${c.d}`;
+      const aw = c.holder === 'a' ? weightHgOf(c.a, abilityName) : weightHgOf(c.a);
+      const dw = c.holder === 'd' ? weightHgOf(c.d, abilityName) : weightHgOf(c.d);
+      if (c.kind === 'ratio') {
+        assert(ratioSafe(aw, dw) && ratioSafe(weightHgOf(c.a), weightHgOf(c.d)), `${abilityName} ${label}: 重さの比が境界にある(組を選び直す)`);
+      }
+      const plain = stage2Vector(`${label}/base`, c.a, c.d, c.moveName, {});
+      const apply = addStage2(`weight-ability/${slug}/${slugOf(c.moveName)}/${c.a}/${c.d}/${holderName}`, c.a, c.d, c.moveName, withAbility);
+      trackChange(`weight-ability/${slug}/${c.kind}`, apply, plain);
+    }
+    for (const kind of ['target','ratio']) {
+      assert.equal(changedGroups[`weight-ability/${slug}/${kind}`], true, `weight-ability/${slug}/${kind}: 重さの補正で oracle のダメージが変わった組が1つも無い(組を選び直す)`);
+    }
+    // effects/<id>/weight/apply・control・breakable(ADR-0143 §7)。
+    const [moveName, a, d] = ['Low Kick', 'Lucario', 'Garchomp']; // Garchomp 95.0kg: ×2 で 100(80 → 100)・×0.5 で 47.5(80 → 60)
+    const base = stage2Vector(`effects/${slug}/weight/base`, a, d, moveName, {});
+    compareStage2(`effects/${slug}/weight/apply`, a, d, moveName, {d:{ability:abilityName}}, base);
+    // 攻撃側が持っても防御側の重さは変わらない(けたぐり型)。
+    compareStage2(`effects/${slug}/weight/control`, a, d, moveName, {a:{ability:abilityName}}, base, false);
+    if (def.Breakable) {
+      const withIgnorer = {a:{ability:ignorer}};
+      compareStage2(`effects/${slug}/weight/breakable`, a, d, moveName, {a:{ability:ignorer}, d:{ability:abilityName}},
+        stage2Vector(`effects/${slug}/weight/breakable-base`, a, d, moveName, withIgnorer), false);
+    }
+  }
+  // 比の式の整数比較: 攻撃側 / 防御側が整数倍に近い組(境界を避けた近傍)で、段の境目に近い値を確かめる。
+  for (const [a, d, moveName] of [['Metagross','Garchomp','Heavy Slam'],['Snorlax','Typhlosion','Heavy Slam'],['Aggron','Blastoise','Heavy Slam']]) {
+    if (ratioSafe(weightHgOf(a), weightHgOf(d))) addStage2(`weight-ratio/${slugOf(moveName)}/${a}/${d}/near-boundary`, a, d, moveName, {});
+  }
+}
+
+// 生成器の保証(ADR-0143 §7): (a) moveRules の全技に1件以上のベクタ。(b) 重さの比のベクタは境界を避ける。
+{
+  const missing = Object.keys(stage2Rules).filter(n => !stage2CoveredMoves.has(n));
+  assert.deepEqual(missing, [], `moveRules の技にベクタが無い: ${missing.join(', ')}`);
+  for (const v of stage2Fixed) {
+    const rule = v.input.Move.Rule;
+    if (rule.PowerFormula !== 'weight_ratio') continue;
+    const wa = effectiveWeightHg(v.input.Attacker), wd = effectiveWeightHg(v.input.Defender);
+    assert(ratioSafe(wa, wd), `${v.id}: 重さの比が境界にある(攻撃側 ${wa} / 防御側 ${wd})`);
+  }
+  const ids = new Set();
+  for (const v of stage2Fixed) {
+    assert(!ids.has(v.id), `ベクタの id が重複: ${v.id}`);
+    ids.add(v.id);
+    assert(v.input.Attacker.Species.WeightHg > 0 && v.input.Defender.Species.WeightHg > 0, `${v.id}: 種族の重さが入力に無い`);
+  }
+}
+function effectiveWeightHg(side) {
+  const w = side.Species.WeightHg, mod = side.Ability.Effect && side.Ability.Effect.WeightMod;
+  return mod ? Math.max(1, Math.trunc(w * mod / 4096)) : w;
+}
+
 mkdirSync(out,{recursive:true});
 const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
@@ -1298,6 +1812,7 @@ save('legacy-effects.jsonl.gz',legacyEffectsCases,true);
 save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCases,true);
 save('tera.json',teraFixed);save('tera-random.jsonl.gz',teraRandomCases,true);
 save('mechanisms.json',mechanismsFixed);
+save('mechanisms-stage2.json',stage2Fixed);
 
 // ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
 // 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
@@ -1333,7 +1848,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json','mechanisms-stage2.json'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -1352,9 +1867,9 @@ const metadata={
   exclusions:[
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
-    {scope:'moves',reason:'The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Excluded everywhere: OHKO (the oracle does not compute it), variable power, other fixed damage, screen removal, terrain-specific move mechanics, tera/Z/Max moves'},
+    {scope:'moves',reason:'The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Stage-2 move rules (ADR-0143: power formulas by weight / speed ratio / positive ranks / hit index, status / item / weather / terrain conditions, move type by weather or terrain, two-type effectiveness, Freeze-Dry, screen removal, priority boost, moves whose handlers do not affect damage) are checked in mechanisms-stage2.json (stage-2 moves are checked in mechanisms-stage2.json, not the other files). Excluded everywhere: OHKO (the oracle does not compute it), other fixed damage, moves that need current HP or battle history (stage 3), tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect (issue #270 / ADR-0120) or a stage-1 ability field (TypeConvert, PowerMods, AuraType/AuraMod, StatMods, SeparateStatMods, CritDamageMod, PreventsCritical, IgnoresOpponentRanks, IgnoresDefenderAbility; ADR-0176) has an apply/control pair (effects/<id>/...), and every Breakable definition has a breakable vector showing that an IgnoresDefenderAbility attacker (Mold Breaker) gets the same damage as against no ability (ADR-0176). The coverage survey also uses both-side +/-2 ranks, a poisoned defender and attacker-only probes against a defender ability (Thick Fat, Fur Coat, Fluffy, Multiscale, Levitate, critical hit x Shell Armor), so abilities that change damage only in combination (Mold Breaker, Unaware, Merciless, Long Reach) must be either defined or marked; Breakable is checked against the oracle in both directions, not listed by hand (ADR-0176). Champions items/abilities that change damage but are not representable by the effect schema (move-flag and HP-dependent abilities are later stages) are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors; unsupported-mark definitions carry no Breakable in stage 1, so Mold Breaker against a marked defender ability keeps the mark (ADR-0176)'},
-    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)'},
+    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse, Misty Explosion, Expanding Force, Rising Voltage) are checked in mechanisms-stage2.json (ADR-0143)'},
     {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],

@@ -35,6 +35,9 @@ type CalcSpecies struct {
 	Name      string    `json:"name"`
 	Types     []string  `json:"types"`
 	BaseStats BaseStats `json:"baseStats"`
+	// WeightKg は種族の重さ(kg。取得物の数値の字面のまま。ADR-0143 §4)。必須: キーが無い古い取得物はデコードで拒否する。
+	// 浮動小数を経由せず hg の整数にするため json.Number で受ける。
+	WeightKg *json.Number `json:"weightkg"`
 }
 
 // CalcMove は calc の技1件。Type/Category は calc が省略すると空文字になる。
@@ -90,6 +93,8 @@ type ShowdownSpecies struct {
 	IsNonstandard *string           `json:"isNonstandard"`
 	// Prevo は進化前の種族の Showdown 名(無ければ空)。習得技の継承(ADR-0103 §7)に使う。
 	Prevo string `json:"prevo"`
+	// WeightKg は種族の重さ(kg。取得物の数値の字面のまま。ADR-0143 §4)。必須: キーが無い古い取得物はデコードで拒否する。
+	WeightKg *json.Number `json:"weightkg"`
 }
 
 // ShowdownMove は Showdown の技1件。Accuracy 0 は必中(calc の `accuracy: true`)。
@@ -221,6 +226,8 @@ type EffectsFile struct {
 	// 素早さの効果定義(ADR-0139)。ダメージの節とは別に置き、取り込みで同じ ID の定義に合わせる。
 	SpeedItems     map[string]json.RawMessage `json:"speedItems"`
 	SpeedAbilities map[string]json.RawMessage `json:"speedAbilities"`
+	// 技の処理の定義(ADR-0143 §4)。キーは Showdown の技 ID、値は engine.MoveRule の JSON(Go のフィールド名)。
+	MoveRules map[string]json.RawMessage `json:"moveRules"`
 }
 
 // RegulationsFile は data/importer/regulations.json。

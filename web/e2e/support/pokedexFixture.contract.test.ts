@@ -70,6 +70,7 @@ const SPECIES_DETAIL_OPTIONAL_KEYS = [
   "requiredItemId",
   "baseSpeciesKey",
   "baseSpeciesNameJa",
+  "weightHg", // ADR-0143: 取り込み前・古いサーバーは返さない
 ] as const satisfies readonly (keyof Schemas["SpeciesDetail"])[];
 export type SpeciesDetailKeysAreComplete = AssertNever<
   Exclude<
@@ -92,6 +93,8 @@ const MOVE_OPTIONAL_KEYS = [
   "target",
   "mechanisms",
   "flags",
+  "mechanismParams", // ADR-0143: 中身の無い技・古いサーバーは返さない
+  "rule",
 ] as const satisfies readonly (keyof Schemas["Move"])[];
 export type MoveKeysAreComplete = AssertNever<
   Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number] | (typeof MOVE_OPTIONAL_KEYS)[number]>

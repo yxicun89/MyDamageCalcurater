@@ -1360,6 +1360,12 @@ components:
                 メガシンカに要る持ち物(メガストーン)の ID。メガでなければ null。pokedex-svc は null でもキーを常に返す
                 (ADR-0218 の `effect` は「キーごと省く」ので逆。クライアントは省略も null も「メガではない」と読む)。
                 isMega が true の種族は、この ID の持ち物を持つ前提(クライアントが持ち物を固定する。ADR-0200 §4 の検証と同じ規則)。
+            weightHg:
+              type: integer
+              minimum: 1
+              description: |
+                種族の重さ(hg。0.1kg 単位の整数。ADR-0143 §4)。重さで威力が決まる技の計算に使う(WASM の種族の `weightHg` にそのまま渡せる)。
+                まだ取り込んでいない・古いサーバーは**キーを省く**。クライアントは省略を「不明」と読む(重さの技に未対応の印が付く)。
 
     StatBlock:
       type: object
@@ -1436,6 +1442,19 @@ components:
             技のフラグ(move_flags。ADR-0178)。昇順・重複なし。フラグの無い技は空配列。
             フラグがまだ取り込まれていない(古いサーバー・取り込み前)ときは**キーごと省く**。クライアントは「キーが無い」を不明として
             WASM に渡さない(フラグに依存する特性には未対応の印が付く)。WASM の技の `flags` にそのまま渡せる。
+        mechanismParams:
+          allOf: [ { $ref: '#/components/schemas/MasterMoveMechanismParams' } ]
+          description: |
+            技の機構の中身(多段の回数・固定ダメージ・一撃必殺・攻撃/防御に使う能力値。ADR-0142・ADR-0143 §6)。値と形は内部 API の
+            `MasterMove.mechanismParams` と同じ。中身の無い技は**キーごと省く**(null を返さない)。古いサーバーも返さない。
+            WASM の技の `mechanismParams` にそのまま渡せる(渡さないと、中身の要る機構に未対応の印が付く)。
+        rule:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            技の処理の定義(威力の式・条件つきの威力・タイプ・相性・優先度・壁。move_rules の JSON。ADR-0143 §1・§6)。値と形は内部 API の
+            `MasterMove.rule` と同じ(キーは engine の MoveRule のフィールド名)。定義の無い技は**キーごと省く**。古いサーバーも返さない。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeMoveRule`)で厳格に検証し、検証を通らない定義を含む応答は返さない
+            (503 `master_unavailable`)。WASM の技の `rule` にそのまま渡せる(キーの大文字小文字は WASM が区別しない)。
 
     MoveFlag:
       type: string
@@ -2418,6 +2437,12 @@ components:
         abilities:
           type: array
           items: { $ref: '#/components/schemas/MasterSpeciesAbility' }
+        weightHg:
+          type: integer
+          minimum: 1
+          description: |
+            種族の重さ(species.weight_hg。hg の整数。ADR-0143 §4・§6)。**省略可**: NULL(まだ取り込んでいない)はキーを省く。
+            calc-svc は省略を「不明」(engine.Species.WeightHg = 0。重さで威力が決まる技に未対応の印が付く)として扱う。古い pokedex-svc も返さない。
 
     MasterSpeciesAbility:
       type: object
@@ -2483,6 +2508,13 @@ components:
             (公開 API の MoveFlag と同じ 9 種)。enum は付けない(mechanisms と同じ理由。検証は calc-svc の `master.Move`)。
             **省略可**: フラグがまだ取り込まれていない(move_flags が空)ときは全技でキーを省く。calc-svc は省略を「不明」として
             engine.Move.FlagsKnown を偽にする(フラグに依存する特性に未対応の印が付く)。古い pokedex-svc も返さない。
+        rule:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            技の処理の定義(move_rules の JSON。ADR-0143 §1・§4)。威力の式・条件つきの威力・タイプ・相性・優先度・壁などを engine の
+            閉じた語彙(MoveRule)で表したもの。**省略可**: 定義の無い技はキーを省く。古い pokedex-svc も返さない。calc-svc はキーが無い・
+            null を「定義なし」として扱う(入れ替えの順序に依存させない。ADR-0223 §3)。
+            形の検証は受け取った calc-svc が `services/internal/master.DecodeMoveRule` で行い、機構との対応は `master.Move` が確かめる。
 
     MasterMoveMechanismParams:
       type: object

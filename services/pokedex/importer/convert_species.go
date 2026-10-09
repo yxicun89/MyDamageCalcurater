@@ -32,6 +32,7 @@ type rawSpecies struct {
 	baseSpeciesName  string
 	requiredItemName string
 	abilities        []master.SpeciesAbilityRow
+	weightHg         int // 種族の重さ(hg。ADR-0143)
 	fromCalc         bool
 	support          bool // 使用可能なメガの FK を満たすためだけに保持する、レギュレーション外の基本種
 }
@@ -74,12 +75,12 @@ func equalStringSlices(a, b []string) bool {
 	return true
 }
 
-// rawSignature は「見た目だけ違うか」の判定に使う性能の署名(タイプ・種族値・特性)。
+// rawSignature は「見た目だけ違うか」の判定に使う性能の署名(タイプ・種族値・特性・重さ。重さで威力が決まる技があるので、重さだけ違う姿は畳まない。ADR-0143)。
 func rawSignature(r rawSpecies) string {
 	abilities := append([]master.SpeciesAbilityRow(nil), r.abilities...)
 	sort.Slice(abilities, func(i, j int) bool { return abilities[i].Slot < abilities[j].Slot })
 	var b strings.Builder
-	fmt.Fprintf(&b, "%s|%s|%v", r.type1, r.type2, r.stats)
+	fmt.Fprintf(&b, "%s|%s|%v|%d", r.type1, r.type2, r.stats, r.weightHg)
 	for _, a := range abilities {
 		fmt.Fprintf(&b, "|%d:%s", a.Slot, a.AbilityID)
 	}
@@ -129,6 +130,17 @@ func buildRawSpecies(c CalcSpecies, sd ShowdownSpecies, sdByName map[string]Show
 		}
 		if c.BaseStats != sd.BaseStats {
 			blockers = append(blockers, Finding{Kind: KindSpeciesMismatch, ID: sd.ID, Detail: "stats"})
+		}
+		calcWeight, err := weightHgOf(c.Name, c.WeightKg)
+		if err != nil {
+			return rawSpecies{}, nil, nil, err
+		}
+		sdWeight, err := weightHgOf(sd.ID, sd.WeightKg)
+		if err != nil {
+			return rawSpecies{}, nil, nil, err
+		}
+		if calcWeight != sdWeight {
+			blockers = append(blockers, Finding{Kind: KindSpeciesMismatch, ID: sd.ID, Detail: "weightkg"})
 		}
 		if len(blockers) > 0 {
 			return rawSpecies{}, nil, blockers, nil
@@ -186,12 +198,16 @@ func buildRawSpecies(c CalcSpecies, sd ShowdownSpecies, sdByName map[string]Show
 	if err != nil {
 		return rawSpecies{}, nil, nil, err
 	}
+	weightHg, err := weightHgOf(sd.ID, sd.WeightKg)
+	if err != nil {
+		return rawSpecies{}, nil, nil, err
+	}
 
 	r := rawSpecies{
 		showdownID: sd.ID, nameEn: sd.Name, dexNo: sd.Num, form: form,
 		type1: type1, type2: type2, stats: stats, isMega: isMega, forme: sd.Forme,
 		baseSpeciesName: sd.BaseSpecies, requiredItemName: sd.RequiredItem,
-		abilities: abilities, fromCalc: fromCalc,
+		abilities: abilities, weightHg: weightHg, fromCalc: fromCalc,
 	}
 	return r, abilityNames, nil, nil
 }
@@ -463,7 +479,7 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 				Key: f.key, DexNo: r.dexNo, Form: r.form, ShowdownID: r.showdownID,
 				NameJa: res.NameJa, NameEn: r.nameEn, Type1: r.type1, Type2: r.type2,
 				BaseHP: r.stats[0], BaseAtk: r.stats[1], BaseDef: r.stats[2], BaseSpA: r.stats[3], BaseSpD: r.stats[4], BaseSpe: r.stats[5],
-				IsMega: r.isMega, BaseSpeciesKey: baseKey, RequiredItemID: itemID,
+				IsMega: r.isMega, BaseSpeciesKey: baseKey, RequiredItemID: itemID, WeightHg: r.weightHg,
 			},
 			NameJaSource: res.Source,
 			Abilities:    r.abilities,

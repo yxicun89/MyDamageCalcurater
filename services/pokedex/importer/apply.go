@@ -30,6 +30,14 @@ func strToNull(s string) sql.NullString {
 	return sql.NullString{String: s, Valid: s != ""}
 }
 
+// weightToNull は種族の重さ(hg)を列の値にする。0 は NULL(まだ分からない)。
+func weightToNull(hg int) sql.NullInt16 {
+	if hg == 0 {
+		return sql.NullInt16{}
+	}
+	return sql.NullInt16{Int16: int16(hg), Valid: true}
+}
+
 func accuracyToNull(v int) sql.NullInt16 {
 	if v == 0 {
 		return sql.NullInt16{}
@@ -117,7 +125,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 		q.DeleteLearnsets,
 		q.DeleteSpeciesAbilities,
 		q.DeleteItemEffects, q.DeleteAbilityEffects, q.DeleteMoveEffects, q.DeleteMoveMechanisms, q.DeleteMoveMechanismParams,
-		q.DeleteMoveFlags,
+		q.DeleteMoveRules, q.DeleteMoveFlags,
 		q.DeleteMegaSpecies, q.DeleteRemainingSpecies,
 		q.DeleteMoves, q.DeleteItems, q.DeleteAbilities,
 		q.DeleteTypeChart, q.DeleteTypes,
@@ -181,6 +189,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 			BaseHp: uint16(sp.BaseHP), BaseAtk: uint16(sp.BaseAtk), BaseDef: uint16(sp.BaseDef),
 			BaseSpa: uint16(sp.BaseSpA), BaseSpd: uint16(sp.BaseSpD), BaseSpe: uint16(sp.BaseSpe),
 			IsMega: sp.IsMega, BaseSpeciesKey: strToNull(sp.BaseSpeciesKey), RequiredItemID: strToNull(sp.RequiredItemID),
+			WeightHg: weightToNull(sp.WeightHg),
 		}); err != nil {
 			return err
 		}
@@ -214,6 +223,11 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 	}
 	for _, p := range out.MoveMechanismParams {
 		if err := q.InsertMoveMechanismParams(ctx, insertMoveMechanismParams(p)); err != nil {
+			return err
+		}
+	}
+	for _, r := range out.MoveRules {
+		if err := q.InsertMoveRule(ctx, store.InsertMoveRuleParams{MoveID: r.ID, Rule: json.RawMessage(r.Effect)}); err != nil {
 			return err
 		}
 	}

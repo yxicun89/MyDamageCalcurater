@@ -86,6 +86,10 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	if err != nil {
 		return api.MasterExport{}, err
 	}
+	moveRules, err := q.ListMoveRules(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
 	moveFlags, err := q.ListMoveFlags(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
@@ -138,6 +142,10 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	for _, p := range moveMechanismParams {
 		mechanismParamsByMoveID[p.MoveID] = masterMechanismParams(p)
 	}
+	moveRuleByID := make(map[string]store.MoveRule, len(moveRules))
+	for _, r := range moveRules {
+		moveRuleByID[r.MoveID] = r
+	}
 	// flagsByMoveID: 契約(MasterMove.flags)の「昇順」もここでソートする(ADR-0178)。
 	// move_flags が空ならまだ取り込んでいない(不明)ので、全技で flags キーを省く(ADR-0178 §3)。
 	flagsKnown := len(moveFlags) > 0
@@ -169,7 +177,7 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 			Type1: api.PokeType(sp.Type1), Type2: pokeTypePtr(sp.Type2),
 			BaseStats: api.StatBlock{Hp: int(sp.BaseHp), Atk: int(sp.BaseAtk), Def: int(sp.BaseDef), Spa: int(sp.BaseSpa), Spd: int(sp.BaseSpd), Spe: int(sp.BaseSpe)},
 			IsMega:    sp.IsMega, BaseSpeciesKey: nullStringPtr(sp.BaseSpeciesKey), RequiredItemId: nullStringPtr(sp.RequiredItemID),
-			Abilities: abilityOut,
+			Abilities: abilityOut, WeightHg: weightHgPtr(sp.WeightHg),
 		})
 	}
 
@@ -193,6 +201,13 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		if mechanisms == nil {
 			mechanisms = []string{} // 通常の技は空配列(null にしない。ADR-0121)
 		}
+		// 技の処理の定義(ADR-0143 §6)。行が無い技はキーを省く(定義なし)。
+		var rule *api.MasterEffect
+		if r, ok := moveRuleByID[m.ID]; ok {
+			if rule, err = masterEffectFor(r.Rule); err != nil {
+				return api.MasterExport{}, err
+			}
+		}
 		var flags *[]string
 		if flagsKnown {
 			f := flagsByMoveID[m.ID]
@@ -204,7 +219,7 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
 			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms, MechanismParams: mechanismParamsByMoveID[m.ID], Target: nullStringPtr(m.Target),
-			Flags: flags,
+			Flags: flags, Rule: rule,
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))
@@ -255,6 +270,15 @@ func masterEffectFor(raw []byte) (*api.MasterEffect, error) {
 	}
 	effect := api.MasterEffect(m)
 	return &effect, nil
+}
+
+// weightHgPtr は species.weight_hg(NULL = まだ取り込んでいない)を契約の省略可の整数にする。
+func weightHgPtr(v sql.NullInt16) *int {
+	if !v.Valid {
+		return nil
+	}
+	w := int(v.Int16)
+	return &w
 }
 
 func nullStringPtr(v sql.NullString) *string {

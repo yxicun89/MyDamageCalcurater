@@ -50,6 +50,7 @@ type Querier struct {
 	MoveEffects         []store.MoveEffect
 	MoveMechanisms      []store.MoveMechanism
 	MoveMechanismParams []store.MoveMechanismParam
+	MoveRules           []store.MoveRule // 技の処理の定義(ADR-0143)。空 = 定義なし
 	MoveFlags           []store.MoveFlag // 空 = まだ取り込んでいない(ADR-0178 §3)
 	Items               []store.Item
 	ItemEffects         []store.ItemEffect
@@ -351,6 +352,47 @@ func (q *Querier) ListMoveMechanismParams(context.Context) ([]store.MoveMechanis
 		return nil, err
 	}
 	return append([]store.MoveMechanismParam(nil), q.MoveMechanismParams...), nil
+}
+
+func (q *Querier) ListMoveMechanismParamsByMoveIDs(_ context.Context, ids []string) ([]store.MoveMechanismParam, error) {
+	if err := q.record("ListMoveMechanismParamsByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var out []store.MoveMechanismParam
+	for _, p := range q.MoveMechanismParams {
+		if want[p.MoveID] {
+			out = append(out, p)
+		}
+	}
+	return out, nil
+}
+
+func (q *Querier) ListMoveRules(context.Context) ([]store.MoveRule, error) {
+	if err := q.record("ListMoveRules", nil); err != nil {
+		return nil, err
+	}
+	return append([]store.MoveRule(nil), q.MoveRules...), nil
+}
+
+func (q *Querier) ListMoveRulesByMoveIDs(_ context.Context, ids []string) ([]store.MoveRule, error) {
+	if err := q.record("ListMoveRulesByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := map[string]bool{}
+	for _, id := range ids {
+		want[id] = true
+	}
+	var out []store.MoveRule
+	for _, r := range q.MoveRules {
+		if want[r.MoveID] {
+			out = append(out, r)
+		}
+	}
+	return out, nil
 }
 
 func (q *Querier) ListMoveMechanismsByMoveIDs(_ context.Context, ids []string) ([]store.MoveMechanism, error) {
@@ -682,7 +724,8 @@ func New() *Querier {
 		},
 		Species: []store.Species{
 			{Key: "9001-000", DexNo: 9001, Form: 0, ShowdownID: "testmon", NameJa: "テストモン", NameJaSource: "pokeapi", NameEn: "Testmon",
-				Type1: "fire", BaseHp: 80, BaseAtk: 90, BaseDef: 70, BaseSpa: 100, BaseSpd: 75, BaseSpe: 85},
+				Type1: "fire", BaseHp: 80, BaseAtk: 90, BaseDef: 70, BaseSpa: 100, BaseSpd: 75, BaseSpe: 85,
+				WeightHg: sql.NullInt16{Int16: 905, Valid: true}}, // 重さ 90.5kg(ADR-0143)。9002-000 は NULL(取り込み前)
 			{Key: "9001-001", DexNo: 9001, Form: 1, ShowdownID: "testmonmega", NameJa: "テストメガモン", NameJaSource: "pokeapi", NameEn: "Testmon-Mega",
 				Type1: "fire", Type2: ns("water"), BaseHp: 80, BaseAtk: 120, BaseDef: 90, BaseSpa: 130, BaseSpd: 95, BaseSpe: 105,
 				IsMega: true, BaseSpeciesKey: ns("9001-000"), RequiredItemID: ns("teststone")},

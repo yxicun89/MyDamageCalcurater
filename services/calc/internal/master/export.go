@@ -65,7 +65,8 @@ func FromExport(export api.MasterExport) (*MemoryStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	items, err := buildItems(export.Items, chart)
+	megaItems := buildMegaItems(export.Species)
+	items, err := buildItems(export.Items, megaItems, chart)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +74,6 @@ func FromExport(export api.MasterExport) (*MemoryStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	megaItems := buildMegaItems(export.Species)
 	moves, err := buildMoves(export.Moves, chart)
 	if err != nil {
 		return nil, err
@@ -135,7 +135,14 @@ func buildAbilities(list []api.MasterAbility, chart engine.TypeChart) (map[strin
 }
 
 // buildItems は items の行を共通マスタの写像で engine.Item にする。ID の重複は calc-svc 側で見る。
-func buildItems(list []api.MasterItem, chart engine.TypeChart) (map[string]engine.Item, error) {
+// メガストーン(engine.Item.MegaStone)は、メガ種族の requiredItemId に現れる持ち物(ADR-0175 と同じ定義。ADR-0143 §6)。
+func buildItems(list []api.MasterItem, megaItems map[string]string, chart engine.TypeChart) (map[string]engine.Item, error) {
+	megaStones := make(map[string]bool, len(megaItems))
+	for _, id := range megaItems {
+		if id != "" {
+			megaStones[id] = true
+		}
+	}
 	out := make(map[string]engine.Item, len(list))
 	for _, it := range list {
 		if _, dup := out[it.Id]; dup {
@@ -149,6 +156,7 @@ func buildItems(list []api.MasterItem, chart engine.TypeChart) (map[string]engin
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidMaster, err)
 		}
+		item.MegaStone = megaStones[it.Id]
 		out[it.Id] = item
 	}
 	return out, nil
@@ -214,6 +222,9 @@ func buildSpecies(
 		if s.RequiredItemId != nil {
 			row.RequiredItemID = *s.RequiredItemId
 		}
+		if s.WeightHg != nil { // キーが無い = 不明(0。古い pokedex-svc・取り込み前。ADR-0143 §6)
+			row.WeightHg = *s.WeightHg
+		}
 
 		sp, err := sharedmaster.Species(row, abilityRows, chart)
 		if err != nil {
@@ -256,6 +267,12 @@ func buildMoves(list []api.MasterMove, chart engine.TypeChart) (map[string]engin
 			ID: m.Id, NameJa: m.NameJa, Type: string(m.Type), Category: string(m.Category),
 			Power: m.Power, Priority: m.Priority, Effect: effect, Mechanisms: m.Mechanisms, Target: derefString(m.Target),
 			Params: mechanismParamsRow(m.MechanismParams),
+		}
+		// rule のキーが無い・null = 定義なし(古い pokedex-svc・定義の無い技。ADR-0143 §6)。形の検証は共通マスタの Move が行う。
+		if m.Rule != nil {
+			if row.Rule, err = effectBytes(m.Rule); err != nil {
+				return nil, fmt.Errorf("%w: 技 %q の処理の定義を読めない: %v", ErrInvalidMaster, m.Id, err)
+			}
 		}
 		// flags のキーが無い = 不明(古い pokedex-svc・取り込み前。ADR-0178 §4)。配列(空を含む)は既知。
 		if m.Flags != nil {
