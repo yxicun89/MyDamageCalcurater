@@ -83,8 +83,8 @@ public enum CalcHistoryLabels {
     public static let loadMoreButton = "もっと見る"
     public static let loadingMore = "続きを読み込んでいます…"
     public static let unknownMove = "不明な技"
-    public static let rowHint = "タップすると、この計算を計算画面に復元します。"
-    public static let note = "計算した直後の行は、少し遅れて載ることがあります。"
+    public static let rowHint = "タップすると、この計算を計算画面に復元します。防御側の性格・能力ポイント・持ち物は復元されず、ダブルの計算もシングルで復元するため、結果が一覧と異なることがあります。"
+    public static let note = "計算した直後の行は、少し遅れて載ることがあります。行を開いた結果は、防御側の性格・能力ポイント・持ち物を復元しないため、一覧の%と異なることがあります。"
 
     public static func occurredText(_ date: Date, now: Date, calendar: Calendar) -> String {
         let days = calendar.dateComponents(

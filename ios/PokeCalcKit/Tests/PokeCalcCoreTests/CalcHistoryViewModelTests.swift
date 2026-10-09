@@ -242,6 +242,9 @@ final class CalcHistoryViewModelTests: XCTestCase {
     func testLabelsAndOccurredText() {
         XCTAssertEqual(CalcHistoryLabels.sectionTitle, "計算履歴")
         XCTAssertEqual(CalcHistoryLabels.loadMoreButton, "もっと見る")
+        // 復元の限界(ADR-0519)を利用者に伝える文言が消えないように固定する。
+        XCTAssertTrue(CalcHistoryLabels.note.contains("防御側の性格・能力ポイント・持ち物を復元しない"))
+        XCTAssertTrue(CalcHistoryLabels.rowHint.contains("ダブルの計算もシングルで復元"))
         let row = CalcHistoryRow(
             id: "0-0", entry: entry(0), attackerName: "あ", defenderName: nil, moveName: nil)
         XCTAssertEqual(row.title, "あ → \(FavoritesLabels.unknownSpecies)")
