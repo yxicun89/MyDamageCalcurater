@@ -250,10 +250,13 @@ final class CalcViewModelConditionsTests: XCTestCase {
     }
 
     func testStatusMoveEditsAttackRank() async {
-        // 変化技の関連ステータスは atk(`AttackerPreset.relevantStat(for:)`)。
+        // 変化技の関連ステータスは atk(`AttackerPreset.relevantStat(for:)`)。変化技は計算画面で選べなくなったので
+        // (ADR-0518 §3)、その規則は単体で確かめ、画面側は物理技で atk を編集することを確かめる。
+        XCTAssertEqual(AttackerPreset.relevantStat(for: .status), .atk)
         let stub = StubMaster.makeService()
         let viewModel = await loadedViewModel(stub)
         await viewModel.selectMove(id: StubMaster.statusMove.id)
+        XCTAssertEqual(viewModel.selectedMove?.category, .physical, "変化技は選べない(無視される)")
         XCTAssertEqual(viewModel.attackerRankStat, .atk)
         await viewModel.setAttackerRank(1)
         XCTAssertEqual(viewModel.attackerRanks, RankBlock(atk: 1))

@@ -62,7 +62,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public private(set) var itemOptionsReachedLimit = false
     /// 「直近の技検索の結果 ∩ 攻撃側の learnset の ID 集合」を learnset の順で並べたもの(6章)。
     public private(set) var moveOptions: [Move] = []
-    private var natureOptions: [Nature] = []
+    var natureOptions: [Nature] = []
     /// `load()` の二重実行を防ぐ(同じ画面から複数回 `load()` を呼んでも読み込みは1回だけ)。
     private var didLoad = false
 
@@ -73,11 +73,20 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public private(set) var moveId: String = ""
     /// 自分側(攻撃側)の SP・性格などの出どころ(P6-2d。ADR-0501「P6-2d」1章)。既定は
     /// `AttackerPreset.defaultPreset`(無振り。`AttackerPresetTests` が順序を固定する)。
-    public private(set) var attackerBuildSource: AttackerBuildSource = .preset(AttackerPreset.defaultPreset)
-    /// `attackerBuildSource.preset` のショートカット。構築の個体を呼んでいる間は nil になる
-    /// (ADR-0501「P6-2d」1章「判断」: 既存のテスト・View のピル選択表示を無変更で保つため、
-    /// 計算プロパティとして残す。Swift の optional 昇格で `== .aFull` の比較がそのまま成り立つ)。
-    public var attackerPreset: AttackerPreset? { attackerBuildSource.preset }
+    /// `.preset` のときの中身は要求に使わない(構築の個体を呼んでいるかどうかの判定だけ。ADR-0518 §2)。
+    public internal(set) var attackerBuildSource: AttackerBuildSource = .preset(AttackerPreset.defaultPreset)
+    /// ピルの行の選択状態。構築の個体を呼んでいる間は nil、そうでなければ選んだ技が使う側のブロックの値と
+    /// 一致するプリセット(一致しなければ nil = カスタム。ADR-0518 §2。技が無ければ攻撃)。
+    /// Swift の optional 昇格で `== .aFull` の比較がそのまま成り立つ。
+    public var attackerPreset: AttackerPreset? {
+        attackerBuildSource.teamSelection == nil ? attackerPreset(for: usedAttackStat ?? .atk) : nil
+    }
+    /// ダメージ技を1つも覚えない種族のとき true(技欄は空・計算しない。ADR-0518 §3)。`hasNoDamagingMoves` が返す。
+    var noDamagingMoves = false
+    /// 攻撃側の「攻撃」「特攻」2ブロックの入力(SP の文字列・性格補正。ADR-0518)。既定は両方 0・補正なし。
+    /// 技・攻撃側/防御側の種族・攻守入れ替え・構築の呼び出しでは消さない(`load()` だけが既定に戻す)。
+    /// 更新は `CalcViewModel+AttackerStats.swift` の操作メソッドだけが行う(`internal(set)`)。
+    public internal(set) var attackerStatInputs = AttackerStatInputs.default
     public private(set) var attackerItemId: String?
     /// 持ち物マスタの順(トグルした順ではない)。
     public private(set) var comparedDefenderItemIds: [String] = []
@@ -107,7 +116,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 攻撃側の特性の選択肢(いまの攻撃側の `species(key:)` の `abilities` の順)。
     public private(set) var attackerAbilityOptions: [Ability] = []
     /// 要求に載せる攻撃側の特性(nil は送らない)。
-    public private(set) var attackerAbilityId: String?
+    public internal(set) var attackerAbilityId: String?
 
     /// ランクのステッパーが編集する能力(選択中の技の分類の関連ステータス。技が無いときは atk)。
     public var attackerRankStat: StatKey {
@@ -426,6 +435,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             attackerSpeciesKey = species[0].key
             defenderSpeciesKey = species[1].key
             attackerBuildSource = .preset(AttackerPreset.defaultPreset)
+            attackerStatInputs = .default
             attackerItemId = nil
             toggledDefenderItemIds = []
             comparedDefenderItemIds = []
@@ -536,18 +546,6 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         guard moveOptions.contains(where: { $0.id == id }) else { return }
         let token = beginInput()
         moveId = id
-        await recalculate(token: token)
-    }
-
-    /// プリセットを押すと構築の選択は外れる(排他。ADR-0501「P6-2d」1章「判断」)。
-    public func selectAttackerPreset(_ preset: AttackerPreset) async {
-        let token = beginInput()
-        // 構築から来た特性は外す(直前がプリセット同士の切り替えなら、利用者が選んだ特性を残す。
-        // issue #274。ADR-0501「issue #274」2章・8章)。
-        if attackerBuildSource.teamSelection != nil {
-            attackerAbilityId = nil
-        }
-        attackerBuildSource = .preset(preset)
         await recalculate(token: token)
     }
 
@@ -701,7 +699,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 入力操作の入口。世代を1つ進めて返す。以降その操作から生まれる `await` はすべてこの番号で
     /// 「まだ最新か」を確かめ、途中で失敗しても・古い応答が後から届いても、最新の操作だけが
     /// 画面の状態(`rows` / `error` / `isLoading` / `moveOptions`)を書き換えるようにする(M1・M2)。
-    private func beginInput() -> Int {
+    func beginInput() -> Int {
         favoriteLoadNotice = nil
         latestRequestToken += 1
         return latestRequestToken
@@ -755,9 +753,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
 
     /// `attackerLearnsetIds` と `latestMoveSearchResults` のどちらかが変わったら呼び直す(6章)。
     private func recomputeMoveOptions() {
-        moveOptions = attackerLearnsetIds.compactMap { learnedId in
+        moveOptions = CalcMoveRules.damagingMoves(attackerLearnsetIds.compactMap { learnedId in
             latestMoveSearchResults.first(where: { $0.id == learnedId })
-        }
+        })
     }
 
     private func mergeSpeciesIntoDictionary(_ items: [SpeciesSummary]) {
@@ -773,41 +771,49 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// 1. **優先する技**: `currentMoveId` がいまの learnset(ID 集合)にあれば、辞書にあるならそのまま、
     ///    無ければ `move(id:)` で1回だけ解決して選ぶ(`moveOptions` に無くても選ぶ。構築の個体の技を
     ///    黙って既定の技に置き換えないため)。
-    /// 2. **既定の技**: `moveOptions`(検索結果 ∩ learnset)から選べればそれ(learnset の順で最初の
-    ///    ダメージ技、無ければ最初)。それでも選べないときだけ、learnset を先頭から辞書 or `move(id:)`
-    ///    (上限 `MasterSearch.maxMoveLookupsPerSelection` 回まで)で解決し、最初のダメージ技を探す。
-    ///    見つからなければ「解決できた最初の技」、それも無ければ `moveUnavailable`。
+    /// 2. **既定の技**: `moveOptions`(検索結果 ∩ learnset ∩ ダメージ技)から選べればその先頭。それでも選べない
+    ///    ときだけ、learnset を先頭から辞書 or `move(id:)`(上限 `MasterSearch.maxMoveLookupsPerSelection` 回まで)で
+    ///    解決し、最初のダメージ技を探す。見つからなければ、1つも解決できなければ `moveUnavailable`、
+    ///    解決の上限で打ち切ったなら解決できた最初の技(従来どおり。変化技なら安全網が計算を止める)、
+    ///    全部調べ終えたなら「ダメージ技なし」(`moveId` を空・`noDamagingMoves`)。
+    ///    変化技は優先する技にも既定の技にも選ばない。
     ///
     /// `token` は `beginInput()` の世代(issue #113 A5): `move(id:)` の各 `await` の後にこれで最新かを
     /// 確かめ、追い越されていたら `moveId` を書き換えずに戻る(呼び出し側が続く
     /// `guard token == latestRequestToken` で気付く)。`CancellationError` はそのまま投げ直し、
     /// 呼び出し側の `catch`(`handleInputFailure`)に任せる。
     private func reselectMove(preferringCurrent currentMoveId: String?, token: Int) async throws {
+        noDamagingMoves = false
         if let currentMoveId, attackerLearnsetIds.contains(currentMoveId) {
             var candidate = moveDictionary[currentMoveId]
             if candidate == nil {
                 candidate = try await resolveMove(id: currentMoveId)
                 guard token == latestRequestToken else { return }
             }
-            if let candidate {
+            // 変化技は選ばない(構築の個体の技が変化技でも既定のダメージ技にする。ADR-0518 §3)。
+            if let candidate, !CalcMoveRules.isStatusMove(candidate) {
                 moveId = candidate.id
                 return
             }
             // 解決できなかった(404・通信失敗。A4)ので、下の既定の技に進む。
         }
-        if let defaultMove = moveOptions.first(where: { $0.category != .status }) ?? moveOptions.first {
+        if let defaultMove = moveOptions.first {
             moveId = defaultMove.id
             return
         }
         // 既知の技だけでは既定が決まらない: learnset を先頭から解決し、最初のダメージ技を探す(4章)。
         var firstResolved: Move?
         var lookups = 0
+        var reachedLookupLimit = false
         for learnedId in attackerLearnsetIds {
             let known: Move?
             if let dictionaryMove = moveDictionary[learnedId] {
                 known = dictionaryMove
             } else {
-                guard lookups < MasterSearch.maxMoveLookupsPerSelection else { break }
+                guard lookups < MasterSearch.maxMoveLookupsPerSelection else {
+                    reachedLookupLimit = true
+                    break
+                }
                 lookups += 1
                 let resolved = try await resolveMove(id: learnedId)
                 guard token == latestRequestToken else { return }
@@ -815,7 +821,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             }
             guard let move = known else { continue }
             if firstResolved == nil { firstResolved = move }
-            if move.category != .status {
+            if !CalcMoveRules.isStatusMove(move) {
                 moveId = move.id
                 return
             }
@@ -823,7 +829,15 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         guard let fallback = firstResolved else {
             throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚える技がマスタに見つかりません")
         }
-        moveId = fallback.id
+        if reachedLookupLimit {
+            // 解決の上限で打ち切った(上限の先にダメージ技があるかもしれない): 「覚えない」とは言い切れないので、
+            // 従来どおり解決できた最初の技にする。変化技のときは安全網(`isStatusMoveSelected`)が計算を止める。
+            moveId = fallback.id
+            return
+        }
+        // 覚える技がすべて変化技: 技欄は空にして案内を出し、計算しない(エラーにはしない。ADR-0518 §3)。
+        moveId = ""
+        noDamagingMoves = true
     }
 
     /// `move(id:)`(openapi `getMove`)を呼び、成功したら技の辞書に入れて返す。失敗(404・通信失敗)は
@@ -843,7 +857,20 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
 
     /// いまの入力から要求を組み立て、計算する。組み立てに失敗した(性格が無い等)ときは
     /// calcBulk を呼ばずにエラーを立てる。
-    private func recalculate(token: Int) async {
+    func recalculate(token: Int) async {
+        // 計算しない場合(ダメージ技が無い種族・変化技・SP の不正)は、古い行も出さず要求も送らない
+        // (ADR-0518 §1・§3)。`error` を立てるのは性格が解決できないときだけ。
+        if selectedMove == nil ? noDamagingMoves : isStatusMoveSelected {
+            discardResult(token: token, error: nil)
+            return
+        }
+        if attackerBuildSource.teamSelection == nil, !attackerStatIssues.isEmpty {
+            let natureError = attackerStatIssues.contains(.nature)
+                ? PokeCalcError(code: PokeCalcError.Code.natureUnavailable, message: AttackerStatLabels.natureUnresolved)
+                : nil
+            discardResult(token: token, error: natureError)
+            return
+        }
         let request: BulkCalcRequest
         do {
             request = try buildRequest()
@@ -853,6 +880,15 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             return
         }
         await performCalc(request, token: token)
+    }
+
+    /// 計算せずに結果を空にする(世代が最新のときだけ)。`error` は渡したものだけを立てる(nil なら消す)。
+    private func discardResult(token: Int, error pokeCalcError: PokeCalcError?) {
+        guard token == latestRequestToken else { return }
+        rows = []
+        unsupportedNotice = nil
+        isLoading = false
+        error = pokeCalcError.map { CalcScreenError($0) }
     }
 
     /// いまの攻撃側(計算に使う個体そのまま)。お気に入りへ追加するときに使う(ADR-0509)。
@@ -871,6 +907,21 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             sp: StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0), abilityId: defenderAbilityId)
     }
 
+    /// 画面の「攻撃」「特攻」の入力から性格・SP を作る。作れないときは SP の不正 → 性格なしの順で投げる。
+    private func attackerBuildFromInputs(category: MoveCategory) throws -> AttackerBuild {
+        switch AttackerStatRules.resolve(inputs: attackerStatInputs, natures: natureOptions, category: category) {
+        case .resolved(let build):
+            return build
+        case .invalid(let issues):
+            if issues.contains(where: { if case .sp = $0 { return true } else { return false } }) {
+                throw PokeCalcError(
+                    code: PokeCalcError.Code.attackerSPInvalid,
+                    message: AttackStat.allCases.first { isSPInvalid($0) }.map(AttackerStatLabels.spInvalid) ?? "")
+            }
+            throw PokeCalcError(code: PokeCalcError.Code.natureUnavailable, message: AttackerStatLabels.natureUnresolved)
+        }
+    }
+
     private func buildRequest() throws -> BulkCalcRequest {
         guard let move = selectedMove else {
             // `moveId` は `selectMove`/`reselectMove` を通じてしか変わらず、どちらも
@@ -880,8 +931,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         }
         var attacker: Individual
         switch attackerBuildSource {
-        case .preset(let preset):
-            let build = try AttackerPreset.build(preset, moveCategory: move.category, natures: natureOptions)
+        case .preset:
+            let build = try attackerBuildFromInputs(category: move.category)
             attacker = Individual(speciesKey: attackerSpeciesKey, natureId: build.natureId, sp: build.sp, itemId: attackerItemId)
         case .team(let selection):
             // 呼び出した個体の性格・SP・特性・テラスタイプをそのまま使う(プリセットに丸め直さない。
