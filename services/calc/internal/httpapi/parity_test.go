@@ -45,7 +45,24 @@ func wasmResult(t *testing.T, out string) any {
 	if env.Error != nil {
 		t.Fatalf("wasmapi が失敗した: %s", out)
 	}
+	dropWasmOnlyFields(env.Result)
 	return env.Result
+}
+
+// dropWasmOnlyFields は WASM だけの応答の項目を取り除く。hitRolls(多段技の1発ごとの16段階)は公開 API の応答に
+// 出さない(ADR-0142 §1。段階2)。
+func dropWasmOnlyFields(v any) {
+	switch x := v.(type) {
+	case map[string]any:
+		delete(x, "hitRolls")
+		for _, c := range x {
+			dropWasmOnlyFields(c)
+		}
+	case []any:
+		for _, c := range x {
+			dropWasmOnlyFields(c)
+		}
+	}
 }
 
 func calcWasmBody(t *testing.T, f *fakeStore, c calcCase) map[string]any {

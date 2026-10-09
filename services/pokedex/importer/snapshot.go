@@ -47,6 +47,12 @@ type CalcMove struct {
 	// Target は技の対象。calc は全体技にだけ持つので、fetch-calc は省略を "" で出す。
 	// 必須(ADR-0136): キー自体が無い古い取得物はデコードで拒否する("" と「無い」を区別するため *string)。
 	Target *string `json:"target"`
+	// Flags・Recoil・HasCrashDamage・Secondaries は技のフラグの判定材料(ADR-0178)。calc の技データの表現のまま
+	// (Flags は真のフラグ名の昇順)。Flags は必須: キーが無い古い取得物はデコードで拒否する(nil と空を区別するため *[]string)。
+	Flags          *[]string       `json:"flags"`
+	Recoil         json.RawMessage `json:"recoil"`
+	HasCrashDamage bool            `json:"hasCrashDamage"`
+	Secondaries    bool            `json:"secondaries"`
 }
 
 // ShowdownSnapshot は Showdown の champions mod から抽出した正規化スナップショット。
@@ -110,6 +116,12 @@ type ShowdownMove struct {
 	Mechanism *ShowdownMoveMechanism `json:"mechanism"`
 	// Target は技の対象(取得元の文字列のまま。全技が持つ)。必須(ADR-0136): 無い古い取得物はデコードで拒否する。
 	Target *string `json:"target"`
+	// Flags は Showdown の技データの flags のうち真のキーの昇順(取得元の名前のまま。語彙に無いものも含む)。
+	// Recoil は recoil([分子, 分母] か null)、HasCrashDamage は hasCrashDamage。技のフラグの判定材料(ADR-0178)。
+	// Flags は必須: キーが無い古い取得物はデコードで拒否する(nil と空を区別するため *[]string)。
+	Flags          *[]string       `json:"flags"`
+	Recoil         json.RawMessage `json:"recoil"`
+	HasCrashDamage bool            `json:"hasCrashDamage"`
 }
 
 // ShowdownMoveMechanism は技の機構の判定材料。Showdown の技データの表現のまま持つ
@@ -185,6 +197,9 @@ type PokeAPISnapshot struct {
 type PokeAPIName struct {
 	Slug  string            `json:"slug"`
 	Names map[string]string `json:"names"`
+	// FormNames は forms だけが持つ姿の名前(pokemon_form_names.csv の form_name。「ヒスイのすがた」。ADR-0141)。
+	// Names(完全名 pokemon_name)が空の姿の名前の生成に使う。forms では必須(無い古いスナップショットは拒否)。
+	FormNames map[string]string `json:"formNames,omitempty"`
 }
 
 // NameOverrides は日本語名の人手の上書き(data/local/name_ja_overrides.json。実データなので Git 管理外)。

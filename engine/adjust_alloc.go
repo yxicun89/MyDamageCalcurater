@@ -3,6 +3,7 @@ package engine
 import (
 	"fmt"
 	"math"
+	"slices"
 )
 
 // SP 配分の提案(plan.md AJ3・機能 3)。定義は ADR-0150 §8。
@@ -320,8 +321,9 @@ func (s *allocSearch) evalGoal(self Individual, c *allocCand) error {
 	if !s.calculated {
 		// 印は SP によらず同じなので、最初の計算の印を使う。
 		s.calculated = true
-		if len(res.Unsupported) > 0 {
-			s.unsupported = res.Unsupported
+		// 参照する能力値が技と合わない機構(段階2)の印は、探索する能力が違うので結果に残す(ADR-0142 §6)。
+		if marks := append(slices.Clone(res.Unsupported), altStatMarks(g.Move)...); len(marks) > 0 {
+			s.unsupported = marks
 		}
 	}
 	ko := koChancePercent(res, g.Hits)
@@ -332,18 +334,19 @@ func (s *allocSearch) evalGoal(self Individual, c *allocCand) error {
 		c.chance = certainPercent - ko
 		c.goalMet = meetsSurviveThreshold(res, g.Hits, c.chance, s.threshold)
 	}
-	c.goalCount = goalEventCount(c.chance, len(res.Rolls), g.Hits)
+	c.goalCount = goalEventCount(c.chance, goalDraws(res, g.Hits))
 	return nil
 }
 
-// goalEventCount は確率(%)を「ロール数^hits 通り中の組数」に戻す。
+// goalEventCount は確率(%)を「16^draws 通り中の組数」に戻す(draws は goalDraws)。
 // 組数は 16^MaxAdjustHits = 2^40 以下で float64 に正確に載り、確率の誤差は 0.5 組より十分小さい。
-func goalEventCount(chancePercent float64, rolls, hits int) int64 {
-	total := int64(1)
-	for range hits {
-		total *= int64(rolls)
-	}
-	return int64(math.Round(chancePercent / certainPercent * float64(total)))
+func goalEventCount(chancePercent float64, draws int) int64 {
+	return int64(math.Round(chancePercent / certainPercent * float64(goalEventTotal(draws))))
+}
+
+// goalDraws は目標の hits 回の使用に含まれる独立な乱数の個数。多段技は 1 回の使用が回数ぶんの乱数になる。
+func goalDraws(res DamageResult, hits int) int {
+	return hits * max(1, len(res.HitRolls))
 }
 
 // offense は攻撃側で比べる攻撃実数値(物理 → A、特殊 → C)。

@@ -276,14 +276,18 @@ func TestSpeciesRequiresTypeChart(t *testing.T) {
 func TestMoveMapsAllEngineFields(t *testing.T) {
 	c := testChart(t)
 	got, err := master.Move(master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 1,
-		Mechanisms: []string{"variable_power", "multi_hit"}, Target: "allAdjacentFoes"}, c)
+		Mechanisms: []string{"variable_power", "multi_hit"}, Target: "allAdjacentFoes", Flags: []string{"sound", "contact"}, FlagsKnown: true,
+		Params: &master.MoveMechanismParamsRow{MultiHitMin: 2, MultiHitMax: 5}}, c)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
 	// 機構は昇順に並べて engine.Move に載せる(ADR-0123)。対象は全体技なので spread(ADR-0223)。
+	// フラグも昇順に並べて載せる(ADR-0178)。
 	want := engine.Move{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: engine.CategorySpecial, Power: 90, Priority: 1,
 		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower},
-		Target:     engine.MoveTargetSpread}
+		Params:     engine.MechanismParams{MultiHit: &engine.MultiHit{Min: 2, Max: 5}},
+		Target:     engine.MoveTargetSpread,
+		Flags:      []engine.MoveFlag{engine.MoveFlagContact, engine.MoveFlagSound}, FlagsKnown: true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -431,8 +435,17 @@ func fullAbilityEffect() engine.AbilityEffect {
 		IgnoresOpponentRanks:   true,
 		IgnoresDefenderAbility: true,
 		Breakable:              true,
-		UnsupportedAttacker:    true,
-		UnsupportedDefender:    true,
+		MaxMultiHit:            true, // 技の機構の段階1(ADR-0142)
+		PreventsOHKO:           true,
+		// 特性の段階2(ADR-0178)。
+		PostAuraPowerMods:   []engine.ConditionalPowerMod{{Condition: engine.PowerConditionMoveFlag, Flag: engine.MoveFlagContact, Modifier: 5325}},
+		FlagTypeConvert:     &engine.FlagTypeConvert{Flag: engine.MoveFlagSound, To: "water"},
+		DefImmuneFlags:      []engine.MoveFlag{engine.MoveFlagBullet},
+		DefFinalModsByFlag:  map[engine.MoveFlag]int{engine.MoveFlagSound: 2048},
+		DefFinalModsByType:  map[engine.Type]int{"fire": 8192},
+		NoContact:           true,
+		UnsupportedAttacker: true,
+		UnsupportedDefender: true,
 	}
 }
 

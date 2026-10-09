@@ -73,7 +73,7 @@ func TestClassifyMoveMechanism(t *testing.T) {
 		{"damage 数値", func(m *importer.ShowdownMoveMechanism) { m.Damage = json.RawMessage(`40`) }, []string{"fixed_damage"}},
 		{"damageCallback", func(m *importer.ShowdownMoveMechanism) { m.Hooks = []string{"damageCallback"} }, []string{"fixed_damage"}},
 		{"ohko true", func(m *importer.ShowdownMoveMechanism) { m.OHKO = json.RawMessage(`true`) }, []string{"ohko"}},
-		{"ohko タイプ", func(m *importer.ShowdownMoveMechanism) { m.OHKO = json.RawMessage(`"Ice"`) }, []string{"ohko"}},
+		{"ohko タイプ", func(m *importer.ShowdownMoveMechanism) { m.OHKO = json.RawMessage(`"Water"`) }, []string{"ohko"}},
 		{"willCrit", func(m *importer.ShowdownMoveMechanism) { m.WillCrit = true }, []string{"always_crit"}},
 		{"overrideOffensiveStat", func(m *importer.ShowdownMoveMechanism) { m.OverrideOffensiveStat = "def" }, []string{"alt_offense_stat"}},
 		{"overrideOffensivePokemon", func(m *importer.ShowdownMoveMechanism) { m.OverrideOffensivePokemon = "target" }, []string{"alt_offense_stat"}},

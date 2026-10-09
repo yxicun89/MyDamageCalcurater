@@ -130,6 +130,11 @@ const moves = [...dex.moves.all()].map((m) => ({
   priority: m.priority,
   // 技の対象(単体・全体 等。ADR-0136)。Showdown の文字列のまま(全技が持つ)。
   target: m.target,
+  // 技のフラグの判定材料(ADR-0178)。flags は真のキーの昇順(取得元の名前のまま。語彙への変換は Go 側)。
+  // フラグの無い技も [] を出す(キーが無い古い取得物は Go 側が拒否する)。
+  flags: Object.keys(m.flags ?? {}).filter((k) => m.flags[k]).sort(),
+  recoil: m.recoil ?? null,
+  hasCrashDamage: m.hasCrashDamage === true,
   isNonstandard: toNonstandard(m),
   // 追加効果(命中時のランク変化。ADR-0107 決定6)。取得元の表現のまま出す
   // (ID化・正準化は Go 側の変換で行う)。

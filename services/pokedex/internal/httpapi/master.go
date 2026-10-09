@@ -82,6 +82,14 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	if err != nil {
 		return api.MasterExport{}, err
 	}
+	moveMechanismParams, err := q.ListMoveMechanismParams(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
+	moveFlags, err := q.ListMoveFlags(ctx)
+	if err != nil {
+		return api.MasterExport{}, err
+	}
 	items, err := q.ListItems(ctx)
 	if err != nil {
 		return api.MasterExport{}, err
@@ -125,6 +133,20 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 	}
 	for id := range mechanismsByMoveID {
 		sort.Strings(mechanismsByMoveID[id])
+	}
+	mechanismParamsByMoveID := make(map[string]*api.MasterMoveMechanismParams, len(moveMechanismParams))
+	for _, p := range moveMechanismParams {
+		mechanismParamsByMoveID[p.MoveID] = masterMechanismParams(p)
+	}
+	// flagsByMoveID: 契約(MasterMove.flags)の「昇順」もここでソートする(ADR-0178)。
+	// move_flags が空ならまだ取り込んでいない(不明)ので、全技で flags キーを省く(ADR-0178 §3)。
+	flagsKnown := len(moveFlags) > 0
+	flagsByMoveID := map[string][]string{}
+	for _, f := range moveFlags {
+		flagsByMoveID[f.MoveID] = append(flagsByMoveID[f.MoveID], f.Flag)
+	}
+	for id := range flagsByMoveID {
+		sort.Strings(flagsByMoveID[id])
 	}
 	itemEffectByID := map[string]store.ItemEffect{}
 	for _, e := range itemEffects {
@@ -171,9 +193,18 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		if mechanisms == nil {
 			mechanisms = []string{} // 通常の技は空配列(null にしない。ADR-0121)
 		}
+		var flags *[]string
+		if flagsKnown {
+			f := flagsByMoveID[m.ID]
+			if f == nil {
+				f = []string{} // フラグの無い技は空配列(既知のフラグなし)
+			}
+			flags = &f
+		}
 		masterMoves = append(masterMoves, api.MasterMove{
 			Id: m.ID, NameJa: m.NameJa, Type: api.PokeType(m.Type), Category: api.MoveCategory(m.Category),
-			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms, Target: nullStringPtr(m.Target),
+			Power: int(m.Power), Priority: int(m.Priority), Effect: effect, Mechanisms: mechanisms, MechanismParams: mechanismParamsByMoveID[m.ID], Target: nullStringPtr(m.Target),
+			Flags: flags,
 		})
 	}
 	masterItems := make([]api.MasterItem, 0, len(items))
@@ -254,3 +285,23 @@ func statKeyPtr(v sql.NullString) *api.StatKey {
 type errEmpty string
 
 func (e errEmpty) Error() string { return "empty: " + string(e) }
+
+// masterMechanismParams は move_mechanism_params の行を契約の機構の中身にする(ADR-0142 §8)。
+// 無い項目(NULL)は null。値の検証は受け取った calc-svc が行う。
+func masterMechanismParams(p store.MoveMechanismParam) *api.MasterMoveMechanismParams {
+	out := &api.MasterMoveMechanismParams{
+		OffenseStat:    nullStringPtr(p.OffenseStat),
+		OffensePokemon: nullStringPtr(p.OffensePokemon),
+		DefenseStat:    nullStringPtr(p.DefenseStat),
+	}
+	if p.MultiHitMin.Valid || p.MultiHitMax.Valid {
+		out.MultiHit = &api.MasterMoveMultiHit{Min: int(p.MultiHitMin.Int16), Max: int(p.MultiHitMax.Int16)}
+	}
+	if p.FixedDamageLevel.Valid || p.FixedDamageValue.Valid {
+		out.FixedDamage = &api.MasterMoveFixedDamage{Level: p.FixedDamageLevel.Bool, Value: int(p.FixedDamageValue.Int16)}
+	}
+	if p.Ohko.Valid && p.Ohko.Bool {
+		out.Ohko = &api.MasterMoveOHKO{ImmuneType: nullStringPtr(p.OhkoImmuneType)}
+	}
+	return out
+}

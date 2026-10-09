@@ -366,6 +366,10 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 
 	pokeAPISpecies := newPokeAPILookup(in.PokeAPI.Species)
 	pokeAPIForms := newPokeAPILookup(in.PokeAPI.Forms)
+	formNamesByID := make(map[string]map[string]string, len(in.PokeAPI.Forms))
+	for _, e := range in.PokeAPI.Forms {
+		formNamesByID[toID(e.Slug)] = e.FormNames
+	}
 
 	// 日本語名は、メガ以外を先に解決する。メガの名前の生成(上流に無いときだけ)が基本種の名前を使うため。
 	resolveName := func(r rawSpecies) nameResolution {
@@ -379,6 +383,39 @@ func convertSpecies(in Input, typeNameToID map[string]string, includedItems map[
 	for _, f := range finals {
 		if !f.raw.isMega {
 			resolved[f.raw.showdownID] = resolveName(f.raw)
+		}
+	}
+	// 姿(form != 0 のメガ以外)は、上流の完全名が無いとき、姿の名前から「基本種名（姿の名前）」を作る(ADR-0141)。
+	// 基本種は上の周回で解決済み(基本種の姿は form 0)。完全名と姿の名前の両方があれば、規則の結果が完全名と
+	// 一致するかを確かめる(食い違いは警告。名前は完全名)。
+	for _, f := range finals {
+		r := f.raw
+		if r.isMega || r.form == 0 {
+			continue
+		}
+		base, ok := resolved[toID(r.baseSpeciesName)]
+		if !ok || base.Source == "fallback_en" {
+			continue
+		}
+		formName := ""
+		for _, lang := range in.Config.NameJaLanguages {
+			if v := strings.TrimSpace(formNamesByID[r.showdownID][lang]); v != "" {
+				formName = v
+				break
+			}
+		}
+		generated := master.FormNameJa(base.NameJa, formName)
+		if generated == "" {
+			continue
+		}
+		cur := resolved[r.showdownID]
+		switch cur.Source {
+		case "fallback_en":
+			resolved[r.showdownID] = nameResolution{NameJa: generated, Source: "generated"}
+		case "pokeapi":
+			if cur.NameJa != generated {
+				warnings = append(warnings, Finding{Kind: KindFormNameRuleMismatch, ID: r.showdownID})
+			}
 		}
 	}
 	for _, f := range finals {

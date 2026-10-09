@@ -121,7 +121,7 @@ final class MegaItemLockTests: XCTestCase {
         XCTAssertEqual(MegaItemText.clearedNotice, "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます")
     }
 
-    // MARK: - 表示名(持ち物はすべて日本語。ストーンの nameJa を出さない)
+    // MARK: - 表示名(持ち物はすべて日本語。英語名のストーンの nameJa は出さず、日本語の正式名称はそのまま出す)
 
     func testDisplayName() {
         let names = [Self.stone.id: "テストルカのメガストーン"]

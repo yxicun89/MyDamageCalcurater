@@ -4,15 +4,17 @@ import XCTest
 ///
 /// モック(`Resources/items.json`・`species.json`。ADR-0509 §9):
 /// - 攻撃側専用 `test-item-attack-only`・防御側専用 `test-item-defense-only`・役割なし `test-item-no-role`・
-///   メガストーン `test-item-mega-stone`(`nameJa`「テストどうぐメガいし」は画面のどこにも出てはならない)
+///   メガストーン `test-item-mega-stone`(`nameJa`「テストどうぐメガいし」は日本語の正式名称。固定中の持ち物欄にそのまま出す。
+///   ADR-0509 追記 §6'。組み立てた「{基本種名}のメガストーン」は、英語名のとき(単体テスト)だけ出す)
 /// - メガ種族「テストメガモンいち」(基本種「テストモンいち」)
 @MainActor
 final class MegaItemLockUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
     private static let megaSpeciesName = "テストメガモンいち"
     private static let nonMegaSpeciesName = "テストモンさん"
-    private static let lockedStoneName = "テストモンいちのメガストーン"
+    private static let composedStoneName = "テストモンいちのメガストーン"
     private static let stoneMasterName = "テストどうぐメガいし"
+    private static let lockedStoneName = stoneMasterName
     private static let lockedReason = "メガシンカ: メガストーンを持ちます"
     private static let ax5ContentSizeCategory = "UICTContentSizeCategoryAccessibilityXXXL"
 
@@ -50,10 +52,11 @@ final class MegaItemLockUITests: XCTestCase {
         option.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.15)).tap()
     }
 
-    /// 画面のどの要素のラベルにも、メガストーンのマスタの名前が出ていない。
-    private func assertStoneMasterNameIsHidden(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
-        let leaked = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", Self.stoneMasterName))
-        XCTAssertEqual(leaked.count, 0, "メガストーンの nameJa が画面に出ている", file: file, line: line)
+    /// 正式名称(日本語の nameJa)があるので、組み立てた「{基本種名}のメガストーン」はどの要素のラベルにも出ていない。
+    /// (ADR-0509 追記 §6'。旧: nameJa が出ていないことを確かめていた。英語名の分岐は単体テストで保つ)
+    private func assertComposedStoneNameIsHidden(_ app: XCUIApplication, file: StaticString = #filePath, line: UInt = #line) {
+        let leaked = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", Self.composedStoneName))
+        XCTAssertEqual(leaked.count, 0, "正式名称があるのに組み立てた名前が画面に出ている", file: file, line: line)
     }
 
     /// 攻撃側の持ち物の選択肢は攻撃側の役割の持ち物だけ。比較のトグルは防御側の役割の持ち物だけ。メガストーンはどこにも出ない。
@@ -91,7 +94,7 @@ final class MegaItemLockUITests: XCTestCase {
         let reason = element(app, "attackerItemLockReason")
         XCTAssertTrue(reason.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertEqual(reason.label, Self.lockedReason)
-        assertStoneMasterNameIsHidden(app)
+        assertComposedStoneNameIsHidden(app)
 
         selectAttacker(app, Self.nonMegaSpeciesName)
 

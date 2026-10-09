@@ -49,7 +49,7 @@ type AdjustSearchInput struct {
 
 // KOSearchResult は MinSPToKO の結果。
 type KOSearchResult struct {
-	// Stat は探索した能力(物理 → StatAtk、特殊 → StatSpA)。
+	// Stat は探索した能力(物理 → StatAtk、特殊 → StatSpA。技が攻撃に使う能力値を指定していればそれ。ADR-0142 §6)。
 	Stat StatKey
 	// SearchLimit は探索した SP の上限 = min(MaxSPPerStat, MaxSPTotal - 固定 SP の合計)。
 	SearchLimit int
@@ -67,7 +67,7 @@ type KOSearchResult struct {
 
 // SurviveSearchResult は MinSPToSurvive の結果。
 type SurviveSearchResult struct {
-	// Stat は H と組にして探索した能力(物理 → StatDef、特殊 → StatSpD)。
+	// Stat は H と組にして探索した能力(物理 → StatDef、特殊 → StatSpD。技が防御に使う能力値を指定していればそれ。ADR-0142 §6)。
 	Stat StatKey
 	// SearchLimit は HPSP + StatSP の上限 = MaxSPTotal - 固定 SP の合計(各能力は別に MaxSPPerStat まで)。
 	SearchLimit int
@@ -97,7 +97,7 @@ func MinSPToKO(in AdjustSearchInput) (KOSearchResult, error) {
 	if err != nil {
 		return KOSearchResult{}, err
 	}
-	stat := reverseStat(SideAttacker, in.Move.Category)
+	stat := reverseStatFor(SideAttacker, in.Move)
 	attacker := in.Attacker
 	attacker.SP = attacker.SP.WithStat(stat, 0)
 	if err := validateAdjustIndividuals(attacker, in.Defender); err != nil {
@@ -136,7 +136,7 @@ func MinSPToSurvive(in AdjustSearchInput) (SurviveSearchResult, error) {
 	if err != nil {
 		return SurviveSearchResult{}, err
 	}
-	stat := reverseStat(SideDefender, in.Move.Category)
+	stat := reverseStatFor(SideDefender, in.Move)
 	defender := in.Defender
 	defender.SP = defender.SP.WithStat(StatHP, 0).WithStat(stat, 0)
 	if err := validateAdjustIndividuals(in.Attacker, defender); err != nil {
@@ -258,7 +258,7 @@ func koChancePercent(res DamageResult, hits int) float64 {
 	case res.MaxDamage()*hits < res.DefenderHP:
 		return 0
 	}
-	return koProbability(res.Rolls, res.DefenderHP, hits) * certainPercent
+	return koProbabilityHits(res.Rolls, res.HitRolls, res.DefenderHP, hits) * certainPercent
 }
 
 // meetsKOThreshold は倒す確率がしきい値以上か。確定(100)は最小ロールの整数比較で判定する。

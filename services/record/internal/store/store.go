@@ -120,6 +120,27 @@ type CalcEvent struct {
 	Payload []byte
 }
 
+// CalcHistoryCursor は計算履歴の keyset の位置(ADR-0230 §1)。(OccurredAt, EventID) がこの位置より
+// 古い(occurred_at DESC, event_id DESC の並びで後ろの)行だけを返すのに使う。
+type CalcHistoryCursor struct {
+	OccurredAt time.Time
+	EventID    string
+}
+
+// CalcHistoryQuery は ListCalcHistory の問い合わせ(ADR-0230 §8)。
+type CalcHistoryQuery struct {
+	Since  time.Time          // occurred_at >= Since(ゼロ値なら下限なし。保持期間の下限)
+	Before *CalcHistoryCursor // nil なら先頭(最新)から
+	Limit  int
+}
+
+// CalcHistoryRow は履歴の1行。Payload は calc_events.payload で、store は中身を解釈しない。
+type CalcHistoryRow struct {
+	EventID    string
+	OccurredAt time.Time
+	Payload    []byte
+}
+
 // Store は record-svc が record DB に対して行う操作のすべて。
 type Store interface {
 	// TouchDevice は devices.last_seen_at を now へ更新する(行が無ければ作る)。
@@ -164,4 +185,11 @@ type Store interface {
 	// DeleteFavorite はその端末のお気に入りを1件消す。その端末が持っていなければ ErrNotFound
 	// (2回目の削除も ErrNotFound。他端末の行は消さない)。
 	DeleteFavorite(ctx context.Context, deviceID string, favoriteID int64) error
+
+	// --- 計算履歴(ADR-0230)------------------------------------------------------
+
+	// ListCalcHistory はその端末の operation = calc の行を occurred_at DESC, event_id DESC で最大 q.Limit 行返す。
+	// devices.purged_at(墓石)以前の行・q.Since より古い行・q.Before 以降(新しい側)の行は含めない。
+	// 1行も無ければ長さ0のスライス。読むだけで何も書き換えない。届かなければ ErrUnavailable。
+	ListCalcHistory(ctx context.Context, deviceID string, q CalcHistoryQuery) ([]CalcHistoryRow, error)
 }

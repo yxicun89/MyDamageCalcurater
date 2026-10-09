@@ -21,13 +21,13 @@
     {"name": "Testbug", "types": ["Grass"], "baseStats": {"hp": 1, "atk": 90, "def": 45, "spa": 30, "spd": 30, "spe": 40}}
   ],
   "moves": [
-    {"name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "priority": 0, "target": "allAdjacentFoes"},
-    {"name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "priority": 1, "target": ""},
-    {"name": "Test Glare", "type": "Normal", "basePower": 0, "priority": 0, "target": ""},
-    {"name": "Test Old", "basePower": 0, "priority": 0, "target": ""},
-    {"name": "Test Revived", "basePower": 0, "priority": 0, "target": ""},
-    {"name": "(No Move)", "type": "Normal", "category": "Status", "basePower": 0, "priority": 0, "target": ""},
-    {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0, "target": ""}
+    {"name": "Test Flame", "type": "Fire", "category": "Special", "basePower": 90, "priority": 0, "target": "allAdjacentFoes", "flags": ["sound"], "recoil": null, "hasCrashDamage": false, "secondaries": true},
+    {"name": "Test Strike", "type": "Normal", "category": "Physical", "basePower": 40, "priority": 1, "target": "", "flags": ["contact", "punch"], "recoil": [33, 100], "hasCrashDamage": false, "secondaries": false},
+    {"name": "Test Glare", "type": "Normal", "basePower": 0, "priority": 0, "target": "", "flags": ["sound"], "recoil": null, "hasCrashDamage": false, "secondaries": false},
+    {"name": "Test Old", "basePower": 0, "priority": 0, "target": "", "flags": [], "recoil": null, "hasCrashDamage": false, "secondaries": false},
+    {"name": "Test Revived", "basePower": 0, "priority": 0, "target": "", "flags": [], "recoil": null, "hasCrashDamage": false, "secondaries": false},
+    {"name": "(No Move)", "type": "Normal", "category": "Status", "basePower": 0, "priority": 0, "target": "", "flags": [], "recoil": null, "hasCrashDamage": false, "secondaries": false},
+    {"name": "Test Banned", "type": "Water", "category": "Special", "basePower": 80, "priority": 0, "target": "", "flags": [], "recoil": null, "hasCrashDamage": false, "secondaries": false}
   ],
   "items": ["Testmonite", "Test Orb", "Test Berry"],
   "abilities": ["Test Blaze", "Test Guard", "Test Leaf", "Test Stance"],

@@ -2,7 +2,7 @@ import XCTest
 
 @testable import PokeCalcCore
 
-/// 未対応の印の注記にも、メガストーンの `nameJa`(英語のことがある)を出さない(ADR-0509 §6)。
+/// 未対応の印の注記にも、英語名のメガストーンの `nameJa` は出さない(日本語の正式名称はそのまま出す。ADR-0509 §6 の更新)。
 final class ItemDisplayNameUnsupportedTests: XCTestCase {
     private static let stone = Item(id: "test-unsup-stone", nameJa: "Test Mega Stone", roles: [], isMegaStone: true)
     private static let berry = Item(id: "test-unsup-berry", nameJa: "テストきのみ", roles: [.defender], isMegaStone: false)

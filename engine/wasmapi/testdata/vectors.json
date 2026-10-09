@@ -482,6 +482,112 @@
       }
     },
     {
+      "name": "calc/multi-hit-skill-link",
+      "fn": "calc",
+      "tags": [
+        "mechanism",
+        "multi-hit"
+      ],
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "skilllink",
+            "nameJa": "テストれんぞく",
+            "effect": {
+              "maxMultiHit": true
+            }
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "testmulti",
+          "type": "normal",
+          "category": "physical",
+          "power": 25,
+          "priority": 0,
+          "mechanisms": [
+            "multi_hit"
+          ],
+          "mechanismParams": {
+            "multiHit": {
+              "min": 2,
+              "max": 5
+            }
+          }
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false
+      }
+    },
+    {
       "name": "calc/psychic-terrain-priority",
       "fn": "calc",
       "tags": [

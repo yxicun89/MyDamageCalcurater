@@ -21,8 +21,8 @@ type Species struct {
 // Move は技データ(マスタから解決済み)。
 // Effect は追加効果(命中時のランク変化)の定義(マスタから解決)。nil は追加効果なし。
 // CalcDamage は Effect を読まない(ADR-0107 決定2)。
-// Mechanisms は技の機構(ADR-0121)。空は通常の技。CalcDamage は数値の計算には使わず、
-// 通常の式で誤る機構に「未対応」の印を付けるためだけに読む(ADR-0123)。
+// Mechanisms は技の機構(ADR-0121)。空は通常の技。Params に中身がある機構(ADR-0142)は計算し、
+// 中身が無い・計算しない機構は通常の式で計算して「未対応」の印を付ける(ADR-0123)。
 type Move struct {
 	ID         string
 	NameJa     string
@@ -32,8 +32,14 @@ type Move struct {
 	Priority   int
 	Effect     *MoveEffect
 	Mechanisms []MoveMechanism
+	// Params は機構の中身(ADR-0142)。ゼロ値は中身なし(通常の式 + 印)。
+	Params MechanismParams `json:"mechanismParams"` // JSON のキーは WASM の入力(wasmapi)と同じ
 	// Target は技の対象(ADR-0222)。ダブルの全体技の補正に使う。"" は不明(マスタが持つまでの既定。単体扱い)。
 	Target MoveTarget
+	// Flags は技のフラグ(ADR-0178)。FlagsKnown が偽(マスタが持たない・古いキャッシュ)のときは空でなければならず、
+	// フラグに依存する特性の効果は効かないものとして計算し、その特性に未対応の印を付ける。
+	Flags      []MoveFlag
+	FlagsKnown bool
 }
 
 // MoveTarget は技の対象の分類。oracle の allAdjacent・allAdjacentFoes が spread、それ以外が single。
@@ -238,7 +244,10 @@ func (e AbilityEffect) validate() error {
 			return err
 		}
 	}
-	return e.validateStage1()
+	if err := e.validateStage1(); err != nil {
+		return err
+	}
+	return e.validateStage2()
 }
 
 // validateStage1 は特性の段階1の項目(ADR-0176)の値域を確かめる。
@@ -254,26 +263,8 @@ func (e AbilityEffect) validateStage1() error {
 			return err
 		}
 	}
-	for i, pm := range e.PowerMods {
-		name := fmt.Sprintf("PowerMods[%d]", i)
-		switch pm.Condition {
-		case PowerConditionMaxBasePower:
-			if pm.MaxPower < 1 || pm.MoveType != TypeNone {
-				return fmt.Errorf("%s: max_base_power は MaxPower 1 以上・MoveType 空", name)
-			}
-		case PowerConditionMoveType:
-			if pm.MoveType == TypeNone || pm.MaxPower != 0 {
-				return fmt.Errorf("%s: move_type は MoveType 必須・MaxPower 0", name)
-			}
-		default:
-			return fmt.Errorf("%s: 未知の条件 %q", name, pm.Condition)
-		}
-		if pm.Modifier == Modifier4096 {
-			return fmt.Errorf("%s.Modifier は中立(%d)不可", name, Modifier4096)
-		}
-		if err := validateModifier(name+".Modifier", pm.Modifier, false); err != nil {
-			return err
-		}
+	if err := validateConditionalPowerMods("PowerMods", e.PowerMods); err != nil {
+		return err
 	}
 	if (e.AuraType == TypeNone) != (e.AuraMod == 0) {
 		return errors.New("AuraType と AuraMod は組で指定する")
@@ -288,6 +279,36 @@ func (e AbilityEffect) validateStage1() error {
 		return err
 	}
 	return validateModifier("CritDamageMod", e.CritDamageMod, true)
+}
+
+// validateConditionalPowerMods は条件つきの威力補正の並び(PowerMods・PostAuraPowerMods)を確かめる。
+func validateConditionalPowerMods(field string, mods []ConditionalPowerMod) error {
+	for i, pm := range mods {
+		name := fmt.Sprintf("%s[%d]", field, i)
+		switch pm.Condition {
+		case PowerConditionMaxBasePower:
+			if pm.MaxPower < 1 || pm.MoveType != TypeNone || pm.Flag != "" {
+				return fmt.Errorf("%s: max_base_power は MaxPower 1 以上・MoveType 空・Flag 空", name)
+			}
+		case PowerConditionMoveType:
+			if pm.MoveType == TypeNone || pm.MaxPower != 0 || pm.Flag != "" {
+				return fmt.Errorf("%s: move_type は MoveType 必須・MaxPower 0・Flag 空", name)
+			}
+		case PowerConditionMoveFlag:
+			if !pm.Flag.Known() || pm.MaxPower != 0 || pm.MoveType != TypeNone {
+				return fmt.Errorf("%s: move_flag は既知の Flag 必須・MaxPower 0・MoveType 空", name)
+			}
+		default:
+			return fmt.Errorf("%s: 未知の条件 %q", name, pm.Condition)
+		}
+		if pm.Modifier == Modifier4096 {
+			return fmt.Errorf("%s.Modifier は中立(%d)不可", name, Modifier4096)
+		}
+		if err := validateModifier(name+".Modifier", pm.Modifier, false); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // validateAbilityStatMods は特性の実数値の倍率の map のキーが allowed にあり、値が範囲内かを確かめる。

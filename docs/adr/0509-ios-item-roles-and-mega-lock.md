@@ -173,3 +173,37 @@ iOS はこれらをまだ写しておらず、**メガの固定も未実装**(`g
 - **詳細の読み込み(P6-19)**: 防御側・自分(受けたダメージ)の詳細は View が種族の変更ごとに読む(`DefenderCardView`・`ReverseMyCardView` の `.task(id:)`。
   「詳細」セクション側の重複した `.task` は外した)。L1(要求の前に読む)と同時に走ると、まれに同じ種族を2回読み得るが、
   結果は同じで計算は余計に走らない(既知の制約)。
+
+## 追記 2026-10-04: メガストーンの表示名は正式名称を優先する(§6 を更新)
+
+背景: ユーザー要望「メガリザードンX を選んだら リザードナイトX のような正式名称が出てほしい」。§6 は、メガストーンの `nameJa` が英語のことがあったため
+「{基本種名}のメガストーン」を組み立てて見せ、マスタの `nameJa` はどこにも出さないとした。その後データレーンが `items.name_ja` に正式名称を入れた
+(日本語名の無い 40 件は英語名にフォールバック)。契約・API は変えない(表示名だけ)。
+
+### §6'(§6 を次で更新する)
+
+- メガストーンの表示名は `ItemDisplayName.megaStoneName(for:baseSpeciesNameJa:)` の1関数に集約する。
+  - `item.nameJa` が**日本語の文字を含む**(正式名称)→ `nameJa` をそのまま。基本種名が無くても正式名称を出す。
+  - 含まない(英語名のフォールバック・空文字)→ 従来どおり `MegaItemText.stoneName(baseSpeciesNameJa:)`(「{基本種名}のメガストーン」/ 基本種名が無ければ「メガストーン」)。
+- 「日本語の文字を含む」は純粋関数 `ItemDisplayName.containsJapanese(_:)`。ひらがな(U+3041–309F)・カタカナ(U+30A0–30FF。長音「ー」U+30FC を含む)・
+  半角カナ(U+FF66–FF9F)・漢字(CJK 統合漢字 U+4E00–9FFF と拡張 A U+3400–4DBF)のうち1文字以上。英数字・全角英数字・空白・記号・空文字だけなら false。
+- 使う場所は §6 と同じ(固定中の持ち物欄・`MegaItemLock.locked` の `displayName`・構築の補正の通知・結果の行・逆算の候補・未対応の印の注記・`BulkRowDisplay.itemLabel`)。
+  `ItemDisplayName.text` / `displayItems` / `MegaItemLock.make` は上の関数を通す。`isMegaStone == true` で VM がメガ情報を知らないときも、正式名称ならそれを出す
+  (英語名のときだけ従来の「メガストーン」)。
+- ID 参照は変えない: 要求の `itemId`・保存済みの構築・お気に入り・計算履歴は ID のまま。変わるのは画面の表示名だけ。
+- Web とそろえる: Web の `megaStoneLabel`・`itemsWithStoneLabels`(ADR-0326 §4・0320)は「ストーンの `nameJa` は使わない」ままなので、同じ判定
+  (日本語の文字を1文字以上含む → `nameJa`)へ更新する。語の判定はこの章の定義を正とする(別タスク。データレーン依頼)。
+- モックの制約: モックの `nameJa` はすべて「テスト」始まり(`MockPokeCalcServiceTests` が固定)で、「テスト」は日本語の文字なので、モックに英語名のストーンは置けない
+  (置くには固定テストの緩和が要る。ルール 6 のため緩めない)。モックのストーン `test-item-mega-stone`(「テストどうぐメガいし」)は**日本語の正式名称**として扱い、
+  英語名のフォールバックは単体テスト(スタブの英語名ストーン)で保つ。
+
+### 期待値が変わる既存テスト(ルール 6: 理由は上の仕様変更。nameJa を出さない約束が、日本語の正式名称に限って反転した)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `MegaItemLockUITests`(XCUITest)`lockedStoneName` | 「テストモンいちのメガストーン」→「テストどうぐメガいし」 | モックのストーンの nameJa が日本語の正式名称なのでそのまま出る |
+| 同 `assertStoneMasterNameIsHidden` → `assertComposedStoneNameIsHidden` | 「nameJa が出ていない」→「組み立てた名前が出ていない」 | 反転(同じ強さの検査を逆の側に) |
+| 同 `testItemOptionsAreFilteredByRole` の `buttons[stoneMasterName].exists == false` | 変更なし | ストーンは選択肢に出ない(§2)ので引き続き成り立つ |
+| `StubMegaMaster`(スタブ)`stone`・`otherStone` の `nameJa` | 「テストSTONE-ENGLISH(-2)」→「TEST-STONE-ENGLISH(-2)」 | 「テスト」が日本語の文字なので英語名のスタブでなくなる。値の変更のみで、これらを使う既存テストの期待値(「{基本種名}のメガストーン」・「メガストーン」)は変わらない |
+
+`MegaItemLockTests`・`ItemDisplayNameUnsupportedTests`・5つの `*ViewModelItemRolesTests`・`ItemRoleFilterTests` は英語名のストーン(`Test Mega Stone` ほか)のままで、期待値の変更なし。

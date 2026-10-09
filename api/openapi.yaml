@@ -21,7 +21,7 @@ tags:
     description: ダメージ計算・一括計算・逆算・調整(指数・最小 SP・SP 配分。ADR-0250)
   - name: record
     description: |
-      計算の記録(自動保存された計算イベントから作る「よく使う相手」の集計・お気に入り)と、
+      計算の記録(自動保存された計算イベントの履歴・それから作る「よく使う相手」の集計・お気に入り)と、
       端末単位の全削除(ADR-0209 §5)。すべて `X-Device-Id` の端末の中だけを見る(ADR-0209 §6)。
       端末 ID はボディ・クエリ・パスで受け取らない(送られたら 400 `unknown_field`)。
   - name: team
@@ -730,6 +730,60 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/record/calc-history:
+    get:
+      tags: [record]
+      operationId: listCalcHistory
+      summary: この端末の計算履歴(1件の計算 POST /api/calc)を新しい順に返す
+      description: |
+        `X-Device-Id` の端末で成功した1件の計算(`POST /api/calc`)の履歴を、計算した時刻の新しい順に返す
+        (requirements.md §2「計算結果の自動保存」・ADR-0209 §3「calc_events の目的: 履歴表示」・ADR-0230)。他端末の履歴は混ざらない。
+
+        - 各行の `calc` は計算の入力全体で、`POST /api/calc` の本文 `CalcRequest` と同じ形(既定値を補った形。
+          お気に入りの `Favorite.calc` と同じ正規化。ADR-0228)。行を選んだらそのまま `POST /api/calc` に渡して結果を出し直せる
+          (マスタとは照合していないので、マスタの更新後に `unknown_move` 等で 400 になることはある)。
+        - 一括計算(`POST /api/calc/bulk`)・逆算(`POST /api/calc/reverse`)は**載らない**(計算イベントが入力を持たない。ADR-0212 §7.1)。
+        - 返すのは計算の入力と結果の要約(表示%の幅)だけで、端末 ID・セッション ID・イベントの内部情報は返さない(ADR-0230 §2)。
+        - 保存は非同期(calc-svc → NATS → record-svc)なので、計算した直後の行はまだ載っていないことがある。
+        - 生の履歴は**計算した時刻から90日**(record-svc の保持期間の設定。ADR-0209 §4)で消える。
+          保持期間を過ぎた行は、失効ジョブが消す前でも返さない。
+          端末単位の全削除(`DELETE /api/record/device-data`)の後は、削除より前の行を返さない(`partial` の途中でも)。
+        - 記録が1件も無い端末は `items` が空配列(404 にしない)。
+        - ページング: `nextCursor` が null でなければ続きがある。同じ `limit` で `cursor` にその値を入れて次のページを取る。
+          カーソルは不透明な文字列で、クライアントは中身を解釈しない。ページの間に新しい計算が保存されても、
+          取得済みの行が次のページに重複して出ることも、抜けることもない(時刻とイベントの順序によるカーソル。ADR-0230 §1)。
+        - 個別の行の削除は持たない(端末単位の全削除だけ。ADR-0230 §5)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+        - name: limit
+          in: query
+          description: 1ページの上限。範囲外・整数でない値は 400 `invalid_input`
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: cursor
+          in: query
+          description: |
+            前のページの `nextCursor`。省略すると先頭(最新)から。形式が違う・読めない値は 400 `invalid_input`
+            (他端末のカーソルを渡しても、その端末の行は返らない。カーソルは位置だけを持ち、端末を指さない)。
+          schema: { $ref: '#/components/schemas/CalcHistoryCursor' }
+      responses:
+        '200':
+          description: 計算した時刻の新しい順(同時刻は event_id の降順(文字列の比較。一意に決まる順で、ページをまたいでも重複・欠落しない))。記録が無ければ `items` が空配列
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CalcHistoryPage' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            record-svc が TiDB に届かない(`store_unavailable`)、または gateway から record-svc に届かない
+            (`upstream_unavailable`。ADR-0202・ADR-0209 §5.3)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /api/record/device-data:
     delete:
       tags: [record]
@@ -1367,6 +1421,29 @@ components:
             pokedex-svc がマスタの対象(`MasterMove.target` の Showdown の文字列)から分類して返す。
             対象がまだ取り込まれていない技は**キーごと省く**(null を返さない)。古いサーバーもこのキーを返さないため、
             クライアントは「キーが無い」を不明として扱う(ダブルの計算では単体として計算し、未対応の印 move_target_unknown が付く)。
+        mechanisms:
+          type: array
+          items: { type: string }
+          description: |
+            技の機構(ADR-0121・ADR-0178 §4)。値は engine の `MoveMechanism`(UnsupportedMark.reason の技側と同じ。昇順・重複なし)。
+            通常の技は空配列。pokedex-svc は常に返す。Web のオフライン計算(WASM の技の `mechanisms`)にそのまま渡すと、
+            多段・威力変動などの技に未対応の印が付く。古いサーバーは返さないため、省略は「不明」(印を付けられない)と読む。
+            enum は付けない(値の検証は WASM の境界と engine が行う)。
+        flags:
+          type: array
+          items: { $ref: '#/components/schemas/MoveFlag' }
+          description: |
+            技のフラグ(move_flags。ADR-0178)。昇順・重複なし。フラグの無い技は空配列。
+            フラグがまだ取り込まれていない(古いサーバー・取り込み前)ときは**キーごと省く**。クライアントは「キーが無い」を不明として
+            WASM に渡さない(フラグに依存する特性には未対応の印が付く)。WASM の技の `flags` にそのまま渡せる。
+
+    MoveFlag:
+      type: string
+      description: |
+        技のフラグ(ADR-0178 §1)。contact・sound・punch・bite・slicing・pulse・bullet は Showdown の技データの flags、
+        recoil は反動(recoil・hasCrashDamage)、secondary は追加効果あり(secondary・secondaries)。値の正は engine の AllMoveFlags。
+      enum: [bite, bullet, contact, pulse, punch, recoil, secondary, slicing, sound]
+      x-enum-varnames: [MoveFlagBite, MoveFlagBullet, MoveFlagContact, MoveFlagPulse, MoveFlagPunch, MoveFlagRecoil, MoveFlagSecondary, MoveFlagSlicing, MoveFlagSound]
 
     Item:
       type: object
@@ -2353,7 +2430,7 @@ components:
     MasterMove:
       type: object
       description: moves テーブルの行(計算に使う列だけ)+ move_effects の effect(ADR-0107)
-      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target]
+      required: [id, nameJa, type, category, power, priority, effect, mechanisms, target, mechanismParams]
       properties:
         id: { type: string }
         nameJa: { type: string }
@@ -2391,6 +2468,71 @@ components:
             null を不明("")として engine.Move.Target に写す(ダブルで不明の攻撃技には move_target_unknown の印。ADR-0222)。
             古い pokedex-svc(このキーを返さない版)からの取り込みは、キーが無いことを null と同じ「不明」として受け付ける
             (入れ替えの順序に依存させない。ADR-0223 §3)。
+        mechanismParams:
+          allOf: [ { $ref: '#/components/schemas/MasterMoveMechanismParams' } ]
+          description: |
+            技の機構の中身(move_mechanism_params。ADR-0142)。null は中身なし(通常の技・中身を持たない機構だけの技・
+            まだ取り込んでいない行)。キーは省かない(null を返す)。calc-svc は engine.Move.Params に写す
+            (検証は `services/internal/master.Move`)。古い pokedex-svc(このキーを返さない版)からの取り込みは、
+            キーが無いことを null と同じに扱う(ADR-0223 §3 と同じ)。
+        flags:
+          type: array
+          items: { type: string }
+          description: |
+            技のフラグ(move_flags。ADR-0178)。昇順・重複なし。フラグの無い技は空配列。値の正は engine の AllMoveFlags
+            (公開 API の MoveFlag と同じ 9 種)。enum は付けない(mechanisms と同じ理由。検証は calc-svc の `master.Move`)。
+            **省略可**: フラグがまだ取り込まれていない(move_flags が空)ときは全技でキーを省く。calc-svc は省略を「不明」として
+            engine.Move.FlagsKnown を偽にする(フラグに依存する特性に未対応の印が付く)。古い pokedex-svc も返さない。
+
+    MasterMoveMechanismParams:
+      type: object
+      nullable: true
+      description: |
+        技の機構の中身(ADR-0142 §2・§8)。機構(MasterMove.mechanisms)ごとの値で、対応する機構の無い項目は持たない。
+        enum は付けない(mechanisms と同じ理由。値の検証は受け取った calc-svc の `services/internal/master.Move`)。
+      required: [multiHit, fixedDamage, ohko, offenseStat, offensePokemon, defenseStat]
+      properties:
+        multiHit: { $ref: '#/components/schemas/MasterMoveMultiHit' }
+        fixedDamage: { $ref: '#/components/schemas/MasterMoveFixedDamage' }
+        ohko: { $ref: '#/components/schemas/MasterMoveOHKO' }
+        offenseStat:
+          type: string
+          nullable: true
+          description: alt_offense_stat で攻撃に使う能力値(atk・def・spa・spd・spe)。null は技の分類どおり。
+        offensePokemon:
+          type: string
+          nullable: true
+          description: alt_offense_stat で攻撃に使うポケモン(attacker・defender)。null は攻撃側。
+        defenseStat:
+          type: string
+          nullable: true
+          description: alt_defense_stat で防御に使う能力値(atk・def・spa・spd・spe)。null は技の分類どおり。
+
+    MasterMoveMultiHit:
+      type: object
+      nullable: true
+      description: multi_hit の回数(ADR-0142)。min == max は固定回数。範囲の既定の回数は engine が決める(ADR-0142 §3)。null は中身なし。
+      required: [min, max]
+      properties:
+        min: { type: integer }
+        max: { type: integer }
+
+    MasterMoveFixedDamage:
+      type: object
+      nullable: true
+      description: fixed_damage のダメージ(ADR-0142)。level(攻撃側のレベル)か value(正の整数)のちょうど一方。null は中身なし。
+      required: [level, value]
+      properties:
+        level: { type: boolean }
+        value: { type: integer }
+
+    MasterMoveOHKO:
+      type: object
+      nullable: true
+      description: 一撃必殺(ADR-0142)。immuneType はそのタイプの相手に効かないタイプ ID(null はなし)。null は中身なし。
+      required: [immuneType]
+      properties:
+        immuneType: { type: string, nullable: true }
 
     MasterEffect:
       type: object
@@ -2550,6 +2692,64 @@ components:
           description: |
             最終更新(作成時と、同じ内容の再ピン留め〈`createFavorite` の 200〉で進む)。一覧の並びと失効の判定に使う
             (`max(devices.last_seen_at, updatedAt)` から540日。ADR-0209 §4)
+
+    CalcHistoryCursor:
+      type: string
+      description: |
+        計算履歴のページの位置(ADR-0230 §1)。サーバーが作る不透明な文字列(URL にそのまま入る文字だけ)で、
+        クライアントは中身を解釈せず、受け取った `nextCursor` をそのまま次の要求の `cursor` に渡す。
+      minLength: 1
+      maxLength: 200
+      pattern: '^[A-Za-z0-9_-]+$'
+
+    CalcHistoryResult:
+      type: object
+      description: |
+        計算結果の要約(ADR-0230 §2)。計算した時点の表示%(`CalcResult.minPercent` / `maxPercent` と同じ値・同じ丸め。ADR-0010 §3)。
+        乱数の16段階・確定数は持たない(必要なら `calc` で計算し直す)。
+      required: [minPercent, maxPercent]
+      properties:
+        minPercent: { type: number, format: double, description: 最小ダメージの表示%(切り捨て。CalcResult.minPercent) }
+        maxPercent: { type: number, format: double, description: 最大ダメージの表示%(四捨五入。100 を超えうる。CalcResult.maxPercent) }
+
+    CalcHistoryEntry:
+      type: object
+      description: |
+        計算履歴の1行(1回の `POST /api/calc`。ADR-0230 §2)。返す項目はこの3つだけ(端末 ID・セッション ID・
+        イベントの内部情報は返さない)。行の ID は持たない(個別の削除・取得が無いため。並びの位置は `CalcHistoryPage.nextCursor`)。
+
+        `calc` は計算の入力全体で、`POST /api/calc` の本文 `CalcRequest` そのもの(`$ref` だけで参照し、生成型も `CalcRequest`)。
+        `Favorite.calc` と同じ正規化(既定値を補った形。ADR-0228)で返す: `format` は必ず入り、`attacker` / `defender` は
+        `level`・`ranks`(すべてのキー)・`status` を持ち、`field` は `weather`・`terrain`・`attackerScreens`・`defenderScreens` をすべて、
+        `options` は `critical` を必ず持つ。
+      required: [occurredAt, calc, result]
+      properties:
+        occurredAt:
+          type: string
+          format: date-time
+          description: 計算した時刻(calc-svc の時計。record-svc が受け取った時刻ではない。ADR-0209 §7)
+        calc: { $ref: '#/components/schemas/CalcRequest' }
+        result: { $ref: '#/components/schemas/CalcHistoryResult' }
+
+    CalcHistoryPage:
+      type: object
+      description: 計算履歴の1ページ(ADR-0230 §1)
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          maxItems: 50
+          description: 計算した時刻の新しい順。`limit` 件以下(空のこともある)
+          items: { $ref: '#/components/schemas/CalcHistoryEntry' }
+        nextCursor:
+          type: string
+          nullable: true
+          minLength: 1
+          maxLength: 200
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: |
+            続きがあれば次のページの位置(`CalcHistoryCursor` と同じ形式)、無ければ null。最後のページは null で、空のページを余計に1回返さない
+            (残りがちょうど `limit` 件のときも、そのページで null になる)。
 
     # --- team-svc(ADR-0209 §5.3 から移した契約 + ADR-0213 の CRUD。P5-4)---------
 
