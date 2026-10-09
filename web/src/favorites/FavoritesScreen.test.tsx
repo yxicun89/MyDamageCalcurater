@@ -63,6 +63,7 @@ function createFakeRecord(): FakeRecord {
     listFrequentOpponents: unused,
     deleteDeviceData: unused,
     createFavorite: unused,
+    listCalcHistory: () => new Promise(() => undefined),
     listFavorites(signal) {
       return new Promise((resolve) => {
         listCalls.push({ args: signal, resolve });

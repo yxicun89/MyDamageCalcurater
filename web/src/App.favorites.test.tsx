@@ -52,6 +52,10 @@ function installRecordBackend(options: { readonly down?: boolean } = {}) {
       headers: new Headers(init?.headers),
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     });
+    // 計算履歴(ADR-0338)は常に空の1ページ。この試験はお気に入りの alert だけを見るので、down でも履歴は応答させる。
+    if (url.includes("/api/record/calc-history")) {
+      return Promise.resolve(json(200, { items: [], nextCursor: null }));
+    }
     if (options.down === true) {
       return Promise.resolve(json(503, { code: "upstream_unavailable", message: "届きません" }));
     }
