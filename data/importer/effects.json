@@ -127,7 +127,9 @@
     "skilllink": {"MaxMultiHit": true},
     "sturdy": {"PreventsOHKO": true, "Breakable": true},
     "merciless": {"UnsupportedAttacker": true},
-    "longreach": {"NoContact": true}
+    "longreach": {"NoContact": true},
+    "heavymetal": {"WeightMod": 8192, "Breakable": true},
+    "lightmetal": {"WeightMod": 2048, "Breakable": true}
   },
   "speedItems": {
     "ironball": {"SpeedMods": [{"Condition": "always", "Modifier": 2048}]}
@@ -140,5 +142,43 @@
     "surgesurfer": {"SpeedMods": [{"Condition": "terrain_electric", "Modifier": 8192}]},
     "quickfeet": {"SpeedMods": [{"Condition": "has_status", "Modifier": 6144}], "IgnoresParalysisSpeedDrop": true},
     "unburden": {"SpeedMods": [{"Condition": "item_lost", "Modifier": 8192}]}
+  },
+  "moveRules": {
+    "acrobatics": {"PowerBoosts": [{"Condition": "attacker_no_item", "BaseMultiplier": 2}]},
+    "barbbarrage": {"PowerBoosts": [{"Condition": "defender_status", "Statuses": ["poison", "badly_poison"], "BaseMultiplier": 2}]},
+    "blizzard": {"MoveSpecificResolved": true},
+    "brickbreak": {"BreaksScreens": true, "MoveSpecificResolved": true},
+    "bulldoze": {"TerrainPowerMods": [{"Terrain": "grassy", "Modifier": 2048}]},
+    "earthquake": {"TerrainPowerMods": [{"Terrain": "grassy", "Modifier": 2048}]},
+    "electroball": {"PowerFormula": "speed_ratio"},
+    "expandingforce": {"PowerBoosts": [{"Condition": "terrain_attacker_grounded", "Terrains": ["psychic"], "Modifier": 6144}], "SpreadInTerrain": "psychic", "MoveSpecificResolved": true},
+    "facade": {"PowerBoosts": [{"Condition": "attacker_status", "Statuses": ["burn", "paralysis", "poison", "badly_poison"], "Modifier": 8192}], "IgnoresBurn": true},
+    "flyingpress": {"ExtraEffectivenessType": "flying"},
+    "freezedry": {"SuperEffectiveAgainst": ["water"]},
+    "grassknot": {"PowerFormula": "target_weight", "MoveSpecificResolved": true},
+    "grassyglide": {"PriorityBoost": {"Terrain": "grassy", "Delta": 1}},
+    "gyroball": {"PowerFormula": "inverse_speed_ratio"},
+    "heatcrash": {"PowerFormula": "weight_ratio", "MoveSpecificResolved": true},
+    "heavyslam": {"PowerFormula": "weight_ratio", "MoveSpecificResolved": true},
+    "hex": {"PowerBoosts": [{"Condition": "defender_status", "Statuses": ["burn", "paralysis", "poison", "badly_poison", "sleep", "freeze"], "BaseMultiplier": 2}]},
+    "hurricane": {"MoveSpecificResolved": true},
+    "infernalparade": {"PowerBoosts": [{"Condition": "defender_status", "Statuses": ["burn", "paralysis", "poison", "badly_poison", "sleep", "freeze"], "BaseMultiplier": 2}]},
+    "knockoff": {"PowerBoosts": [{"Condition": "defender_item_removable", "Modifier": 6144}]},
+    "lowkick": {"PowerFormula": "target_weight", "MoveSpecificResolved": true},
+    "mistyexplosion": {"PowerBoosts": [{"Condition": "terrain_attacker_grounded", "Terrains": ["misty"], "Modifier": 6144}]},
+    "pollenpuff": {"MoveSpecificResolved": true},
+    "poltergeist": {"FailsWithoutDefenderItem": true, "MoveSpecificResolved": true},
+    "powertrip": {"PowerFormula": "attacker_positive_boosts"},
+    "psychicfangs": {"BreaksScreens": true, "MoveSpecificResolved": true},
+    "risingvoltage": {"PowerBoosts": [{"Condition": "terrain_defender_grounded", "Terrains": ["electric"], "BaseMultiplier": 2}]},
+    "solarbeam": {"PowerBoosts": [{"Condition": "weather", "Weathers": ["rain", "sand", "snow"], "Modifier": 2048}]},
+    "solarblade": {"PowerBoosts": [{"Condition": "weather", "Weathers": ["rain", "sand", "snow"], "Modifier": 2048}]},
+    "storedpower": {"PowerFormula": "attacker_positive_boosts"},
+    "terrainpulse": {"PowerBoosts": [{"Condition": "terrain_attacker_grounded", "Terrains": ["electric", "grassy", "misty", "psychic"], "BaseMultiplier": 2}], "TypeByTerrain": {"electric": "electric", "grassy": "grass", "misty": "fairy", "psychic": "psychic"}, "MoveSpecificResolved": true},
+    "thunder": {"MoveSpecificResolved": true},
+    "tripleaxel": {"PowerFormula": "hit_index"},
+    "uproar": {"MoveSpecificResolved": true},
+    "venoshock": {"PowerBoosts": [{"Condition": "defender_status", "Statuses": ["poison", "badly_poison"], "Modifier": 8192}]},
+    "weatherball": {"PowerBoosts": [{"Condition": "weather", "Weathers": ["sun", "rain", "sand", "snow"], "BaseMultiplier": 2}], "TypeByWeather": {"rain": "water", "sand": "rock", "snow": "ice", "sun": "fire"}, "MoveSpecificResolved": true}
   }
 }

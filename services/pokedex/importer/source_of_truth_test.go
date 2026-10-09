@@ -95,6 +95,10 @@ type goldenEffectsFile struct {
 	Note      string                     `json:"note"`
 	Items     map[string]json.RawMessage `json:"items"`
 	Abilities map[string]json.RawMessage `json:"abilities"`
+	// 素早さの効果定義と技の処理の定義(ADR-0143 §4。素早さ比の技の照合に素早さの定義も写す)。
+	SpeedItems     map[string]json.RawMessage `json:"speedItems"`
+	SpeedAbilities map[string]json.RawMessage `json:"speedAbilities"`
+	MoveRules      map[string]json.RawMessage `json:"moveRules"`
 }
 
 // TestGoldenEffectsMatchImporterEffects は、ゴールデンテストが検証している効果定義と、本番の DB に
@@ -118,6 +122,9 @@ func TestGoldenEffectsMatchImporterEffects(t *testing.T) {
 	}{
 		{"items", prod.Items, golden.Items},
 		{"abilities", prod.Abilities, golden.Abilities},
+		{"speedItems", prod.SpeedItems, golden.SpeedItems},
+		{"speedAbilities", prod.SpeedAbilities, golden.SpeedAbilities},
+		{"moveRules", prod.MoveRules, golden.MoveRules},
 	} {
 		if len(c.prod) == 0 {
 			t.Errorf("%s: 本番の効果定義が空(比較が空振りしていないか)", c.label)
