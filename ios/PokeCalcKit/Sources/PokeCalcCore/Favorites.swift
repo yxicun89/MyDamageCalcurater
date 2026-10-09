@@ -136,8 +136,6 @@ public enum FavoritesLabels {
     public static let historySectionTitle = "よく計算する相手"
     public static let emptyFavorites = "お気に入りはまだありません。計算画面の「お気に入りに追加」から追加できます。"
     public static let emptyHistory = "計算した相手がまだありません。計算すると、よく計算する相手がここに並びます。"
-    /// 生の計算履歴の取得 API は契約に無い(ADR-0511)。契約ができるまで注記だけ出す。
-    public static let pendingHistoryNote = "計算の履歴そのものの一覧は、サーバーの対応待ちです。"
     public static let removeButton = "外す"
     public static let retryButton = "再読み込み"
     public static let pinAttackerButton = "攻撃側をお気に入りに追加"

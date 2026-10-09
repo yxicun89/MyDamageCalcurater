@@ -5,6 +5,8 @@ import XCTest
 /// - `POKECALC_MOCK_FAVORITES`: 未設定=空のストア(追加・削除は動く)/ `list`(id 102「HB特化」9002-000・id 101 9003-000)/
 ///   `fail` / `unavailable` / `full`(100件)。
 /// - `POKECALC_MOCK_FREQUENT_OPPONENTS`: 未設定=3件(9003-000・9001-000・マスタに無い 9999-000)/ `empty` / `fail`。
+/// - `POKECALC_MOCK_CALC_HISTORY`: 未設定=計算履歴3件 / `paged` / `paged-fail-more` / `empty` / `fail` / `unavailable`
+///   (計算履歴そのものの確認は `CalcHistoryUITests`。ここでは同じ画面の他の節を壊さないことだけ確かめる)。
 /// 識別子と架空の key を直接書く(UI テストは App のターゲットに依存しない)。実装前は identifier が無いので失敗してよい。
 @MainActor
 final class FavoritesScreenUITests: XCTestCase {
@@ -20,12 +22,14 @@ final class FavoritesScreenUITests: XCTestCase {
     }
 
     private func launch(
-        favorites: String? = nil, opponents: String? = nil, contentSizeCategory: String? = nil
+        favorites: String? = nil, opponents: String? = nil, calcHistory: String? = nil,
+        contentSizeCategory: String? = nil
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if let favorites { app.launchEnvironment["POKECALC_MOCK_FAVORITES"] = favorites }
         if let opponents { app.launchEnvironment["POKECALC_MOCK_FREQUENT_OPPONENTS"] = opponents }
+        if let calcHistory { app.launchEnvironment["POKECALC_MOCK_CALC_HISTORY"] = calcHistory }
         if let contentSizeCategory {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
@@ -77,7 +81,12 @@ final class FavoritesScreenUITests: XCTestCase {
         XCTAssertLessThan(first.frame.minY, second.frame.minY, "サーバーの順(スコア降順)")
         XCTAssertTrue(first.label.contains("テストモンさん"), "label: \(first.label)")
         XCTAssertTrue(first.label.contains("3回"), "件数を出す: \(first.label)")
-        XCTAssertTrue(element(app, "opponentHistoryPendingNote").exists, "生の履歴一覧は契約待ちの注記")
+        // ADR-0519: 計算履歴の API ができたので「契約待ち」の注記は外し、計算履歴の一覧(既定は3件)が出る。
+        XCTAssertFalse(element(app, "opponentHistoryPendingNote").exists, "「契約待ち」の注記はもう出さない")
+        XCTAssertTrue(element(app, "calcHistorySection").exists)
+        XCTAssertTrue(
+            element(app, "calcHistoryRow-0-1790000000").waitForExistence(timeout: Self.existenceTimeout),
+            "計算履歴の一覧が出る")
     }
 
     // MARK: - お気に入りの一覧・削除
@@ -245,7 +254,7 @@ final class FavoritesScreenUITests: XCTestCase {
         let identifiers = [
             "favoritesSection", "favoriteRow-102", "favoriteRow-101", "favoriteDeleteButton-102",
             "opponentHistorySection", "opponentHistoryRow-9003-000", "opponentHistoryRow-9999-000",
-            "opponentHistoryPendingNote",
+            "calcHistorySection", "calcHistoryRow-0-1790000000",
         ]
         for identifier in identifiers {
             let target = element(app, identifier)
@@ -263,10 +272,15 @@ final class FavoritesScreenUITests: XCTestCase {
     }
 
     func testFailureStateNoHorizontalOverflowAtAX5() {
-        let app = launch(favorites: "unavailable", opponents: "fail", contentSizeCategory: Self.ax5ContentSizeCategory)
+        let app = launch(
+            favorites: "unavailable", opponents: "fail", calcHistory: "unavailable",
+            contentSizeCategory: Self.ax5ContentSizeCategory)
         openFavorites(app)
         let width = app.windows.firstMatch.frame.width
-        for identifier in ["favoritesError", "favoritesRetryButton", "opponentHistoryError", "opponentHistoryRetryButton"] {
+        for identifier in [
+            "favoritesError", "favoritesRetryButton", "calcHistoryError", "calcHistoryRetryButton",
+            "opponentHistoryError", "opponentHistoryRetryButton",
+        ] {
             let target = element(app, identifier)
             XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), identifier)
             XCTAssertGreaterThanOrEqual(target.frame.minX, -Self.overflowTolerance, identifier)
