@@ -150,7 +150,9 @@ func megaSpeciesRow() master.SpeciesRow {
 func TestSpeciesMapsAllEngineFields(t *testing.T) {
 	c := testChart(t)
 	abilities := []master.SpeciesAbilityRow{{Slot: 3, AbilityID: "testhidden"}, {Slot: 1, AbilityID: "testability"}}
-	got, err := master.Species(baseSpeciesRow(), abilities, c)
+	row := baseSpeciesRow()
+	row.WeightHg = 905 // 重さ(ADR-0143)
+	got, err := master.Species(row, abilities, c)
 	if err != nil {
 		t.Fatalf("Species: %v", err)
 	}
@@ -159,6 +161,7 @@ func TestSpeciesMapsAllEngineFields(t *testing.T) {
 		Types:     []engine.Type{"fire"},
 		BaseStats: engine.Stats{HP: 80, Atk: 90, Def: 70, SpA: 100, SpD: 75, Spe: 85},
 		Abilities: []string{"testability", "testhidden"}, // slot 順
+		WeightHg:  905,
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
@@ -277,7 +280,8 @@ func TestMoveMapsAllEngineFields(t *testing.T) {
 	c := testChart(t)
 	got, err := master.Move(master.MoveRow{ID: "testflame", NameJa: "テストフレイム", Type: "fire", Category: "special", Power: 90, Priority: 1,
 		Mechanisms: []string{"variable_power", "multi_hit"}, Target: "allAdjacentFoes", Flags: []string{"sound", "contact"}, FlagsKnown: true,
-		Params: &master.MoveMechanismParamsRow{MultiHitMin: 2, MultiHitMax: 5}}, c)
+		Params: &master.MoveMechanismParamsRow{MultiHitMin: 2, MultiHitMax: 5},
+		Rule:   []byte(`{"PowerFormula":"attacker_positive_boosts"}`)}, c) // 処理の定義(ADR-0143)
 	if err != nil {
 		t.Fatalf("Move: %v", err)
 	}
@@ -287,7 +291,8 @@ func TestMoveMapsAllEngineFields(t *testing.T) {
 		Mechanisms: []engine.MoveMechanism{engine.MechanismMultiHit, engine.MechanismVariablePower},
 		Params:     engine.MechanismParams{MultiHit: &engine.MultiHit{Min: 2, Max: 5}},
 		Target:     engine.MoveTargetSpread,
-		Flags:      []engine.MoveFlag{engine.MoveFlagContact, engine.MoveFlagSound}, FlagsKnown: true}
+		Flags:      []engine.MoveFlag{engine.MoveFlagContact, engine.MoveFlagSound}, FlagsKnown: true,
+		Rule: &engine.MoveRule{PowerFormula: engine.PowerFormulaPositiveBoosts}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v, want %+v", got, want)
 	}
@@ -444,6 +449,7 @@ func fullAbilityEffect() engine.AbilityEffect {
 		DefFinalModsByFlag:  map[engine.MoveFlag]int{engine.MoveFlagSound: 2048},
 		DefFinalModsByType:  map[engine.Type]int{"fire": 8192},
 		NoContact:           true,
+		WeightMod:           8192, // 重さの補正(ADR-0143)
 		UnsupportedAttacker: true,
 		UnsupportedDefender: true,
 	}

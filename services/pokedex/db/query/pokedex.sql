@@ -13,7 +13,7 @@ FROM type_chart;
 -- name: GetSpeciesByKey :one
 SELECT `key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
        base_hp, base_atk, base_def, base_spa, base_spd, base_spe,
-       is_mega, base_species_key, required_item_id
+       is_mega, base_species_key, required_item_id, weight_hg
 FROM species
 WHERE `key` = ?;
 
@@ -38,10 +38,28 @@ SELECT move_id, mechanism
 FROM move_mechanisms
 ORDER BY move_id, mechanism;
 
+-- name: ListMoveRules :many
+SELECT move_id, rule
+FROM move_rules
+ORDER BY move_id;
+
 -- name: ListMoveMechanismParams :many
 SELECT move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
        ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
 FROM move_mechanism_params
+ORDER BY move_id;
+
+-- name: ListMoveMechanismParamsByMoveIDs :many
+SELECT move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
+       ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
+FROM move_mechanism_params
+WHERE move_id IN (sqlc.slice(ids))
+ORDER BY move_id;
+
+-- name: ListMoveRulesByMoveIDs :many
+SELECT move_id, rule
+FROM move_rules
+WHERE move_id IN (sqlc.slice(ids))
 ORDER BY move_id;
 
 -- name: ListMoveMechanismsByMoveIDs :many
@@ -180,6 +198,9 @@ DELETE FROM move_mechanisms;
 -- name: DeleteMoveMechanismParams :exec
 DELETE FROM move_mechanism_params;
 
+-- name: DeleteMoveRules :exec
+DELETE FROM move_rules;
+
 -- name: DeleteMoveFlags :exec
 DELETE FROM move_flags;
 
@@ -229,8 +250,8 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertSpecies :exec
 INSERT INTO species (`key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
-                      base_hp, base_atk, base_def, base_spa, base_spd, base_spe, is_mega, base_species_key, required_item_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                      base_hp, base_atk, base_def, base_spa, base_spd, base_spe, is_mega, base_species_key, required_item_id, weight_hg)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: InsertSpeciesAbility :exec
 INSERT INTO species_abilities (species_key, slot, ability_id)
@@ -257,6 +278,10 @@ INSERT INTO move_mechanism_params (
   move_id, multi_hit_min, multi_hit_max, fixed_damage_level, fixed_damage_value,
   ohko, ohko_immune_type, offense_stat, offense_pokemon, defense_stat
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: InsertMoveRule :exec
+INSERT INTO move_rules (move_id, rule)
+VALUES (?, ?);
 
 -- name: InsertMoveFlag :exec
 INSERT INTO move_flags (move_id, flag)
@@ -312,7 +337,7 @@ VALUES (?, ?, ?, ?, ?, ?);
 -- name: ListSpecies :many
 SELECT `key`, dex_no, form, showdown_id, name_ja, name_ja_source, name_en, type1, type2,
        base_hp, base_atk, base_def, base_spa, base_spd, base_spe,
-       is_mega, base_species_key, required_item_id
+       is_mega, base_species_key, required_item_id, weight_hg
 FROM species
 ORDER BY `key`;
 

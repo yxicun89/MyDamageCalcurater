@@ -109,6 +109,10 @@ type AbilityEffect struct {
 	// NoContact は攻撃側: 自分の技を接触しない扱いにする(えんかく。防御側の contact の最終補正を受けない)。
 	NoContact bool
 
+	// WeightMod は重さの補正(ヘヴィメタル 8192・ライトメタル 2048。ADR-0143)。重さ = max(1, trunc(hg × WeightMod / 4096))。
+	// 0 は補正なし。Breakable と組で書く(かたやぶりで防御側の補正が無視される)。
+	WeightMod int
+
 	// UnsupportedAttacker / UnsupportedDefender は ItemEffect と同じ「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool
@@ -318,7 +322,10 @@ func weatherDefenseMod(in DamageInput, defKey StatKey) int {
 // → タイプ変換 → 持ち物(ADR-0176)。
 // in.Move.Type は変換後のタイプ。converted はタイプ変換したか。
 func powerModifier(in DamageInput, converted bool) int {
-	mods := []int{terrainDamageMod(in.Field.Terrain, in.Move.Type, isGrounded(in.Attacker), isGrounded(in.Defender))}
+	// 技の定義の Modifier(最初)→ フィールド(攻撃側・防御側)→ 定義の TerrainPowerMods(防御側が接地)。
+	mods := ruleModifiers(in)
+	mods = append(mods, terrainDamageMod(in.Field.Terrain, in.Move.Type, isGrounded(in.Attacker), isGrounded(in.Defender)))
+	mods = append(mods, ruleTerrainPowerMods(in)...)
 	ae := in.Attacker.Ability.Effect
 	if ae != nil {
 		for _, pm := range ae.PowerMods {
@@ -390,7 +397,7 @@ func otherModifiers(in DamageInput, eff Effectiveness) []int {
 	var mods []int
 	superEffective := eff.IsSuperEffective()
 
-	if !in.Critical {
+	if !in.Critical && !ruleBreaksScreens(in) {
 		if sm := screenDamageMod(in); sm != Modifier4096 {
 			mods = append(mods, sm)
 		}

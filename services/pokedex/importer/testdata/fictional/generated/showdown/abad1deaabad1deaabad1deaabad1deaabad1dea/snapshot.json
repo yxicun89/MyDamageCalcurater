@@ -19,7 +19,7 @@
     {"id": "testleafbloom", "name": "Testleaf-Bloom", "num": 9002, "baseSpecies": "Testleaf", "forme": "Bloom", "baseForme": "",
      "types": ["Grass"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60},
      "abilities": {"0": "Test Leaf"}, "requiredItem": "",
-     "formeOrder": [], "weightkg": 7, "isNonstandard": null},
+     "formeOrder": [], "weightkg": 6.9, "isNonstandard": null},
     {"id": "testleafrain", "name": "Testleaf-Rain", "num": 9002, "baseSpecies": "Testleaf", "forme": "Rain", "baseForme": "",
      "types": ["Water"], "baseStats": {"hp": 70, "atk": 60, "def": 80, "spa": 90, "spd": 80, "spe": 60},
      "abilities": {"0": "Test Leaf"}, "requiredItem": "",

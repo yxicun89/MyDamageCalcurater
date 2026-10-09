@@ -71,6 +71,12 @@ func DecodeCalcSnapshot(raw []byte) (CalcSnapshot, error) {
 	if err := checkSource(s.Source, "calc"); err != nil {
 		return CalcSnapshot{}, err
 	}
+	// 種族の重さは必須(ADR-0143)。無いまま照合すると全種族の重さが食い違いになり、原因が分かりにくい。
+	for _, sp := range s.Species {
+		if sp.WeightKg == nil {
+			return CalcSnapshot{}, fmt.Errorf("%w: calc の種族 %q に weightkg が無い(ADR-0143 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, sp.Name)
+		}
+	}
 	// 技の対象は必須(ADR-0136)。無いまま照合すると全体技がすべて食い違いになり、原因が分かりにくい。
 	for _, m := range s.Moves {
 		if m.Target == nil {
@@ -107,6 +113,12 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 		// 技のフラグは必須(ADR-0178)。無いと全技が「フラグなし」として黙って取り込まれる。
 		if m.Flags == nil {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に flags が無い(ADR-0178 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
+		}
+	}
+	// 種族の重さは必須(ADR-0143)。無いと重さで威力が決まる技を計算できない。
+	for _, sp := range s.Species {
+		if sp.WeightKg == nil {
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 種族 %q に weightkg が無い(ADR-0143 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, sp.ID)
 		}
 	}
 	for _, it := range s.Items {
@@ -167,7 +179,7 @@ func DecodeEffectsFile(raw []byte) (EffectsFile, error) {
 	if err := json.Unmarshal(raw, &sections); err == nil {
 		for k := range sections {
 			switch k {
-			case "schemaVersion", "items", "abilities", "speedItems", "speedAbilities":
+			case "schemaVersion", "items", "abilities", "speedItems", "speedAbilities", "moveRules":
 			default:
 				return EffectsFile{}, fmt.Errorf("%w: effects.json の未知の節 %q", ErrInvalidInput, k)
 			}

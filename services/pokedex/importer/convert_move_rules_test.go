@@ -115,7 +115,9 @@ func speciesWeightByShowdownID(out importer.Output) map[string]int {
 }
 
 func TestConvertSpeciesWeight(t *testing.T) {
-	out, _ := convertOK(t, loadFixture(t))
+	in := loadFixture(t)
+	unexcludeCalcSpecies(t, &in, "Testbug") // testbug は設定で除外している fixture の種族。重さを確かめるため取り込む
+	out, _ := convertOK(t, in)
 	got := speciesWeightByShowdownID(out)
 	for id, want := range map[string]int{"testmon": 905, "testmonmega": 1200, "testleaf": 69, "testbug": 1} {
 		if got[id] != want {

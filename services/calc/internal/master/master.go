@@ -85,6 +85,7 @@ func (s *MemoryStore) Move(id string) (engine.Move, bool) {
 	// スライスも複製する(呼び出し側の書き換えが Store に漏れない。ADR-0178)。
 	mv.Mechanisms = slices.Clone(mv.Mechanisms)
 	mv.Flags = slices.Clone(mv.Flags)
+	mv.Rule = copyMoveRule(mv.Rule)
 	return mv, true
 }
 
@@ -122,6 +123,32 @@ func copyItemEffect(e *engine.ItemEffect) *engine.ItemEffect {
 		}
 	}
 	out.SpeedMods = slices.Clone(e.SpeedMods)
+	return &out
+}
+
+// copyMoveRule は *engine.MoveRule のディープコピーを返す(nil は nil のまま。ADR-0143)。
+func copyMoveRule(r *engine.MoveRule) *engine.MoveRule {
+	if r == nil {
+		return nil
+	}
+	out := *r
+	if r.PowerBoosts != nil {
+		out.PowerBoosts = make([]engine.MovePowerBoost, len(r.PowerBoosts))
+		for i, b := range r.PowerBoosts {
+			b.Statuses = slices.Clone(b.Statuses)
+			b.Weathers = slices.Clone(b.Weathers)
+			b.Terrains = slices.Clone(b.Terrains)
+			out.PowerBoosts[i] = b
+		}
+	}
+	out.TerrainPowerMods = slices.Clone(r.TerrainPowerMods)
+	out.TypeByWeather = maps.Clone(r.TypeByWeather)
+	out.TypeByTerrain = maps.Clone(r.TypeByTerrain)
+	out.SuperEffectiveAgainst = slices.Clone(r.SuperEffectiveAgainst)
+	if r.PriorityBoost != nil {
+		pb := *r.PriorityBoost
+		out.PriorityBoost = &pb
+	}
 	return &out
 }
 

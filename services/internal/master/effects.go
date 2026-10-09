@@ -58,6 +58,8 @@ var (
 		// 特性の段階2(技のフラグ。ADR-0178)
 		"PostAuraPowerMods": true, "FlagTypeConvert": true, "DefImmuneFlags": true,
 		"DefFinalModsByFlag": true, "DefFinalModsByType": true, "NoContact": true,
+		// 重さの補正(ADR-0143)
+		"WeightMod":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 	}
 	// typeConvertFields / powerModFields は TypeConvert・PowerMods の要素の既知のキー(ADR-0176)。
@@ -617,6 +619,16 @@ func DecodeAbilityEffect(raw []byte, chart engine.TypeChart) (*engine.AbilityEff
 	if err := decodeAbilityStage2(fields, chart, &e); err != nil {
 		return nil, err
 	}
+	if v, ok := fields["WeightMod"]; ok {
+		n, err := decodePositiveInt(v)
+		if err != nil {
+			return nil, err
+		}
+		if n > engine.MaxWeightModifier {
+			return nil, fmt.Errorf("%w: WeightMod が上限 %d を超える: %d", ErrInvalidEffect, engine.MaxWeightModifier, n)
+		}
+		e.WeightMod = n
+	}
 	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
 		return nil, err
 	}
@@ -1053,6 +1065,9 @@ func (w *effectWriter) encodeAbilityStage2(e engine.AbilityEffect) {
 	}
 	if e.NoContact {
 		w.field("NoContact", []byte("true"))
+	}
+	if e.WeightMod != 0 {
+		w.field("WeightMod", []byte(strconv.Itoa(e.WeightMod)))
 	}
 }
 

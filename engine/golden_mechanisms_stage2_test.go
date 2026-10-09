@@ -65,6 +65,16 @@ func (c *goldenMechanismStage2Case) UnmarshalJSON(b []byte) error {
 	return json.Unmarshal(raw.Expected, &c.Expected)
 }
 
+// readGoldenMechanismStage2Cases は mechanisms-stage2.json のベクタを読む(特性・持ち物の照合の網羅を数えるテストが使う)。
+func readGoldenMechanismStage2Cases(t *testing.T) []goldenMechanismStage2Case {
+	t.Helper()
+	var cases []goldenMechanismStage2Case
+	if err := json.Unmarshal(goldenFile(t, readGoldenMetadata(t), goldenMechanismsStage2File), &cases); err != nil {
+		t.Fatal(err)
+	}
+	return cases
+}
+
 // goldenMoveRules は testdata/golden/effects.json の moveRules(キーは oracle の技名)。
 func goldenMoveRules(t *testing.T) map[string]json.RawMessage {
 	t.Helper()

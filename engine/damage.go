@@ -203,7 +203,7 @@ func stabModifier(in DamageInput, moveType Type) (int, bool) {
 // burnModifier は物理やけどによる攻撃半減(ModifierHalf)を返す。
 // やけど無効化の特性(こんじょう等)は AbilityEffect.IgnoresBurn で表す。
 func burnModifier(in DamageInput) int {
-	ignores := false
+	ignores := ruleIgnoresBurn(in)
 	if ae := in.Attacker.Ability.Effect; ae != nil && ae.IgnoresBurn {
 		ignores = true
 	}
@@ -369,6 +369,9 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	if err := in.Move.ValidateParams(in.TypeChart); err != nil {
 		return DamageResult{}, false, err
 	}
+	if err := in.Move.ValidateRule(in.TypeChart); err != nil {
+		return DamageResult{}, false, err
+	}
 
 	// 特性の段階1(ADR-0176): 防御側の特性の無視・技のタイプの変換・急所の無効を、計算の最初に1回だけ決める。
 	// 以降は in.Move.Type が変換後のタイプ、in.Defender.Ability.Effect が無視した後の効果になる。
@@ -377,6 +380,9 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		return DamageResult{}, false, err
 	}
 
+	// 技の処理の定義(ADR-0143 §2 の 1): 優先度・タイプ・全体技を決める。
+	in = applyRulePreconditions(in)
+
 	res = DamageResult{
 		Category:    in.Move.Category,
 		DefenderHP:  RealStats(in.Defender).HP,
@@ -384,7 +390,7 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	}
 
 	moveType := in.Move.Type
-	eff, err := in.TypeChart.Effectiveness(moveType, in.Defender.Species.Types)
+	eff, err := moveEffectiveness(in, moveType)
 	if err != nil {
 		return DamageResult{}, false, err
 	}
@@ -393,7 +399,10 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 
 	// タイプ由来の無効が先(oracle champions.ts L262 / ADR-0017 §5)。
 	// 同じタイプを特性でも無効にしている場合は、タイプ由来として報告する(Nullified は空のまま)。
-	if !eff.IsImmune() {
+	// 防御側が持ち物なしで失敗する技(ポルターガイスト型)は、タイプの無効の後・特性の無効の前(ADR-0143 §2)。
+	if !eff.IsImmune() && in.Move.Category != CategoryStatus && ruleFailed(in) {
+		res.Nullified = NullifyMoveFailed
+	} else if !eff.IsImmune() {
 		res.Nullified = abilityNullification(in.Defender.Ability.Effect, in.Move)
 	}
 	// サイコフィールドの先制技は、タイプ・特性による無効の後に判定する(oracle champions.js と同じ順)。
@@ -422,11 +431,44 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		}
 	}
 
-	// 変化技・威力0・無効相性・特性による無効/吸収はダメージ0。
-	if in.Move.Category == CategoryStatus || in.Move.Power <= 0 || eff.IsImmune() || res.Nullified != NullifyNone {
+	// 威力の式で基本威力が決まる技は威力 0 でも計算する(ADR-0143 §2 の 4)。
+	basePower := ruleBasePower(in, 0)
+	if in.Move.Category == CategoryStatus || basePower <= 0 || eff.IsImmune() || res.Nullified != NullifyNone {
 		return res, false, nil
 	}
 
+	hits := multiHitCount(in)
+	if r := in.Move.Rule; r != nil && r.PowerFormula == PowerFormulaHitIndex && hits > 1 {
+		// h 発目は威力 × h で、1発ごとに計算する。
+		res.HitRolls = make([][16]int, hits)
+		for h := range res.HitRolls {
+			res.HitRolls[h] = damageRolls(in, ruleBasePower(in, h), typeConverted, eff)
+			for i, d := range res.HitRolls[h] {
+				res.Rolls[i] += d
+			}
+		}
+		return res, true, nil
+	}
+	per := damageRolls(in, basePower, typeConverted, eff)
+	res.Rolls = per
+	// 多段技: 1発は同じ計算で、回数ぶん並べる。Rolls は同じ段の合計(ADR-0142 §3)。
+	if hits > 1 {
+		res.HitRolls = make([][16]int, hits)
+		for h := range res.HitRolls {
+			res.HitRolls[h] = per
+		}
+		for i := range res.Rolls {
+			res.Rolls[i] = per[i] * hits
+		}
+	}
+	return res, true, nil
+}
+
+// damageRolls は基本威力 basePower の1発の16段階を返す。basePower は式・整数倍を反映済みの威力で、
+// 特性の条件(テクニシャン等)はこの値で判定する(oracle の basePower)。
+func damageRolls(in DamageInput, basePower int, typeConverted bool, eff Effectiveness) (rolls [16]int) {
+	in.Move.Power = basePower
+	moveType := in.Move.Type
 	level := in.Attacker.EffectiveLevel()
 	atk, def := attackDefenseStats(in)
 
@@ -460,20 +502,9 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 		if d < 1 {
 			d = 1 // 相性≠0 なら最低1ダメージ
 		}
-		res.Rolls[i] = d
+		rolls[i] = d
 	}
-	// 多段技: 1発は同じ計算で、回数ぶん並べる。Rolls は同じ段の合計(ADR-0142 §3)。
-	if hits := multiHitCount(in); hits > 1 {
-		per := res.Rolls
-		res.HitRolls = make([][16]int, hits)
-		for h := range res.HitRolls {
-			res.HitRolls[h] = per
-		}
-		for i := range res.Rolls {
-			res.Rolls[i] = per[i] * hits
-		}
-	}
-	return res, true, nil
+	return rolls
 }
 
 // filledRolls は全 16 段が v の結果(固定ダメージ・一撃必殺)。

@@ -599,6 +599,7 @@ export function ReverseScreen({ engine, master, masterSearch }: ReverseScreenPro
       nature,
       item: myItem,
       ability: myAbility,
+      defending: side === "attacker", // 観測した側が攻撃側なら、自分(既知側)は防御側
     });
     const request = buildReverseRequest({
       side,

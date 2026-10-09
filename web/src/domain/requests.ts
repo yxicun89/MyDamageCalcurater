@@ -58,16 +58,29 @@ export const NEUTRAL_MODIFIER = 4096;
  */
 export function toEngineSpecies(species: MasterSpecies): Species {
   const { key, dexNo, form, nameJa, types, baseStats, abilities } = species;
-  const base = { key, dexNo, form, nameJa, types, baseStats, abilities };
+  // weightHg は重さの技の計算に使う(ADR-0143)。不明(省略)のときはキーを作らない。
+  const base = {
+    key,
+    dexNo,
+    form,
+    nameJa,
+    types,
+    baseStats,
+    abilities,
+    ...(species.weightHg === undefined ? {} : { weightHg: species.weightHg }),
+  };
   if (species.isMega !== true) {
     return base;
   }
   return { ...base, isMega: true, requiredItemId: species.requiredItemId ?? null };
 }
 
-/** 持ち物なし(null)はそのまま、あれば engine の形にする(ADR-0326。roles・isMegaStone を境界へ渡さない)。 */
+/**
+ * 持ち物なし(null)はそのまま、あれば engine の形にする(ADR-0326。roles を境界へ渡さない)。防御側の持ち物の候補に使うので、
+ * メガストーンは isMegaStone を残す(ADR-0143)。
+ */
 function engineItemOrNull(item: Item | null): Item | null {
-  return item === null ? null : toEngineItem(item);
+  return item === null ? null : toEngineItem(item, true);
 }
 
 /** 種族の特性の先頭(特性一覧に解決できるもの)を使う。1つも解決できなければ特性なし。 */
@@ -115,6 +128,8 @@ export interface BuildIndividualInput {
   /** 攻撃側の状態異常・ランク(計算条件。省略はキーを作らない。issue 274)。 */
   readonly status?: string;
   readonly ranks?: Ranks;
+  /** 防御側の個体か。メガストーンの持ち物に isMegaStone を残す(防御側の持ち物を払い落とす技のため。ADR-0143)。 */
+  readonly defending?: boolean;
 }
 
 /** レベル 50・指定の SP・性格・持ち物・特性の個体を作る(P4-2 ではランクを入力しない)。 */
@@ -124,7 +139,7 @@ export function buildIndividual(species: MasterSpecies, input: BuildIndividualIn
     level: BATTLE_LEVEL,
     nature: input.nature,
     ability: input.ability,
-    item: input.item === null ? null : toEngineItem(input.item),
+    item: input.item === null ? null : toEngineItem(input.item, input.defending === true),
     sp: input.sp,
     ...(input.status === undefined ? {} : { status: input.status }),
     ...(input.ranks === undefined ? {} : { ranks: input.ranks }),

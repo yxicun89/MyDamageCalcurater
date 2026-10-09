@@ -170,6 +170,8 @@ func errorResponse(err error) string {
 		{engine.ErrUnknownMoveTarget, CodeInvalidInput},
 		// 技の機構の中身の不正(ADR-0142 §2。新しいコードは足さない)。
 		{engine.ErrInvalidMechanismParams, CodeInvalidInput},
+		// 技の処理の定義の不正(ADR-0143。新しいコードは足さない)。
+		{engine.ErrInvalidMoveRule, CodeInvalidInput},
 		// 件数・範囲の上限(issue #110。ADR-0208 §2 と同じく新しいコードは足さず invalid_input に写す。
 		// ADR-0108)。
 		{engine.ErrTooManyPresets, CodeInvalidInput},

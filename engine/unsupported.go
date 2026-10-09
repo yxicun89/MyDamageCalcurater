@@ -155,8 +155,8 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	}
 	slices.Sort(reasons)
 	reasons = slices.Compact(reasons)
-	// 威力 0 は、固定ダメージ・一撃必殺の中身があれば正しい(ダメージを技の処理で決める。ADR-0142 §10)。
-	if in.Move.Power <= 0 && in.Move.Params.FixedDamage == nil && in.Move.Params.OHKO == nil {
+	// 威力 0 は、固定ダメージ・一撃必殺の中身か、計算できる威力の式があれば正しい(ダメージを技の処理で決める。ADR-0142 §10・ADR-0143 §3)。
+	if in.Move.Power <= 0 && in.Move.Params.FixedDamage == nil && in.Move.Params.OHKO == nil && !ruleHasComputableFormula(in) {
 		reasons = append(reasons, UnsupportedZeroPower)
 	}
 	if in.Format == FormatDouble && in.Move.Target == "" {
@@ -179,8 +179,12 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 //     防御側が浮いていて判定に関係しないときも印を付ける(安全側の過検出)。
 //   - 天候・フィールドが名指しする技: engine が持つ場の状態は天候とフィールドだけで、どちらも無ければ
 //     名指しの処理は起きない。
+//   - 技の処理の定義(Move.Rule。ADR-0143 §3): variable_power は計算できる威力の中身、move_specific は MoveSpecificResolved、
+//     type_change はタイプの中身、effectiveness_change は相性の中身、field_specific は TerrainPowerMods、
+//     priority_change は PriorityBoost があれば計算する。
 func mechanismHandled(in DamageInput, m MoveMechanism) bool {
 	p := in.Move.Params
+	r := in.Move.Rule
 	switch m {
 	case MechanismAlwaysCrit, MechanismIgnoreDefenseRanks:
 		return true
@@ -195,11 +199,24 @@ func mechanismHandled(in DamageInput, m MoveMechanism) bool {
 	case MechanismAltDefenseStat:
 		return p.hasDefenseContent()
 	case MechanismPriorityChange:
-		return in.Field.Terrain != TerrainPsychic
+		return in.Field.Terrain != TerrainPsychic || (r != nil && r.PriorityBoost != nil)
 	case MechanismFieldSpecific:
 		noWeather := in.Field.Weather == WeatherNone || in.Field.Weather == ""
 		noTerrain := in.Field.Terrain == TerrainNone || in.Field.Terrain == ""
-		return noWeather && noTerrain
+		return (noWeather && noTerrain) || (r != nil && len(r.TerrainPowerMods) > 0)
+	}
+	if r == nil {
+		return false
+	}
+	switch m {
+	case MechanismVariablePower:
+		return ruleHandlesVariablePower(in)
+	case MechanismMoveSpecific:
+		return r.MoveSpecificResolved
+	case MechanismTypeChange:
+		return len(r.TypeByWeather) > 0 || len(r.TypeByTerrain) > 0
+	case MechanismEffectivenessChange:
+		return r.ExtraEffectivenessType != TypeNone || len(r.SuperEffectiveAgainst) > 0
 	}
 	return false
 }

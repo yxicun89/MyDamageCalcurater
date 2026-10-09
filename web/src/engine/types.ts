@@ -72,6 +72,11 @@ export interface Species {
   readonly isMega?: boolean;
   /** メガ種族が持てる持ち物(メガストーン)の ID。isMega が true のときだけ渡す。 */
   readonly requiredItemId?: string | null;
+  /**
+   * 種族の重さ(hg。0.1kg 単位の整数。ADR-0143)。重さで威力が決まる技の計算に使う。
+   * 省略は不明(WASM がキーなしを不明として扱い、重さの技に未対応の印を付ける)。
+   */
+  readonly weightHg?: number;
 }
 
 /** 技。 */
@@ -92,6 +97,16 @@ export interface Move {
    * 技のフラグ(ADR-0178。昇順)。省略は不明(フラグに依存する特性に未対応の印が付く)、空配列は既知のフラグなし。
    */
   readonly flags?: readonly string[];
+  /**
+   * 技の機構の中身(多段の回数・固定ダメージ・一撃必殺・攻撃/防御に使う能力値。ADR-0142・ADR-0143 §6)。公開 API の応答のまま
+   * WASM に渡す。省略は中身なし(中身の要る機構に未対応の印が付く)。
+   */
+  readonly mechanismParams?: Readonly<Record<string, unknown>> | null;
+  /**
+   * 技の処理の定義(威力の式・条件つきの威力・タイプ・相性・優先度・壁。ADR-0143 §6)。公開 API の応答のまま(PascalCase のまま)
+   * WASM に渡す。省略は定義なし。
+   */
+  readonly rule?: Readonly<Record<string, unknown>> | null;
 }
 
 /** 持ち物の効果(4096 基準の固定小数。CLAUDE.md ドメイン規約)。すべて省略可(省略はengineの既定値)。 */
@@ -111,6 +126,11 @@ export interface Item {
   readonly id: string;
   readonly nameJa: string;
   readonly effect: ItemEffect | null;
+  /**
+   * メガストーンか(ADR-0143。防御側の持ち物を払い落とす技の補正に使う)。メガストーンのときだけ true を渡す
+   * (domain/itemRoles.ts の toEngineItem)。省略は偽。
+   */
+  readonly isMegaStone?: boolean;
 }
 
 /**

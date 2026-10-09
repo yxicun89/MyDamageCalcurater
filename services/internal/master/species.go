@@ -28,6 +28,8 @@ type SpeciesRow struct {
 	// BaseSpeciesKey / RequiredItemID は "" が NULL を表す。
 	BaseSpeciesKey string
 	RequiredItemID string
+	// WeightHg は種族の重さ(hg。ADR-0143)。0 は不明(まだ取り込んでいない)。負は不正。
+	WeightHg int
 }
 
 // MegaNamePrefix はメガ種族の日本語名の先頭に付ける語(メガルカリオ)。importer が名前を生成するとき
@@ -121,6 +123,10 @@ func Species(row SpeciesRow, abilities []SpeciesAbilityRow, chart engine.TypeCha
 		return engine.Species{}, err
 	}
 
+	if row.WeightHg < 0 {
+		return engine.Species{}, fmt.Errorf("%w: 重さが負: %d", ErrInvalidRow, row.WeightHg)
+	}
+
 	abilityIDs, err := speciesAbilities(abilities)
 	if err != nil {
 		return engine.Species{}, err
@@ -134,6 +140,7 @@ func Species(row SpeciesRow, abilities []SpeciesAbilityRow, chart engine.TypeCha
 		Types:     types,
 		BaseStats: stats,
 		Abilities: abilityIDs,
+		WeightHg:  row.WeightHg,
 	}, nil
 }
 

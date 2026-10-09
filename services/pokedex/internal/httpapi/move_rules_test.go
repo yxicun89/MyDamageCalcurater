@@ -77,7 +77,7 @@ func TestMasterExportCarriesRuleAndWeight(t *testing.T) {
 		w, ok := s["weightHg"]
 		switch s["key"] {
 		case "9001-000":
-			if !ok || w != float64(905) {
+			if !ok || w != json.Number("905") { // rawExport は UseNumber
 				t.Errorf("9001-000.weightHg = %v, want 905", w)
 			}
 		case "9002-000":

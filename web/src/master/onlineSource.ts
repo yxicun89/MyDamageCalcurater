@@ -164,6 +164,9 @@ function mapMove(move: Schemas["Move"]): Move {
     ...(move.target !== undefined && { target: move.target }),
     ...(move.mechanisms !== undefined && { mechanisms: move.mechanisms }),
     ...(move.flags !== undefined && { flags: move.flags }),
+    // ADR-0143 §6: 機構の中身・処理の定義も応答のまま写す(オフライン計算で多段・固定ダメージ・重さの技等の印を外す)。
+    ...(move.mechanismParams !== undefined && { mechanismParams: move.mechanismParams }),
+    ...(move.rule !== undefined && { rule: move.rule }),
   };
 }
 
@@ -199,6 +202,8 @@ function mapSpeciesDetail(detail: Schemas["SpeciesDetail"]): MasterSpecies {
     ...(detail.requiredItemId === undefined ? {} : { requiredItemId: detail.requiredItemId }),
     ...(detail.baseSpeciesKey === undefined ? {} : { baseSpeciesKey: detail.baseSpeciesKey }),
     ...(detail.baseSpeciesNameJa === undefined ? {} : { baseSpeciesNameJa: detail.baseSpeciesNameJa }),
+    // ADR-0143: 重さ(hg)。応答が返さない(不明・古いサーバー)ときは作らない。
+    ...(detail.weightHg === undefined ? {} : { weightHg: detail.weightHg }),
   };
 }
 

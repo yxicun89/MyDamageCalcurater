@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import { calcMoveEntry } from './calc-move.mjs';
+import { calcSpeciesEntry } from './calc-species.mjs';
 
 const EXPECTED_VERSION = '0.12.0';
 const { Generations, NATURES } = calc;
@@ -31,14 +32,7 @@ for (const t of gen.types) {
   typeChart[t.name] = row;
 }
 
-const species = [...gen.species].map((s) => ({
-  name: s.name,
-  types: s.types,
-  baseStats: {
-    hp: s.baseStats.hp, atk: s.baseStats.atk, def: s.baseStats.def,
-    spa: s.baseStats.spa, spd: s.baseStats.spd, spe: s.baseStats.spe,
-  },
-}));
+const species = [...gen.species].map(calcSpeciesEntry);
 
 const moves = [...gen.moves].map(calcMoveEntry);
 

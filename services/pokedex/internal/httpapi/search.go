@@ -168,6 +168,7 @@ func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) er
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
 			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
+			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID],
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)
@@ -178,6 +179,9 @@ type moveExtras struct {
 	mechanismsByID map[string][]string
 	flagsKnown     bool
 	flagsByID      map[string][]api.MoveFlag
+	// paramsByID・ruleByID は機構の中身と処理の定義(ADR-0143 §6)。行の無い技はキーごと省く。
+	paramsByID map[string]*api.MasterMoveMechanismParams
+	ruleByID   map[string]*api.MasterEffect
 }
 
 // mechanisms は技の機構を返す(常に返す。通常の技は空配列)。
@@ -204,7 +208,10 @@ func (e moveExtras) flags(id string) *[]api.MoveFlag {
 // publicMoveExtras は技の ID で機構・フラグを引く。語彙に無い値(CHECK をすり抜けた値)は黙って捨てず
 // 503 master_unavailable(target と同じ扱い。ADR-0178 §4)。
 func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras, error) {
-	out := moveExtras{mechanismsByID: map[string][]string{}, flagsByID: map[string][]api.MoveFlag{}}
+	out := moveExtras{
+		mechanismsByID: map[string][]string{}, flagsByID: map[string][]api.MoveFlag{},
+		paramsByID: map[string]*api.MasterMoveMechanismParams{}, ruleByID: map[string]*api.MasterEffect{},
+	}
 	if len(ids) == 0 {
 		return out, nil
 	}
@@ -220,6 +227,26 @@ func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras
 	}
 	for id := range out.mechanismsByID {
 		sort.Strings(out.mechanismsByID[id])
+	}
+	params, err := s.q.ListMoveMechanismParamsByMoveIDs(ctx, ids)
+	if err != nil {
+		return moveExtras{}, unavailable("ListMoveMechanismParamsByMoveIDs", err)
+	}
+	for _, p := range params {
+		out.paramsByID[p.MoveID] = masterMechanismParams(p)
+	}
+	rules, err := s.q.ListMoveRulesByMoveIDs(ctx, ids)
+	if err != nil {
+		return moveExtras{}, unavailable("ListMoveRulesByMoveIDs", err)
+	}
+	var chart engine.TypeChart // 定義を持つ行があるときだけ読む
+	for i := range rules {
+		// 共通マスタで厳格に検証してから返す(検証に通らない定義は黙って捨てず 503。効果と同じ扱い)。
+		rule, _, err := publicEffect(ctx, s.q, &chart, &rules[i].Rule, master.DecodeMoveRule)
+		if err != nil {
+			return moveExtras{}, unavailable("move rule: "+rules[i].MoveID, err)
+		}
+		out.ruleByID[rules[i].MoveID] = rule
 	}
 	if out.flagsKnown, err = s.q.HasMoveFlags(ctx); err != nil {
 		return moveExtras{}, unavailable("HasMoveFlags", err)
@@ -355,6 +382,7 @@ func (s *Server) GetSpecies(ctx *echo.Context, key api.SpeciesKey, params api.Ge
 	}
 	isMega := sp.IsMega
 	detail.IsMega = &isMega
+	detail.WeightHg = weightHgPtr(sp.WeightHg)
 	// 基本種の名前も同じ読み取り専用トランザクションで読む(1スナップショット。ADR-0127・ADR-0175 §3)。
 	var baseNameJa *string
 	if sp.BaseSpeciesKey.Valid {
@@ -408,6 +436,7 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 		Id: row.ID, NameJa: row.NameJa, Type: api.PokeType(row.Type), Category: api.MoveCategory(row.Category),
 		Power: int(row.Power), Priority: &priority, Target: target,
 		Mechanisms: extras.mechanisms(row.ID), Flags: extras.flags(row.ID),
+		MechanismParams: extras.paramsByID[row.ID], Rule: extras.ruleByID[row.ID],
 	}
 	return ctx.JSON(http.StatusOK, move)
 }
@@ -452,6 +481,7 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
 			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
+			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID],
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)

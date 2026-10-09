@@ -30,6 +30,10 @@ func TestGoldenCoversStage1AbilityEffects(t *testing.T) {
 	for _, c := range readGoldenMechanismCases(t) {
 		ids = append(ids, c.ID)
 	}
+	// 重さの補正の特性(ヘヴィメタル・ライトメタル)の breakable は mechanisms-stage2.json で照合する(ADR-0143)。
+	for _, c := range readGoldenMechanismStage2Cases(t) {
+		ids = append(ids, c.ID)
+	}
 	has := func(prefix, suffix string) bool {
 		for _, id := range ids {
 			if strings.HasPrefix(id, prefix) && strings.HasSuffix(id, suffix) {

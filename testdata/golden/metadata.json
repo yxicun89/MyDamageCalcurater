@@ -64,7 +64,7 @@
     },
     {
       "scope": "moves",
-      "reason": "The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Excluded everywhere: OHKO (the oracle does not compute it), variable power, other fixed damage, screen removal, terrain-specific move mechanics, tera/Z/Max moves"
+      "reason": "The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Stage-2 move rules (ADR-0143: power formulas by weight / speed ratio / positive ranks / hit index, status / item / weather / terrain conditions, move type by weather or terrain, two-type effectiveness, Freeze-Dry, screen removal, priority boost, moves whose handlers do not affect damage) are checked in mechanisms-stage2.json (stage-2 moves are checked in mechanisms-stage2.json, not the other files). Excluded everywhere: OHKO (the oracle does not compute it), other fixed damage, moves that need current HP or battle history (stage 3), tera/Z/Max moves"
     },
     {
       "scope": "abilities/items",
@@ -72,7 +72,7 @@
     },
     {
       "scope": "terrain",
-      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse etc.) are outside the move list and carry an unsupported mark in the engine (ADR-0123)"
+      "reason": "Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse, Misty Explosion, Expanding Force, Rising Voltage) are checked in mechanisms-stage2.json (ADR-0143)"
     },
     {
       "scope": "battle",
@@ -102,7 +102,8 @@
         "doubles-random.jsonl.gz",
         "tera.json",
         "tera-random.jsonl.gz",
-        "mechanisms.json"
+        "mechanisms.json",
+        "mechanisms-stage2.json"
       ],
       "koCrossChecks": 37,
       "doublesRandomSeed": 1145195589,
@@ -178,6 +179,10 @@
     "mechanisms.json": {
       "count": 232,
       "sha256": "a69e942a3c20000cc1e9a8f511c795e3b9ab3d5da6e4f2bf7b7f56a0605e5e0b"
+    },
+    "mechanisms-stage2.json": {
+      "count": 654,
+      "sha256": "02ad60c97308abe6348bc9f74b98118b2a1d1549cbaf82f7d5923d2672d88039"
     },
     "typechart.json": {
       "count": 324,

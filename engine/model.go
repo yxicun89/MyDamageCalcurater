@@ -16,6 +16,8 @@ type Species struct {
 	Types     []Type   // 1〜2個
 	BaseStats Stats    // 種族値
 	Abilities []string // 特性 ID(参考。計算では Individual.Ability を使う)
+	// WeightHg は種族の重さ(hg。0.1kg 単位の整数。ADR-0143)。0 は不明(重さで威力が決まる技に未対応の印が付く)。
+	WeightHg int
 }
 
 // Move は技データ(マスタから解決済み)。
@@ -40,6 +42,8 @@ type Move struct {
 	// フラグに依存する特性の効果は効かないものとして計算し、その特性に未対応の印を付ける。
 	Flags      []MoveFlag
 	FlagsKnown bool
+	// Rule は技の処理の定義(威力の式・条件つきの威力・タイプ・相性・優先度・壁。ADR-0143)。nil は定義なし(従来どおり)。
+	Rule *MoveRule
 }
 
 // MoveTarget は技の対象の分類。oracle の allAdjacent・allAdjacentFoes が spread、それ以外が single。
@@ -55,6 +59,8 @@ type Item struct {
 	ID     string
 	NameJa string
 	Effect *ItemEffect
+	// MegaStone はメガストーンか(ADR-0143。はたきおとす型は、メガストーンを払い落とせないものとして扱う)。
+	MegaStone bool
 }
 
 // Ability は特性データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。
@@ -176,6 +182,9 @@ func (in Individual) Validate() error {
 	if in.Nature.Plus == StatHP || in.Nature.Minus == StatHP {
 		return errors.New("性格補正は HP に適用できない")
 	}
+	if in.Species.WeightHg < 0 {
+		return fmt.Errorf("種族の重さ WeightHg は 0(不明)以上: %d", in.Species.WeightHg)
+	}
 	if len(in.Species.Types) == 0 || len(in.Species.Types) > 2 {
 		return fmt.Errorf("タイプは1〜2個: %d", len(in.Species.Types))
 	}
@@ -195,6 +204,9 @@ func (in Individual) Validate() error {
 	}
 	return nil
 }
+
+// MaxWeightModifier は特性の重さの補正(AbilityEffect.WeightMod)の上限 ×32(4096 基準。ADR-0143)。
+const MaxWeightModifier = 32 * Modifier4096
 
 // validateModifier は 4096 基準の補正値 v が MinEffectModifier..MaxEffectModifier に入るかを確かめる。
 // optional のときは 0(補正なし)も許す。
@@ -243,6 +255,13 @@ func (e AbilityEffect) validate() error {
 		if err := validateModifier("DefResistType["+string(t)+"]", e.DefResistType[t], false); err != nil {
 			return err
 		}
+	}
+	if err := validateModifier("WeightMod", e.WeightMod, true); err != nil {
+		return err
+	}
+	// 重さの補正は ×32 まで(実在は ×0.5 と ×2。他の補正の上限 ×512 では 1 回の掛け算が現実の重さを大きく超える)。
+	if e.WeightMod > MaxWeightModifier {
+		return fmt.Errorf("WeightMod は %d 以下: %d", MaxWeightModifier, e.WeightMod)
 	}
 	if err := e.validateStage1(); err != nil {
 		return err
