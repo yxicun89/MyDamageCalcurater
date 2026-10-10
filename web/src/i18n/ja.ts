@@ -193,7 +193,7 @@ export const calcConditionsText = {
   rankDownSymbol: "-",
 } as const;
 
-/** 計算画面の「対戦の状態」(残り HP・多段の回数。ADR-0144 §3、I-web-13)。 */
+/** 計算画面の「対戦の状態」(残り HP・多段の回数。ADR-0144 §3、I-web-14)。 */
 export const battleStateText = {
   toggleLabel: "対戦の状態",
   /** 設定中の目印(閉じていても分かるように)。 */

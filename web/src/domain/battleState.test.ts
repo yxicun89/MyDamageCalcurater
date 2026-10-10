@@ -1,4 +1,4 @@
-// ADR-0144 §3(I-web-13): 対戦の状態の入力 → battleState の純粋関数。
+// ADR-0144 §3(I-web-14): 対戦の状態の入力 → battleState の純粋関数。
 import { describe, expect, test } from "vitest";
 import type { Move } from "../engine/types";
 import {

@@ -1,4 +1,4 @@
-// ADR-0144 §3(I-web-13): 計算画面の「対戦の状態」(攻撃側・防御側の残りHP・多段の回数)。engine は fake。
+// ADR-0144 §3(I-web-14): 計算画面の「対戦の状態」(攻撃側・防御側の残りHP・多段の回数)。engine は fake。
 // 仕様の正: docs/ai-shared/decisions/2026-10-10-data-move-mechanisms-stage3.md の Web レーンへの依頼。
 // 確かめること:
 //   B-1 既定は閉じていて、何も入れなければ従来と同じ(1対1の計算を呼ばない。一括の要求に battleState は無い)

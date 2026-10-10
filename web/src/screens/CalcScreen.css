@@ -583,7 +583,7 @@
   padding-left: var(--space-4);
 }
 
-/* 「対戦の状態」(ADR-0144 §3、I-web-13): 残り HP の入力と多段の回数。色・余白はトークンのみ。 */
+/* 「対戦の状態」(ADR-0144 §3、I-web-14): 残り HP の入力と多段の回数。色・余白はトークンのみ。 */
 .battle-state {
   display: flex;
   flex-direction: column;

@@ -1,4 +1,4 @@
-// ADR-0144 §3(I-web-13): calc の battleState は POST /api/calc の CalcRequest.battleState にそのまま写す。
+// ADR-0144 §3(I-web-14): calc の battleState は POST /api/calc の CalcRequest.battleState にそのまま写す。
 // 指定が無ければキーごと送らない(従来と同じ本文)。一括(calcBulk)には付けない。
 
 import { describe, expect, test, vi } from "vitest";

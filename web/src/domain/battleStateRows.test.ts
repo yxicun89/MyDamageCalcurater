@@ -1,4 +1,4 @@
-// ADR-0144 §3(I-web-13): 一括の行を battleState つきの calc で計算し直す。並列度の上限と、状態が無い行の扱い。
+// ADR-0144 §3(I-web-14): 一括の行を battleState つきの calc で計算し直す。並列度の上限と、状態が無い行の扱い。
 import { describe, expect, test } from "vitest";
 import type { CalcEngine, CalcRequest, CalcResult, EngineResult, Individual, Move } from "../engine/types";
 import type { MasterSpecies } from "../master/types";

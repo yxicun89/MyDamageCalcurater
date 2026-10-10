@@ -1,4 +1,4 @@
-// ADR-0144 §3(I-web-13): 本物の engine.wasm で、一括の行の結果と、battleState なしの同じ入力の calc の結果が一致すること。
+// ADR-0144 §3(I-web-14): 本物の engine.wasm で、一括の行の結果と、battleState なしの同じ入力の calc の結果が一致すること。
 // (状態を指定したときに行を calc で計算し直しても、状態が無ければ一括と同じ数値になる = 差し替えの前提。)
 // 前提(web/public/engine.wasm)が無ければスキップせず失敗する。実行: npm run test:wasm
 
