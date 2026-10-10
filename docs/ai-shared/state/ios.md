@@ -63,3 +63,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-10(F-09 お気に入りから計算を復元。ブランチ feat/ios-f09-f02。ADR-0524): 計算画面の「攻撃側をお気に入りに追加」が `FavoriteInput.calc` を付ける(Web の ADR-0333 §1 と同じ省略規則)。お気に入り画面の calc つきの行に「計算に使う」→ 計算画面を push して `CalcViewModel.loadFavoriteCalc`(`loadHistoryCalc` と共通の `restoreCalc`)で復元し結果をすぐ出す。防御側の性格・SP・持ち物、攻撃側の壁、ダブルは戻さない(画面の文言と ADR に明記)。失敗は計算の失敗として表示し入力を書き換えない。calc の無い旧お気に入りは #613 の読み込み導線のまま。モック `POKECALC_MOCK_FAVORITES=calc`。
 
 2026-10-10(F-08 iOS 構築の作り直し。ブランチ feat/ios-f08-team-rebuild。ADR-0522): 構築名を廃止(保存は既定名「名称未設定」・表示は「構築 N」、旧データの名前は保つ・`Team.updatedAt` を任意項目で追加)、編集画面は 1体目〜6体目の枠が最初から並び(`slotIDs`・上へ/下へ/外す)、保存は明示(保存後も編集画面に残る。未保存の印・[一覧に戻る]の 2 段階)、一覧はカード(アイコン・n/6体・最終更新・[開く]・[削除]〈2 段階〉)、Showdown 形式は一覧の下(取り込み=新しい構築)/編集画面の下(書き出し)の閉じた折りたたみ。識別子の変更表は ADR-0522。後続: 一覧のアイコンは先頭ページの種族しか引かない。
+
+2026-10-11(F-13 文言のやさしい言い換え。ブランチ feat/ios-f13-wording。ADR-0526): ADR-0337 §4 の対応表と同じ文に iOS の文言(`AdjustText`・`SpeedLabels`・`BalanceErrorText`・`MegaItemText`・`DeviceDataText`・`RequestLimitLabels`・逆算の「観測」→「ダメージ」・接続先の表示など)を直し、`GlossaryTests` で禁止語の混入と「変えない語」の残りを検査。判定画面は触らない(判定レーン)。期待値を変えたテストは ADR-0501「F-13」章。

@@ -250,6 +250,6 @@ final class APIBalanceServiceTests: XCTestCase {
         XCTAssertEqual(analyzeError?.code, "balance_unavailable")
         let coverageError = await assertThrowsPokeCalcError("unavailable coverage") { try await service.coverage(members: members) }
         XCTAssertEqual(coverageError?.code, "balance_unavailable")
-        XCTAssertEqual(BalanceScreenError(analyzeError ?? PokeCalcError(code: "", message: "")).message, "タイプバランスの API に接続できません")
+        XCTAssertEqual(BalanceScreenError(analyzeError ?? PokeCalcError(code: "", message: "")).message, "タイプバランスのサーバーに接続できません")
     }
 }

@@ -82,7 +82,7 @@ extension FavoritesLabels {
         "一部は読み込めませんでした(\(dropped.map(loadDroppedName).joined(separator: "、")))。読み込めた分だけ設定しました。"
     }
 
-    public static let loadSpeciesMissingNotice = "このお気に入りのポケモンはいまのマスタに無いため、読み込めませんでした。何も変えていません。"
+    public static let loadSpeciesMissingNotice = "このお気に入りのポケモンはいまのデータに無いため、読み込めませんでした。何も変えていません。"
     public static let loadUnavailableNotice = "お気に入りを読み込めませんでした。何も変えていません。もう一度お試しください。"
 }
 

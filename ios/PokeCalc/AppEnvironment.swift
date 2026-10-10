@@ -35,7 +35,7 @@ enum AppEnvironment {
                 let service = APIPokeCalcService(baseURL: url, identity: identity)
                 core = CoreServices(
                     pokeCalc: service, frequentOpponents: service,
-                    backendDescription: "APIに接続中(\(url.host ?? url.absoluteString))",
+                    backendDescription: "サーバーに接続中(\(url.host ?? url.absoluteString))",
                     images: RemoteImageCatalog(baseURL: url, fetcher: URLSessionImageManifestFetcher()))
                 backend = .api(baseURL: url, identity: identity, pokeCalc: service)
             }

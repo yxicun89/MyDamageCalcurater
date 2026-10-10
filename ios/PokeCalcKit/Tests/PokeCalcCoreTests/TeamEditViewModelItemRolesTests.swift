@@ -80,7 +80,7 @@ final class TeamEditViewModelItemRolesTests: XCTestCase {
         XCTAssertEqual(viewModel.itemLock(forMember: saved.id), .missing)
         XCTAssertEqual(
             viewModel.itemNotice(forMember: saved.id),
-            "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます")
+            "メガシンカに使うメガストーンがデータに無いため、持ち物を空にしました。保存すると反映されます")
     }
 
     func testLoadDoesNotTouchCorrectMegaMemberOrNonMegaWithStone() async throws {

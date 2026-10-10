@@ -28,7 +28,7 @@ struct ReverseObservationListView: View {
             Button {
                 viewModel.addObservation()
             } label: {
-                Label("観測を追加", systemImage: "plus.circle")
+                Label("ダメージを追加", systemImage: "plus.circle")
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.brandPrimary.color)
             }
@@ -85,7 +85,7 @@ private struct ReverseObservationRowView: View {
                 .padding(.vertical, SpacingToken.x2)
                 .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
                 .accessibilityIdentifier("reverseObservationField-\(index)")
-                .accessibilityLabel("観測\(index + 1)(\(unitLabel))")
+                .accessibilityLabel("ダメージ\(index + 1)(\(unitLabel))")
 
                 Text(unitLabel)
                     .font(TextStyleToken.body.font)
@@ -101,7 +101,7 @@ private struct ReverseObservationRowView: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("reverseObservationRemove-\(index)")
-                .accessibilityLabel("この観測を削除")
+                .accessibilityLabel("このダメージを削除")
             }
             if let visibleErrorMessage {
                 Text(visibleErrorMessage)

@@ -12,10 +12,10 @@ final class MegaItemLockUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
     private static let megaSpeciesName = "テストメガモンいち"
     private static let nonMegaSpeciesName = "テストモンさん"
-    private static let composedStoneName = "テストモンいちのメガストーン"
+    private static let composedStoneName = "テストモンいち専用のメガストーン"
     private static let stoneMasterName = "テストどうぐメガいし"
     private static let lockedStoneName = stoneMasterName
-    private static let lockedReason = "メガシンカ: メガストーンを持ちます"
+    private static let lockedReason = "メガシンカするので、持ち物はメガストーンに決まっています"
     private static let ax5ContentSizeCategory = "UICTContentSizeCategoryAccessibilityXXXL"
 
     override func setUpWithError() throws {

@@ -210,7 +210,7 @@ final class FavoriteLoadUITests: XCTestCase {
         waitUntilGone(element(app, "favoriteLoadSheet"))
         let notice = element(app, "favoriteLoadNotice")
         scrollUntilHittable(app, notice)
-        XCTAssertTrue(notice.label.contains("マスタに無い"), "label: \(notice.label)")
+        XCTAssertTrue(notice.label.contains("データに無い"), "label: \(notice.label)")
         XCTAssertTrue(notice.label.contains("何も変えていません"), "label: \(notice.label)")
         XCTAssertEqual(element(app, "attackerSpeciesPicker").label, "テストモンいち", "何も変えない")
         XCTAssertTrue(element(app, "calcResultRow-none@-").exists, "結果の表示は消さない")

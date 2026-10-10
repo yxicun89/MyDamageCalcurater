@@ -421,7 +421,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
                 move = resolved
             } else {
                 throw PokeCalcError(
-                    code: PokeCalcError.Code.moveUnavailable, message: "履歴の技がマスタに見つかりません: \(calc.moveId)")
+                    code: PokeCalcError.Code.moveUnavailable, message: "履歴の技がデータに見つかりません: \(calc.moveId)")
             }
         } catch {
             guard token == latestRequestToken else { return }
@@ -524,7 +524,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             guard species.count >= Self.minimumSpeciesCount else {
                 throw PokeCalcError(
                     code: PokeCalcError.Code.insufficientSpecies,
-                    message: "計算に必要な種族が足りません(\(species.count) 件)"
+                    message: "計算に必要なポケモンのデータが足りません(\(species.count) 件)"
                 )
             }
             attackerSpeciesKey = species[0].key
@@ -922,7 +922,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             }
         }
         guard let fallback = firstResolved else {
-            throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚える技がマスタに見つかりません")
+            throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚える技がデータに見つかりません")
         }
         if reachedLookupLimit {
             // 解決の上限で打ち切った(上限の先にダメージ技があるかもしれない): 「覚えない」とは言い切れないので、

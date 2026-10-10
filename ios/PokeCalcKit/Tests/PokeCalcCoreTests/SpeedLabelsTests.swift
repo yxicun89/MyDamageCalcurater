@@ -8,11 +8,11 @@ final class SpeedLabelsTests: XCTestCase {
     /// `not_found` は Web の表に無く、汎用の文言になる。
     static let expectedErrorMessages: [String: String] = [
         "invalid_request": "入力の形が正しくありません。値の範囲を確認してください",
-        "missing_header": "端末の識別情報が送られていません",
-        "invalid_header": "端末の識別情報の形が正しくありません",
-        "unknown_pokemon": "このポケモンはマスタにありません",
+        "missing_header": "端末の情報が送られていません。アプリを開き直してください",
+        "invalid_header": "端末の情報が正しくありません。アプリを開き直してください",
+        "unknown_pokemon": "このポケモンはデータにありません",
         "request_too_large": "入力が大きすぎます",
-        "master_unavailable": "ポケモンのマスタを読み込めません",
+        "master_unavailable": "ポケモンのデータを読み込めません",
         "internal_error": "素早さの計算に失敗しました",
         "not_found": "素早さの計算に失敗しました",
         "overloaded": "素早さの計算に失敗しました",
@@ -26,8 +26,8 @@ final class SpeedLabelsTests: XCTestCase {
 
     /// Web の `speed_unavailable`(通信できない・応答が読めない)に当たる iOS の失敗。
     func testTransportAndDecodeFailuresMeanTheServiceIsUnavailable() {
-        XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.transport), "素早さの API に接続できません")
-        XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.decode), "素早さの API に接続できません")
+        XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.transport), "素早さのサーバーに接続できません")
+        XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.decode), "素早さのサーバーに接続できません")
     }
 
     func testUnknownAndUnexpectedCodesFallBackToGenericMessage() {
@@ -37,7 +37,7 @@ final class SpeedLabelsTests: XCTestCase {
 
     func testFailureShowsJapaneseMessageNeverTheServerMessage() {
         let failure = SpeedFailure(code: "master_unavailable")
-        XCTAssertEqual(failure.message, "ポケモンのマスタを読み込めません")
+        XCTAssertEqual(failure.message, "ポケモンのデータを読み込めません")
     }
 
     func testPresetNamesMatchWeb() {
@@ -56,7 +56,7 @@ final class SpeedLabelsTests: XCTestCase {
     }
 
     func testModeAndNatureNamesMatchWeb() {
-        XCTAssertEqual(SpeedInputMode.allCases.map(SpeedLabels.mode), ["プリセット", "カスタム", "実数値"])
+        XCTAssertEqual(SpeedInputMode.allCases.map(SpeedLabels.mode), ["定番の振り方", "カスタム", "実数値"])
         XCTAssertEqual(SpeedNature.allCases.map(SpeedLabels.nature), ["下降", "補正なし", "上昇"])
     }
 

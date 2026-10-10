@@ -91,10 +91,10 @@ final class BalanceStage3LabelsTests: XCTestCase {
 
     func testOverloadedAndUnavailableMessages() {
         XCTAssertEqual(BalanceErrorText.message(forCode: "overloaded"), "サーバーが混み合っています。しばらくしてからもう一度お試しください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_move"), "選んだ技がサーバーのマスタにありません。選び直してください")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_move"), "選んだ技がサーバーのデータにありません。選び直してください")
         XCTAssertEqual(
             BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.transport, message: "x")).message,
-            "タイプバランスの API に接続できません")
+            "タイプバランスのサーバーに接続できません")
     }
 
     // MARK: - 表示上限(長い一覧を端末で出し切らない)

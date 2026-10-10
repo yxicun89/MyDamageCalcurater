@@ -150,7 +150,7 @@ final class AdjustScreenUITests: XCTestCase {
         XCTAssertFalse(element(app, "adjustCeiling-spe").exists, "耐久側は素早さを見ない")
         tap(app, "adjustSubmitButton")
         XCTAssertTrue(element(app, "adjustMaxIndexPlan").waitForExistence(timeout: Self.resultTimeout))
-        waitForLabel(element(app, "adjustMinSpNotRequested"), "目標を指定すると、目標を満たす最小の振り方も出します")
+        waitForLabel(element(app, "adjustMinSpNotRequested"), "目標を指定すると、目標に届くいちばん少ない振り方も出します")
     }
 
     /// 未対応の印(連続技)を結果の上に1回出す。

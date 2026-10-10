@@ -36,7 +36,7 @@ enum StubMegaMaster {
     )
 
     /// 固定中の表示(`MegaItemText.stoneName` に基本種名を入れた値)。
-    static let megaAlphaStoneName = "\(StubMaster.alpha.nameJa)のメガストーン"
+    static let megaAlphaStoneName = "\(StubMaster.alpha.nameJa)専用のメガストーン"
 
     /// 正式名称(日本語の文字を含む nameJa)を持つメガストーン。`items` には入れない(既存の期待値を変えないため。`makeOfficialService` だけが足す)。
     static let officialStone = Item(id: "stub-item-mega-stone-official", nameJa: "テストナイトX", roles: [], isMegaStone: true)

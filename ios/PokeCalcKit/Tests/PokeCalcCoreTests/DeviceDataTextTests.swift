@@ -6,8 +6,8 @@ import XCTest
 final class DeviceDataTextTests: XCTestCase {
     func testExplanationIsThreeSentencesInOrder() {
         XCTAssertEqual(DeviceDataText.explanation, [
-            "アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた ID でサーバーに保存しています。",
-            "ID が変わると(アプリを削除して入れ直したとき)、前のデータは開けなくなります。元に戻す方法はありません。",
+            "アカウントはありません。履歴・お気に入り・構築は、この端末に割り当てた番号でサーバーに保存しています。",
+            "番号が変わると(アプリを削除して入れ直したとき)、前のデータは開けなくなります。元に戻す方法はありません。",
             "開けなくなったデータは自動的に消えます。計算の履歴は記録から90日、お気に入りと構築は最後に使った日から18か月です。",
         ])
     }

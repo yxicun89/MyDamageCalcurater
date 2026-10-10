@@ -54,7 +54,7 @@ public enum RequestLimits {
 /// 件数は `RequestLimits` から埋め込む(数字を文字列に直書きしない)。
 public enum RequestLimitLabels {
     public static let observationsReachedLimit =
-        "観測は最大\(RequestLimits.maxObservations)件までです"
+        "ダメージは最大\(RequestLimits.maxObservations)件まで入力できます"
     public static let itemCandidatesReachedLimit =
         "持ち物の候補は「持ち物なし」を含めて最大\(RequestLimits.maxItemCandidates)件までです"
     public static let itemVariantsReachedLimit =

@@ -4791,3 +4791,24 @@ XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。
 
 
 検証: `swift test` 1646 件成功。XCUITest は構築関連 TeamScreenUITests(13)・TeamTextTransferUITests(6)・LargeTextLayoutUITests の構築 4 件・Calc/Reverse/Judge/FavoriteLoad/LargeText(78 件)を `run-xcode-tests.sh` 経由で実行し全件成功(失敗 0・スキップ 0)。
+
+## F-13 文言のやさしい言い換え(ADR-0526。2026-10-11)
+
+受け入れ条件: (1) 画面に出る文言から用語集(docs/glossary.md)の禁止語(観測・プリセット・指数・16n・マスタ・API・識別子/識別情報・リクエスト・ID・「メガシンカ:」見出し形・「〇〇のメガストーン」ほか)が無い。
+(2) 同じ意味の文は ADR-0337 §4 の対応表(Web)と同じ文。(3) 変えない語(確定・乱数・特化・性格・特性・持ち物・能力ポイント・実数値・仮想敵・メガストーン・メガシンカ)は残る。
+(4) 識別子(accessibilityIdentifier)・コメント・型名・API のコード値・判定画面は変えない。(5) `GlossaryTests` が(1)(3)を機械で守る。
+
+### 既存テストの期待値の変更(絶対ルール6: 文言の置換だけ。検査の強さは変えていない)
+
+| テスト | 前 → 後 | 理由 |
+|---|---|---|
+| `AdjustTextTests`(modeLabel・indexLine・hpCurrent・hpLinePoints・unavailable・エラー表) | 「指数と 16n を見る」→「今の耐久・火力と HP を見る」、「倒せる/耐えられる最小の振り方」→「…いちばん少ない振り方」、「火力指数」→「火力の目安」、「16n」→「16の倍数」(「16n-1」→「16の倍数-1」)、「調整の API に接続できません」→「調整のサーバーに接続できません」、「マスタの準備が…」→「ポケモンのデータの準備が…」 | ADR-0337 §4(調整) |
+| `SpeedLabelsTests`・`SpeedViewModelAsyncTests` | 「プリセット」→「定番の振り方」、「素早さの API に…」→「素早さのサーバーに…」、「ポケモンのマスタを読み込めません」→「…データを…」 | ADR-0337 §4(素早さ) |
+| `BalanceLabelsTests`・`BalanceStage3LabelsTests`・`BalanceViewModelStage3Tests`・`APIBalanceServiceTests` | 「リクエストが正しくありません。入力を見直してください」→「入力の内容が正しくありません。見直してください」、「サーバーのマスタ」→「サーバーのデータ」、「タイプバランスの API に…」→「…のサーバーに…」 | ADR-0337 §4(タイプバランス) |
+| `MegaItemLockTests`・`TeamEditViewModelItemRolesTests`・`ItemDisplayNameUnsupportedTests`・`MegaStoneOfficialNameTests`・`StubMegaMaster` | 「{基本種名}のメガストーン」→「{基本種名}専用のメガストーン」、「メガシンカ: メガストーンを持ちます」→「メガシンカするので、持ち物はメガストーンに決まっています」ほか(missing/compare/cleared も §4 の文) | ADR-0337 §4(メガ) |
+| `DeviceDataTextTests` | 「この端末に割り当てた ID」→「…番号」、「ID が変わると」→「番号が変わると」 | ADR-0337 §4(このアプリについて) |
+| `ReverseCandidateDisplayTests`・`AbilitySplitDisplayTests` | 「観測と一致」→「入力したダメージと一致」(件数表示も) | Web に同じ文が無い。用語集の「観測 → ダメージ」に従う(ADR-0526 決定2) |
+| `FavoriteLoadLabelsTests` | 「いまのマスタに無い」→「いまのデータに無い」 | 用語集(マスタ → データ) |
+| `UITests`: `AdjustScreenUITests`(`adjustMinSpNotRequested`)・`MegaItemLockUITests`・`MegaStoneOfficialNameUITests`・`FavoriteLoadUITests`(通知の `contains`) | 上と同じ文言の置換(ラベルで比べている箇所だけ。識別子は不変) | 同上 |
+
+追加: `GlossaryTests`(禁止語の混入なし・変えない語が残る・言い換え後の語の確認)。

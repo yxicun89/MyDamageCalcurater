@@ -26,7 +26,7 @@ final class MegaItemLockTests: XCTestCase {
             ("詳細が無い", nil, .none),
             ("非メガ", Self.detail(isMega: false), .none),
             ("メガ + 全件にストーン", Self.detail(isMega: true, requiredItemId: Self.stone.id, baseSpeciesNameJa: "テストルカ"),
-             .locked(itemId: Self.stone.id, displayName: "テストルカのメガストーン")),
+             .locked(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")),
             ("メガ + 基本種名が null", Self.detail(isMega: true, requiredItemId: Self.stone.id, baseSpeciesNameJa: nil),
              .locked(itemId: Self.stone.id, displayName: "メガストーン")),
             ("メガ + requiredItemId が null", Self.detail(isMega: true, requiredItemId: nil, baseSpeciesNameJa: "テストルカ"), .missing),
@@ -54,7 +54,7 @@ final class MegaItemLockTests: XCTestCase {
     }
 
     func testLockedItemIdAndFieldDisabled() {
-        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカのメガストーン")
+        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")
         XCTAssertEqual(locked.lockedItemId, Self.stone.id)
         XCTAssertTrue(locked.disablesItemField)
         XCTAssertNil(MegaItemLock.missing.lockedItemId)
@@ -66,7 +66,7 @@ final class MegaItemLockTests: XCTestCase {
     // MARK: - 種族を変えたときの持ち物
 
     func testItemIdAfterSpeciesChange() {
-        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカのメガストーン")
+        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")
         let cases: [(name: String, previous: MegaItemLock, next: MegaItemLock, current: String?, expected: String?)] = [
             ("非メガ → メガ: ストーンにする", .none, locked, Self.berry.id, Self.stone.id),
             ("非メガ(持ち物なし)→ メガ", .none, locked, nil, Self.stone.id),
@@ -87,11 +87,11 @@ final class MegaItemLockTests: XCTestCase {
     // MARK: - 構築の保存データの補正(Web ADR-0320 PR-B と同じ方針)
 
     func testCorrection() {
-        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカのメガストーン")
+        let locked = MegaItemLock.locked(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")
         let cases: [(name: String, current: String?, lock: MegaItemLock, expected: MegaItemCorrection)] = [
             ("メガ + 別の持ち物 → ストーンに直す", Self.berry.id, locked,
-             .fixed(itemId: Self.stone.id, displayName: "テストルカのメガストーン")),
-            ("メガ + 持ち物なし → ストーンに直す", nil, locked, .fixed(itemId: Self.stone.id, displayName: "テストルカのメガストーン")),
+             .fixed(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")),
+            ("メガ + 持ち物なし → ストーンに直す", nil, locked, .fixed(itemId: Self.stone.id, displayName: "テストルカ専用のメガストーン")),
             ("メガ + ストーン → そのまま", Self.stone.id, locked, .unchanged),
             ("missing + 持ち物 → 空にする", Self.berry.id, .missing, .cleared),
             ("missing + 空 → 通知なし", nil, .missing, .unchanged),
@@ -106,29 +106,29 @@ final class MegaItemLockTests: XCTestCase {
     // MARK: - 文言(Web と同じ語)
 
     func testStoneName() {
-        XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: "テストルカ"), "テストルカのメガストーン")
+        XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: "テストルカ"), "テストルカ専用のメガストーン")
         XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: nil), "メガストーン", "null なら名前を推測せず「メガストーン」だけ")
     }
 
     func testTextsMatchWeb() {
-        XCTAssertEqual(MegaItemText.lockedReason, "メガシンカ: メガストーンを持ちます")
-        XCTAssertEqual(MegaItemText.missingReason, "メガシンカ: メガストーンがマスタに見つかりません")
-        XCTAssertEqual(MegaItemText.compareDisabledReason, "メガシンカ: 防御側の持ち物はメガストーンに固定されるため、候補は比較しません")
-        XCTAssertEqual(MegaItemText.fixedItemName("テストルカのメガストーン"), "持ち物: テストルカのメガストーン")
+        XCTAssertEqual(MegaItemText.lockedReason, "メガシンカするので、持ち物はメガストーンに決まっています")
+        XCTAssertEqual(MegaItemText.missingReason, "メガシンカに使うメガストーンが、データに見つかりません")
+        XCTAssertEqual(MegaItemText.compareDisabledReason, "防御側はメガシンカするので持ち物がメガストーンに決まっています。持ち物の候補は比べません")
+        XCTAssertEqual(MegaItemText.fixedItemName("テストルカ専用のメガストーン"), "持ち物: テストルカ専用のメガストーン")
         XCTAssertEqual(
-            MegaItemText.correctedNotice("テストルカのメガストーン"),
-            "メガシンカのため持ち物をテストルカのメガストーンに直しました。保存すると反映されます")
-        XCTAssertEqual(MegaItemText.clearedNotice, "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます")
+            MegaItemText.correctedNotice("テストルカ専用のメガストーン"),
+            "メガシンカのため持ち物をテストルカ専用のメガストーンに直しました。保存すると反映されます")
+        XCTAssertEqual(MegaItemText.clearedNotice, "メガシンカに使うメガストーンがデータに無いため、持ち物を空にしました。保存すると反映されます")
     }
 
     // MARK: - 表示名(持ち物はすべて日本語。英語名のストーンの nameJa は出さず、日本語の正式名称はそのまま出す)
 
     func testDisplayName() {
-        let names = [Self.stone.id: "テストルカのメガストーン"]
+        let names = [Self.stone.id: "テストルカ専用のメガストーン"]
         let cases: [(name: String, itemId: String?, names: [String: String], expected: String)] = [
             ("持ち物なし", nil, [:], "持ち物なし"),
             ("ふつうの持ち物は nameJa", Self.berry.id, [:], "テストきのみ"),
-            ("知っているメガのストーン", Self.stone.id, names, "テストルカのメガストーン"),
+            ("知っているメガのストーン", Self.stone.id, names, "テストルカ専用のメガストーン"),
             ("知らないストーンは「メガストーン」", Self.stone.id, [:], "メガストーン"),
             ("マスタに無い ID はそのまま(既存の規則)", "test-lock-unknown", [:], "test-lock-unknown"),
         ]
