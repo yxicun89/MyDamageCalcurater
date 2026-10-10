@@ -75,6 +75,13 @@
   min-width: 0;
 }
 
+.favorites-screen__who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
 .favorites-screen__title {
   overflow-wrap: anywhere;
 }
@@ -115,6 +122,12 @@
   padding: var(--space-3);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
+}
+
+.calc-history__icons {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
 }
 
 .calc-history__pair {

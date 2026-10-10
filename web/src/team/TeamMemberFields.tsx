@@ -19,6 +19,7 @@ import type {
 import { typeAccentStyle } from "../ui/typeAccent";
 import { AbilitySelect } from "../screens/AbilitySelect";
 import { MegaItemReason } from "../screens/MegaItemReason";
+import { PokemonIcon } from "../images/PokemonIcon";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import {
   MAX_MEMBER_MOVES,
@@ -227,7 +228,10 @@ export function TeamMemberFields({
       className={typeId === undefined ? "team-member ui-card" : "team-member ui-card ui-card--typed"}
       style={typeAccentStyle(typeId)}
     >
-      <legend>{teamMemberText.memberLegend(position)}</legend>
+      <legend>
+        {species !== null && <PokemonIcon speciesKey={species.key} typeId={species.types[0]} />}
+        {teamMemberText.memberLegend(position)}
+      </legend>
 
       {speciesField}
 

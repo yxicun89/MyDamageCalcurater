@@ -12,6 +12,7 @@ import {
   SPECIES_SEARCH_MIN_LENGTH,
 } from "../master/onlineSource";
 import type { MasterSpeciesResolution, MasterSpeciesSearch, MasterSpeciesSummary } from "../master/types";
+import { PokemonIcon } from "../images/PokemonIcon";
 import "./SpeciesSearchField.css";
 
 export interface SpeciesSearchFieldProps {
@@ -296,7 +297,8 @@ export function SpeciesSearchField({
                     selectCandidate(candidate);
                   }}
                 >
-                  {candidate.nameJa}
+                  <PokemonIcon speciesKey={candidate.key} typeId={candidate.types[0]} />
+                  <span className="species-search__name">{candidate.nameJa}</span>
                 </li>
               );
             })}

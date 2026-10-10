@@ -107,6 +107,7 @@ import type {
 import { prefersReducedMotion } from "../ui/motion";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { MegaItemReason } from "./MegaItemReason";
+import { PokemonIcon } from "../images/PokemonIcon";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
@@ -947,7 +948,10 @@ function ReverseCard({
       aria-label={cardLabel}
       style={typeAccentStyle(species?.types[0])}
     >
-      <h2 className="reverse-card__region">{regionLabel}</h2>
+      <h2 className="reverse-card__region">
+        {species !== null && <PokemonIcon speciesKey={species.key} typeId={species.types[0]} />}
+        {regionLabel}
+      </h2>
       {speciesListAvailable ? (
         <>
           <label className="reverse-card__label" htmlFor={speciesSelectId}>
