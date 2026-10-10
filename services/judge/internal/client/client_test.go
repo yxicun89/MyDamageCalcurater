@@ -21,7 +21,12 @@ const shortTimeout = 50 * time.Millisecond
 // newTestServer は架空の上流を1つ立てる(テスト終了時に閉じる)。
 func newTestServer(t *testing.T, handler http.HandlerFunc) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(handler)
+	// 応答ごとに接続を閉じさせる。共有の既定トランスポートに残った待機接続が、閉じたサーバーと同じポートを
+	// 再利用した別のテストのサーバーへ使い回されて、負荷時だけ transport error になるのを防ぐ。
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Connection", "close")
+		handler(w, r)
+	}))
 	t.Cleanup(server.Close)
 	return server
 }
