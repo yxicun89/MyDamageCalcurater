@@ -221,3 +221,6 @@ Next(F-12 PR-2 残り画面 / I-web-12): 実装済み・コミット前(ADR-0336
 Next(F-13 文言のやさしい言い換え / I-web-11): 実装済み・コミット前(ADR-0337 採用)。残りは PR 化のみ。用語集 `docs/glossary.md` を画面の言葉の正にした(判定画面 judge.ts は判定レーンの担当で例外)。iOS は `decisions/2026-10-04-web-plain-wording.md` の語に揃える。次は I-web-10(F-06 素早さ表)。
 
 Next(計算履歴の一覧 / ADR-0338): 実装済み・コミット前(ADR-0338 採用)。残りは PR 化のみ。お気に入りの画面の第2の節(`favorites/CalcHistorySection.tsx`)。種族・技は key 表示(名前の解決は要望が出たら別 ADR)。iOS は `decisions/2026-10-09-web-calc-history.md` の語・挙動に揃える。
+
+**見た目の作り直し方針(2026-10-11。ADR-0339。I-web-13 / G-05。ブランチ docs/web-visual-policy-g05)**: 方針だけ(文書のみ・コードの変更なし)。docs/design.md に「見た目の作り直し方針(G-05)」を足した。
+iOS は `decisions/2026-10-11-web-visual-policy-g05.md` の対応表で追う。Next: 実装・コミット前の方針は PR 化のみ。次は I-web-13a(共通の部品)→ 13b(計算。G-01 と同じ PR)。
