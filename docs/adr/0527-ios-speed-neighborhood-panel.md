@@ -11,7 +11,7 @@ ADR-0517 の表は全体を見る用で、自分の周りを見るにはスク�
 
 ## 決定
 1. **Web と同じ規則**(ADR-0609 §3〜§4)。自分を中央に、先に動く側/後に動く側の直近 3 段(`SpeedNeighborhoodBuilder.defaultSteps`)、各段は実数値と代表名 1 体(多ければ「ほか n 体」)、同速の段は最大 4 体まで並べる。端は片側全体の合計体数(同速の段は含めない)。自分と同じ実数値の段が無ければ「ここに自分が入ります(同速なし)」。
-2. **ADR-0517 の表とは独立**。`SpeedTableSection`(LazyVStack・位置の読み上げ・ジャンプボタン)は変えない。パネルは表のスクロール領域の外、自分の結果カードの近くに常時表示(折りたたみなし)。表のスクロール位置に関係なく木に残る。
+2. **ADR-0517 の表とは独立**。`SpeedTableSection`(LazyVStack・位置の読み上げ・ジャンプボタン)は変えない。パネルは表のスクロール領域の外、自分のカード内の `SpeedResultView` の直下に常時表示(折りたたみなし)。表のスクロール位置に関係なく木に残る。
 3. **素早さは iOS で再計算しない**。入力は `SpeedViewModel.tableRows`(ADR-0503 §6 の表示用の並び)と自分の実数値(`positionState` の `speed`)。段の実数値と自分の実数値の直接比較だけで前後を決める。新しい API は足さない。
 4. **トリックルーム**: 表の並びが昇順なので、通常は「速い側/遅い側」、トリックルームは「先に動く側/後に動く側」で見出しと合計行を言う(ADR-0607)。切り出しは並びで決まるため分岐は文言だけ。
 5. **構造**: 純粋ロジックは `PokeCalcCore/SpeedNeighborhood.swift`(`SpeedNeighborhoodBuilder.build`・`SpeedViewModel.neighborhood`)、文言は `SpeedNeighborhoodLabels.swift`(`SpeedLabels` の拡張。Web の `neighborhood*` と同じ)、View は `ios/PokeCalc/SpeedNeighborhoodSection.swift`。見た目は G-05 の方針が入ったら View だけ差し替えられるようにする。

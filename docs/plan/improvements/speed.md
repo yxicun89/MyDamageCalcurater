@@ -14,4 +14,4 @@
 
 ## 2026-10-11 使用感フィードバック第3回(docs/usability-round3.md の G-04)
 - [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。
-- [ ] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。spec 済み(SpeedNeighborhood.swift の足場・SpeedNeighborhoodTests・SpeedNeighborhoodUITests)。実装(`SpeedNeighborhoodBuilder.build`・`SpeedNeighborhoodSection`・SpeedScreenView への差し込み)が残り。
+- [x] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。実装済み(SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection。SpeedScreenView の自分のカード内、SpeedResultView の下)。
