@@ -182,6 +182,22 @@ const CONTRAST_PAIRS: readonly (readonly [string, string, number, string])[] = [
   ["focus.ring", "bg.gradient-end", WCAG_NON_TEXT_MIN_CONTRAST, "フォーカスの輪(背景のグラデーション)"],
   ["brand.primary", "bg.gradient-start", WCAG_NON_TEXT_MIN_CONTRAST, "選択中のタブの塗りの境界(背景)"],
   ["brand.primary", "bg.gradient-end", WCAG_NON_TEXT_MIN_CONTRAST, "選択中のタブの塗りの境界(背景)"],
+  // G-05(ADR-0339)の部品: 区切りボタン・増減ボタン・タイル・数値欄の枠は text.secondary、選択中のタイルの枠は brand.primary。
+  [
+    "text.secondary",
+    "surface.card",
+    WCAG_NON_TEXT_MIN_CONTRAST,
+    "区切りボタン・増減ボタン・タイル・数値欄の枠(カードの上)",
+  ],
+  ["text.secondary", "bg.gradient-start", WCAG_NON_TEXT_MIN_CONTRAST, "同上(背景のグラデーション)"],
+  ["text.secondary", "bg.gradient-end", WCAG_NON_TEXT_MIN_CONTRAST, "同上(背景のグラデーション)"],
+  [
+    "brand.primary",
+    "surface.card",
+    WCAG_NON_TEXT_MIN_CONTRAST,
+    "選択中のタイルの枠・チェックの印・増減ボタンの記号",
+  ],
+  ["text.primary", "info.soft", WCAG_NORMAL_TEXT_MIN_CONTRAST, "説明ボタンの本文"],
 ];
 
 describe.each([
@@ -245,6 +261,23 @@ describe("動き(design.md「動き」)", () => {
     const seconds = /(\d+(?:\.\d+)?)\s*秒/.exec(line)?.[1];
     expect(seconds, "design.md の「押下:」に秒数が無い").toBeDefined();
     expect(expectVariable(light, "--duration-press")).toBe(`${seconds ?? ""}s`);
+  });
+
+  test("--duration-sheet はシートの出入りの秒数(0.25 秒以内。G-05)", () => {
+    const line = bulletLine(motion, "シートの出入り:");
+    const seconds = /(\d+(?:\.\d+)?)\s*秒/.exec(line)?.[1];
+    expect(seconds, "design.md の「シートの出入り:」に秒数が無い").toBeDefined();
+    expect(Number(seconds)).toBeLessThanOrEqual(0.25);
+    expect(expectVariable(light, "--duration-sheet")).toBe(`${seconds ?? ""}s`);
+  });
+
+  test("prefers-reduced-motion: reduce で --duration-sheet も 0 にする", () => {
+    const rootInReduced = declarationMap(
+      rulesInAtRules(css, isReducedMotionMedia).filter((rule) =>
+        splitSelectors(rule.selector).some((selector) => selector.startsWith(":root")),
+      ),
+    );
+    expect(rootInReduced.get("--duration-sheet")).toMatch(/^(0s|0ms)$/);
   });
 
   test("prefers-reduced-motion: reduce で --duration-press も 0 にする", () => {
