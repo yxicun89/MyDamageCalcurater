@@ -111,11 +111,16 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
     let onSelect: (Move) -> Void
     /// 非 nil なら「外す」行を先頭に出す(構築編集の技スロット専用。すでに選ばれている技を外す)。
     var removeAction: (() -> Void)? = nil
+    /// 非 nil なら並びの切り替え(習得順・五十音順・タイプ順。F-02)を先頭に出す。`options` は呼び出し元が並べて渡す。
+    var sortOrder: Binding<MoveSortOrder>? = nil
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                if let sortOrder {
+                    MoveSortChips(order: sortOrder)
+                }
                 if let removeAction {
                     Button(role: .destructive) {
                         removeAction()
@@ -126,15 +131,15 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
                     .accessibilityIdentifier("moveSearchRemoveButton")
                 }
                 hintRow
-                ForEach(options, id: \.id) { move in
-                    Button {
-                        onSelect(move)
-                        dismiss()
-                    } label: {
-                        MasterSearchRow.move(move)
+                if sortOrder?.wrappedValue == .type {
+                    // タイプ順は見出し(タイプ名)つきの群で出す。
+                    ForEach(MoveSort.typeGroups(options), id: \.type) { group in
+                        Section(PokeTypeLabel.japaneseName(for: group.type)) {
+                            ForEach(group.moves, id: \.id) { moveRow($0) }
+                        }
                     }
-                    .accessibilityIdentifier("moveSearchResult-\(move.id)")
-                    .accessibilityLabel(move.nameJa)
+                } else {
+                    ForEach(options, id: \.id) { moveRow($0) }
                 }
             }
             .listStyle(.plain)
@@ -160,6 +165,17 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
             }
         }
         .accessibilityIdentifier("moveSearchSheet")
+    }
+
+    private func moveRow(_ move: Move) -> some View {
+        Button {
+            onSelect(move)
+            dismiss()
+        } label: {
+            MasterSearchRow.move(move)
+        }
+        .accessibilityIdentifier("moveSearchResult-\(move.id)")
+        .accessibilityLabel(move.nameJa)
     }
 
     @ViewBuilder
@@ -206,5 +222,49 @@ private enum MasterSearchRow {
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
         }
+    }
+}
+
+/// 技の並びの切り替え(F-02。Web の「技の並び」チップ群と同じ語)。`Menu` は使わず、画面幅いっぱいのチップを並べる
+/// (アクセシビリティの文字サイズでは縦に積む)。選択は Core の `MoveSortOrder`。
+struct MoveSortChips: View {
+    @Binding var order: MoveSortOrder
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            Text(MoveSortLabels.groupLabel)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+            let layout = dynamicTypeSize >= .accessibility1
+                ? AnyLayout(VStackLayout(spacing: SpacingToken.x2))
+                : AnyLayout(HStackLayout(spacing: SpacingToken.x2))
+            layout {
+                ForEach(MoveSortOrder.allCases, id: \.self) { option in
+                    chip(option)
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("moveSortPicker")
+    }
+
+    private func chip(_ option: MoveSortOrder) -> some View {
+        let isSelected = order == option
+        return Button {
+            order = option
+        } label: {
+            Text(MoveSortLabels.label(for: option))
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                .padding(.vertical, SpacingToken.x1)
+                .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
+                .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("moveSort-\(option.rawValue)")
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }

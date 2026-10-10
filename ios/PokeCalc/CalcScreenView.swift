@@ -36,7 +36,8 @@ struct CalcScreenView: View {
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
         favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil
     ) {
-        _viewModel = State(initialValue: CalcViewModel(service: service, teamStore: teamStore))
+        _viewModel = State(
+            initialValue: CalcViewModel(service: service, teamStore: teamStore, moveSortStore: MoveSortStore.forApp()))
         _frequentOpponents = State(
             initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
         _favoritePin = State(initialValue: FavoritePinViewModel(service: favoritesService))
@@ -266,9 +267,10 @@ struct CalcScreenView: View {
         }
         .accessibilityIdentifier("movePicker")
         .sheet(isPresented: $isMoveSearchPresented) {
-            MoveSearchSheet(viewModel: viewModel, options: viewModel.moveOptions) { move in
-                viewModel.scheduleLatest { await $0.selectMove(id: move.id) }
-            }
+            MoveSearchSheet(
+                viewModel: viewModel, options: viewModel.displayedMoveOptions,
+                onSelect: { move in viewModel.scheduleLatest { await $0.selectMove(id: move.id) } },
+                sortOrder: Binding(get: { viewModel.moveSortOrder }, set: { viewModel.moveSortOrder = $0 }))
         }
     }
 

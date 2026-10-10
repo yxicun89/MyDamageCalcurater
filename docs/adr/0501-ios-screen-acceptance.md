@@ -4753,3 +4753,10 @@ XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で�
 | `DesignTokenTests.testTextStyleSizesMatchDesignDoc` | サイズ 4 種・`allCases.count == 4` | `title`(22)を加えた 5 種・`count == 5` | design.md の文字の段階にタイトル 22 が加わったため(「design.md に無いサイズを足さない」の趣旨は維持) |
 
 XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。XCUITest は代表 14 クラス 133 件成功(失敗 0・スキップ 0)。
+
+## F-02 技の並び(ADR-0523。2026-10-10)
+
+受け入れ条件: (1) 計算画面の技ピッカーに「技の並び」(習得順〔既定〕・五十音順・タイプ順)。(2) 五十音順はひらがな/カタカナを同じ字・濁点は同じ字の中で後・同順位は技 ID。
+(3) タイプ順はタイプの並びで群にし群の中は五十音順、見出しはタイプ名。(4) 選択中の技・要求・結果は並びで変わらず、再計算しない。既定の技は learnset の先頭のまま。
+(5) 選択は端末内(UserDefaults `pokecalc.moveSort`)に保存、不正値は既定。(6) チップは 36pt 以上・AX5 で横にはみ出さない。
+既存テストの変更なし(既定が習得順のため期待値は変わらない)。
