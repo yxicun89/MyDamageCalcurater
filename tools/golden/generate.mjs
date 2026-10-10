@@ -2013,8 +2013,8 @@ const hpLevels = max => uniqSorted([max, max - 1, Math.floor(max * 3 / 4), Math.
   const noEffectItems = ['Leftovers','King\'s Rock','Quick Claw','Sitrus Berry','Focus Sash','Lum Berry']
     .filter(n => genC.items.get(id(n)) && !effects.items[n] && !(effects.speedItems && effects.speedItems[n]) && !unsupportedEffects.items[id(n)]);
   assert(noEffectItems.length >= 4, `効果を持たない持ち物の候補が少ない: ${noEffectItems}`);
-  const effectItems = ['Life Orb','Muscle Band','Charcoal','Expert Belt'].filter(n => genC.items.get(id(n)) && effects.items[n] && !isUnsupportedEffect(effects.items[n]));
-  assert(effectItems.length >= 3, `効果を持つ持ち物の候補が少ない: ${effectItems}`);
+  // 攻撃側の補正を持つ持ち物(いのちのたま等)を投げる組は、実機で効果が乗るか未確認なので engine が攻撃側の持ち物の印を残す
+  // (ADR-0144 §結果)。印の付くベクタはゴールデンに入れない(印の有無は engine の単体テストが見る)。
   const flingPairs = [['Tyranitar','Snorlax'],['Weavile','Gardevoir']];
   const powers = new Set();
   for (const [a, d] of flingPairs) {
@@ -2023,9 +2023,8 @@ const hpLevels = max => uniqSorted([max, max - 1, Math.floor(max * 3 / 4), Math.
       assert(stage3Hp(v), `fling/${id(item)}/${a}/${d}: ダメージが0`);
       powers.add(v.input.Attacker.Item.FlingPower);
     }
-    for (const item of effectItems) addStage3(`fling/${id(item)}/${a}/${d}`, a, d, 'Fling', {a:{item, fling:true}});
     addStage3(`fling/${id('Quick Claw')}/${a}/${d}/crit-reflect`, a, d, 'Fling', {a:{item:'Quick Claw', fling:true}, critical:true, screen:'Reflect'});
-    addStage3(`fling/${id('Life Orb')}/${a}/${d}/technician`, a, d, 'Fling', {a:{item:'Life Orb', fling:true, ability:'Technician'}});
+    addStage3(`fling/${id('Quick Claw')}/${a}/${d}/technician`, a, d, 'Fling', {a:{item:'Quick Claw', fling:true, ability:'Technician'}});
     // 攻撃側がくろいてっきゅうを持つ(威力 130・接地)。
     const iron = addStage3(`fling/${id('Iron Ball')}/${a}/${d}`, a, d, 'Fling', {a:{item:'Iron Ball', fling:true}});
     assert.equal(iron.input.Attacker.Item.FlingPower, 130);

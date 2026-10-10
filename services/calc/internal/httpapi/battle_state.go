@@ -32,3 +32,11 @@ func battleStateFrom(b *api.CalcBattleState) (engine.BattleState, error) {
 	}
 	return s, nil
 }
+
+// eventBattleState は計算イベントに載せる battleState。何も指定が無い({})は省略と同じなので nil(キーを出さない)。
+func eventBattleState(b *api.CalcBattleState) *api.CalcBattleState {
+	if b == nil || (b.AttackerCurrentHp == nil && b.DefenderCurrentHp == nil && b.Hits == nil) {
+		return nil
+	}
+	return b
+}

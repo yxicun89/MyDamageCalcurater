@@ -153,6 +153,8 @@ func TestWasmStage3Errors(t *testing.T) {
 	}{
 		{"攻撃側の残り HP が最大を超える", func(r map[string]any) { r["battleState"] = map[string]any{"attackerCurrentHp": 236} }, "invalid_input"},
 		{"防御側の残り HP が最大を超える", func(r map[string]any) { r["battleState"] = map[string]any{"defenderCurrentHp": 331} }, "invalid_input"},
+		{"攻撃側の残り HP が 0(満タンの意味にしない)", func(r map[string]any) { r["battleState"] = map[string]any{"attackerCurrentHp": 0} }, "invalid_input"},
+		{"回数が 0", func(r map[string]any) { r["battleState"] = map[string]any{"hits": 0} }, "invalid_input"},
 		{"残り HP が負", func(r map[string]any) { r["battleState"] = map[string]any{"attackerCurrentHp": -1} }, "invalid_input"},
 		{"多段でない技に回数", func(r map[string]any) { r["battleState"] = map[string]any{"hits": 3} }, "invalid_input"},
 		{"battleState の未知のキー", func(r map[string]any) { r["battleState"] = map[string]any{"currentHp": 10} }, "unknown_field"},

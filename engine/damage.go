@@ -136,6 +136,8 @@ type DamageResult struct {
 	Unsupported []UnsupportedMark
 	// defenderCurHP は確定数を数える防御側の残り HP(0 は DefenderHP = 満タン。ADR-0144)。満タンの指定は 0 に正規化する。
 	defenderCurHP int
+	// singleShotKO は HP で決まる固定ダメージ(いかりのまえば型・がむしゃら型)で、1 発ごとにダメージが変わるため確定数を 1 発で数える(ADR-0144 §2-6)。
+	singleShotKO bool
 }
 
 // abilityNullification は防御側の特性がその技を無効・吸収するかを返す。
@@ -441,6 +443,8 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 			return res, true, nil
 		}
 		if v, ok := ruleFixedDamage(in); ok {
+			f := in.Move.Rule.FixedDamageFormula
+			res.singleShotKO = f == FixedDamageDefenderHalfHP || f == FixedDamageDefenderMinusAttackerHP
 			res.Rolls = filledRolls(v)
 			return res, true, nil
 		}

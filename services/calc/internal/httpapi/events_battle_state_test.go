@@ -27,6 +27,18 @@ func TestCalcEventCarriesBattleState(t *testing.T) {
 		t.Errorf("Detail.BattleState = %+v, want defenderCurrentHp 40・hits 4", b)
 	}
 
+	// 空のオブジェクトは省略と同じ(イベントに載せない)。
+	pub = &fakePublisher{}
+	h = NewHandler(store, pub)
+	empty := calcCase{attacker: attacker, defender: defender, moveID: movePhysical}.httpBody()
+	empty["battleState"] = map[string]any{}
+	if rec := post(t, h, "/api/calc", mustJSON(t, empty), true); rec.Code != 200 {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body.String())
+	}
+	if pub.calls[0].detail.BattleState != nil {
+		t.Errorf("空の battleState が Detail に載った: %+v", pub.calls[0].detail.BattleState)
+	}
+
 	pub = &fakePublisher{}
 	h = NewHandler(store, pub)
 	plain := calcCase{attacker: attacker, defender: defender, moveID: movePhysical}.httpBody()

@@ -38,18 +38,37 @@ type calcRequest struct {
 	BattleState *battleStateDTO `json:"battleState"`
 }
 
-// battleStateDTO は engine.BattleState の境界の形。0 は「満タン・既定」(engine と同じ)で、値域の検証は engine が行う。
+// battleStateDTO は engine.BattleState の境界の形。指定した値は 1 以上(engine の 0 は「満タン・既定」なので、境界の 0 や負は
+// 黙って省略と取り違えず invalid_input にする。calc-svc と同じ規則)。省略・null は省略扱い。上限・範囲の検証は engine が行う。
 type battleStateDTO struct {
-	AttackerCurrentHP int `json:"attackerCurrentHp"`
-	DefenderCurrentHP int `json:"defenderCurrentHp"`
-	Hits              int `json:"hits"`
+	AttackerCurrentHP *int `json:"attackerCurrentHp"`
+	DefenderCurrentHP *int `json:"defenderCurrentHp"`
+	Hits              *int `json:"hits"`
 }
 
-func (d *battleStateDTO) toEngine() engine.BattleState {
+func (d *battleStateDTO) toEngine() (engine.BattleState, error) {
+	var s engine.BattleState
 	if d == nil {
-		return engine.BattleState{}
+		return s, nil
 	}
-	return engine.BattleState{AttackerCurrentHP: d.AttackerCurrentHP, DefenderCurrentHP: d.DefenderCurrentHP, Hits: d.Hits}
+	for _, f := range []struct {
+		name string
+		src  *int
+		dst  *int
+	}{
+		{"battleState.attackerCurrentHp", d.AttackerCurrentHP, &s.AttackerCurrentHP},
+		{"battleState.defenderCurrentHp", d.DefenderCurrentHP, &s.DefenderCurrentHP},
+		{"battleState.hits", d.Hits, &s.Hits},
+	} {
+		if f.src == nil {
+			continue
+		}
+		if *f.src < 1 {
+			return engine.BattleState{}, fail(CodeInvalidInput, "%s は 1 以上でなければならない: %d", f.name, *f.src)
+		}
+		*f.dst = *f.src
+	}
+	return s, nil
 }
 
 func (r *calcRequest) run() (calcResultDTO, error) {
@@ -90,9 +109,13 @@ func (r *calcRequest) run() (calcResultDTO, error) {
 		return calcResultDTO{}, err
 	}
 
+	state, err := r.BattleState.toEngine()
+	if err != nil {
+		return calcResultDTO{}, err
+	}
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field, Critical: r.Critical,
-		TypeChart: chart, State: r.BattleState.toEngine(),
+		TypeChart: chart, State: state,
 	})
 	if err != nil {
 		return calcResultDTO{}, err

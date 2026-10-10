@@ -219,6 +219,35 @@ func TestStage3FixedDamageFormulas(t *testing.T) {
 	}
 }
 
+// HP で決まる固定ダメージのうち、1 発ごとにダメージが変わる型(いかりのまえば型・がむしゃら型)は確定数を 1 発で数える。
+// いのちがけ型は変えない(ComputeKO と同じ)。
+func TestStage3FixedDamageKO(t *testing.T) {
+	fd := []MoveMechanism{MechanismFixedDamage}
+	one := KOChance{Hits: 1, Guaranteed: true}
+	cases := []struct {
+		name           string
+		formula        FixedDamageFormula
+		atkCur, defCur int
+		want           KOChance
+	}{
+		{"いかりのまえば型 残り 100", FixedDamageDefenderHalfHP, 0, 100, KOChance{}},
+		{"いかりのまえば型 残り 1", FixedDamageDefenderHalfHP, 0, 1, one},
+		{"いかりのまえば型 残り 175", FixedDamageDefenderHalfHP, 0, 175, KOChance{}},
+		{"がむしゃら型 100−1", FixedDamageDefenderMinusAttackerHP, 1, 100, KOChance{}},
+		{"いのちがけ型は通常の数え方", FixedDamageAttackerCurrentHP, 0, 175, ComputeKO(filledRolls(175), 175)},
+	}
+	for _, c := range cases {
+		in := s3Rule(CategoryPhysical, TypeNormal, 0, fd, MoveRule{FixedDamageFormula: c.formula})
+		in.State = BattleState{AttackerCurrentHP: c.atkCur, DefenderCurrentHP: c.defCur}
+		if c.formula == FixedDamageAttackerCurrentHP {
+			in.Move.Type = TypeFighting
+		}
+		if got := mustCalcS3(t, in).KO; got != c.want {
+			t.Errorf("%s: KO = %+v, want %+v", c.name, got, c.want)
+		}
+	}
+}
+
 // 防御側の残り HP は確定数に効く(oracle の getKOChance は defender.curHP())。表示%の分母(DefenderHP)は最大 HP のまま。
 func TestStage3DefenderCurrentHPDrivesKO(t *testing.T) {
 	base := s2Input(CategoryPhysical, TypeNormal, 100)
@@ -373,6 +402,15 @@ func TestStage3Fling(t *testing.T) {
 	got = mustCalcS3(t, mk(nil))
 	if got.Nullified != NullifyMoveFailed || got.Rolls != ([16]int{}) || got.Unsupported != nil {
 		t.Errorf("持ち物なし: Nullified = %q・rolls = %v・印 %v, want move_failed・0・なし", got.Nullified, got.Rolls, got.Unsupported)
+	}
+
+	// 攻撃側の補正を持つ持ち物を投げる型は、実機で効果が乗るか未確認なので攻撃側の持ち物の印を残す(数値は oracle どおり)。
+	{
+		in := mk(&Item{ID: "test-orb", FlingPower: 30, Effect: &ItemEffect{DamageMod: 5324}})
+		got := mustCalcS3(t, in)
+		if len(got.Unsupported) != 1 || got.Unsupported[0].Target != UnsupportedTargetAttackerItem {
+			t.Errorf("補正を持つ持ち物のなげつける: 印 %v, want 攻撃側の持ち物の印", got.Unsupported)
+		}
 	}
 
 	// 威力が不明(0)・メガストーンは印を残す(数値は従来どおり 0)。

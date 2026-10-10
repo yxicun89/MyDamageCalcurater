@@ -35,7 +35,7 @@ Impact:
 ### API レーンへの連絡
 
 - `CalcRequest.battleState` と `CalcBattleState` を足した(api/openapi.yaml)。calc-svc の検証(1 未満も `invalid_input`)と engine への写しはデータレーンの PR で入れる。
-- 計算イベント(`calcevents.CalcDetail`)には載せない(record-svc の受け口の変更と同時に足すため。下の依頼)。
+- 計算イベント(`calcevents.CalcDetail`)には指定があれば `battleState` を載せる(空のオブジェクトは載せない。record-svc の対応と同じ PR。下の依頼)。
 
 ### record レーンへの依頼(データレーンが実装済み)
 
@@ -45,5 +45,5 @@ Impact:
   計算履歴は calc-svc の計算イベント `CalcDetail` に `battleState`(omitempty)を足し、record-svc が同じ正規化で返す。
 - **デプロイ順**: イベントの形の変更なので、record-svc(受け手)を先に入れ替えてから calc-svc。古い record-svc は未知のキー `battleState` を含む
   イベントを読めない恐れがある。DB のスキーマは変えない(お気に入りの snapshot・イベントの payload は JSON)。
-- Web・iOS は、お気に入りの保存で `battleState` を外さなくてよい(上の「お気に入りに保存するとき外す」は不要になった)。保存した計算・履歴から開いた計算は、
+- Web・iOS は、お気に入りの保存で `battleState` を外さなくてよい(Web への依頼の表の当初案「外す」は取り消し)。保存した計算・履歴から開いた計算は、
   保存した残り HP・回数を復元する。

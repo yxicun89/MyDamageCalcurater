@@ -120,7 +120,7 @@ func unsupportedMarks(in DamageInput) []UnsupportedMark {
 	if in.Move.Category != CategoryStatus {
 		marks = append(marks, moveMarks(in)...)
 	}
-	if it := in.Attacker.Item; it != nil && it.Effect != nil && it.Effect.UnsupportedAttacker {
+	if it := in.Attacker.Item; it != nil && it.Effect != nil && (it.Effect.UnsupportedAttacker || flingKeepsAttackEffect(in, it.Effect)) {
 		marks = append(marks, UnsupportedMark{Target: UnsupportedTargetAttackerItem, Reason: UnsupportedEffect, ID: it.ID})
 	}
 	// 技のフラグが不明なら、フラグに依存する特性も「計算に入れていない」(ADR-0178 §5)。変化技には付けない。
@@ -219,4 +219,14 @@ func mechanismHandled(in DamageInput, m MoveMechanism) bool {
 		return r.ExtraEffectivenessType != TypeNone || len(r.SuperEffectiveAgainst) > 0
 	}
 	return false
+}
+
+// flingKeepsAttackEffect は、なげつける型で投げる持ち物が攻撃側の補正(実数値・威力・最終ダメージ・タイプ強化)を持つか。
+// oracle は投げた持ち物の効果を計算中も残すが、実機で乗るかは未確認なので、安全側で攻撃側の持ち物の印を残す(ADR-0144 §結果)。
+func flingKeepsAttackEffect(in DamageInput, e *ItemEffect) bool {
+	r := in.Move.Rule
+	if r == nil || r.PowerFormula != PowerFormulaAttackerItemFling {
+		return false
+	}
+	return len(e.StatMods) > 0 || e.DamageMod != 0 || e.PowerMod != 0 || (e.BoostType != "" && e.BoostTypeMod != 0)
 }

@@ -20,6 +20,13 @@ func (r DamageResult) computeKO() KOChance {
 	if r.defenderCurHP > 0 {
 		hp = r.defenderCurHP
 	}
+	if r.singleShotKO {
+		// 1 発ごとにダメージが変わる型は、1 発で残り HP 以上なら確定 1 発、それ以外は倒せない(Hits 0)。
+		if r.Rolls[15] > 0 && r.Rolls[15] >= hp {
+			return KOChance{Hits: 1, Guaranteed: true}
+		}
+		return KOChance{}
+	}
 	return computeKOHits(r.Rolls, r.HitRolls, hp)
 }
 

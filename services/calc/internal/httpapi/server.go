@@ -279,7 +279,7 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
-		MoveID: req.MoveId, Field: req.Field, Options: req.Options, BattleState: req.BattleState,
+		MoveID: req.MoveId, Field: req.Field, Options: req.Options, BattleState: eventBattleState(req.BattleState),
 		MinPercent: result.MinPercent, MaxPercent: result.MaxPercent,
 	})
 	return ctx.JSON(http.StatusOK, result)

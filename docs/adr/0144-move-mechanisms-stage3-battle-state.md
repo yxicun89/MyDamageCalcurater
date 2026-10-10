@@ -45,6 +45,7 @@ ADR-0143 の後も、使用可能な攻撃技(Showdown の isNonstandard が nul
   種族 ID ↔ キーの対応をデータの語彙に持たせる設計(「その種族以外は失敗」も含む)が要る。2 技は使用不可のフォルム・戦闘中だけの姿で
   効くものを含み、実害が小さい。段階4に回す。
 - **じゅうりょく 1 技**: 場の入力にじゅうりょくを足すと、接地・ふゆうの無効・命中に広く効く(この技だけの話ではない)。場の入力の設計とともに扱う。
+- **固定回数の多段技(multiaccuracy)への hits 指定**は受けない(`battleState.hits` は範囲の多段技だけ)。
 - **確率で威力が変わる 1 技**: 結果を1つの分布で表すと確定数の意味が変わる。表示の設計が要る(ユーザー方針で対象外)。
 - **わるあがき 1 技**: 実機はタイプなし(相性・タイプ一致なし)だが oracle はノーマルとして計算し(ゴーストに無効)、照合の正が実機と食い違う。
   技選びに出ない(覚える種族が無い)ので対象外のまま。
@@ -117,7 +118,7 @@ ItemEffect.Grounds bool    // 持ち物で接地する(isGrounded でタイプ�
 3. 固定ダメージ: 既存の `Params.FixedDamage` と同じ位置で `FixedDamageFormula` を計算し、16 段階を同じ値で埋める。
 4. 威力: `PowerFormula` の新しい式。持ち物が `FlingPower` 0 またはメガストーンのなげつける型は「計算できない」(印を残し、数値は従来どおり 0)。
 5. 多段: `State.Hits` が 0 でなければその回数(スキルリンクより優先)。0 は段階1の既定。
-6. 確定数: `DefenderCurrentHP`(0 は最大)を倒す回数で数える。`DamageResult.DefenderHP` と表示%は最大 HP のまま。
+6. 確定数: `DefenderCurrentHP`(0 は最大)を倒す回数で数える。HP で決まる固定ダメージのうち、いかりのまえば型・がむしゃら型は1発で数える(下の §結果)。`DamageResult.DefenderHP` と表示%は最大 HP のまま。
 7. 接地: `isGrounded` は持ち物の `Grounds` を最初に見る(両側)。
 
 **HP が条件の特性(もうか 等・マルチスケイル 等)は段階3で計算に入れない**(従来どおり効果データの印)。残り HP の入力があるので、次の段で
@@ -172,7 +173,7 @@ WASM(Web 内部): `calc` の `battleState`(同じ3つのキー。未知のキー
 未知のキーは 400 `unknown_field`)。計算履歴は calc-svc の計算イベント `calcevents.CalcDetail` に `battleState`(omitempty)を足し、record-svc が同じ正規化で返す。
 DB のスキーマ変更は無い(お気に入りの snapshot・イベントの payload は JSON)。**デプロイ順**: record-svc(受け手)を先、その後 calc-svc。
 
-### 7. ゴールデン(`testdata/golden/mechanisms-stage3.json`。Champions 世代・SP そのまま。既存のファイルは変えない)
+### 7. ゴールデン(`testdata/golden/mechanisms-stage3.json`。Champions 世代・SP そのまま。既存のファイルの expected は変えない。入力の効果定義の写しは更新されうる)
 
 生成器は oracle の `curHP`・`hits` を使い、入力の `State` に載せる(残り HP は 1..最大。0 は oracle が満タンと読むので使わない)。
 
@@ -231,7 +232,7 @@ oracle の結果が違う、(c) 状態の値域、を確かめて崩れたら止
    テスト: `services/pokedex/internal/httpapi/item_fling_power_test.go`。
 6. calc-svc: `internal/master/export.go` で `flingPower` → `ItemRow.FlingPower`(0 以下は `ErrInvalidMaster`)。`httpapi` の `CalcDamage` で
    `battleState` を検証(1 未満は `invalid_input`。engine の 0 = 満タンと取り違えない)して `DamageInput.State` に写し、`ErrInvalidBattleState` を
-   `invalid_input` に写す。計算イベントには載せない(§6)。テスト: `services/calc/internal/master/fling_power_test.go`・
+   `invalid_input` に写す。指定があれば(空のオブジェクトを除く)計算イベント `CalcDetail.battleState` に載せる(§6)。テスト: `services/calc/internal/master/fling_power_test.go`・
    `services/calc/internal/httpapi/battle_state_test.go`。
 7. wasmapi: `calcRequest.BattleState`(`*battleStateDTO`。未知のキーは `unknown_field`)、`itemDTO.FlingPower`、`itemEffectDTO.Grounds`、
    `moveRuleDTO.FixedDamageFormula`・`CategoryByStats`。`ErrInvalidBattleState` → `invalid_input`。Go/WASM 一致のベクタ(`testdata/vectors.json`)に
@@ -247,6 +248,8 @@ oracle の結果が違う、(c) 状態の値域、を確かめて崩れたら止
 
 - 良い点: 残り HP で決まる技・なげつける・分類の切り替えの数値が正しくなり、印が 31 → 21 技に減る(残りはすべて対戦の履歴・フォルム・
   じゅうりょく・乱数・わるあがき)。防御側の残り HP で確定数を数えられる。範囲の多段技の回数を選べる。
+- HP で決まる固定ダメージは確定数を 1 発で数える: いかりのまえば型・がむしゃら型は 1 発ごとにダメージが変わる(防御側の残りが減る)ので、1 発のダメージが残り HP 以上なら確定 1 発(いかりのまえば型は残り 1 のときだけ)、それ以外は倒せない(Hits 0。がむしゃら型は常に倒せない)。いのちがけ型は通常の数え方(§2-6)。
+- なげつける型で投げる持ち物が攻撃側の補正(実数値・威力・最終ダメージ・タイプ強化)を持つとき(いのちのたま等)は、実機で効果が乗るか未確認なので攻撃側の持ち物の未対応の印を残す(数値は oracle どおり)。印の付くベクタはゴールデンに入れない(印の有無は engine の単体テスト)。確認は段階4。
 - 注意: いかりのまえば型・がむしゃら型は oracle が計算しないので、ゴールデンではなく単体テスト(Showdown の規則)で守る。
 - 注意: 分類の切り替えは oracle(実数値の比・同値は特殊)に合わせ、実機(ダメージの途中の値・同値は乱数)とは境界で違いうる。
 - 注意: なげつける型は oracle に合わせ、攻撃側の持ち物の他の効果を計算中も残す。実機で投げた持ち物の効果が残るかは未確認(段階4の確認事項)。
