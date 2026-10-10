@@ -4,7 +4,7 @@
 
 ## 0. 取得する(個人利用。ADR-0810)
 
-取り込み済みの種族(`data/generated/readmodel/pokemon-types.json`)の画像を Pokémon Showdown の sprites から `data/generated/images/src/{key}.png` へ取る。先にマスタの取得と取り込み(docs/runbooks/data.md)が済んでいること。
+取り込み済みの種族(`data/generated/readmodel/pokemon-types.json`)の画像を GitHub の smogon/sprites(raw。無ければ Pokémon Showdown の sprites)から `data/generated/images/src/{key}.png` へ取る。先にマスタの取得と取り込み(docs/runbooks/data.md)が済んでいること。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"

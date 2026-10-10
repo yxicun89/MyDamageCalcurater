@@ -4,9 +4,10 @@
 //
 // 入力は取り込み済みマスタ: ① readmodel の pokemon-types.json(取り込み済みの種族 key 一覧)
 // ② importer が取得した Showdown スナップショット(num・baseSpecies・forme・formeOrder。key の採番に使う)。
-// 入手元は Pokémon Showdown の sprites(home → gen5 の順に試す)。URL は Showdown の種族データから組み立て、名前は書かない。
+// 入手元は ① GitHub raw の smogon/sprites(src/champions → src/dex)② Pokémon Showdown の sprites(home → gen5)の順。
+// URL は Showdown の種族データから組み立て、名前は書かない。
 // 取得は直列(同時 1 本)で、1 リクエストごとに待つ。既にあるファイルは取り直さない(冪等)。失敗した key は一覧で報告するが終了コードは 0(画像なしでもエンブレムで動く)。
-// 環境変数: ASSETS_SRC(出力先)・ASSETS_SHOWDOWN_SNAPSHOT・ASSETS_KEYS_FILE・ASSETS_SPRITES_BASE_URL。
+// 環境変数: ASSETS_SRC(出力先)・ASSETS_SHOWDOWN_SNAPSHOT・ASSETS_KEYS_FILE・ASSETS_SPRITES_BASE_URL(Showdown)・ASSETS_GITHUB_BASE_URL。
 
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -17,8 +18,11 @@ const repoRoot = join(here, '..', '..')
 
 // convert.mjs の DEFAULT_SRC_DIR と同じ場所(convert.mjs は sharp を読むので、取得だけなら依存させない)。
 export const DEFAULT_SRC_DIR = join(repoRoot, 'data', 'generated', 'images', 'src')
+export const DEFAULT_GITHUB_BASE_URL = 'https://raw.githubusercontent.com/smogon/sprites/master/src'
 export const DEFAULT_BASE_URL = 'https://play.pokemonshowdown.com/sprites'
-/** 試す順。home が高画質(192px・透過)、gen5 は小さいが新しい姿が先に載ることがある。 */
+/** 主: GitHub raw の smogon/sprites。champions は Champions の姿(新しいメガを含む)、dex はそれ以外。 */
+export const GITHUB_SETS = ['champions', 'dex']
+/** 補助: Showdown 本体。home が高画質(192px・透過)、gen5 は小さい。 */
 export const SPRITE_SETS = ['home', 'gen5']
 export const USER_AGENT = 'pokecalc-personal-assets/1.0 (personal use; low rate)'
 /** 取得は直列(同時 1 本。並列にしない。ADR-0810)。各リクエストの後にこの時間待つ。 */
@@ -35,7 +39,17 @@ export function spriteId(sp) {
   return forme ? `${base}-${forme}` : base
 }
 
-/** Showdown の種族一覧から {key → sprite 名} を作る。key = 図鑑番号4桁-フォルム3桁(formeOrder の位置。pokedex importer と同じ規則)。 */
+/** smogon/sprites のファイル名の部分: 英数字以外の連なりは、語の間なら `_`、端なら消す(アクセントとアポストロフィは外す)。 */
+export const flatten = (s) =>
+  String(s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/['’]/g, '').replace(/(?<=[a-z0-9])[^a-z0-9]+(?=[a-z0-9])/g, '_').replace(/[^a-z0-9_]/g, '')
+
+/** smogon/sprites の種族ファイル名(拡張子なし): `s{名前}[-o{フォーム}]`。 */
+export function githubId(sp) {
+  const forme = flatten(sp.forme || '')
+  return `s${flatten(sp.baseSpecies || sp.name)}${forme ? `-o${forme}` : ''}`
+}
+
+/** Showdown の種族一覧から {key → {spriteId, githubId}} を作る。key = 図鑑番号4桁-フォルム3桁(formeOrder の位置。pokedex importer と同じ規則)。 */
 export function buildKeyMap(species) {
   const byName = new Map(species.map((s) => [s.name, s]))
   const map = new Map()
@@ -47,7 +61,7 @@ export function buildKeyMap(species) {
     if (form < 0 && order.length === 0 && sp.name === base.name && !sp.forme) form = 0
     if (form < 0 || !Number.isInteger(sp.num) || sp.num <= 0) continue
     const key = `${String(sp.num).padStart(4, '0')}-${String(form).padStart(3, '0')}`
-    if (!map.has(key)) map.set(key, spriteId(sp))
+    if (!map.has(key)) map.set(key, { spriteId: spriteId(sp), githubId: githubId(sp) })
   }
   return map
 }
@@ -57,15 +71,21 @@ export function buildTargets(keys, keyMap) {
   const targets = []
   const unmapped = []
   for (const key of [...new Set(keys)].sort()) {
-    const id = keyMap.get(key)
-    if (id) targets.push({ key, spriteId: id })
+    const ids = keyMap.get(key)
+    if (ids) targets.push({ key, ...ids })
     else unmapped.push(key)
   }
   return { targets, unmapped }
 }
 
-export function candidateUrls(baseUrl, id) {
-  return SPRITE_SETS.map((set) => `${baseUrl.replace(/\/$/, '')}/${set}/${id}.png`)
+const trim = (u) => u.replace(/\/$/, '')
+
+/** 試す URL の順(主 → 補助)。bases = { github, showdown }。 */
+export function candidateUrls(bases, t) {
+  return [
+    ...GITHUB_SETS.map((set) => `${trim(bases.github)}/${set}/${t.githubId}.png`),
+    ...SPRITE_SETS.map((set) => `${trim(bases.showdown)}/${set}/${t.spriteId}.png`),
+  ]
 }
 
 const defaultSleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -106,7 +126,7 @@ async function exists(path) {
  * @returns {{fetched:string[], skipped:string[], failed:{key:string,reason:string}[], planned:string[]}}
  */
 export async function fetchImages(targets, opts) {
-  const { srcDir, baseUrl = DEFAULT_BASE_URL, delayMs = DEFAULT_DELAY_MS, limit = Infinity, dryRun = false, fetchImpl = fetch, sleep = defaultSleep } = opts
+  const { srcDir, bases = { github: DEFAULT_GITHUB_BASE_URL, showdown: DEFAULT_BASE_URL }, delayMs = DEFAULT_DELAY_MS, limit = Infinity, dryRun = false, fetchImpl = fetch, sleep = defaultSleep } = opts
   const result = { fetched: [], skipped: [], failed: [], planned: [] }
   const todo = []
   for (const t of targets) {
@@ -114,20 +134,21 @@ export async function fetchImages(targets, opts) {
     else if (todo.length < limit) todo.push(t)
   }
   if (dryRun) {
-    result.planned = todo.map((t) => `${t.key} ${candidateUrls(baseUrl, t.spriteId)[0]}`)
+    result.planned = todo.map((t) => `${t.key} ${candidateUrls(bases, t)[0]}`)
     return result
   }
   if (todo.length > 0) await mkdir(srcDir, { recursive: true })
   for (const t of todo) {
     let outcome = { error: 'not_found' }
-    for (const url of candidateUrls(baseUrl, t.spriteId)) {
+    for (const url of candidateUrls(bases, t)) {
       const r = await getPng(url, { fetchImpl, sleep, delayMs })
       await sleep(delayMs)
       if (r.buf) {
         outcome = r
         break
       }
-      if (r.error) outcome = r // 404 だけなら次の入手元へ。他のエラーも次を試し、最後の理由を残す
+      // 404 だけなら次の入手元へ。他のエラー(503 等)は次も試しつつ理由を残す(not_found で上書きしない)
+      if (r.error) outcome = r
     }
     if (outcome.buf) {
       const tmp = join(srcDir, `.${t.key}.png.tmp`)
@@ -181,7 +202,7 @@ async function main() {
   const { keys, species } = await loadInputs()
   const { targets, unmapped } = buildTargets(keys, buildKeyMap(species))
   const srcDir = process.env.ASSETS_SRC || DEFAULT_SRC_DIR
-  const res = await fetchImages(targets, { srcDir, baseUrl: process.env.ASSETS_SPRITES_BASE_URL || DEFAULT_BASE_URL, ...args })
+  const res = await fetchImages(targets, { srcDir, bases: { github: process.env.ASSETS_GITHUB_BASE_URL || DEFAULT_GITHUB_BASE_URL, showdown: process.env.ASSETS_SPRITES_BASE_URL || DEFAULT_BASE_URL }, ...args })
   for (const line of res.planned) console.log(`dry-run: ${line}`)
   for (const f of res.failed) console.warn(`assets-fetch: 失敗 ${f.key} (${f.reason})`)
   for (const k of unmapped) console.warn(`assets-fetch: 入手元の名前を引けない ${k}`)

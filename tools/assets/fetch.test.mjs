@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { after, describe, it } from 'node:test'
 
-import { DEFAULT_BASE_URL, USER_AGENT, buildKeyMap, buildTargets, candidateUrls, fetchImages, spriteId } from './fetch.mjs'
+import { DEFAULT_GITHUB_BASE_URL, GITHUB_SETS, SPRITE_SETS, USER_AGENT, buildKeyMap, buildTargets, candidateUrls, fetchImages, flatten, githubId, spriteId } from './fetch.mjs'
 
 const tmp = mkdtempSync(join(tmpdir(), 'assets-fetch-'))
 after(() => rmSync(tmp, { recursive: true, force: true }))
@@ -31,10 +31,10 @@ describe('キーと URL の組み立て', () => {
   })
   it('key は図鑑番号4桁-formeOrder の位置3桁。基本種の省略は 000', () => {
     const m = buildKeyMap(species)
-    assert.equal(m.get('0007-000'), 'foo')
-    assert.equal(m.get('0007-001'), 'foo-megax')
-    assert.equal(m.get('0007-002'), 'foo-alola')
-    assert.equal(m.get('0012-000'), 'mrbar')
+    assert.equal(m.get('0007-000').spriteId, 'foo')
+    assert.equal(m.get('0007-001').spriteId, 'foo-megax')
+    assert.equal(m.get('0007-002').spriteId, 'foo-alola')
+    assert.equal(m.get('0012-000').spriteId, 'mrbar')
     assert.equal(m.has('0099-000'), false)
   })
   it('対象は昇順・重複なし。引けない key は unmapped', () => {
@@ -42,13 +42,30 @@ describe('キーと URL の組み立て', () => {
     assert.deepEqual(targets.map((t) => t.key), ['0007-001', '0012-000'])
     assert.deepEqual(unmapped, ['0500-000'])
   })
-  it('候補 URL は home → gen5(末尾スラッシュを許す)', () => {
-    assert.deepEqual(candidateUrls('https://x.test/s/', 'foo'), ['https://x.test/s/home/foo.png', 'https://x.test/s/gen5/foo.png'])
+  it('smogon/sprites のファイル名: 語の間は _、端の記号は消す、フォームは -o', () => {
+    assert.equal(flatten('Mr. Bar'), 'mr_bar')
+    assert.equal(flatten('Mega-X'), 'mega_x')
+    assert.equal(flatten('Farfetch’d'), 'farfetchd')
+    assert.equal(flatten('Flabébé'), 'flabebe')
+    assert.equal(githubId(species[1]), 'sfoo-omega_x')
+    assert.equal(githubId(species[3]), 'smr_bar')
+    assert.equal(githubId(species[0]), 'sfoo')
+  })
+  it('候補 URL は GitHub raw(champions → dex)→ Showdown(home → gen5)。末尾スラッシュを許す', () => {
+    const urls = candidateUrls({ github: 'https://g.test/src/', showdown: 'https://x.test/s/' }, { spriteId: 'foo', githubId: 'sfoo' })
+    const [g0, g1] = GITHUB_SETS
+    const [p0, p1] = SPRITE_SETS
+    assert.deepEqual(urls, [`https://g.test/src/${g0}/sfoo.png`, `https://g.test/src/${g1}/sfoo.png`, `https://x.test/s/${p0}/foo.png`, `https://x.test/s/${p1}/foo.png`])
   })
 })
 
 describe('fetchImages', () => {
-  const targets = [{ key: '0007-000', spriteId: 'foo' }, { key: '0007-001', spriteId: 'foo-megax' }, { key: '0012-000', spriteId: 'mrbar' }]
+  const targets = [
+    { key: '0007-000', spriteId: 'foo', githubId: 'sfoo' },
+    { key: '0007-001', spriteId: 'foo-megax', githubId: 'sfoo-omega_x' },
+    { key: '0012-000', spriteId: 'mrbar', githubId: 'smr_bar' },
+  ]
+  const [GH0] = GITHUB_SETS
 
   it('取得して {key}.png に書く・既存は取り直さない(冪等)・User-Agent を付ける', async () => {
     const dir = join(tmp, 'a')
@@ -70,11 +87,11 @@ describe('fetchImages', () => {
     assert.equal(urls.length, n)
   })
 
-  it('home が 404 なら gen5 を試す。両方 404 は not_found で報告し、他の key は続ける', async () => {
+  it('主が 404 なら次の入手元を試す。全部 404 は not_found で報告し、他の key は続ける', async () => {
     const dir = join(tmp, 'b')
     const fetchImpl = async (url) => {
-      if (url.includes('mrbar')) return res(404)
-      if (url.includes('/home/foo-megax')) return res(404)
+      if (url.includes('mr') && url.includes('bar')) return res(404)
+      if (url.includes(`/${GH0}/`) && url.includes('omega_x')) return res(404)
       return res(200)
     }
     const r = await fetchImages(targets, { srcDir: dir, fetchImpl, ...fast })
@@ -96,6 +113,13 @@ describe('fetchImages', () => {
     assert.deepEqual(readdirSync(dir), [])
   })
 
+  it('503 のあと別の入手元が 404 でも、失敗の理由は 503 のまま(not_found で上書きしない)', async () => {
+    const dir = join(tmp, 'f')
+    const fetchImpl = async (url) => (url.includes(`/${GH0}/`) ? res(503) : res(404))
+    const r = await fetchImages(targets.slice(0, 1), { srcDir: dir, fetchImpl, ...fast })
+    assert.deepEqual(r.failed, [{ key: '0007-000', reason: 'http_503' }])
+  })
+
   it('--limit は未取得のうち先頭 N 件。dry-run は取得せず計画だけ', async () => {
     const dir = join(tmp, 'd')
     mkdirSync(dir)
@@ -104,7 +128,7 @@ describe('fetchImages', () => {
     const fetchImpl = async () => (calls++, res(200))
     const dry = await fetchImages(targets, { srcDir: dir, limit: 1, dryRun: true, fetchImpl, ...fast })
     assert.equal(calls, 0)
-    assert.deepEqual(dry.planned, [`0007-001 ${DEFAULT_BASE_URL}/home/foo-megax.png`])
+    assert.deepEqual(dry.planned, [`0007-001 ${DEFAULT_GITHUB_BASE_URL}/${GH0}/sfoo-omega_x.png`])
     const r = await fetchImages(targets, { srcDir: dir, limit: 1, fetchImpl, ...fast })
     assert.deepEqual(r.fetched, ['0007-001'])
     assert.equal(calls, 1)

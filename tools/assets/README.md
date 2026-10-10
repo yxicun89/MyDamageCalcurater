@@ -10,9 +10,8 @@ make assets                 # 変換
 
 ### 取得(`fetch.mjs`)
 - 対象: 取り込み済みの種族(`data/generated/readmodel/pokemon-types.json`)。key と URL は Showdown スナップショット(`data/importer/config.json` の版)から組む(名前は書かない)。
-- 入手元: `play.pokemonshowdown.com/sprites/home/{id}.png`、無ければ `gen5/`。User-Agent を名乗り、直列(同時 1 本)・500ms 待ち・429/5xx は 2 回まで再試行。
-- 既存の `{key}.png` は取り直さない。失敗は理由付きで一覧に出すが終了コード 0。`LIMIT` は未取得のうち N 件。環境変数 `ASSETS_SRC`・`ASSETS_KEYS_FILE`・`ASSETS_SHOWDOWN_SNAPSHOT`・`ASSETS_SPRITES_BASE_URL`。
-
+- 入手元(上から順に試す): 主は GitHub raw の `smogon/sprites`(`src/champions/s{名前}[-o{フォーム}].png` → `src/dex/`。Champions の新しいメガを含む・128px 透過)、補助は Showdown 本体の `sprites/home/{id}.png` → `gen5/`。User-Agent を名乗り、直列(同時 1 本)・500ms 待ち・429/5xx は 2 回まで再試行。
+- 既存の `{key}.png` は取り直さない。失敗は理由付きで一覧に出すが終了コード 0。`LIMIT` は未取得のうち N 件。環境変数 `ASSETS_SRC`・`ASSETS_KEYS_FILE`・`ASSETS_SHOWDOWN_SNAPSHOT`・`ASSETS_SPRITES_BASE_URL`(Showdown)・`ASSETS_GITHUB_BASE_URL`。
 
 - 入力 `data/generated/images/src/{key}.{png|jpg|jpeg|webp}`(`ASSETS_SRC` で変更)。`key` は `{図鑑番号4桁}-{フォルム3桁}`(例 `0445-000`)。
 - 出力 `data/generated/images/dist/`(`ASSETS_OUT` で変更)。どちらも `.gitignore` 済みで Git に載らない。
