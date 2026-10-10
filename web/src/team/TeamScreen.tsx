@@ -1,16 +1,15 @@
 // 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。一覧と編集の2つの表示を切り替える(URL は /team のまま)。
-// 一覧: 構築のカード・[新しい構築]・閉じた Showdown 取り込み。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
+// 一覧: 構築のカード・[新しい構築]。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
 //
 // 状態の作り(SpeedScreen.tsx・BalanceScreen.tsx と同じ考え方):
 //   - list() はマウント時に1回だけ呼び、cancelled フラグで古い応答を捨てる
 //   - create()/update()/remove() が成功したら、応答の Team で手元の一覧を書き換える(list を呼び直さない)
 //   - 一覧の読み込みに失敗しても、[新しい構築]は先に使える(ADR-0309 §4)
-//   - 編集中の下書き・開いている構築・取り込みの入力と折りたたみの開閉はこの画面の state に持つ(ADR-0308)
+//   - 編集中の下書き・開いている構築はこの画面の state に持つ(ADR-0308)
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { teamMemberText, teamScreenText } from "../i18n/ja";
-import { teamShowdownText } from "../i18n/team";
 import { PokemonImage } from "../images/PokemonImage";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { typeAccentStyle } from "../ui/typeAccent";
@@ -19,7 +18,6 @@ import { TeamMemberEditor } from "./TeamMemberEditor";
 import type { TeamClient, TeamError } from "./teamClient";
 import { teamDisplayNames } from "./teamName";
 import { TEAM_SLOT_COUNT, teamInputFromMembers } from "./teamSlots";
-import { TeamShowdownImport } from "./TeamShowdownImport";
 
 type Schemas = components["schemas"];
 
@@ -183,11 +181,6 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
     }
   }
 
-  // Showdown 取り込みの入力と折りたたみの開閉(一覧と編集画面を行き来しても残す。ADR-0308)。
-  const [importText, setImportText] = useState("");
-  const [importOpen, setImportOpen] = useState(false);
-  const exampleLabelId = useId();
-
   const teams = list.status === "loaded" ? list.teams : [];
   const displayNames = teamDisplayNames(teams);
   const editingTeam = editingTeamId === null ? undefined : teams.find((team) => team.id === editingTeamId);
@@ -276,34 +269,6 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
           })}
         </ul>
       )}
-
-      <details
-        className="ui-card team-fold"
-        open={importOpen}
-        onToggle={(event) => {
-          setImportOpen(event.currentTarget.open);
-        }}
-      >
-        <summary>{teamShowdownText.importFoldLabel}</summary>
-        <p className="team-fold__help">{teamShowdownText.importHelp}</p>
-        <p id={exampleLabelId} className="team-fold__help">
-          {teamShowdownText.importExampleLabel}
-        </p>
-        <pre role="region" aria-labelledby={exampleLabelId} tabIndex={0} className="team-fold__example">
-          {teamShowdownText.importExample}
-        </pre>
-        <TeamShowdownImport
-          teamClient={teamClient}
-          master={master}
-          masterSearch={masterSearch}
-          text={importText}
-          onTextChange={setImportText}
-          onCreated={(team) => {
-            hasWrittenRef.current = true;
-            setList((current) => addCreatedTeam(current, team));
-          }}
-        />
-      </details>
     </section>
   );
 }
