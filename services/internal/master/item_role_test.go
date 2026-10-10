@@ -73,6 +73,7 @@ func itemRoleCases() []itemRoleCase {
 		// 未対応の印(ADR-0123): その側で持つとダメージが変わるのに計算に入れていない。
 		{name: "UnsupportedAttacker", effect: &engine.ItemEffect{UnsupportedAttacker: true}, want: attackerOnly},
 		{name: "UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedDefender: true}, want: defenderOnly},
+		{name: "Grounds(接地は両側のフィールドの判定を変える。ADR-0144)", effect: &engine.ItemEffect{Grounds: true}, want: bothRoles},
 		{name: "UnsupportedAttacker と UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedAttacker: true, UnsupportedDefender: true}, want: bothRoles},
 
 		// SpeedMods: 素早さの補正(ADR-0139)。ダメージ計算では読まないので役割にならない(判定・素早さの画面の役割は ADR-0175 の対象外)。
@@ -133,6 +134,7 @@ func roleProbeChart(t *testing.T) engine.TypeChart {
 			{ID: "fire", SortOrder: 2, NameJa: "テストほのお"},
 			{ID: "water", SortOrder: 3, NameJa: "テストみず"},
 			{ID: "grass", SortOrder: 4, NameJa: "テストくさ"},
+			{ID: "flying", SortOrder: 5, NameJa: "テストひこう"},
 		},
 		[]master.TypeChartRow{
 			{AttackType: "fire", DefenseType: "grass", Code: 4},
@@ -174,6 +176,21 @@ func probeInputs(t *testing.T) []engine.DamageInput {
 			}
 		}
 	}
+	// 持ち物による接地(Grounds。ADR-0144)は、ひこうタイプがフィールドの補正・サイコフィールドの先制技の判定を受けるかを変える。
+	flier := engine.DamageInput{
+		Format:    engine.FormatSingle,
+		Attacker:  probeIndividual("9900-000", engine.TypeFlying),
+		Defender:  probeIndividual("9901-000", engine.TypeFlying),
+		Move:      engine.Move{ID: "testprobe", NameJa: "テストかくにんわざ", Type: engine.TypeGrass, Category: engine.CategorySpecial, Power: 80},
+		TypeChart: roleProbeChart(t),
+	}
+	grassy := flier
+	grassy.Field.Terrain = engine.TerrainGrassy
+	psychic := flier
+	psychic.Move.Type = engine.TypeNormal
+	psychic.Move.Priority = 1
+	psychic.Field.Terrain = engine.TerrainPsychic
+	out = append(out, grassy, psychic)
 	return out
 }
 

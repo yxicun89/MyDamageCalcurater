@@ -186,6 +186,8 @@ const items = [...dex.items.all()].map((i) => ({
   hooks: hooks(i),
   // メガストーンなら基本種名 → メガ種族名。そうでなければ {}(キーは必ず出す。ADR-0140)。
   megaStone: i.megaStone ?? {},
+  // なげつけるの威力(Showdown の fling.basePower)。投げられない持ち物は null(キーは必ず出す。ADR-0144)。
+  flingBasePower: i.fling?.basePower ?? null,
 }));
 const abilities = [...dex.abilities.all()].map((a) => ({
   id: a.id,

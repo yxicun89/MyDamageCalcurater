@@ -120,7 +120,7 @@ export function megaStoneLabel(species: MasterSpecies, stoneNameJa?: string | nu
 }
 
 /**
- * engine に渡す持ち物の形(id・nameJa・effect だけ。境界は未知のフィールドを拒否する)。roles・isMegaStone は画面のための
+ * engine に渡す持ち物の形(id・nameJa・effect と flingPower だけ。境界は未知のフィールドを拒否する)。roles・isMegaStone は画面のための
  * 項目なので落とす。ただし防御側の持ち物(keepMegaStone)のメガストーンは isMegaStone: true を残す: 防御側の持ち物を払い落とす技が
  * メガストーンを除くため(ADR-0143)。攻撃側の持ち物には要らない。偽・省略は作らない。
  */
@@ -133,6 +133,8 @@ export function toEngineItem(item: MasterItem, keepMegaStone = false): Item {
     nameJa: item.nameJa,
     effect: item.effect,
     ...(keepMegaStone && item.isMegaStone === true ? { isMegaStone: true } : {}),
+    // ADR-0144: なげつけるの威力は WASM の項目(攻撃側のなげつける型が使う)なので残す。省略は作らない。
+    ...(item.flingPower === undefined ? {} : { flingPower: item.flingPower }),
   };
 }
 

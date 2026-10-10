@@ -43,6 +43,7 @@ var (
 		"OnlySuperEffective": true, "BoostType": true, "BoostTypeMod": true, "ResistBerryType": true,
 		"SpeedMods":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
+		"Grounds": true, // 持ち物で接地する(ADR-0144)
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
@@ -511,6 +512,11 @@ func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, e
 	}
 	if e.UnsupportedAttacker, e.UnsupportedDefender, err = decodeUnsupportedMarks(fields); err != nil {
 		return nil, err
+	}
+	if v, ok := fields["Grounds"]; ok {
+		if e.Grounds, err = decodeTrueLiteral(v); err != nil {
+			return nil, err
+		}
 	}
 	return &e, nil
 }
@@ -1238,6 +1244,9 @@ func EncodeItemEffect(e engine.ItemEffect) ([]byte, error) {
 		w.field("SpeedMods", encodeSpeedMods(e.SpeedMods))
 	}
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
+	if e.Grounds {
+		w.field("Grounds", []byte("true"))
+	}
 	return w.bytes()
 }
 

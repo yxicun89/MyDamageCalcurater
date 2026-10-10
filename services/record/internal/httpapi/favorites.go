@@ -51,6 +51,16 @@ type calcRequest struct {
 	MoveID   *string            `json:"moveId"`
 	Field    *fieldRequest      `json:"field"`
 	Options  *optionsRequest    `json:"options"`
+	// BattleState は対戦の状態(残り HP・多段の回数。ADR-0144)。省略・null・{} は省略のまま保存する。
+	BattleState *battleStateRequest `json:"battleState"`
+}
+
+// battleStateRequest は契約の CalcBattleState の受け口。値域は契約の minimum / maximum と同じ(最大 HP との照合はマスタが要るのでしない。
+// 最大を超える残り HP は計算するとき calc-svc が invalid_input にする)。
+type battleStateRequest struct {
+	AttackerCurrentHP *int `json:"attackerCurrentHp"`
+	DefenderCurrentHP *int `json:"defenderCurrentHp"`
+	Hits              *int `json:"hits"`
 }
 
 type fieldRequest struct {
@@ -117,6 +127,15 @@ type calcSnapshot struct {
 	MoveID   string             `json:"moveId"`
 	Field    fieldSnapshot      `json:"field"`
 	Options  optionsSnapshot    `json:"options"`
+	// BattleState は対戦の状態(ADR-0144)。無いときはキーごと出さない(既存行のバイト列・ハッシュを変えない)。
+	BattleState *battleStateSnapshot `json:"battleState,omitempty"`
+}
+
+// battleStateSnapshot は battleState の正規化済みの形(指定したキーだけを持つ。フィールドの宣言順が JSON のキー順)。
+type battleStateSnapshot struct {
+	AttackerCurrentHP *int `json:"attackerCurrentHp,omitempty"`
+	DefenderCurrentHP *int `json:"defenderCurrentHp,omitempty"`
+	Hits              *int `json:"hits,omitempty"`
 }
 
 type fieldSnapshot struct {
@@ -289,7 +308,44 @@ func normalizeCalc(in *calcRequest) (calcSnapshot, error) {
 	if in.Options != nil && in.Options.Critical != nil {
 		out.Options.Critical = *in.Options.Critical
 	}
+	if out.BattleState, err = normalizeBattleState(in.BattleState); err != nil {
+		return out, err
+	}
 	return out, nil
+}
+
+// 対戦の状態の上限(契約の CalcBattleState.hits の maximum)。
+const maxBattleStateHits = 10
+
+// normalizeBattleState は battleState を契約(CalcBattleState)と同じ値域で検証する。残り HP は 1 以上(0 は満タンの意味にしない)、
+// 回数は 1..10。何も指定が無い({})は省略と同じ(nil)。
+func normalizeBattleState(in *battleStateRequest) (*battleStateSnapshot, error) {
+	if in == nil {
+		return nil, nil
+	}
+	for _, f := range []struct {
+		name string
+		v    *int
+		max  int
+	}{
+		{"calc.battleState.attackerCurrentHp", in.AttackerCurrentHP, 0},
+		{"calc.battleState.defenderCurrentHp", in.DefenderCurrentHP, 0},
+		{"calc.battleState.hits", in.Hits, maxBattleStateHits},
+	} {
+		if f.v == nil {
+			continue
+		}
+		if *f.v < 1 || (f.max > 0 && *f.v > f.max) {
+			if f.max > 0 {
+				return nil, newError(api.InvalidInput, "%s は 1〜%d でなければならない", f.name, f.max)
+			}
+			return nil, newError(api.InvalidInput, "%s は 1 以上でなければならない", f.name)
+		}
+	}
+	if in.AttackerCurrentHP == nil && in.DefenderCurrentHP == nil && in.Hits == nil {
+		return nil, nil
+	}
+	return &battleStateSnapshot{AttackerCurrentHP: in.AttackerCurrentHP, DefenderCurrentHP: in.DefenderCurrentHP, Hits: in.Hits}, nil
 }
 
 func normalizeScreens(in *screensRequest) screensSnapshot {
@@ -402,8 +458,17 @@ func calcFrom(c calcSnapshot) (*api.CalcRequest, error) {
 			AttackerScreens: screensFrom(c.Field.AttackerScreens),
 			DefenderScreens: screensFrom(c.Field.DefenderScreens),
 		},
-		Options: &api.CalcOptions{Critical: &critical},
+		Options:     &api.CalcOptions{Critical: &critical},
+		BattleState: battleStateFrom(c.BattleState),
 	}, nil
+}
+
+// battleStateFrom は保存済みの battleState を契約の CalcBattleState に写す(無ければ nil = キーを省く)。
+func battleStateFrom(b *battleStateSnapshot) *api.CalcBattleState {
+	if b == nil {
+		return nil
+	}
+	return &api.CalcBattleState{AttackerCurrentHp: b.AttackerCurrentHP, DefenderCurrentHp: b.DefenderCurrentHP, Hits: b.Hits}
 }
 
 func screensFrom(s screensSnapshot) *api.Screens {

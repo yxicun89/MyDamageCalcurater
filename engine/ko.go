@@ -16,7 +16,11 @@ type KOChance struct {
 // computeKO は結果から確定数を求める。多段技は1回の使用 = 回数ぶんの独立な16段階として数える(ADR-0142 §3)。
 // 単発の技(HitRolls が無い)は ComputeKO と同じ。
 func (r DamageResult) computeKO() KOChance {
-	return computeKOHits(r.Rolls, r.HitRolls, r.DefenderHP)
+	hp := r.DefenderHP
+	if r.defenderCurHP > 0 {
+		hp = r.defenderCurHP
+	}
+	return computeKOHits(r.Rolls, r.HitRolls, hp)
 }
 
 // ComputeKO は16段階ロールと HP から確定数/乱数n発を求める(単発用)。

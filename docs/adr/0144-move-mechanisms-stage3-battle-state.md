@@ -1,6 +1,6 @@
 # ADR-0144: 技の機構の段階3 — 残り HP・多段の回数を「対戦の状態」の入力にし、なげつける・分類の切り替え・持ち物による接地を計算に入れる
 
-- 状態: 提案(受け入れ条件と失敗するテストを置いた段階。実装・実データの dry-run の結果は §結果 に追記する)
+- 状態: 採用(実装済み。実データの dry-run の結果は §結果)
 - 日付: 2026-10-10
 - レーン: データ(取り込み・DB・共通マスタ・効果定義)+ engine(計算)+ API 契約(省略可のキーの追加)
 - 関連: ADR-0142(段階1)、ADR-0143(段階2。MoveRule の語彙・effects.json の moveRules)、ADR-0123(未対応の印)、ADR-0116(接地)、
@@ -166,9 +166,11 @@ ItemEffect.Grounds bool    // 持ち物で接地する(isGrounded でタイプ�
 WASM(Web 内部): `calc` の `battleState`(同じ3つのキー。未知のキーは `unknown_field`)、持ち物の `flingPower`、持ち物の効果の `grounds`、
 技の `rule` の `fixedDamageFormula`・`categoryByStats`(PascalCase も受ける)。語彙外は `invalid_enum`、値域は `invalid_input`。
 
-**お気に入り・計算履歴**: `CalcRequest` を共有する(ADR-0228・ADR-0230)が、record-svc は手書きの受け口で `battleState` を `unknown_field` で拒否し、
-計算イベント(`calcevents.CalcDetail`)も運ばない。段階3では保存しない(record-svc とイベントの形の変更は record レーンへの依頼。
-`docs/ai-shared/decisions/2026-10-10-data-move-mechanisms-stage3.md`)。それまで Web・iOS はお気に入りに保存するとき `battleState` を外す。
+**お気に入り・計算履歴**: `CalcRequest` を共有する(ADR-0228・ADR-0230)ので、record-svc の手書きの受け口も `battleState` を受けて保存・返却する
+(ユーザー指示 2026-10-10 で当初の「record レーンへの依頼」をこの実装に入れた)。省略・null・`{}` は省略のまま(`calc` のバイト列・重複判定が変わらない)、
+指定したキーだけを保存し、値域は `CalcBattleState` と同じ(残り HP は 1 以上・回数は 1..10。最大 HP との照合はマスタが要るのでしない。範囲外は 400 `invalid_input`・
+未知のキーは 400 `unknown_field`)。計算履歴は calc-svc の計算イベント `calcevents.CalcDetail` に `battleState`(omitempty)を足し、record-svc が同じ正規化で返す。
+DB のスキーマ変更は無い(お気に入りの snapshot・イベントの payload は JSON)。**デプロイ順**: record-svc(受け手)を先、その後 calc-svc。
 
 ### 7. ゴールデン(`testdata/golden/mechanisms-stage3.json`。Champions 世代・SP そのまま。既存のファイルは変えない)
 
@@ -248,5 +250,13 @@ oracle の結果が違う、(c) 状態の値域、を確かめて崩れたら止
 - 注意: いかりのまえば型・がむしゃら型は oracle が計算しないので、ゴールデンではなく単体テスト(Showdown の規則)で守る。
 - 注意: 分類の切り替えは oracle(実数値の比・同値は特殊)に合わせ、実機(ダメージの途中の値・同値は乱数)とは境界で違いうる。
 - 注意: なげつける型は oracle に合わせ、攻撃側の持ち物の他の効果を計算中も残す。実機で投げた持ち物の効果が残るかは未確認(段階4の確認事項)。
-- 注意: お気に入り・計算履歴は `battleState` を保存しない(record レーンの対応まで)。履歴から開いた計算は満タン・既定の回数になる。
-- 実データの dry-run の結果: (実装後に追記)
+- 注意: お気に入り・計算履歴は `battleState` を保存・返却する(上の §6)。最大 HP を超える残り HP は保存時には弾かず、計算するとき calc-svc が 400 にする。
+- 実データの dry-run の結果(2026-10-10。Showdown champions mod f10d6798・@smogon/calc 0.12.0): `go run ./pokedex/cmd/import -data ../data -typechart ../testdata/golden/typechart.json -dry-run` は
+  exit 0・blockers: none・`moveRules: 46`(段階2の 36 + 段階3の 10〈ふんか・しおふき型 2・きしかいせい・じたばた型 2・ハードプレス型 1・いのちがけ・いかりのまえば・がむしゃら型 3・なげつける 1・分類の切り替え 1〉)。
+  攻撃技 335 のうち、攻撃側・防御側とも持ち物を持つ単純な対戦(単体・フィールドなし)で技の印が残るのは **21 技**(測定の 31 から 10 減。assurance・aurawheel・avalanche・beatup・comeuppance・counter・ficklebeam・gravapple・lashout・lastrespects・metalburst・mirrorcoat・payback・ragefist・ragingbull・round・spitup・stompingtantrum・struggle・temperflare・watershuriken。
+  理由別の印の数: variable_power 14・zero_power 6・fixed_damage 4・move_specific 3・type_change 2〈1 技が複数の印を持つ〉)。
+- なげつけるの威力の食い違い(Showdown の `fling.basePower` と oracle の `getFlingPower`): 使用可能な持ち物 166 件のうち 87 件。メガストーン 81 件は Showdown 80・oracle 0(engine はメガストーンを投げられないものとして印を残す)、
+  それ以外 6 件(Big Root 10・Binding Band 30・Bright Powder 10・Fairy Feather 10・Metronome 30・Shell Bell 30)は oracle の表に無く 0。engine は取り込んだ Showdown の値で計算するので、この 6 件は oracle と違う(ゴールデンは一致する持ち物だけを使う)。
+- ゴールデン mechanisms-stage3.json は 380 件・全件一致。既存のファイルは expected が全件そのまま一致する。ただし `mechanisms-stage2.json` はくろいてっきゅうの効果定義(effects.json)が `Grounds` を持つようになったため、
+  それを持つ攻撃側のベクタの入力の `Item.Effect` に `"Grounds": true` が 12 行増えた(ダメージ・期待値は不変。ベクタの入力は効果定義と同じ内容を載せる規則のため)。
+

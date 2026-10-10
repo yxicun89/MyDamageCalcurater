@@ -102,6 +102,8 @@ type DamageInput struct {
 	// TypeChart はタイプ相性表(マスタ由来の入力。ADR-0013)。Field と同じ「入力」の扱い。
 	// ゼロ値は未設定で、CalcDamage は ErrTypeChartMissing を返す(既定の表にフォールバックしない)。
 	TypeChart TypeChart
+	// State は対戦の状態(残り HP・多段の回数。ADR-0144)。ゼロ値は満タン・段階1の既定の回数で、従来と同じ結果。
+	State BattleState `json:"battleState"` // JSON のキーは WASM の入力(wasmapi)と同じ
 }
 
 // NullifyKind はタイプ相性以外の理由でダメージが 0 になった理由(特性は ADR-0106、サイコフィールドは ADR-0123)。
@@ -126,12 +128,14 @@ type DamageResult struct {
 	Effectiveness float64 // タイプ相性(0, 0.25, 0.5, 1, 2, 4)
 	STAB          bool    // タイプ一致
 	Category      MoveCategory
-	DefenderHP    int
+	DefenderHP    int         // 防御側の最大 HP(表示%の分母)
 	KO            KOChance    // 確定数/乱数n発
 	Nullified     NullifyKind // 特性による無効・吸収(ADR-0106)・サイコフィールド(ADR-0123)でダメージが0のとき
 	// Unsupported は engine が正しく計算できない技の機構・持ち物・特性の印(ADR-0123)。nil は印なし。
 	// 印があっても Rolls 等は通常の式の値(正しくない可能性がある)。
 	Unsupported []UnsupportedMark
+	// defenderCurHP は確定数を数える防御側の残り HP(0 は DefenderHP = 満タン。ADR-0144)。満タンの指定は 0 に正規化する。
+	defenderCurHP int
 }
 
 // abilityNullification は防御側の特性がその技を無効・吸収するかを返す。
@@ -372,6 +376,9 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 	if err := in.Move.ValidateRule(in.TypeChart); err != nil {
 		return DamageResult{}, false, err
 	}
+	if err := validateBattleState(in); err != nil {
+		return DamageResult{}, false, err
+	}
 
 	// 特性の段階1(ADR-0176): 防御側の特性の無視・技のタイプの変換・急所の無効を、計算の最初に1回だけ決める。
 	// 以降は in.Move.Type が変換後のタイプ、in.Defender.Ability.Effect が無視した後の効果になる。
@@ -382,11 +389,15 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 
 	// 技の処理の定義(ADR-0143 §2 の 1): 優先度・タイプ・全体技を決める。
 	in = applyRulePreconditions(in)
+	in = applyCategoryByStats(in)
 
 	res = DamageResult{
 		Category:    in.Move.Category,
 		DefenderHP:  RealStats(in.Defender).HP,
 		Unsupported: unsupportedMarks(in),
+	}
+	if cur := in.State.DefenderCurrentHP; cur != 0 && cur < res.DefenderHP {
+		res.defenderCurHP = cur
 	}
 
 	moveType := in.Move.Type
@@ -426,6 +437,10 @@ func calcDamageNoKO(in DamageInput) (res DamageResult, hasKO bool, err error) {
 			if fd.Level {
 				v = in.Attacker.EffectiveLevel()
 			}
+			res.Rolls = filledRolls(v)
+			return res, true, nil
+		}
+		if v, ok := ruleFixedDamage(in); ok {
 			res.Rolls = filledRolls(v)
 			return res, true, nil
 		}

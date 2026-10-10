@@ -34,6 +34,22 @@ type calcRequest struct {
 	Critical bool          `json:"critical"`
 	// TypeChart は必須。省略は type_chart_missing(ADR-0011 §13)。
 	TypeChart typeChartDTO `json:"typeChart"`
+	// BattleState は対戦の状態(残り HP・多段の回数。ADR-0144)。省略・null は従来と同じ。
+	BattleState *battleStateDTO `json:"battleState"`
+}
+
+// battleStateDTO は engine.BattleState の境界の形。0 は「満タン・既定」(engine と同じ)で、値域の検証は engine が行う。
+type battleStateDTO struct {
+	AttackerCurrentHP int `json:"attackerCurrentHp"`
+	DefenderCurrentHP int `json:"defenderCurrentHp"`
+	Hits              int `json:"hits"`
+}
+
+func (d *battleStateDTO) toEngine() engine.BattleState {
+	if d == nil {
+		return engine.BattleState{}
+	}
+	return engine.BattleState{AttackerCurrentHP: d.AttackerCurrentHP, DefenderCurrentHP: d.DefenderCurrentHP, Hits: d.Hits}
 }
 
 func (r *calcRequest) run() (calcResultDTO, error) {
@@ -76,7 +92,7 @@ func (r *calcRequest) run() (calcResultDTO, error) {
 
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field, Critical: r.Critical,
-		TypeChart: chart,
+		TypeChart: chart, State: r.BattleState.toEngine(),
 	})
 	if err != nil {
 		return calcResultDTO{}, err

@@ -1592,9 +1592,9 @@ components:
           allOf: [ { $ref: '#/components/schemas/CalcBattleState' } ]
           description: |
             対戦の状態(残り HP・多段の回数。ADR-0144)。省略・null・空のオブジェクトは従来と同じ結果(両側とも満タン・
-            多段は段階1の既定の回数)。`POST /api/calc` だけが計算に使う。お気に入り(`FavoriteInput.calc`)・計算履歴
-            (`CalcHistoryEntry.calc`)は、record-svc が対応するまでこの項目を保存しない(お気に入りに含めると 400 `unknown_field`。
-            計算履歴の行にも残らない。docs/ai-shared/decisions/2026-10-10-data-move-mechanisms-stage3.md の record レーンへの依頼)。
+            多段は段階1の既定の回数)。`POST /api/calc` だけが計算に使う。お気に入り(`FavoriteInput.calc`)は
+            この項目を保存して返し(指定したキーだけ。値域は `CalcBattleState` と同じで、最大 HP との照合はしない)、計算履歴
+            (`CalcHistoryEntry.calc`)も calc-svc が発行したイベントの値を返す。
 
     CalcBattleState:
       type: object

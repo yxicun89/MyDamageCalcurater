@@ -156,7 +156,7 @@ func moveMarks(in DamageInput) []UnsupportedMark {
 	slices.Sort(reasons)
 	reasons = slices.Compact(reasons)
 	// 威力 0 は、固定ダメージ・一撃必殺の中身か、計算できる威力の式があれば正しい(ダメージを技の処理で決める。ADR-0142 §10・ADR-0143 §3)。
-	if in.Move.Power <= 0 && in.Move.Params.FixedDamage == nil && in.Move.Params.OHKO == nil && !ruleHasComputableFormula(in) {
+	if in.Move.Power <= 0 && in.Move.Params.FixedDamage == nil && in.Move.Params.OHKO == nil && !ruleHasFixedFormula(in) && !ruleHasComputableFormula(in) {
 		reasons = append(reasons, UnsupportedZeroPower)
 	}
 	if in.Format == FormatDouble && in.Move.Target == "" {
@@ -191,7 +191,7 @@ func mechanismHandled(in DamageInput, m MoveMechanism) bool {
 	case MechanismMultiHit:
 		return p.MultiHit != nil
 	case MechanismFixedDamage:
-		return p.FixedDamage != nil
+		return p.FixedDamage != nil || (r != nil && r.FixedDamageFormula != "")
 	case MechanismOHKO:
 		return p.OHKO != nil
 	case MechanismAltOffenseStat:

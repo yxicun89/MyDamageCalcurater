@@ -138,6 +138,8 @@ function mapItem(item: Schemas["Item"]): MasterItem {
     // ADR-0326: 応答が返さないキーは作らない(省略は「分からない」で、役割では絞らない)。
     ...(item.roles === undefined ? {} : { roles: item.roles }),
     ...(item.isMegaStone === undefined ? {} : { isMegaStone: item.isMegaStone }),
+    // ADR-0144: なげつけるの威力は応答のまま写す(省略は「不明・投げられない」で、WASM はキーなしを不明として印を残す)。
+    ...(item.flingPower === undefined ? {} : { flingPower: item.flingPower }),
   };
 }
 

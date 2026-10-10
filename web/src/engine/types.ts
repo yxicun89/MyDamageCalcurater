@@ -119,6 +119,8 @@ export interface ItemEffect {
   readonly boostType?: string;
   readonly boostTypeMod?: number;
   readonly resistBerryType?: string;
+  /** 持ち物で接地する(くろいてっきゅう型。ADR-0144)。 */
+  readonly grounds?: boolean;
 }
 
 /** 持ち物。effect が null は補正なし。 */
@@ -131,6 +133,11 @@ export interface Item {
    * (domain/itemRoles.ts の toEngineItem)。省略は偽。
    */
   readonly isMegaStone?: boolean;
+  /**
+   * なげつけるの威力(ADR-0144。公開 API の Item.flingPower のまま WASM に渡す)。省略は不明・投げられない
+   * (なげつける型の技に未対応の印が付く)。
+   */
+  readonly flingPower?: number;
 }
 
 /**

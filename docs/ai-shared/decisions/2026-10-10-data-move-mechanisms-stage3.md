@@ -24,21 +24,26 @@ Impact:
 - 種族・SP・性格・持ち物の変更で最大 HP が下がり、残り HP が最大を超えたら、残り HP を最大に合わせて「最大HP({n})に合わせました」と出す(黙って送らない)。
 - 技を変えたら回数は「既定」に戻す。多段でない技・回数が固定の技では欄を出さず、送らない(送ると 400 / invalid_input)。
 - 状態を入れて計算した結果には「対戦の状態: 攻撃側 HP {a}/{A}・防御側 HP {d}/{D}・{n} 回」を結果の近くに出す(何を前提にした数値か分かるように)。
-- お気に入りに保存するとき `battleState` は**外す**(record-svc が対応するまで `unknown_field` になる)。保存した計算・履歴から開いた計算は満タン・既定の回数。
-- テスト: 欄の表示条件(範囲の多段だけ)・既定は送らない・範囲外は送らない・最大の変更で丸める・お気に入りの保存で外す。
+- お気に入りに保存するとき `battleState` は**含めてよい**(record-svc が保存して返す。下の「record レーンへの依頼」の節)。保存した計算・履歴から開いた計算は、返された残り HP・回数を欄に復元する。
+- テスト: 欄の表示条件(範囲の多段だけ)・既定は送らない・範囲外は送らない・最大の変更で丸める・お気に入りの保存・履歴から開いたときの復元。
 
 ### iOS レーンへの依頼
 
 - `swift-openapi-generator` の再生成(省略可のキーなので既存のコードは壊れない)。計算は HTTP なので計算の写しは不要。
-- 画面は Web と同じ最終形(上の表・文言・検証)。`CalcRequest.battleState` に入れて送る。お気に入りの保存では外す。
+- 画面は Web と同じ最終形(上の表・文言・検証)。`CalcRequest.battleState` に入れて送る。お気に入りの保存にも含めてよい(record-svc が保存して返す)。
 
 ### API レーンへの連絡
 
 - `CalcRequest.battleState` と `CalcBattleState` を足した(api/openapi.yaml)。calc-svc の検証(1 未満も `invalid_input`)と engine への写しはデータレーンの PR で入れる。
 - 計算イベント(`calcevents.CalcDetail`)には載せない(record-svc の受け口の変更と同時に足すため。下の依頼)。
 
-### record レーンへの依頼
+### record レーンへの依頼(データレーンが実装済み)
 
-- お気に入り(`FavoriteInput.calc`)と計算履歴(`CalcHistoryEntry.calc`)で `battleState` を受けて保存し、返す(ADR-0228 の正規化: 省略は省略のまま)。
-  あわせて calc-svc の計算イベント `CalcDetail` に `battleState`(omitempty)を足す。イベントの形の変更なので、record-svc(受け手)を先に入れ替えてから calc-svc。
-- それまでは: お気に入りに `battleState` を含めると 400 `unknown_field`(契約の説明に明記した)。計算履歴の行には残らない。
+- 2026-10-10 追記: ユーザー指示でデータレーンの同じ PR に入れた。record-svc はお気に入り(`FavoriteInput.calc`)で `battleState` を受けて保存し、返す
+  (ADR-0228 の正規化: 省略・null・`{}` は省略のまま。指定したキーだけを保存。値域は `CalcBattleState` と同じ〈残り HP は 1 以上・回数は 1..10〉で、
+  最大 HP との照合はしない〈マスタが要るため〉。範囲外は 400 `invalid_input`、未知のキーは 400 `unknown_field`)。
+  計算履歴は calc-svc の計算イベント `CalcDetail` に `battleState`(omitempty)を足し、record-svc が同じ正規化で返す。
+- **デプロイ順**: イベントの形の変更なので、record-svc(受け手)を先に入れ替えてから calc-svc。古い record-svc は未知のキー `battleState` を含む
+  イベントを読めない恐れがある。DB のスキーマは変えない(お気に入りの snapshot・イベントの payload は JSON)。
+- Web・iOS は、お気に入りの保存で `battleState` を外さなくてよい(上の「お気に入りに保存するとき外す」は不要になった)。保存した計算・履歴から開いた計算は、
+  保存した残り HP・回数を復元する。

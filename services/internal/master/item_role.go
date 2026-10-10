@@ -28,9 +28,10 @@ func ItemRoles(effect *engine.ItemEffect, isMegaStone bool) []ItemRole {
 	active := func(mod int) bool { return mod != 0 && mod != engine.Modifier4096 }
 	attacker := active(effect.DamageMod) || active(effect.PowerMod) ||
 		(effect.BoostType != "" && active(effect.BoostTypeMod)) || effect.UnsupportedAttacker ||
-		active(effect.StatMods[engine.StatAtk]) || active(effect.StatMods[engine.StatSpA])
+		active(effect.StatMods[engine.StatAtk]) || active(effect.StatMods[engine.StatSpA]) ||
+		effect.Grounds // 接地は両側のフィールドの判定を変える(ADR-0144)
 	defender := active(effect.StatMods[engine.StatDef]) || active(effect.StatMods[engine.StatSpD]) ||
-		effect.ResistBerryType != "" || effect.UnsupportedDefender
+		effect.ResistBerryType != "" || effect.UnsupportedDefender || effect.Grounds
 	if attacker {
 		roles = append(roles, ItemRoleAttacker)
 	}

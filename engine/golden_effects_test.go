@@ -25,7 +25,16 @@ import (
 )
 
 // goldenTypedEffectFields は、生成器が効く/対照の組を作る効果のフィールド。
-var goldenTypedEffectFields = []string{"BoostType", "ResistBerryType", "OffBoostType", "DefResistType", "ReduceSuperEffective", "WeightMod"}
+var goldenTypedEffectFields = []string{"BoostType", "ResistBerryType", "OffBoostType", "DefResistType", "ReduceSuperEffective", "WeightMod", "Grounds"}
+
+// goldenEffectPairPrefix は効く/対照の組のベクタの id の接頭辞。持ち物による接地(Grounds。ADR-0144)は
+// mechanisms-stage3.json の grounded-item/<id>/…/apply と …/control、それ以外は effects/<id>/…。
+func goldenEffectPairPrefix(name string, def map[string]json.RawMessage) string {
+	if _, ok := def["Grounds"]; ok {
+		return "grounded-item/" + goldenEffectSlug(name) + "/"
+	}
+	return "effects/" + goldenEffectSlug(name) + "/"
+}
 
 type goldenEffectsFile struct {
 	Items     map[string]map[string]json.RawMessage `json:"items"`
@@ -134,6 +143,17 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 		}
 		ids = append(ids, c.ID)
 	}
+	// 技の機構の段階3(持ち物による接地。ADR-0144)は mechanisms-stage3.json で照合する。
+	for _, c := range readGoldenMechanismStage3Cases(t) {
+		items, abilities := caseEffects(goldenCase{Input: c.Input})
+		for _, n := range append(items, abilities...) {
+			usedStage2[n]++
+			if !speedNames[n] {
+				used[n]++
+			}
+		}
+		ids = append(ids, c.ID)
+	}
 	hasID := func(prefix, suffix string) bool {
 		for _, id := range ids {
 			if strings.HasPrefix(id, prefix) && strings.HasSuffix(id, suffix) {
@@ -159,18 +179,18 @@ func TestGoldenCoversEveryChampionsEffect(t *testing.T) {
 			}
 			checked++
 			if used[name]+usedStage2[name] == 0 {
-				t.Errorf("%s: fixed.json・mechanisms.json・mechanisms-stage2.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
+				t.Errorf("%s: fixed.json・mechanisms.json・mechanisms-stage2.json・mechanisms-stage3.json に1件も無い(tools/golden/generate.mjs で照合されていない)", name)
 				continue
 			}
 			if !hasTypedEffect(group[name]) {
 				continue
 			}
-			prefix := "effects/" + goldenEffectSlug(name) + "/"
+			prefix := goldenEffectPairPrefix(name, group[name])
 			if !hasID(prefix, "/apply") {
-				t.Errorf("%s: 効くケース(%s…/apply)が fixed.json に無い", name, prefix)
+				t.Errorf("%s: 効くケース(%s…/apply)が fixed.json・mechanisms-stage3.json に無い", name, prefix)
 			}
 			if !hasID(prefix, "/control") {
-				t.Errorf("%s: 効かない対照(%s…/control)が fixed.json に無い", name, prefix)
+				t.Errorf("%s: 効かない対照(%s…/control)が fixed.json・mechanisms-stage3.json に無い", name, prefix)
 			}
 		}
 	}
