@@ -30,6 +30,7 @@ import {
   type FakeSpeciesSearch,
 } from "../test/onlineMaster";
 import { ReverseScreen } from "./ReverseScreen";
+import { listedOptions, moveTrigger } from "../test/movePicker";
 
 let example: MasterData;
 
@@ -51,7 +52,6 @@ function speciesAt(index: number): MasterSpecies {
 
 const myCard = () => screen.getByRole("region", { name: "自分のポケモン" });
 const theirCard = () => screen.getByRole("region", { name: "相手のポケモン" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const observationInput = () => screen.getByRole("textbox", { name: "ダメージ1" });
 
 interface RenderResult {
@@ -96,8 +96,8 @@ async function chooseBySearch(
 describe("技が使えないマスタ(capabilities.moves === false)", () => {
   test("技のセレクトは残るが disabled で、選択肢が1件も無い・案内を出す", () => {
     renderScreen(limitedMaster(example, NO_MOVES));
-    expect(moveSelect()).toBeDisabled();
-    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(moveTrigger()).toBeDisabled();
+    expect(listedOptions()).toHaveLength(0);
     expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
   });
 
@@ -169,7 +169,7 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false)"
     await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
     await chooseBySearch(rendered, theirCard(), "相手のポケモン", theirs);
     // 「与えたダメージ」(既定)は自分が攻撃側なので、技は自分の learnset から出る。
-    expect(within(moveSelect()).getAllByRole("option").length).toBeGreaterThan(0);
+    expect(listedOptions().length).toBeGreaterThan(0);
 
     await rendered.user.type(observationInput(), "50");
     // P4-18(issue 113): ダメージの数値入力は 200ms 待ってから計算する。
@@ -197,7 +197,7 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false)"
 describe("capabilities を省いたマスタ(オフライン相当)は今までどおり", () => {
   test("技のセレクトは使え、案内も検索欄も出さない", () => {
     renderScreen(example);
-    expect(moveSelect()).not.toBeDisabled();
+    expect(moveTrigger()).not.toBeDisabled();
     expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
     expect(screen.queryByText(masterOnlineText.itemCandidatesUnavailable)).toBeNull();
     expect(screen.queryByText(masterOnlineText.speciesSearchEmpty)).toBeNull();
@@ -234,8 +234,8 @@ function moveFixture(index: number): Move {
 describe("オンラインのマスタ(種族も技も一覧が無い)で技が戻る(P4-17)", () => {
   test("攻撃側の種族を選ぶ前は、技のセレクトは残るが disabled で案内を出す", () => {
     renderScreen(onlineMaster(), onlineSearch());
-    expect(moveSelect()).toBeDisabled();
-    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(moveTrigger()).toBeDisabled();
+    expect(listedOptions()).toHaveLength(0);
     expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
   });
 
@@ -244,16 +244,16 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     const mine = speciesAt(0);
 
     await chooseBySearch(rendered, theirCard(), "相手のポケモン", speciesAt(1));
-    expect(moveSelect()).toBeDisabled();
+    expect(moveTrigger()).toBeDisabled();
 
     await chooseBySearch(rendered, myCard(), "自分のポケモン", mine);
 
     const expected = damagingLearnsetMoves(mine, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     await waitFor(() => {
-      expect(moveSelect()).not.toBeDisabled();
+      expect(moveTrigger()).not.toBeDisabled();
     });
-    expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    expect(listedOptions()).toHaveLength(expected.length);
     expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
   });
 
@@ -271,9 +271,9 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     // 自分と相手の learnset の件数が同じだと「切り替わっていない」実装でも緑になるので、件数で区別できることを先に確かめる。
     expect(expected.length).not.toBe(damagingLearnsetMoves(mine, example.moves).length);
     await waitFor(() => {
-      expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+      expect(listedOptions()).toHaveLength(expected.length);
     });
-    expect(moveSelect()).not.toBeDisabled();
+    expect(moveTrigger()).not.toBeDisabled();
 
     // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい技の出どころ(相手)の
     // learnset から選ばれ、実際にその技でリクエストが送られることも確かめる。候補一覧は useMemo で
@@ -333,7 +333,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
       await chooseBySearch(rendered, myCard(), "自分のポケモン", species);
 
       await waitFor(() => {
-        expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(learnsetSize);
+        expect(listedOptions()).toHaveLength(learnsetSize);
       });
     },
   );

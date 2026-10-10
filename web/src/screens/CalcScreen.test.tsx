@@ -13,6 +13,7 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import { defaultAbility, defensiveItemCandidates, toEngineSpecies } from "../domain/requests";
 import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
+import { orderMoves } from "../domain/moveOrder";
 import type { BulkRequest, Item, Move, UnsupportedMark } from "../engine/types";
 import { calcScreenText, typeNameJa, unsupportedText, type TypeId } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
@@ -26,6 +27,7 @@ import {
   type FakeEngine,
 } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
+import { chooseMove, listedOption, listedOptions, selectedMoveId } from "../test/movePicker";
 
 let master: MasterData;
 
@@ -61,7 +63,6 @@ const attackerSpeciesSelect = () => screen.getByRole("combobox", { name: "攻撃
 const defenderSpeciesSelect = () => screen.getByRole("combobox", { name: "防御側のポケモン" });
 const attackerItemSelect = () => screen.getByRole("combobox", { name: "攻撃側の持ち物" });
 const defenderItemSelect = () => screen.getByRole("combobox", { name: "防御側の持ち物" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const attackerCard = () => screen.getByRole("region", { name: "攻撃側" });
 const defenderCard = () => screen.getByRole("region", { name: "防御側" });
 
@@ -178,20 +179,23 @@ describe("技セレクタ", () => {
     const attacker = speciesAt(0);
     await user.selectOptions(attackerSpeciesSelect(), attacker.key);
 
-    const options = within(moveSelect()).getAllByRole("option");
-    const moves = damagingLearnsetMoves(attacker, master.moves);
-    const moveOptions = options.filter((option) => option.getAttribute("value") !== "");
-    expect(moveOptions.map((option) => option.getAttribute("value"))).toEqual(moves.map((move) => move.id));
-    const categoryLabel = { physical: "物理", special: "特殊", status: "変化" } as const;
+    const options = listedOptions();
+    // 並びはタイプ順だけ(G-01、ADR-0341)。
+    const moves = orderMoves(damagingLearnsetMoves(attacker, master.moves), master.typeChart.types);
+    const moveOptions = options;
+    expect(moveOptions.map((option) => option.getAttribute("data-move-id"))).toEqual(
+      moves.map((move) => move.id),
+    );
+    const categoryLabel = { physical: "ぶつり", special: "とくしゅ", status: "へんか" } as const;
     moves.forEach((move, index) => {
-      const text = moveOptions[index]?.textContent ?? "";
+      const text = moveOptions[index]?.getAttribute("aria-label") ?? "";
       expect(text).toContain(move.nameJa);
       expect(text).toContain(categoryLabel[move.category]);
       if (move.category !== "status") {
         expect(text).toContain(String(move.power));
       }
     });
-    expect(moveSelect()).toHaveValue(firstMoveOf(attacker).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(attacker).id);
   });
 });
 
@@ -272,7 +276,7 @@ describe("計算の呼び出し", () => {
     if (secondMove === undefined) {
       throw new Error("2つ目のダメージ技が無い");
     }
-    await user.selectOptions(moveSelect(), secondMove.id);
+    await chooseMove(user, secondMove.id);
     await waitFor(() => {
       expect(lastRequest(engine).move).toEqual(secondMove);
     });
@@ -299,7 +303,7 @@ describe("計算の呼び出し", () => {
     }
     await choosePair(user, first, speciesAt(1));
     await user.selectOptions(attackerSpeciesSelect(), other.key);
-    expect(moveSelect()).toHaveValue(firstMoveOf(other).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(other).id);
     await waitFor(() => {
       expect(lastRequest(engine).move).toEqual(firstMoveOf(other));
     });
@@ -324,7 +328,7 @@ describe("計算の呼び出し", () => {
     });
     await resultItems();
 
-    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(listedOption(new RegExp(statusMove.nameJa))).toBeNull();
     expect(screen.queryByText(calcScreenText.statusMoveNotice)).toBeNull();
     expect(screen.getByRole("list", { name: "計算結果" })).toBeInTheDocument();
   });
@@ -447,7 +451,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     await waitFor(() => {
       expect(pending).toHaveLength(1);
     });
-    await user.selectOptions(moveSelect(), secondMove.id);
+    await chooseMove(user, secondMove.id);
     await waitFor(() => {
       expect(pending).toHaveLength(2);
     });
@@ -488,7 +492,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     });
     expect(pending[0]?.signal?.aborted).toBe(false);
 
-    await user.selectOptions(moveSelect(), secondMove.id);
+    await chooseMove(user, secondMove.id);
     await waitFor(() => {
       expect(pending).toHaveLength(2);
     });
@@ -524,7 +528,7 @@ describe("結果の表示(engine の値を加工せずに出す)", () => {
     });
     expect(await screen.findByText("最初の結果")).toBeInTheDocument();
 
-    await user.selectOptions(moveSelect(), secondMove.id);
+    await chooseMove(user, secondMove.id);
     await waitFor(() => {
       expect(pending).toHaveLength(2);
     });
@@ -629,7 +633,7 @@ describe("攻守入れ替え", () => {
     expect(defenderSpeciesSelect()).toHaveValue(attacker.key);
     expect(attackerItemSelect()).toHaveValue(defenderItem.id);
     expect(defenderItemSelect()).toHaveValue(attackerItem.id);
-    expect(moveSelect()).toHaveValue(firstMoveOf(defender).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(defender).id);
     await waitFor(() => {
       expect(engine.bulkRequests.length).toBeGreaterThan(callsBeforeSwap);
     });
@@ -763,13 +767,13 @@ describe("攻撃側のプリセット(P4-3)", () => {
       throw new Error("例データの種族が足りない");
     }
     await choosePair(user, species, defender);
-    await user.selectOptions(moveSelect(), physical.id);
+    await chooseMove(user, physical.id);
     await user.click(presetRadio("A特化"));
     await waitFor(() => {
       expect(lastRequest(engine)).toMatchObject({ move: physical, attacker: { nature: { plus: "atk" } } });
     });
 
-    await user.selectOptions(moveSelect(), special.id);
+    await chooseMove(user, special.id);
 
     expect(presetRadio("A特化", "atk")).toBeChecked();
     expect(presetRadio("無振り", "spa")).toBeChecked();
