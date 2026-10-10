@@ -10,62 +10,44 @@ final class MoveSortTests: XCTestCase {
 
     private func ids(_ moves: [Move]) -> [String] { moves.map(\.id) }
 
-    // MARK: 種類・文言
-
-    func testOrdersAndDefault() {
-        XCTAssertEqual(MoveSortOrder.allCases, [.learnset, .kana, .type])
-        XCTAssertEqual(MoveSortOrder.default, .learnset, "既定は習得順(Web と同じ)")
-        XCTAssertEqual(MoveSortLabels.groupLabel, "技の並び")
-        XCTAssertEqual(MoveSortLabels.label(for: .learnset), "習得順")
-        XCTAssertEqual(MoveSortLabels.label(for: .kana), "五十音順")
-        XCTAssertEqual(MoveSortLabels.label(for: .type), "タイプ順")
-    }
-
-    // MARK: 習得順
-
-    func testLearnsetKeepsInputOrder() {
-        let input = [move("b", "いい"), move("a", "ああ"), move("c", "うう")]
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .learnset)), ["b", "a", "c"])
-    }
-
     // MARK: 五十音順
 
     func testKanaOrdersGojuon() {
         let input = [move("c", "うみ"), move("a", "あさ"), move("b", "いし")]
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .kana)), ["a", "b", "c"])
+        XCTAssertEqual(ids(MoveSort.byType(input)), ["a", "b", "c"])
     }
 
     func testKanaTreatsHiraganaAndKatakanaAsSameLetter() {
         // 「いわ」(ひらがな)と「ウミ」(カタカナ)。カタカナだからといって末尾に回らない。
         let input = [move("c", "ウミ"), move("a", "あさ"), move("b", "いわ"), move("d", "エビ")]
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .kana)), ["a", "b", "c", "d"])
+        XCTAssertEqual(ids(MoveSort.byType(input)), ["a", "b", "c", "d"])
     }
 
     func testKanaVoicedComesAfterUnvoicedWithinSameLetter() {
         // 「かまう」「がまん」は「かみなり」より前(濁点は同じ字の中で後ろ)。「かまう」<「がまん」。
         let input = [move("c", "かみなり"), move("b", "がまん"), move("a", "かまう")]
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .kana)), ["a", "b", "c"])
+        XCTAssertEqual(ids(MoveSort.byType(input)), ["a", "b", "c"])
     }
 
     func testKanaLongVowelIsNotTreatedAsLetterAfterEverything() {
         // 「スーパー」は「スパーク」より前(長音は照合器の扱いに従う)。
         let input = [move("b", "スパーク"), move("a", "スーパー")]
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .kana)), ["a", "b"])
+        XCTAssertEqual(ids(MoveSort.byType(input)), ["a", "b"])
     }
 
     func testKanaTieBreaksByIdAndIsStableRegardlessOfInputOrder() {
         // ひらがな/カタカナだけの違いは同順位。技 ID の昇順で決め、入力の順に依らない。
         let x = move("m2", "あさ")
         let y = move("m1", "アサ")
-        XCTAssertEqual(ids(MoveSort.sorted([x, y], by: .kana)), ["m1", "m2"])
-        XCTAssertEqual(ids(MoveSort.sorted([y, x], by: .kana)), ["m1", "m2"])
+        XCTAssertEqual(ids(MoveSort.byType([x, y])), ["m1", "m2"])
+        XCTAssertEqual(ids(MoveSort.byType([y, x])), ["m1", "m2"])
     }
 
     func testSortDoesNotMutateInputAndKeepsCount() {
         let input = [move("b", "いい"), move("a", "ああ")]
-        _ = MoveSort.sorted(input, by: .kana)
+        _ = MoveSort.byType(input)
         XCTAssertEqual(ids(input), ["b", "a"])
-        XCTAssertEqual(MoveSort.sorted([], by: .kana), [])
+        XCTAssertEqual(MoveSort.byType([]), [])
     }
 
     // MARK: タイプ順
@@ -76,7 +58,7 @@ final class MoveSortTests: XCTestCase {
             move("f1", "ほのお", type: .fire), move("w1", "あわ", type: .water),
         ]
         // PokeType の並び: normal, fire, water ...
-        XCTAssertEqual(ids(MoveSort.sorted(input, by: .type)), ["n1", "f1", "w1", "w2"])
+        XCTAssertEqual(ids(MoveSort.byType(input)), ["n1", "f1", "w1", "w2"])
     }
 
     func testTypeGroupsOnlyContainTypesWithMoves() {
@@ -89,36 +71,6 @@ final class MoveSortTests: XCTestCase {
 
     func testTypeGroupsMatchSortedTypeOrder() {
         let input = (0..<6).map { move("m\($0)", "わざ\(5 - $0)", type: $0 % 2 == 0 ? .grass : .ice) }
-        XCTAssertEqual(MoveSort.typeGroups(input).flatMap(\.moves), MoveSort.sorted(input, by: .type))
-    }
-}
-
-/// 並びの記憶(UserDefaults の1キー。不正値は既定)。
-final class MoveSortStoreTests: XCTestCase {
-    private func makeDefaults() -> UserDefaults {
-        let name = "MoveSortStoreTests-\(UUID().uuidString)"
-        let defaults = UserDefaults(suiteName: name)!
-        addTeardownBlock { defaults.removePersistentDomain(forName: name) }
-        return defaults
-    }
-
-    func testDefaultsToLearnsetWhenNothingSaved() {
-        XCTAssertEqual(MoveSortStore(defaults: makeDefaults()).load(), .learnset)
-    }
-
-    func testSaveThenLoadRoundTrips() {
-        let defaults = makeDefaults()
-        MoveSortStore(defaults: defaults).save(.type)
-        XCTAssertEqual(MoveSortStore(defaults: defaults).load(), .type)
-        XCTAssertEqual(defaults.string(forKey: MoveSortStore.defaultsKey), "type")
-        XCTAssertEqual(MoveSortStore.defaultsKey, "pokecalc.moveSort")
-    }
-
-    func testInvalidStoredValueFallsBackToDefault() {
-        let defaults = makeDefaults()
-        defaults.set("zzz", forKey: MoveSortStore.defaultsKey)
-        XCTAssertEqual(MoveSortStore(defaults: defaults).load(), .learnset)
-        defaults.set(42, forKey: MoveSortStore.defaultsKey)
-        XCTAssertEqual(MoveSortStore(defaults: defaults).load(), .learnset)
+        XCTAssertEqual(MoveSort.typeGroups(input).flatMap(\.moves), MoveSort.byType(input))
     }
 }

@@ -111,16 +111,13 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
     let onSelect: (Move) -> Void
     /// 非 nil なら「外す」行を先頭に出す(構築編集の技スロット専用。すでに選ばれている技を外す)。
     var removeAction: (() -> Void)? = nil
-    /// 非 nil なら並びの切り替え(習得順・五十音順・タイプ順。F-02)を先頭に出す。`options` は呼び出し元が並べて渡す。
-    var sortOrder: Binding<MoveSortOrder>? = nil
+    /// true なら技をタイプ別の群(見出し = タイプ名)で出す(G-01。並びはタイプ順だけ)。`options` は呼び出し元がタイプ順に並べて渡す。
+    var groupsByType = false
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
-                if let sortOrder {
-                    MoveSortChips(order: sortOrder)
-                }
                 if let removeAction {
                     Button(role: .destructive) {
                         removeAction()
@@ -131,7 +128,7 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
                     .accessibilityIdentifier("moveSearchRemoveButton")
                 }
                 hintRow
-                if sortOrder?.wrappedValue == .type {
+                if groupsByType {
                     // タイプ順は見出し(タイプ名)つきの群で出す。
                     ForEach(MoveSort.typeGroups(options), id: \.type) { group in
                         Section(PokeTypeLabel.japaneseName(for: group.type)) {
@@ -176,6 +173,8 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
         }
         .accessibilityIdentifier("moveSearchResult-\(move.id)")
         .accessibilityLabel(move.nameJa)
+        // 読み上げは従来どおり全情報(タイプ・分類・威力)を含める。見た目は名前+アイコンの1行(G-01)。
+        .accessibilityValue(MoveRowLabels.detail(move))
     }
 
     @ViewBuilder
@@ -213,58 +212,55 @@ private enum MasterSearchRow {
         }
     }
 
+    /// 技の1行(G-01): タイプのアイコン + 技名を主に、分類の小さなアイコンと威力を副に、縦に短い1行で出す。
     static func move(_ move: Move) -> some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+        HStack(spacing: SpacingToken.x2) {
+            MoveTypeEmblem(type: move.type)
             Text(move.nameJa)
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
-            Text("威力\(move.power) / \(MoveCategoryLabel.japaneseName(for: move.category))")
+            Spacer(minLength: SpacingToken.x2)
+            Image(systemName: MoveRowLabels.categorySymbol(move.category))
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
+                .accessibilityLabel(MoveCategoryLabel.japaneseName(for: move.category))
+            Text("\(move.power)")
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .accessibilityLabel("威力\(move.power)")
         }
+        .frame(minHeight: CalcScreenMetrics.minimumTapSide)
     }
 }
 
-/// 技の並びの切り替え(F-02。Web の「技の並び」チップ群と同じ語)。`Menu` は使わず、画面幅いっぱいのチップを並べる
-/// (アクセシビリティの文字サイズでは縦に積む)。選択は Core の `MoveSortOrder`。
-struct MoveSortChips: View {
-    @Binding var order: MoveSortOrder
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+/// 技のタイプを示す丸いアイコン(タイプ色の円 + タイプ名の頭文字。画像を使わない)。
+private struct MoveTypeEmblem: View {
+    let type: PokeType
+    private static let side: CGFloat = 28
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Text(MoveSortLabels.groupLabel)
-                .font(TextStyleToken.caption.font)
-                .foregroundStyle(ColorToken.textSecondary.color)
-            let layout = dynamicTypeSize >= .accessibility1
-                ? AnyLayout(VStackLayout(spacing: SpacingToken.x2))
-                : AnyLayout(HStackLayout(spacing: SpacingToken.x2))
-            layout {
-                ForEach(MoveSortOrder.allCases, id: \.self) { option in
-                    chip(option)
-                }
-            }
+        Circle()
+            .fill(TypeColorToken.color(forTypeID: type.rawValue) ?? ColorToken.textSecondary.color)
+            .frame(width: Self.side, height: Self.side)
+            .overlay(
+                Text(PokeTypeLabel.japaneseName(for: type).prefix(1))
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(TypeColorToken.inkColor(forTypeID: type.rawValue) ?? .white)
+            )
+            .accessibilityHidden(true)
+    }
+}
+
+private enum MoveRowLabels {
+    static func categorySymbol(_ category: MoveCategory) -> String {
+        switch category {
+        case .physical: "figure.boxing"
+        case .special: "sparkles"
+        case .status: "circle.dashed"
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("moveSortPicker")
     }
 
-    private func chip(_ option: MoveSortOrder) -> some View {
-        let isSelected = order == option
-        return Button {
-            order = option
-        } label: {
-            Text(MoveSortLabels.label(for: option))
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
-                .padding(.vertical, SpacingToken.x1)
-                .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
-                .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("moveSort-\(option.rawValue)")
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    static func detail(_ move: Move) -> String {
+        "\(PokeTypeLabel.japaneseName(for: move.type))、\(MoveCategoryLabel.japaneseName(for: move.category))、威力\(move.power)"
     }
 }
