@@ -1,12 +1,12 @@
 // ADR-0332 §2・§3(F-08 / I-web-7)× ADR-0308: 構築名の欄を廃止したので、App.tabPersistence.test.tsx の
-// 「構築名の入力は、計算タブへ行って戻っても残り…」の置き換え。取り込みの折りたたみの開閉とテキストが、
-// タブを往復しても残り、構築 API を呼び直さないこと。team-svc は居ない(fetch は失敗)が、取り込みの入力は使える。
+// 「構築名の入力は、計算タブへ行って戻っても残り…」の置き換え。タブを往復しても構築 API を
+// 呼び直さないこと。team-svc は居ない(fetch は失敗)。(取り込みの折りたたみは G-03 で廃止。)
 
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
-import { teamShowdownText } from "./i18n/team";
+import { teamScreenText } from "./i18n/team";
 import { createFakeEngine } from "./test/fakeEngine";
 
 beforeEach(() => {
@@ -29,21 +29,14 @@ function teamCallCount(calls: readonly (readonly [string | URL | Request, ...unk
 }
 
 describe("構築のタブ(F-08)も ADR-0308 の決まりに乗る", () => {
-  test("取り込みの折りたたみの開閉とテキストは、計算タブへ行って戻っても残り、構築 API を呼び直さない", async () => {
+  test("計算タブへ行って戻っても、構築 API を呼び直さない", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
     await user.click(screen.getByRole("tab", { name: "構築" }));
-    const summary = (await screen.findByText(teamShowdownText.importFoldLabel)).closest("summary");
-    if (summary === null) {
-      throw new Error("取り込みの折りたたみの summary が無い");
-    }
-    await user.click(summary);
-    const region = screen.getByRole("region", { name: teamShowdownText.importRegionLabel });
-    await user.click(within(region).getByRole("textbox", { name: teamShowdownText.importTextLabel }));
-    await user.paste("テストほのお @ テストぼうぎょだま");
+    await screen.findByRole("button", { name: teamScreenText.createLabel });
     await waitFor(() => {
       expect(teamCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
     });
@@ -53,13 +46,7 @@ describe("構築のタブ(F-08)も ADR-0308 の決まりに乗る", () => {
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
     await user.click(screen.getByRole("tab", { name: "構築" }));
 
-    const details = (await screen.findByText(teamShowdownText.importFoldLabel)).closest("details");
-    expect(details?.open).toBe(true);
-    expect(
-      within(screen.getByRole("region", { name: teamShowdownText.importRegionLabel })).getByRole("textbox", {
-        name: teamShowdownText.importTextLabel,
-      }),
-    ).toHaveValue("テストほのお @ テストぼうぎょだま");
+    await screen.findByRole("button", { name: teamScreenText.createLabel });
     expect(teamCallCount(fetchMock.mock.calls)).toBe(callsAfterFirstVisit);
   });
 });

@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { CalcHistorySection } from "./CalcHistorySection";
+import { PokemonIcon } from "../images/PokemonIcon";
 import { favoritesScreenText } from "../i18n/favorites";
 import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordError } from "../record/recordClient";
 import "./FavoritesScreen.css";
@@ -152,7 +153,10 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
             return (
               <li key={favorite.id} className="ui-card favorites-screen__item">
                 <div className="favorites-screen__heading">
-                  <span className="favorites-screen__title">{title}</span>
+                  <span className="favorites-screen__who">
+                    <PokemonIcon speciesKey={favorite.individual.speciesKey} />
+                    <span className="favorites-screen__title">{title}</span>
+                  </span>
                   {favorite.calc === undefined && onUse !== undefined && (
                     <span className="ui-badge favorites-screen__hint">
                       {favoritesScreenText.attackerOnlyHint}

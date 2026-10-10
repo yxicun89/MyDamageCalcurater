@@ -226,3 +226,7 @@ Next(計算履歴の一覧 / ADR-0338): 実装済み・コミット前(ADR-0338 
 iOS は `decisions/2026-10-11-web-visual-policy-g05.md` の対応表で追う。Next: 実装・コミット前の方針は PR 化のみ。次は I-web-13a(共通の部品)→ 13b(計算。G-01 と同じ PR)。
 Status(追記 2026-10-11): I-web-14(ADR-0340)= 計算画面の「対戦の状態」(残りHP・多段の回数)を**データレーンが実装**(Web レーンの依頼を代行。critic・PR は後で)。`CalcScreen.tsx`・`BattleStatePanel.tsx`・`domain/battleState*.ts`・`favoriteCalc.ts`。
 Status(追記 2026-10-11): I-web-15(G-01、ADR-0341 採用)= 計算・逆算の技欄を技ピッカー(`MovePicker`)にした(タイプ順だけ・1 行・分類アイコン)。並びの切り替え(MoveSortControls・useMoveSort・moveSortStorage・i18n/moveSort・domain/moveSort とその旧テスト)は削除。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g01-move-picker.md` に揃える。
+
+Status(追記 2026-10-11): I-web-16(G-03、ADR-0342 採用)= Showdown 形式の取り込み・書き出しを廃止(入口と専用コード・文言・テストを削除。「このアプリについて」の出典表記と `showdownId` は別物なので残す)。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g03-remove-showdown.md` に揃える。
+
+Status(追記 2026-10-11): I-web-17(G-06 Web、ADR-0343 採用)= `PokemonIcon` を検索候補・お気に入り・計算履歴・逆算/構築編集/バランスの枠に追加(画像なしでもエンブレムで成立)。判定・調整・select の option は対象外。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g06-pokemon-images.md` に揃える。

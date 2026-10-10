@@ -7,7 +7,7 @@
 //   R-4 保存: update の body に name が無い・種族の決まった枠だけを枠の順に / SP の検査 / 成功・失敗
 //   R-5 未保存の印 / R-6 入れ替え・外す / R-7 一覧に戻る(未保存なら2段階)
 //   R-8 メガの持ち物固定・古いデータの補正(ADR-0320 を維持)
-//   R-9 Showdown 形式は補助(閉じた折りたたみ・説明・入力例・構築名欄なし・取り込みで新しい構築) / 書き出しは編集画面の折りたたみ
+//   R-9 Showdown 形式の入口は無い(G-03 で廃止)
 //   R-10 reloadToken が変わったら編集画面を閉じて一覧を取り直す
 // 架空の ID・名前だけを使う(ADR-0002)。
 
@@ -16,7 +16,6 @@ import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { megaItemText, statLetterJa, teamMemberText, teamScreenText } from "../i18n/ja";
-import { teamShowdownText } from "../i18n/team";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
 import { createFakeTeamClient, flush, lastCall, type FakeTeamClient } from "../test/fakeTeamClient";
@@ -230,25 +229,6 @@ async function saveAndSucceed(user: UserEvent, client: FakeTeamClient, editor: H
   });
 }
 
-function foldOf(label: string): HTMLDetailsElement {
-  const summary = screen.getByText(label).closest("summary");
-  const details = summary?.closest("details");
-  if (summary === null || !(details instanceof HTMLDetailsElement)) {
-    throw new Error(`「${label}」の折りたたみ(details/summary)が無い`);
-  }
-  return details;
-}
-
-async function openFold(user: UserEvent, label: string): Promise<HTMLDetailsElement> {
-  const details = foldOf(label);
-  const summary = details.querySelector("summary");
-  if (summary === null) {
-    throw new Error("summary が無い");
-  }
-  await user.click(summary);
-  return details;
-}
-
 // =====================================================================
 
 describe("R-1 構築名の廃止と新規作成", () => {
@@ -343,7 +323,6 @@ describe("R-2 一覧のカード", () => {
       "ui-button",
       "ui-button--danger",
     );
-    expect(screen.queryByRole("button", { name: teamShowdownText.exportLabel(NAMED.name) })).toBeNull();
   });
 
   test("アイコンの名前: マスタに無い種族は「N体目」", async () => {
@@ -679,93 +658,15 @@ describe("R-8 メガの持ち物固定・古いデータの補正(ADR-0320 を�
   });
 });
 
-describe("R-9 Showdown 形式は補助の入口", () => {
-  const IMPORT_TEXT = [
-    "テストほのお @ テストぼうぎょだま",
-    "Ability: テストむこう",
-    "EVs: 2 HP / 32 Atk / 32 Spe",
-    "テストいじっぱり Nature",
-    "- テストたいあたり",
-  ].join("\n");
-
-  test("一覧の下に閉じた折りたたみ。開くと、やさしい説明と1体分の入力例が見え、構築名の欄は無い", async () => {
+describe("R-9 Showdown 形式の入口は無い(G-03 で廃止。ADR-0342)", () => {
+  test("一覧にも編集画面にも、Showdown の取り込み・書き出しの折りたたみが無い", async () => {
     const { user } = await renderScreen([NAMED]);
-    const details = foldOf(teamShowdownText.importFoldLabel);
-    expect(details.open).toBe(false);
-    // 主な流れ(一覧)より後ろに置く。
-    expect(teamList().compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector("details")).toBeNull();
+    expect(screen.queryByText(/Showdown/)).toBeNull();
 
-    await openFold(user, teamShowdownText.importFoldLabel);
-    expect(details.open).toBe(true);
-    expect(within(details).getByText(teamShowdownText.importHelp)).toBeInTheDocument();
-    expect(within(details).getByText(teamShowdownText.importExampleLabel)).toBeInTheDocument();
-    const example = within(details).getByText(
-      (_content, element) =>
-        element?.tagName === "PRE" && element.textContent === teamShowdownText.importExample,
-    );
-    expect(example).toBeInTheDocument();
-    const region = within(details).getByRole("region", { name: teamShowdownText.importRegionLabel });
-    expect(
-      within(region).getByRole("textbox", { name: teamShowdownText.importTextLabel }),
-    ).toBeInTheDocument();
-    expect(within(region).queryByRole("textbox", { name: /構築名/ })).toBeNull();
-  });
-
-  test("取り込み(確認 → 作成)は name 無しの create。成功すると一覧の先頭に新しい構築が出て、体数を知らせる", async () => {
-    const { client, user } = await renderScreen([NAMED]);
-    const details = await openFold(user, teamShowdownText.importFoldLabel);
-    const region = within(details).getByRole("region", { name: teamShowdownText.importRegionLabel });
-    await user.click(within(region).getByRole("textbox", { name: teamShowdownText.importTextLabel }));
-    await user.paste(IMPORT_TEXT);
-    await user.click(within(region).getByRole("button", { name: teamShowdownText.importPreviewLabel }));
-    expect(await within(region).findByText(teamShowdownText.previewSummary(1))).toBeInTheDocument();
-
-    await user.click(within(region).getByRole("button", { name: teamShowdownText.importCreateLabel }));
-    expect(client.createCalls).toHaveLength(1);
-    const args = lastCall(client.createCalls, "create").args;
-    expect("name" in args).toBe(false);
-    expect(args.members).toHaveLength(1);
-    expect(args.members[0]).toMatchObject({ speciesKey: "9001-000", itemId: "exampleitemdef" });
-
-    await flush(() => {
-      lastCall(client.createCalls, "create").resolve({
-        ok: true,
-        value: team(CREATED_ID, DEFAULT_NAME, args.members, "2026-10-04T09:00:00Z"),
-      });
-    });
-    const items = within(teamList()).getAllByRole("listitem");
-    expect(items).toHaveLength(2);
-    expect(items[0]).toHaveTextContent(teamScreenText.untitledTeamName(1));
-    expect(within(region).getByRole("status")).toHaveTextContent(teamShowdownText.importCreated(1));
-    expect(within(region).getByRole("textbox", { name: teamShowdownText.importTextLabel })).toHaveValue("");
-    // 続けて取り込めるよう、編集画面には移らない。
-    expect(screen.queryByRole("region", { name: /のメンバー編集$/ })).toBeNull();
-  });
-
-  test("編集画面には取り込みは無く、下の閉じた折りたたみから保存済みの内容を書き出せる", async () => {
-    const { user } = await renderScreen([NAMED]);
-    const editor = await openTeam(user, NAMED.name);
-    expect(screen.queryByText(teamShowdownText.importFoldLabel)).toBeNull();
-
-    const details = foldOf(teamShowdownText.exportFoldLabel);
-    expect(details.open).toBe(false);
-    // 6枠の後ろ(編集画面の中か、その後ろ)に置く。
-    const afterSlots = slot(editor, MAX_TEAM_MEMBERS).compareDocumentPosition(details);
-    expect(afterSlots & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    await openFold(user, teamShowdownText.exportFoldLabel);
-    expect(within(details).getByText(teamShowdownText.exportHelp)).toBeInTheDocument();
-
-    await user.click(within(details).getByRole("button", { name: teamShowdownText.exportLabel(NAMED.name) }));
-    const exported = await screen.findByRole("region", {
-      name: teamShowdownText.exportRegionLabel(NAMED.name),
-    });
-    const textarea = within(exported).getByRole("textbox", {
-      name: teamShowdownText.exportTextLabel(NAMED.name),
-    });
-    if (!(textarea instanceof HTMLTextAreaElement)) {
-      throw new Error("書き出しのテキスト欄が textarea ではない");
-    }
-    expect(textarea.value).toContain(speciesName(FIRE.speciesKey));
+    await openTeam(user, NAMED.name);
+    expect(document.querySelector("details")).toBeNull();
+    expect(screen.queryByText(/Showdown/)).toBeNull();
   });
 });
 

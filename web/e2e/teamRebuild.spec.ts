@@ -1,5 +1,5 @@
 // ADR-0332(F-08 / I-web-7): 作り直した構築画面の主な流れ(docs/test-strategy.md「E2E」)。
-// e2e/team.spec.ts・e2e/teamShowdown.spec.ts の置き換え(構築名の欄・[メンバーを追加]・行の[メンバーを編集]・
+// e2e/team.spec.ts の置き換え(構築名の欄・[メンバーを追加]・行の[メンバーを編集]・
 // 取り込みの構築名欄を使わない。古い spec は実装の PR で、この spec が通ってから外す。ADR-0332 §5)。
 // team-svc は起動しない。`/api/team/**` は spec の中の fake(page.route)で受け、name の省略にはサーバーと同じく
 // 既定名「名称未設定」を補う(ADR-0229)。マスタは pokedex フィクスチャ(既定のオンライン。種族は検索欄)。
@@ -8,8 +8,7 @@
 //   - SP の合計 67 は保存できず、66 に戻すと保存できる
 //   - 編集中にタブを往復しても下書きが残る(ADR-0308)
 //   - メガ種族は持ち物がストーンに固定され、保存に載る
-//   - Showdown 形式: 閉じた折りたたみに説明と入力例 → 貼り付け → 確認 → 作成(POST に name が無い)→ 一覧に「構築 1」
-//   - 書き出しは開いた構築の折りたたみから
+//   - Showdown 形式の取り込み・書き出しの入口は無い(G-03 で廃止)
 
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
 import { MEGA, SPECIES, combobox, openApp } from "./support/calcPage.ts";
@@ -216,106 +215,21 @@ test("メガ種族を選ぶと持ち物がメガストーンに固定され、�
   await expect(item.getByRole("option", { name: MEGA.fire.stoneNameJa })).toHaveCount(0);
 });
 
-const IMPORT_TEXT = [
-  `${SPECIES.fire.nameJa} @ テストぼうぎょだま`,
-  "Ability: テストむこう",
-  "EVs: 2 HP / 32 Atk / 32 Spe",
-  "テストいじっぱり Nature",
-  "- テストたいあたり",
-].join("\n");
-
-test("Showdown 形式: 閉じた折りたたみに説明と入力例。貼り付けて確認 → 作成すると POST に name が無く、一覧に出る", async ({
-  page,
-}) => {
-  const backend = await installTeamBackend(page);
-  await openApp(page);
-  await openTeamTab(page);
-
-  const region = page.getByRole("region", { name: "Showdown 形式から取り込む", exact: true });
-  await expect(region).toBeHidden();
-  await page.getByText("Showdown 形式で取り込む", { exact: true }).click();
-  await expect(region).toBeVisible();
-  await expect(
-    page.getByText(
-      "Pokémon Showdown などで作った構築のテキストを貼り付けると、新しい構築として取り込めます。ポケモン・持ち物・特性・技は日本語の名前で書き、ポケモンごとに空の行で区切ります",
-      { exact: true },
-    ),
-  ).toBeVisible();
-  await expect(page.getByText("入力の例(1体分)", { exact: true })).toBeVisible();
-  const fold = page.locator("details").filter({ hasText: "Showdown 形式で取り込む" });
-  await expect(fold.locator("pre")).toContainText("Ability:");
-  await expect(fold.locator("pre")).toContainText("EVs:");
-  await expect(region.getByRole("textbox", { name: /構築名/ })).toHaveCount(0);
-
-  await region.getByRole("textbox", { name: "取り込むテキスト", exact: true }).fill(IMPORT_TEXT);
-  await region.getByRole("button", { name: "内容を確認", exact: true }).click();
-  await expect(region.getByRole("status")).toContainText("1体を取り込めます");
-  expect(backend.postBodies).toHaveLength(0);
-
-  await region.getByRole("button", { name: "この内容で作成", exact: true }).click();
-  await expect(region.getByRole("status")).toContainText("1体の構築を作りました");
-  const list = page.getByRole("list", { name: "保存した構築", exact: true });
-  await expect(list).toContainText("構築 1");
-  await expect(list).toContainText("1/6体");
-
-  expect(backend.postBodies).toHaveLength(1);
-  const body = backend.postBodies[0] as {
-    members: { speciesKey: string; itemId: string | null; moveIds: string[]; sp: Record<string, number> }[];
-  };
-  expect(Object.keys(body)).toEqual(["members"]);
-  expect(body.members[0]?.speciesKey).toBe(SPECIES.fire.key);
-  expect(body.members[0]?.itemId).toBe("exampleitemdef");
-  expect(body.members[0]?.moveIds).toEqual(["examplemovetackle"]);
-  expect(body.members[0]?.sp).toMatchObject({ hp: 2, atk: 32, spe: 32 });
-});
-
-test("書き出しは開いた構築の折りたたみから。読み取り専用の textarea に Showdown 形式が出る", async ({
-  page,
-}) => {
+test("Showdown 形式の取り込み・書き出しの入口は無い(G-03 で廃止。ADR-0342)", async ({ page }) => {
   const backend = await installTeamBackend(page);
   backend.teams.push({
     id: "00000000-0000-4000-8000-0000000000aa",
     name: DEFAULT_NAME,
-    members: [
-      {
-        speciesKey: SPECIES.fire.key,
-        moveIds: ["examplemovetackle"],
-        itemId: "exampleitemdef",
-        abilityId: "exampleabilitynone",
-        natureId: "example-nature-atk",
-        sp: { hp: 2, atk: 32, def: 0, spa: 0, spd: 0, spe: 32 },
-        teraType: null,
-      },
-    ],
+    members: [],
     createdAt: "2026-10-03T09:00:00Z",
     updatedAt: "2026-10-03T09:00:00Z",
   });
   await openApp(page);
   await openTeamTab(page);
+  await expect(page.getByRole("button", { name: "「構築 1」を開く", exact: true })).toBeVisible();
+  await expect(page.getByText(/Showdown/)).toHaveCount(0);
 
   await page.getByRole("button", { name: "「構築 1」を開く", exact: true }).click();
-  await page.getByText("Showdown 形式で書き出す", { exact: true }).click();
-  await page.getByRole("button", { name: "「構築 1」を Showdown 形式で書き出す", exact: true }).click();
-  const textarea = page.getByRole("textbox", { name: "「構築 1」の書き出しテキスト", exact: true });
-  await expect(textarea).toHaveAttribute("readonly", "");
-  await expect(textarea).toHaveValue(new RegExp(`^${SPECIES.fire.nameJa} @ テストぼうぎょだま`));
-  await expect(textarea).toHaveValue(/Ability: テストむこう/);
-  await expect(textarea).toHaveValue(/EVs: 2 HP \/ 32 Atk \/ 32 Spe/);
-  await expect(textarea).toHaveValue(/- テストたいあたり/);
-  await expect(textarea).not.toHaveValue(new RegExp(SPECIES.fire.key));
-});
-
-test("取り込めない項目は日本語の問題として出て、取り込める分だけ作れる", async ({ page }) => {
-  await installTeamBackend(page);
-  await openApp(page);
-  await openTeamTab(page);
-  await page.getByText("Showdown 形式で取り込む", { exact: true }).click();
-  const region = page.getByRole("region", { name: "Showdown 形式から取り込む", exact: true });
-  await region
-    .getByRole("textbox", { name: "取り込むテキスト", exact: true })
-    .fill(`${IMPORT_TEXT}\n\nふめいなもん\nテストいじっぱり Nature`);
-  await region.getByRole("button", { name: "内容を確認", exact: true }).click();
-  await expect(region.getByRole("alert")).toContainText("2体目");
-  await expect(region.getByRole("alert")).toContainText("ふめいなもん");
-  await expect(region.getByText("1体を取り込めます", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "一覧に戻る", exact: true })).toBeVisible();
+  await expect(page.getByText(/Showdown/)).toHaveCount(0);
 });

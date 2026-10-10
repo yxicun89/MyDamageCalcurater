@@ -116,81 +116,12 @@
   margin-left: auto;
 }
 
-/* Showdown 形式の折りたたみ(取り込みは一覧の下、書き出しは編集画面の下。ADR-0332 §3)。 */
-.team-fold {
-  padding: var(--space-3) var(--space-4);
-  font-family: var(--font-family);
-}
-
-.team-fold > summary {
-  cursor: pointer;
-  font-size: var(--font-size-body);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-/* 折りたたみの中の取り込み・書き出しの領域は、外側のカードと二重にしない。 */
-.team-fold .team-showdown {
-  border: none;
-  background: none;
-  backdrop-filter: none;
-  padding: 0;
-}
-
-.team-fold__help {
-  margin: var(--space-2) 0 0;
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.team-fold__example {
-  margin: var(--space-2) 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-input);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-size: var(--font-size-caption);
-  overflow-x: auto;
-}
-
-.team-screen__delete-confirm {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--danger);
-}
-
-.team-screen__notice {
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-secondary);
-}
-
 .team-screen__error {
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   color: var(--danger);
 }
 
-/* P5-5e(ADR-0321): Showdown 形式の取り込み・書き出し。 */
-.team-showdown {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--space-2);
-  flex-basis: 100%;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
-  padding: var(--space-4);
-}
-
-.team-showdown textarea,
 .team-screen__field textarea {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
@@ -200,29 +131,4 @@
   font-size: var(--font-size-body);
   padding: var(--space-2) var(--space-3);
   resize: vertical;
-}
-
-.team-showdown__actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-}
-
-.team-showdown__empty {
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.team-showdown__issues,
-.team-showdown__notes {
-  margin: 0;
-  padding-left: var(--space-4);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.team-showdown__issues[role="alert"] {
-  color: var(--danger);
 }

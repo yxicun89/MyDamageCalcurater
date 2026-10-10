@@ -4,6 +4,7 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
+import { PokemonIcon } from "../images/PokemonIcon";
 import { calcHistoryText } from "../i18n/favorites";
 import type { RecordClient, RecordError } from "../record/recordClient";
 import { historyEntryAsFavorite } from "./calcHistoryFavorite";
@@ -159,6 +160,10 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
             return (
               // 同じ内容の行が並びうるので、キーは配列の位置(一覧は先頭から足すだけで並べ替えない)。
               <li key={index} className="ui-card calc-history__item">
+                <span className="calc-history__icons">
+                  <PokemonIcon speciesKey={entry.calc.attacker.speciesKey} />
+                  <PokemonIcon speciesKey={entry.calc.defender.speciesKey} />
+                </span>
                 <span className="calc-history__pair">{label}</span>
                 <span className="calc-history__move">{calcHistoryText.moveLabel(entry.calc.moveId)}</span>
                 <span className="ui-badge calc-history__range">
