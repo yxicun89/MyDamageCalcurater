@@ -2,12 +2,25 @@
 
 画像は Git に入れない(ADR-0002)。手元の画像を変換し、gateway が `/images/*` で配信する。画像が無くても全機能が動く(タイプ色のエンブレム)。
 
+## 0. 取得する(個人利用。ADR-0810)
+
+取り込み済みの種族(`data/generated/readmodel/pokemon-types.json`)の画像を Pokémon Showdown の sprites から `data/generated/images/src/{key}.png` へ取る。先にマスタの取得と取り込み(docs/runbooks/data.md)が済んでいること。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make assets-fetch DRY_RUN=1   # 計画だけ(ネットワークに出ない)
+make assets-fetch LIMIT=5     # まず少数。ネットワークが要る
+make assets-fetch             # 全件(直列(同時 1 本)・500ms 待ち。数分)
+```
+確認: `assets-fetch: 対象 N 件・取得 M・既存 K・失敗 F・名前なし U` が出る。2回目は取得 0(既存は取り直さない)。失敗した key は理由付きで出る(画像なしで動く。再実行で再試行)。
+画像は著作物なので Git に入れない・個人の手元だけで使う(`git status` に出ないことを確認)。
+
 ## 1. 変換する
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 mkdir -p data/generated/images/src
-# {図鑑番号4桁}-{フォルム3桁}.png|jpg|jpeg|webp(例 0445-000.png)を data/generated/images/src に置く
+# §0 で取得するか、{図鑑番号4桁}-{フォルム3桁}.png|jpg|jpeg|webp(例 0445-000.png)を data/generated/images/src に自分で置く
 make assets
 ```
 確認: `assets: 変換 N 件・スキップ M 件` が出て、`data/generated/images/dist/manifest.json` と `thumb/`・`detail/` ができる。スキップは理由付きで表示される。
