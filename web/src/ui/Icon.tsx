@@ -75,6 +75,24 @@ const ICON_SHAPES = {
   ],
   // 技の分類: へんか=半分の円
   moveStatus: ["M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 4v16"],
+  // 減らす: マイナス(増減ボタン。G-05)
+  minus: ["M5 12h14"],
+  // 閉じる: ×(G-05)
+  close: ["M6 6l12 12", "M18 6 6 18"],
+  // 開く: 下向きの山(G-05)
+  open: ["M6 9l6 6 6-6"],
+  // 計算履歴: 時計(G-05)
+  history: ["M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z", "M12 7v5l3 2"],
+  // 説明: 丸の中の ?(G-05)
+  help: [
+    "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+    "M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7",
+    "M12 17h.01",
+  ],
+  // 上へ(G-05)
+  up: ["M12 19V5", "M6 11l6-6 6 6"],
+  // 下へ(G-05)
+  down: ["M12 5v14", "M6 13l6 6 6-6"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICON_SHAPES;

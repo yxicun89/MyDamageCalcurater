@@ -10,6 +10,7 @@ import { favoritesRestoreText } from "../i18n/favorites";
 import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
 import { movePickerText } from "../i18n/movePicker";
 import { Icon, type IconName } from "../ui/Icon";
+import { TypeBadge } from "../ui/TypeBadge";
 import "./MovePicker.css";
 
 const CATEGORY_ICON: Record<Move["category"], IconName> = {
@@ -28,20 +29,6 @@ function normalize(text: string): string {
 
 function typeName(type: string): string {
   return isTypeId(type) ? typeNameJa[type] : type;
-}
-
-function TypeBadge({ type }: { readonly type: string }): ReactElement {
-  return (
-    <span
-      className="ui-badge move-picker__type"
-      style={{
-        backgroundColor: `var(--type-${type}, var(--border-hairline))`,
-        color: `var(--type-${type}-ink, var(--text-primary))`,
-      }}
-    >
-      {typeName(type)}
-    </span>
-  );
 }
 
 function rowLabel(move: Move): string {
@@ -244,7 +231,7 @@ export function MovePicker({
           </span>
         ) : (
           <>
-            <TypeBadge type={selected.type} />
+            <TypeBadge className="move-picker__type" type={selected.type} />
             <span className="move-picker__name">{selected.nameJa}</span>
             <Icon
               name={CATEGORY_ICON[selected.category]}
@@ -317,7 +304,7 @@ export function MovePicker({
                     choose(move.id);
                   }}
                 >
-                  <TypeBadge type={move.type} />
+                  <TypeBadge className="move-picker__type" type={move.type} />
                   <span className="move-picker__name">{move.nameJa}</span>
                   <Icon
                     name={CATEGORY_ICON[move.category]}
