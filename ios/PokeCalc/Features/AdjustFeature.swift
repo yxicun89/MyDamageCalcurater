@@ -12,11 +12,14 @@ struct AdjustFeature: AppFeature {
 
     func registerServices(for backend: FeatureBackend, into services: inout FeatureServices) throws {
         switch backend {
-        case .mock:
+        case .mock(let environment):
             try services.register((any AdjustService).self, try MockAdjustService())
+            try services.register((any AdjustGoalsService).self, try MockAdjustGoalsService(environment: environment))
         case .api(_, _, let pokeCalc):
             // 調整は計算と同じ gateway・同じ契約(`APIPokeCalcService` の extension)。
             try services.register((any AdjustService).self, pokeCalc)
+            // 目標方式(F-11)は別プロトコル。必須ではない(無ければ従来の調整だけを出す)。
+            try services.register((any AdjustGoalsService).self, pokeCalc)
         }
     }
 
@@ -24,6 +27,7 @@ struct AdjustFeature: AppFeature {
         guard let adjust = context.services.resolve((any AdjustService).self) else { return unavailableView() }
         return AnyView(
             AdjustScreenView(
-                service: context.core.pokeCalc, adjust: adjust, backendDescription: context.core.backendDescription))
+                service: context.core.pokeCalc, adjust: adjust, goals: context.services.resolve((any AdjustGoalsService).self),
+                backendDescription: context.core.backendDescription))
     }
 }

@@ -125,6 +125,28 @@ struct AdjustResultCardView: View {
             } else if !goalRequested {
                 AdjustResultLine(text: AdjustText.minSpNotRequested, identifier: "adjustMinSpNotRequested", isCaption: true)
             }
+        case .goals(let presentation):
+            goalsResultView(presentation)
+        }
+    }
+
+    /// 目標方式の結果(F-11。ADR-0331 §7): 振り方(すべて満たす/一番近い)+ 目標ごとの1行。
+    @ViewBuilder
+    private func goalsResultView(_ presentation: AdjustGoalsPresentation) -> some View {
+        let result = presentation.result
+        AdjustResultHeading(text: result.feasible ? AdjustText.goalsPlanHeading : AdjustText.goalsNearestHeading)
+        if !result.feasible {
+            AdjustResultLine(text: AdjustText.goalsInfeasibleNotice, identifier: "adjustGoalsInfeasible")
+        }
+        AdjustResultLine(text: AdjustText.planSPLine(result.plan.sp), identifier: "adjustGoalsPlanSP")
+        AdjustResultLine(text: AdjustText.planTotal(result.plan.totalSp), identifier: "adjustGoalsPlanTotal")
+        AdjustResultLine(text: AdjustText.statsLine(result.plan.stats), identifier: "adjustGoalsPlanStats")
+        AdjustResultLine(text: AdjustText.remainingLine(result.remaining), identifier: "adjustRemaining")
+        AdjustResultHeading(text: AdjustText.goalOutcomesLabel)
+        ForEach(Array(zip(presentation.snapshots, result.goals).enumerated()), id: \.offset) { index, pair in
+            AdjustResultLine(
+                text: AdjustText.goalOutcomeLine(index + 1, snapshot: pair.0, outcome: pair.1),
+                identifier: "adjustGoalOutcome-\(index + 1)")
         }
     }
 }

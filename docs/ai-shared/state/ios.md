@@ -59,3 +59,6 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-10(F-12 iOS ビジュアルの基盤。ブランチ feat/ios-f12-visual。ADR-0521): `PokeCalcDesign` にポップ配色・タイトル/太さ・影・押下のトークンを追加し(値は Web と同じ。`PopPaletteTests`)、`ios/PokeCalc/PopComponents.swift` の部品(popCard〈タイプ色の帯〉・PillButtonStyle(kind:)・PopChipStyle・popRow・PopNoticeView・popScreenBackground・PopIcon/PopHeading/PopLabel)を全画面に適用。`glassCard` は廃止。識別子・ラベル・AX5 の分岐は不変。後続の画面の作り直し(F-08 構築・F-13 文言)はこの部品の上で行う。
 
 2026-10-10(F-08 iOS 構築の作り直し。ブランチ feat/ios-f08-team-rebuild。ADR-0522): 構築名を廃止(保存は既定名「名称未設定」・表示は「構築 N」、旧データの名前は保つ・`Team.updatedAt` を任意項目で追加)、編集画面は 1体目〜6体目の枠が最初から並び(`slotIDs`・上へ/下へ/外す)、保存は明示(保存後も編集画面に残る。未保存の印・[一覧に戻る]の 2 段階)、一覧はカード(アイコン・n/6体・最終更新・[開く]・[削除]〈2 段階〉)、Showdown 形式は一覧の下(取り込み=新しい構築)/編集画面の下(書き出し)の閉じた折りたたみ。識別子の変更表は ADR-0522。後続: 一覧のアイコンは先頭ページの種族しか引かない。
+
+2026-10-11(F-11 iOS 調整の目標方式。ブランチ feat/ios-f11-adjust-goals。ADR-0525): 「調整の内容」の先頭に「目標から振り方を決める」を追加(`AdjustMode` は増やさず `isGoalsMode`)。`AdjustGoalsService`(別プロトコル)・`APIPokeCalcService+AdjustGoals`・`MockAdjustGoalsService`(`POKECALC_MOCK_ADJUST_GOALS`: infeasible/unavailable/fail)・`AdjustViewModel+Goals`・`AdjustScreenGoals.swift`。サーバーが 404 を返したら案内を出して従来の調整へ戻る(Web に無い iOS 独自の扱い)。語・検査の順・結果の文は Web の ADR-0331 と同じ。後続: 目標の順序の入れ替え(満たせないとき前の目標を優先)は使用感を見て。
+
