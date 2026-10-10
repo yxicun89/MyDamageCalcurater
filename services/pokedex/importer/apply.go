@@ -45,6 +45,14 @@ func accuracyToNull(v int) sql.NullInt16 {
 	return sql.NullInt16{Int16: int16(v), Valid: true}
 }
 
+// flingPowerToNull はなげつけるの威力を列の値にする(0 は NULL)。
+func flingPowerToNull(v int) sql.NullInt16 {
+	if v == 0 {
+		return sql.NullInt16{}
+	}
+	return sql.NullInt16{Int16: int16(v), Valid: true}
+}
+
 func dateToNull(s string) (sql.NullTime, error) {
 	if s == "" {
 		return sql.NullTime{}, nil
@@ -154,7 +162,7 @@ func ApplyWithOptions(ctx context.Context, db *sql.DB, out Output, versions []So
 		}
 	}
 	for _, it := range out.Items {
-		if err := q.InsertItem(ctx, store.InsertItemParams{ID: it.ID, NameJa: it.NameJa, NameJaSource: it.NameJaSource, NameEn: it.NameEn, IsMegaStone: it.IsMegaStone}); err != nil {
+		if err := q.InsertItem(ctx, store.InsertItemParams{ID: it.ID, NameJa: it.NameJa, NameJaSource: it.NameJaSource, NameEn: it.NameEn, IsMegaStone: it.IsMegaStone, FlingPower: flingPowerToNull(it.FlingPower)}); err != nil {
 			return err
 		}
 	}

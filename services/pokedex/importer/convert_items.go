@@ -1,5 +1,35 @@
 package importer
 
+import (
+	"bytes"
+	"fmt"
+	"strconv"
+)
+
+// maxFlingPower はなげつけるの威力の上限(items.fling_power は 1..255 の整数。ADR-0144 §4)。
+const maxFlingPower = 255
+
+// applyFlingPowers は持ち物の行の FlingPower を Showdown の fling.basePower から決める(null は 0 = 不明・投げられない)。
+// 1..255 の整数以外は ErrInvalidData。取り込まない持ち物(rows に無い)は見ない。
+func applyFlingPowers(rows []NamedRow, sdItems []ShowdownItem) error {
+	raw := map[string][]byte{}
+	for _, it := range sdItems {
+		raw[it.ID] = bytes.TrimSpace(it.FlingBasePower)
+	}
+	for i := range rows {
+		b := raw[rows[i].ID]
+		if len(b) == 0 || string(b) == "null" {
+			continue
+		}
+		n, err := strconv.Atoi(string(b))
+		if err != nil || n < 1 || n > maxFlingPower {
+			return fmt.Errorf("%w: 持ち物 %s の flingBasePower が 1..%d の整数でない: %s", ErrInvalidData, rows[i].ID, maxFlingPower, b)
+		}
+		rows[i].FlingPower = n
+	}
+	return nil
+}
+
 // markMegaStones は持ち物の行の IsMegaStone を決める(ADR-0140)。真 ⇔ Showdown の megaStone が空でない
 // または取り込んだメガ種族の required_item_id に現れる。後者だけ(megaStone が空)なら食い違いの警告を返す。
 func markMegaStones(rows []NamedRow, sdItems []ShowdownItem, species []SpeciesRow) []Finding {

@@ -125,6 +125,10 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 		if it.MegaStone == nil {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 持ち物 %q に megaStone が無い(ADR-0140 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, it.ID)
 		}
+		// なげつけるの威力は必須(ADR-0144)。無いと全持ち物が「投げられない」として黙って取り込まれる(null は投げられない持ち物)。
+		if it.FlingBasePower == nil {
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 持ち物 %q に flingBasePower が無い(ADR-0144 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, it.ID)
+		}
 	}
 	return s, nil
 }

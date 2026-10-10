@@ -11,7 +11,9 @@ import {gzipSync} from 'node:zlib';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import assert from 'node:assert/strict';
+import {createRequire} from 'node:module';
 const {Generations, Pokemon, Move, Field, calculate} = calc;
+const {getFlingPower} = createRequire(import.meta.url)('@smogon/calc/dist/items');
 const genC = Generations.get(0);
 const gen9 = Generations.get(9);
 const out = fileURLToPath(new URL('../../testdata/golden/', import.meta.url));
@@ -104,7 +106,8 @@ function individual(gen, name, options = {}) {
   const abilityEffect = ability ? effectOf(effects.abilities, effects.speedAbilities, ability) : undefined;
   const itemEffect = item ? effectOf(effects.items, effects.speedItems, item) : undefined;
   if (ability) assert(abilityEffect && !markedUnsupported(abilityEffect));
-  if (item) assert(itemEffect && !markedUnsupported(itemEffect));
+  // options.fling(なげつける。ADR-0144)の持ち物だけは、効果定義を持たない持ち物(ダメージを変えない = 調査で未定義に出ない)も使える。
+  if (item) assert((itemEffect || options.fling) && !(itemEffect && markedUnsupported(itemEffect)));
   assert(!(options.status && options.burn) && (!options.status || statusNames[options.status]), `未知の状態 ${options.status}`);
   const status = options.status || (options.burn ? 'brn' : '');
   if (gen.num === 0) {
@@ -122,7 +125,7 @@ function individual(gen, name, options = {}) {
   // Empty ability alone is insufficient: Pokemon.clone() otherwise restores the species default.
   const p = new Pokemon(gen, name, {level:50, ivs:stats(31),
     evs, nature:options.nature || 'Serious', boosts:options.ranks || {}, ability, item,
-    status, overrides:{abilities:{0:''}}, ...(tera ? {teraType:tera} : {})});
+    status, overrides:{abilities:{0:''}}, ...(tera ? {teraType:tera} : {}), ...(options.curHP ? {curHP:options.curHP} : {})});
   assert.equal(p.ability || '', ability);
   assert.equal(p.clone().ability || '', ability);
   assert.equal(p.clone().teraType || '', tera);
@@ -131,6 +134,14 @@ function individual(gen, name, options = {}) {
     Ability:{ID:ability,Effect:abilityEffect || null},
     Item:item ? {ID:item,Effect:itemEffect} : null};
   if (stage2) input.Species.WeightHg=Math.round(p.species.weightkg*10);
+  // 技の機構の段階3(ADR-0144)。options.curHP は oracle の Pokemon の curHP(1..最大。0 は oracle が満タンと読むので渡さない)。
+  // options.fling は持ち物のなげつける威力を oracle の getFlingPower から入力に載せる。どちらも指定したベクタだけ(他のバイト列を変えない)。
+  if (options.curHP) assert(Number.isInteger(options.curHP) && options.curHP >= 1 && options.curHP <= p.rawStats.hp && p.originalCurHP === options.curHP, `curHP ${options.curHP} が 1..${p.rawStats.hp} の外`);
+  if (options.fling) {
+    assert(item && input.Item, 'fling には持ち物が要る');
+    input.Item.FlingPower = getFlingPower(item);
+    assert(input.Item.FlingPower > 0, `${item}: oracle の getFlingPower が 0`);
+  }
   // テラス無しのベクタは従来と同じバイト列にするため、キー自体を出さない。
   if (tera) input.TeraType=tera.toLowerCase();
   return {p, input};
@@ -708,7 +719,9 @@ for (const kind of ['items','abilities']) {
     `${kind}: effects.json の未対応の印(UnsupportedAttacker / UnsupportedDefender)が unsupported-effects.json と一致しない`);
   for (const n of marked) {
     const def = effects[kind][n], sides = changingSides[kind][id(n)];
-    assert.deepEqual(Object.keys(def).sort().filter(k => !unsupportedEffectKeys.includes(k)), [],
+    // 持ち物による接地(Grounds。ADR-0144)は、フィールドがあるときだけ効く機構の効果で、上の probe(フィールドなし)には現れない。
+    // 防御側の印を持つくろいてっきゅうが攻撃側では接地として効くので、印と同じ定義に置く。照合は mechanisms-stage3.json が担う。
+    assert.deepEqual(Object.keys(def).sort().filter(k => !unsupportedEffectKeys.includes(k) && k !== 'Grounds'), [],
       `${kind} ${n}: 未対応の印と補正の定義を同じ項目に混ぜない`);
     assert.deepEqual({a:def.UnsupportedAttacker === true, d:def.UnsupportedDefender === true}, sides,
       `${kind} ${n}: 未対応の印の側が oracle でダメージが変わる側と一致しない(a=攻撃側 / d=防御側)`);
@@ -1318,6 +1331,9 @@ for (const name of Object.keys(effects.abilities).sort()) {
 // (新しいファイルだけ。乱数も使わない)。ベクタは種族の重さ(WeightHg = oracle の weightkg × 10)と、
 // 持ち物・特性の効果(素早さの補正 speedItems / speedAbilities を含む)を入力に載せる。
 const stage2Rules = effects.moveRules;
+// 段階3の語彙(ADR-0144 §1)を使う定義。段階2の網羅(moveRules の全技に1件以上)はこの技を数えず、段階3の節が数える。
+const stage3PowerFormulas = ['attacker_hp_scaled','attacker_hp_low','defender_hp_ratio','attacker_item_fling'];
+const isStage3Rule = r => stage3PowerFormulas.includes(r.PowerFormula) || !!r.FixedDamageFormula || !!r.CategoryByStats;
 assert(stage2Rules && Object.keys(stage2Rules).length > 0, 'testdata/golden/effects.json に moveRules が無い');
 assert(effects.speedItems && effects.speedAbilities, 'testdata/golden/effects.json に speedItems / speedAbilities が無い');
 const stage2Fixed = [];
@@ -1332,6 +1348,8 @@ function stage2Mechanisms(rule) {
   if (rule.ExtraEffectivenessType || rule.SuperEffectiveAgainst) mechanisms.push('effectiveness_change');
   if (rule.TerrainPowerMods) mechanisms.push('field_specific');
   if (rule.PriorityBoost) mechanisms.push('priority_change');
+  if (rule.FixedDamageFormula) mechanisms.push('fixed_damage'); // 段階3(ADR-0144)
+  if (rule.CategoryByStats) mechanisms.push('move_specific');
   assert(mechanisms.length > 0, '技の処理の定義が機構を持たない');
   return mechanisms.sort();
 }
@@ -1784,7 +1802,7 @@ function ratioSafe(attackerHg, defenderHg) {
 
 // 生成器の保証(ADR-0143 §7): (a) moveRules の全技に1件以上のベクタ。(b) 重さの比のベクタは境界を避ける。
 {
-  const missing = Object.keys(stage2Rules).filter(n => !stage2CoveredMoves.has(n));
+  const missing = Object.keys(stage2Rules).filter(n => !stage2CoveredMoves.has(n) && !isStage3Rule(stage2Rules[n]));
   assert.deepEqual(missing, [], `moveRules の技にベクタが無い: ${missing.join(', ')}`);
   for (const v of stage2Fixed) {
     const rule = v.input.Move.Rule;
@@ -1804,6 +1822,319 @@ function effectiveWeightHg(side) {
   return mod ? Math.max(1, Math.trunc(w * mod / 4096)) : w;
 }
 
+// --- 技の機構の段階3(ADR-0144 §7): mechanisms-stage3.json ---------------------------------------------
+// 対戦の状態(残り HP・多段の回数)・なげつける(持ち物の威力)・分類の切り替え・持ち物による接地を oracle(Champions 世代)と照合する。
+// 残り HP は oracle の Pokemon の curHP(1..最大)、回数は Move の hits を、入力の battleState(DamageInput.State)に同じ値で載せる。
+// 技の処理の定義は effects.json の moveRules(段階2と同じく Move.Rule に載せる)。定義を持たない技(hp-ko・hits・grounded-item)は
+// Move.Rule を持たない。いかりのまえば型(Super Fang)・がむしゃら型(Endeavor)は oracle が計算しない(威力 0 として 0 を返す)ので
+// 入れない(engine の単体テストが Showdown の規則を見る)。既存のファイルのバイト列・乱数列は変えない(新しいファイルだけ。乱数も使わない)。
+const stage3Fixed = [];
+const stage3CoveredMoves = new Set();
+const oracleLacksFixedDamage = r => r.FixedDamageFormula === 'defender_current_hp_half' || r.FixedDamageFormula === 'defender_minus_attacker_hp';
+const stage3RuleMoves = Object.keys(stage2Rules).filter(n => isStage3Rule(stage2Rules[n]));
+assert.equal(stage3RuleMoves.length, 10, `段階3の語彙を使う moveRules の技は 10 技のはず: ${stage3RuleMoves.join(', ')}`);
+const maxHpOf = (name, o = {}) => individual(genC, name, o).p.rawStats.hp;
+function stage3Vector(label, a, d, moveName, options = {}) {
+  const rule = stage2Rules[moveName] || null;
+  if (rule) assert(isStage3Rule(rule), `${label}: ${moveName} は段階3の語彙の定義でない`);
+  const attack = individual(genC, a, {...options.a, stage2:'a'}), defend = individual(genC, d, {...options.d, stage2:'d'});
+  const weather = options.weather || 'none', terrain = options.terrain || 'none', screen = options.screen;
+  const m = new Move(genC, moveName, {isCrit:!!options.critical, ability:attack.p.ability || undefined, ...(options.hits ? {hits:options.hits} : {})});
+  const data = {type:m.type, category:m.category, bp:m.bp, priority:m.priority, hits:m.hits || 1, multihit:genC.moves.get(id(moveName)).multihit};
+  const f = new Field({gameType:'Singles',weather:weatherNames[weather],terrain:terrainNames[terrain],
+    defenderSide:{isReflect:screen==='Reflect',isLightScreen:screen==='LightScreen',isAuroraVeil:screen==='AuroraVeil'}});
+  const result = calculate(genC, attack.p, defend.p, m, f);
+  const matrix = typeof result.damage === 'number' ? [Array(16).fill(result.damage)]
+    : Array.isArray(result.damage[0]) ? result.damage : [result.damage];
+  assert(matrix.every(r => r.length === 16 && r.every(Number.isInteger)), `${label}: oracle のダメージが16段階の整数でない`);
+  assert.equal(matrix.length, data.hits, `${label}: 回数が oracle の Move と違う`);
+  const rolls = matrix[0].map((_, i) => matrix.reduce((s, r) => s + r[i], 0));
+  const move = {ID:id(moveName),Type:data.type.toLowerCase(),Category:data.category.toLowerCase(),Power:data.bp,Priority:data.priority};
+  if (rule) {
+    move.Mechanisms = stage2Mechanisms(rule);
+    move.Rule = rule;
+  } else if (data.multihit) {
+    // 定義を持たない多段技: 段階1の機構と中身(回数の範囲)。
+    const mech = mechanismsOf(moveName);
+    move.Mechanisms = mech.mechanisms;
+    if (Object.keys(mech.params).length) move.mechanismParams = mech.params;
+  }
+  // 対戦の状態(残り HP は 1..最大。省略は満タン。回数は範囲の多段技だけ)。
+  const state = {};
+  if (options.a?.curHP) state.AttackerCurrentHP = options.a.curHP;
+  if (options.d?.curHP) state.DefenderCurrentHP = options.d.curHP;
+  if (options.hits) {
+    assert(Array.isArray(data.multihit) && options.hits >= data.multihit[0] && options.hits <= data.multihit[1], `${label}: 回数 ${options.hits} が範囲の多段の外`);
+    state.Hits = options.hits;
+  }
+  const input = {Format:'single',Attacker:attack.input,Defender:defend.input,Move:move,
+    Field:{Weather:weather,Terrain:terrain,DefenderScreens:{Reflect:screen==='Reflect',LightScreen:screen==='LightScreen',AuroraVeil:screen==='AuroraVeil'}},Critical:!!options.critical};
+  if (Object.keys(state).length) input.battleState = state;
+  const hp = defend.p.curHP();
+  const expected = {rolls,attackerStats:attack.p.rawStats,defenderStats:defend.p.rawStats,ko:matrix.length > 1 ? koUses(matrix,hp) : ko(rolls,hp)};
+  if (matrix.length > 1) expected.hitRolls = matrix;
+  return {id:label, oracle:{attacker:a,defender:d,move:moveName}, input, expected, finalCategory:result.move.category.toLowerCase()};
+}
+// ファイルに書くときは検査用の finalCategory を外す。
+const stage3Out = v => { const {finalCategory, ...rest} = v; return rest; };
+const addStage3 = (label, a, d, moveName, options) => {
+  const v = stage3Vector(label, a, d, moveName, options);
+  stage3Fixed.push(v);
+  stage3CoveredMoves.add(moveName);
+  return v;
+};
+const rollsKey = v => JSON.stringify(v.expected.rolls);
+const stage3Hp = v => v.expected.rolls.some(r => r > 0);
+
+// 残り HP: 候補(最大 HP に対する 1..最大の値。重複は除く)。
+const uniqSorted = xs => [...new Set(xs)].sort((x, y) => x - y);
+const hpLevels = max => uniqSorted([max, max - 1, Math.floor(max * 3 / 4), Math.floor(max / 2), Math.floor(max / 3), Math.floor(max / 10), 3, 2, 1].filter(v => v >= 1 && v <= max));
+
+// 攻撃側の残り HP の割合の威力(ふんか・しおふき型): 威力 × 残り / 最大 の切り捨て(最小 1)。
+{
+  for (const [moveName, pairs] of [['Eruption', [['Typhlosion','Snorlax'],['Charizard','Garchomp']]], ['Water Spout', [['Blastoise','Garchomp'],['Gyarados','Typhlosion']]]]) {
+    for (const [a, d] of pairs) {
+      const max = maxHpOf(a), slug = slugOf(moveName);
+      // 切り上げ・切り捨ての境目を含める: max × k / 150 の前後と、最大・最小。
+      const levels = uniqSorted([...hpLevels(max), Math.ceil(max / 150), Math.ceil(max * 2 / 150), Math.floor(max * 149 / 150), Math.floor(max * 75 / 150) + 1].filter(v => v >= 1 && v <= max));
+      for (const cur of levels) addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/cur${cur}`, a, d, moveName, {a:{curHP:cur}});
+      const half = Math.floor(max / 2);
+      addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/half-crit`, a, d, moveName, {a:{curHP:half}, critical:true});
+      addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/half-reflect`, a, d, moveName, {a:{curHP:half}, screen:'LightScreen'});
+      addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/half-life-orb`, a, d, moveName, {a:{curHP:half, item:'Life Orb'}});
+      addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/half-technician`, a, d, moveName, {a:{curHP:half, ability:'Technician'}});
+      // 防御側の残り HP は威力に効かない(確定数だけ)。
+      const full = stage3Vector(`hp-attacker-scaled/${slug}/${a}/${d}/def-ref`, a, d, moveName, {a:{curHP:half}});
+      const defLow = addStage3(`hp-attacker-scaled/${slug}/${a}/${d}/defender-low`, a, d, moveName, {a:{curHP:half}, d:{curHP:Math.floor(maxHpOf(d) / 3)}});
+      assert.equal(rollsKey(defLow), rollsKey(full), `hp-attacker-scaled/${slug}/${a}/${d}: 防御側の残り HP でダメージが変わった`);
+    }
+  }
+}
+// 攻撃側の残り HP の 48 分率の威力(きしかいせい・じたばた型): p = floor(48 × 残り / 最大) の段(≤1:200 ≤4:150 ≤9:100 ≤16:80 ≤32:40 else 20)。
+{
+  const bandLevels = max => {
+    const out = [max, 1];
+    for (const p of [0, 1, 2, 4, 5, 9, 10, 16, 17, 32, 33, 48]) {
+      const lo = Math.max(1, Math.ceil(p * max / 48)); // p 以上になる最小
+      if (Math.floor(48 * lo / max) === p) out.push(lo);
+      const hi = Math.ceil((p + 1) * max / 48) - 1;    // p のままの最大
+      if (hi >= 1 && hi <= max && Math.floor(48 * hi / max) === p) out.push(hi);
+    }
+    return uniqSorted(out.filter(v => v >= 1 && v <= max));
+  };
+  for (const [moveName, pairs] of [['Flail', [['Snorlax','Garchomp'],['Tyranitar','Gardevoir']]], ['Reversal', [['Lucario','Snorlax'],['Garchomp','Tyranitar']]]]) {
+    for (const [a, d] of pairs) {
+      const max = maxHpOf(a), slug = slugOf(moveName);
+      for (const cur of bandLevels(max)) addStage3(`hp-attacker-low/${slug}/${a}/${d}/cur${cur}`, a, d, moveName, {a:{curHP:cur}});
+      assert(bandLevels(max).length >= 6, `hp-attacker-low/${slug}/${a}: 段をまたぐ残り HP が少ない`);
+      const mid = bandLevels(max)[Math.floor(bandLevels(max).length / 2)];
+      addStage3(`hp-attacker-low/${slug}/${a}/${d}/mid-crit-reflect`, a, d, moveName, {a:{curHP:mid}, critical:true, screen:'Reflect'});
+      addStage3(`hp-attacker-low/${slug}/${a}/${d}/mid-life-orb`, a, d, moveName, {a:{curHP:mid, item:'Life Orb'}});
+    }
+  }
+}
+// 防御側の残り HP の割合の威力(ハードプレス型): 100 × floor(残り × 4096 / 最大) の 4096 の丸め。
+{
+  for (const [a, d] of [['Scizor','Snorlax'],['Metagross','Garchomp'],['Scizor','Tyranitar']]) {
+    const max = maxHpOf(d), slug = 'hardpress';
+    for (const cur of uniqSorted([...hpLevels(max), Math.ceil(max / 100), Math.floor(max * 99 / 100)].filter(v => v >= 1 && v <= max))) {
+      addStage3(`hp-defender-ratio/${slug}/${a}/${d}/cur${cur}`, a, d, 'Hard Press', {d:{curHP:cur}});
+    }
+    const half = Math.floor(max / 2);
+    addStage3(`hp-defender-ratio/${slug}/${a}/${d}/half-crit`, a, d, 'Hard Press', {d:{curHP:half}, critical:true});
+    addStage3(`hp-defender-ratio/${slug}/${a}/${d}/half-reflect`, a, d, 'Hard Press', {d:{curHP:half}, screen:'Reflect'});
+    // 攻撃側の残り HP は威力に効かない。
+    const ref = stage3Vector(`hp-defender-ratio/${slug}/${a}/${d}/atk-ref`, a, d, 'Hard Press', {d:{curHP:half}});
+    const atkLow = addStage3(`hp-defender-ratio/${slug}/${a}/${d}/attacker-low`, a, d, 'Hard Press', {d:{curHP:half}, a:{curHP:Math.floor(maxHpOf(a) / 3)}});
+    assert.equal(rollsKey(atkLow), rollsKey(ref), `hp-defender-ratio/${slug}/${a}/${d}: 攻撃側の残り HP でダメージが変わった`);
+  }
+}
+// 攻撃側の残り HP と同じダメージ(いのちがけ型)。タイプ相性の無効(ゴーストにかくとう)は先。
+{
+  for (const [a, d] of [['Lucario','Snorlax'],['Gardevoir','Garchomp'],['Snorlax','Tyranitar']]) {
+    const max = maxHpOf(a);
+    for (const cur of hpLevels(max)) {
+      const v = addStage3(`hp-fixed/finalgambit/${a}/${d}/cur${cur}`, a, d, 'Final Gambit', {a:{curHP:cur}});
+      assert(v.expected.rolls.every(r => r === cur), `hp-fixed/${a}/${d}/cur${cur}: oracle のダメージが残り HP と違う`);
+    }
+    // 一致・壁・急所・持ち物・天候・ランクで変わらない固定ダメージ。
+    const cur = Math.floor(max / 2);
+    addStage3(`hp-fixed/finalgambit/${a}/${d}/stab-crit-reflect`, a, d, 'Final Gambit', {a:{curHP:cur, item:'Life Orb', ranks:{spa:2}}, d:{ranks:{spd:3}}, critical:true, screen:'LightScreen', weather:'sun'});
+  }
+  for (const a of ['Lucario','Snorlax']) {
+    const v = addStage3(`hp-fixed/finalgambit/${a}/Gengar/immune`, a, 'Gengar', 'Final Gambit', {a:{curHP:Math.floor(maxHpOf(a) / 2)}});
+    assert(v.expected.rolls.every(r => r === 0), `hp-fixed/${a}/Gengar: oracle が無効になっていない`);
+  }
+}
+// 防御側の残り HP は確定数に効く(定義を持たない通常の技・多段技)。ダメージの16段階は満タンと同じ。
+{
+  const hpKoPairs = [['Garchomp','Snorlax'],['Tyranitar','Gardevoir'],['Scizor','Blastoise']];
+  for (const [a, d] of hpKoPairs) {
+    const max = maxHpOf(d), full = stage3Vector(`hp-ko/dragonclaw/${a}/${d}/full-ref`, a, d, 'Dragon Claw', {});
+    const dmg = full.expected.rolls[15];
+    // 倒す回数が変わる残り HP: 1 発で倒せる・2 発・乱数を含む・満タン。
+    const levels = uniqSorted([1, Math.max(1, dmg - 1), dmg, dmg + 1, Math.floor(full.expected.rolls[0] * 1.5), Math.floor(dmg * 2) - 1, Math.floor(dmg * 2) + 5, Math.floor(max / 2), max].filter(v => v >= 1 && v <= max));
+    for (const cur of levels) {
+      const v = addStage3(`hp-ko/dragonclaw/${a}/${d}/cur${cur}`, a, d, 'Dragon Claw', {d:{curHP:cur}});
+      assert.equal(rollsKey(v), rollsKey(full), `hp-ko/${a}/${d}/cur${cur}: 残り HP でダメージの16段階が変わった`);
+    }
+    addStage3(`hp-ko/dragonclaw/${a}/${d}/crit-low`, a, d, 'Dragon Claw', {d:{curHP:Math.floor(max / 3)}, critical:true});
+  }
+  for (const [a, d] of [['Snorlax','Corviknight'],['Garchomp','Snorlax']]) {
+    const max = maxHpOf(d), full = stage3Vector(`hp-ko/bulletseed/${a}/${d}/full-ref`, a, d, 'Bullet Seed', {});
+    const dmg = full.expected.rolls[15];
+    for (const cur of uniqSorted([1, Math.max(1, dmg - 1), dmg, dmg + 1, Math.floor(dmg * 1.5), Math.floor(max / 2), max].filter(v => v >= 1 && v <= max))) {
+      addStage3(`hp-ko/bulletseed/${a}/${d}/cur${cur}`, a, d, 'Bullet Seed', {d:{curHP:cur}});
+    }
+  }
+}
+// 多段の回数の指定(範囲の多段技の最小・最大・途中。スキルリンクがあっても指定が勝つ)。
+{
+  for (const [moveName, pairs] of [['Bullet Seed', [['Snorlax','Corviknight'],['Garchomp','Snorlax']]], ['Icicle Spear', [['Weavile','Garchomp']]],
+    ['Rock Blast', [['Tyranitar','Charizard']]], ['Water Shuriken', [['Blastoise','Garchomp']]]]) {
+    for (const [a, d] of pairs) {
+      const slug = slugOf(moveName), [min, max] = genC.moves.get(id(moveName)).multihit;
+      const rolls = {};
+      for (let n = min; n <= max; n++) rolls[n] = rollsKey(addStage3(`hits/${slug}/${a}/${d}/n${n}`, a, d, moveName, {hits:n}));
+      assert.equal(new Set(Object.values(rolls)).size, max - min + 1, `hits/${slug}/${a}/${d}: 回数でダメージが変わらない`);
+      addStage3(`hits/${slug}/${a}/${d}/max-crit-reflect`, a, d, moveName, {hits:max, critical:true, screen:'Reflect'});
+      addStage3(`hits/${slug}/${a}/${d}/min-life-orb`, a, d, moveName, {hits:min, a:{item:'Life Orb'}});
+      // スキルリンクより指定が勝つ(oracle の options.hits)。
+      const linkMin = addStage3(`hits/${slug}/${a}/${d}/skill-link-min`, a, d, moveName, {hits:min, a:{ability:'Skill Link'}});
+      assert.equal(linkMin.expected.hitRolls.length, min, `hits/${slug}: スキルリンクがあっても指定の回数にならない`);
+      addStage3(`hits/${slug}/${a}/${d}/skill-link-max`, a, d, moveName, {hits:max, a:{ability:'Skill Link'}});
+      // 回数と防御側の残り HP の組み合わせ(確定数は残りで数える)。
+      addStage3(`hits/${slug}/${a}/${d}/n3-defender-low`, a, d, moveName, {hits:Math.min(max, 3), d:{curHP:Math.floor(maxHpOf(d) / 2)}});
+    }
+  }
+}
+// なげつける型: 攻撃側の持ち物の威力(oracle の getFlingPower)。持ち物の他の効果は計算中も残る。持ち物なしはダメージ 0。
+{
+  const noEffectItems = ['Leftovers','King\'s Rock','Quick Claw','Sitrus Berry','Focus Sash','Lum Berry']
+    .filter(n => genC.items.get(id(n)) && !effects.items[n] && !(effects.speedItems && effects.speedItems[n]) && !unsupportedEffects.items[id(n)]);
+  assert(noEffectItems.length >= 4, `効果を持たない持ち物の候補が少ない: ${noEffectItems}`);
+  // 攻撃側の補正を持つ持ち物(いのちのたま等)を投げる組は、実機で効果が乗るか未確認なので engine が攻撃側の持ち物の印を残す
+  // (ADR-0144 §結果)。印の付くベクタはゴールデンに入れない(印の有無は engine の単体テストが見る)。
+  const flingPairs = [['Tyranitar','Snorlax'],['Weavile','Gardevoir']];
+  const powers = new Set();
+  for (const [a, d] of flingPairs) {
+    for (const item of noEffectItems) {
+      const v = addStage3(`fling/${id(item)}/${a}/${d}`, a, d, 'Fling', {a:{item, fling:true}});
+      assert(stage3Hp(v), `fling/${id(item)}/${a}/${d}: ダメージが0`);
+      powers.add(v.input.Attacker.Item.FlingPower);
+    }
+    addStage3(`fling/${id('Quick Claw')}/${a}/${d}/crit-reflect`, a, d, 'Fling', {a:{item:'Quick Claw', fling:true}, critical:true, screen:'Reflect'});
+    // テクニシャン(威力 60 以下)は投げた持ち物の威力で判定される: 威力 30 の効果を持たない持ち物で確かめる。
+    const tech = addStage3(`fling/${id("King's Rock")}/${a}/${d}/technician`, a, d, 'Fling', {a:{item:"King's Rock", fling:true, ability:'Technician'}});
+    assert(tech.input.Attacker.Item.FlingPower <= 60, 'fling technician: 持ち物の威力が 60 以下でない');
+    // 攻撃側がくろいてっきゅうを持つ(威力 130・接地)。
+    const iron = addStage3(`fling/${id('Iron Ball')}/${a}/${d}`, a, d, 'Fling', {a:{item:'Iron Ball', fling:true}});
+    assert.equal(iron.input.Attacker.Item.FlingPower, 130);
+    // 持ち物なしは失敗(oracle はダメージ 0)。
+    const none = addStage3(`fling-none/${a}/${d}`, a, d, 'Fling', {});
+    assert(!stage3Hp(none), `fling-none/${a}/${d}: ダメージが0でない`);
+  }
+  assert(powers.size >= 3, `なげつけるの威力の種類が少ない: ${[...powers]}`);
+}
+// 分類の切り替え(シェルアームズ型): ランク補正後の 攻撃 / 防御側の防御 > 特攻 / 防御側の特防 なら物理、同じなら特殊。
+{
+  const sets = [];
+  const attackers = ['Garchomp','Gardevoir','Snorlax','Lucario','Tyranitar','Blastoise'], defenders = ['Snorlax','Gardevoir','Corviknight','Toxapex','Charizard'];
+  const rankVariants = [{}, {a:{ranks:{atk:1}}}, {a:{ranks:{spa:2}}}, {d:{ranks:{def:2}}}, {d:{ranks:{spd:2}}}, {a:{ranks:{atk:-2}}, d:{ranks:{spd:-1}}}];
+  const seen = {physical:0, special:0, tie:0};
+  for (const a of attackers) for (const d of defenders) {
+    if (a === d) continue;
+    for (const [i, rv] of rankVariants.entries()) {
+      const opts = {a:{...(rv.a || {}), nature:'Serious'}, d:{...(rv.d || {}), nature:'Serious'}};
+      const v = stage3Vector(`category-probe/${a}/${d}/${i}`, a, d, 'Shell Side Arm', opts);
+      const label = v.finalCategory === 'physical' ? 'category-physical' : 'category-special';
+      // 組ごとに物理 3 件・特殊 3 件まで(同じ組を使い回さない)。
+      if (seen[v.finalCategory] >= 8) continue;
+      seen[v.finalCategory]++;
+      addStage3(`${label}/shellsidearm/${a}/${d}/r${i}`, a, d, 'Shell Side Arm', opts);
+    }
+  }
+  assert(seen.physical >= 3 && seen.special >= 3, `分類の切り替えの物理/特殊のベクタが足りない: ${JSON.stringify(seen)}`);
+  // 同値(攻撃 / 防御 = 特攻 / 特防)は特殊。実数値(無補正の性格: 種族値 + 20 + SP)の積が一致する組を総当たりで探す
+  // (oracle の比較は浮動小数の除算。同じ比は同じ値になる)。見つけた組のベクタの分類は oracle の結果で確かめる。
+  const spLevels = [0, 2, 4, 8, 12, 16, 20, 24, 28, 32];
+  const baseOf = name => genC.species.get(id(name)).baseStats;
+  let ties = 0;
+  search: for (const a of attackers) for (const d of defenders) {
+    if (a === d) continue;
+    const ab = baseOf(a), db = baseOf(d);
+    for (const atkSp of spLevels) for (const spaSp of spLevels) for (const defSp of spLevels) for (const spdSp of spLevels) {
+      if ((ab.atk + 20 + atkSp) * (db.spd + 20 + spdSp) !== (ab.spa + 20 + spaSp) * (db.def + 20 + defSp)) continue;
+      const opts = {a:{sp:{atk:atkSp, spa:spaSp}, nature:'Serious'}, d:{sp:{def:defSp, spd:spdSp}, nature:'Serious'}};
+      const v = addStage3(`category-special/shellsidearm/${a}/${d}/tie-a${atkSp}-${spaSp}-d${defSp}-${spdSp}`, a, d, 'Shell Side Arm', opts);
+      const ai = v.expected.attackerStats, di = v.expected.defenderStats;
+      assert.equal(ai.atk * di.spd, ai.spa * di.def, `category-tie/${a}/${d}: 実数値の積が一致していない`);
+      assert.equal(v.finalCategory, 'special', `category-tie/${a}/${d}: 同値が特殊でない`);
+      ties++;
+      continue search; // 組ごとに 1 件
+    }
+    if (ties >= 4) break;
+  }
+  assert(ties >= 2, `同値になる組が見つからない(${ties} 組。組を選び直す)`);
+}
+// 持ち物による接地(くろいてっきゅう型 Grounds): 浮いている攻撃側(ひこう・ふゆう)が接地し、フィールドの補正を受ける。
+// 防御側が持つ組は未対応の印(UnsupportedDefender)があるので使わない。
+const stage3GroundItems = Object.keys(effects.items).filter(n => effects.items[n].Grounds).sort();
+assert.deepEqual(stage3GroundItems, ['Iron Ball'], 'Grounds を持つ持ち物が Iron Ball だけでない(ベクタを足す)');
+{
+  const cases = [
+    ['Corviknight', 'Snorlax', 'Thunderbolt', 'electric', {}],
+    ['Charizard', 'Garchomp', 'Energy Ball', 'grassy', {}],
+    ['Gardevoir', 'Snorlax', 'Psychic', 'psychic', {a:{ability:'Levitate'}}],
+    ['Pikachu', 'Corviknight', 'Thunderbolt', 'electric', {a:{ability:'Levitate'}}],
+  ];
+  for (const itemName of stage3GroundItems) {
+    const slug = id(itemName);
+    for (const [a, d, moveName, terrain, extra] of cases) {
+      const base = {...extra, a:{...(extra.a || {})}};
+      const withItem = {...base, a:{...base.a, item:itemName}};
+      // 浮いている攻撃側はフィールドの補正を受けない(持ち物なし)が、持ち物で接地して受ける。ふゆう(Levitate)はひこうタイプでなくても浮く。
+      const apply = addStage3(`grounded-item/${slug}/${a}/${d}/${moveName}/apply`, a, d, moveName, {...withItem, terrain});
+      // 効かない対照: フィールドが無ければ持っていてもダメージは変わらない(oracle で確かめる)。
+      const control = addStage3(`grounded-item/${slug}/${a}/${d}/${moveName}/control`, a, d, moveName, {...withItem});
+      const noItem = addStage3(`grounded-item/${slug}/${a}/${d}/${moveName}/no-item`, a, d, moveName, {...base, terrain});
+      const noItemNoField = stage3Vector(`grounded-item/${slug}/${a}/${d}/${moveName}/ref`, a, d, moveName, {...base});
+      assert(stage3Hp(apply) && stage3Hp(noItem), `grounded-item/${slug}/${a}/${d}/${moveName}: ダメージが0`);
+      assert.notEqual(rollsKey(apply), rollsKey(noItem), `grounded-item/${slug}/${a}/${d}/${moveName}: 接地でダメージが変わらない`);
+      assert.equal(rollsKey(control), rollsKey(noItemNoField), `grounded-item/${slug}/${a}/${d}/${moveName}: フィールドなしで持ち物がダメージを変えた`);
+      assert.equal(rollsKey(noItem), rollsKey(noItemNoField), `grounded-item/${slug}/${a}/${d}/${moveName}: 浮いた攻撃側がフィールドの補正を受けた`);
+    }
+    // 接地済みの攻撃側が持っても変わらない(飛行でも浮いてもいない)。
+    const ground = stage3Vector('grounded-item/ground-ref', 'Garchomp', 'Snorlax', 'Thunderbolt', {terrain:'electric'});
+    const groundItem = addStage3(`grounded-item/${id('Iron Ball')}/Garchomp/Snorlax/Thunderbolt/already-grounded`, 'Garchomp', 'Snorlax', 'Thunderbolt', {terrain:'electric', a:{item:'Iron Ball'}});
+    assert.equal(rollsKey(groundItem), rollsKey(ground), 'grounded-item/already-grounded: 接地済みの攻撃側でダメージが変わった');
+  }
+}
+
+// 生成器の保証(ADR-0144 §7): (a) 段階3の語彙の moveRules の全技(oracle が計算しない固定ダメージの式を除く)に1件以上のベクタ。
+// (b) 状態の値域(残り HP は 1..最大、回数は範囲の多段の最小..最大)。(c) ラベルの網羅。(d) id の重複なし。
+{
+  const missing = stage3RuleMoves.filter(n => !oracleLacksFixedDamage(stage2Rules[n]) && !stage3CoveredMoves.has(n));
+  assert.deepEqual(missing, [], `段階3の moveRules の技にベクタが無い: ${missing.join(', ')}`);
+  const labels = new Set(), ids = new Set();
+  for (const v of stage3Fixed) {
+    assert(!ids.has(v.id), `ベクタの id が重複: ${v.id}`);
+    ids.add(v.id);
+    labels.add(v.id.split('/')[0]);
+    const s = v.input.battleState || {};
+    assert(!s.AttackerCurrentHP || (s.AttackerCurrentHP >= 1 && s.AttackerCurrentHP <= v.expected.attackerStats.hp), `${v.id}: 攻撃側の残り HP が値域外`);
+    assert(!s.DefenderCurrentHP || (s.DefenderCurrentHP >= 1 && s.DefenderCurrentHP <= v.expected.defenderStats.hp), `${v.id}: 防御側の残り HP が値域外`);
+    if (s.Hits) {
+      const mh = v.input.Move.mechanismParams && v.input.Move.mechanismParams.MultiHit;
+      assert(mh && mh.Min < mh.Max && s.Hits >= mh.Min && s.Hits <= mh.Max, `${v.id}: 回数が範囲の多段の外`);
+    }
+  }
+  for (const l of ['hp-attacker-scaled','hp-attacker-low','hp-defender-ratio','hp-fixed','hp-ko','hits','fling','fling-none','category-physical','category-special','grounded-item']) {
+    assert(labels.has(l), `ラベル ${l} のベクタが無い`);
+  }
+}
+const stage3Saved = stage3Fixed.map(stage3Out);
+
 mkdirSync(out,{recursive:true});
 const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
@@ -1813,6 +2144,7 @@ save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCase
 save('tera.json',teraFixed);save('tera-random.jsonl.gz',teraRandomCases,true);
 save('mechanisms.json',mechanismsFixed);
 save('mechanisms-stage2.json',stage2Fixed);
+save('mechanisms-stage3.json',stage3Saved);
 
 // ADR-0013 §P1-13.5: oracle のタイプ相性表を engine に渡す入力として出力する。表の正しさは oracle の責務。
 // 倍率は oracle の値(0/0.5/1/2)を2倍した整数コード(0=無効/1=いまひとつ/2=等倍/4=抜群)。
@@ -1848,7 +2180,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json','mechanisms-stage2.json'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json','mechanisms-stage2.json','mechanisms-stage3.json'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -1867,9 +2199,9 @@ const metadata={
   exclusions:[
     {scope:'species',names:excludedSpeciesNames,reason:'Internal calc-only pseudo-form; not a selectable in-game form (P2-1b)'},
     {scope:'species',names:[...genC.species].filter(s=>s.baseStats.hp===1).map(s=>s.name),reason:'HP=1 special mechanic is outside Champions SP formula; not present in the current Champions set'},
-    {scope:'moves',reason:'The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Stage-2 move rules (ADR-0143: power formulas by weight / speed ratio / positive ranks / hit index, status / item / weather / terrain conditions, move type by weather or terrain, two-type effectiveness, Freeze-Dry, screen removal, priority boost, moves whose handlers do not affect damage) are checked in mechanisms-stage2.json (stage-2 moves are checked in mechanisms-stage2.json, not the other files). Excluded everywhere: OHKO (the oracle does not compute it), other fixed damage, moves that need current HP or battle history (stage 3), tera/Z/Max moves'},
+    {scope:'moves',reason:'The fixed/random/species files use only the listed fixed-power single-hit moves. Stage-1 move mechanisms (multi-hit, fixed damage equal to the level, forced criticals, defense-rank ignoring, alternate attack/defense stats) are checked in mechanisms.json (ADR-0142). Stage-2 move rules (ADR-0143: power formulas by weight / speed ratio / positive ranks / hit index, status / item / weather / terrain conditions, move type by weather or terrain, two-type effectiveness, Freeze-Dry, screen removal, priority boost, moves whose handlers do not affect damage) are checked in mechanisms-stage2.json (stage-2 moves are checked in mechanisms-stage2.json, not the other files). Stage-3 move rules and battle state (ADR-0144: current HP of the attacker / defender as the oracle curHP, the number of hits of a range multi-hit move as the oracle hits, power by current HP (Eruption / Water Spout / Flail / Reversal / Hard Press), damage equal to the attacker current HP (Final Gambit), Fling by the attacker item, Shell Side Arm category by stats) are checked in mechanisms-stage3.json; Endeavor and Super Fang are not computed by the oracle (it returns 0 damage) so they are covered by engine unit tests only. Excluded everywhere: OHKO (the oracle does not compute it), other fixed damage, moves that need battle history (not covered), tera/Z/Max moves'},
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect (issue #270 / ADR-0120) or a stage-1 ability field (TypeConvert, PowerMods, AuraType/AuraMod, StatMods, SeparateStatMods, CritDamageMod, PreventsCritical, IgnoresOpponentRanks, IgnoresDefenderAbility; ADR-0176) has an apply/control pair (effects/<id>/...), and every Breakable definition has a breakable vector showing that an IgnoresDefenderAbility attacker (Mold Breaker) gets the same damage as against no ability (ADR-0176). The coverage survey also uses both-side +/-2 ranks, a poisoned defender and attacker-only probes against a defender ability (Thick Fat, Fur Coat, Fluffy, Multiscale, Levitate, critical hit x Shell Armor), so abilities that change damage only in combination (Mold Breaker, Unaware, Merciless, Long Reach) must be either defined or marked; Breakable is checked against the oracle in both directions, not listed by hand (ADR-0176). Champions items/abilities that change damage but are not representable by the effect schema (move-flag and HP-dependent abilities are later stages) are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors; unsupported-mark definitions carry no Breakable in stage 1, so Mold Breaker against a marked defender ability keeps the mark (ADR-0176)'},
-    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity, Iron Ball and Air Balloon are not modeled and never appear; the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse, Misty Explosion, Expanding Force, Rising Voltage) are checked in mechanisms-stage2.json (ADR-0143)'},
+    {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity and Air Balloon are not modeled and never appear (Iron Ball grounding is modeled as the Grounds item effect and checked in mechanisms-stage3.json grounded-item/*, attacker side only because the defender side keeps an unsupported mark; ADR-0144); the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse, Misty Explosion, Expanding Force, Rising Voltage) are checked in mechanisms-stage2.json (ADR-0143)'},
     {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],

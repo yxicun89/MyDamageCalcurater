@@ -172,6 +172,9 @@ func calcRequestFromDetail(d *calcevents.CalcDetail) calcRequest {
 	if d.Options != nil {
 		req.Options = &optionsRequest{Critical: d.Options.Critical}
 	}
+	if b := d.BattleState; b != nil {
+		req.BattleState = &battleStateRequest{AttackerCurrentHP: b.AttackerCurrentHp, DefenderCurrentHP: b.DefenderCurrentHp, Hits: b.Hits}
+	}
 	return req
 }
 

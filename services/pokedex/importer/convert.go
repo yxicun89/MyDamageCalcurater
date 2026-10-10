@@ -24,6 +24,8 @@ type NamedRow struct {
 	NameEn       string
 	// IsMegaStone は持ち物の行だけが使う(メガストーンか。ADR-0140。特性の行では常に偽)。
 	IsMegaStone bool
+	// FlingPower は持ち物の行だけが使う(なげつけるの威力。0 は不明・投げられない = NULL。ADR-0144)。
+	FlingPower int
 }
 
 // MoveRow は moves テーブルの行。Accuracy 0 は必中(NULL)。
@@ -221,6 +223,9 @@ func Convert(in Input) (Output, Report, error) {
 	itemRows, itemNameWarnings := buildNamedRows(itemIDs, itemNameEn, in.PokeAPI.Items, in.Overrides.Items, in.Config.NameJaLanguages, usedOverrideItems)
 	warnings = append(warnings, itemNameWarnings...)
 	warnings = append(warnings, markMegaStones(itemRows, in.Showdown.Items, speciesConv.Rows)...)
+	if err := applyFlingPowers(itemRows, in.Showdown.Items); err != nil {
+		return Output{}, Report{}, err
+	}
 
 	abilityRows, abilityNameWarnings := buildNamedRows(abilityIDs, speciesConv.AbilityNameEn, in.PokeAPI.Abilities, in.Overrides.Abilities, in.Config.NameJaLanguages, usedOverrideAbilities)
 	warnings = append(warnings, abilityNameWarnings...)
@@ -344,7 +349,7 @@ func validateOutputMapsToEngine(out Output, chart engine.TypeChart) error {
 		}
 	}
 	for _, r := range out.Items {
-		row := master.ItemRow{ID: r.ID, NameJa: r.NameJa, Effect: itemEffects[r.ID]}
+		row := master.ItemRow{ID: r.ID, NameJa: r.NameJa, Effect: itemEffects[r.ID], FlingPower: r.FlingPower}
 		if _, err := master.Item(row, chart); err != nil {
 			return fmt.Errorf("%w: 持ち物 %s を engine の型に写像できない: %v", ErrInvalidData, r.ID, err)
 		}

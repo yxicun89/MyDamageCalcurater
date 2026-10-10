@@ -79,6 +79,8 @@ var engineSentinels = []struct {
 	{engine.ErrInvalidAbilityCandidates, api.InvalidInput},
 	// 調整の入力の不正(ADR-0250 §4。wasmapi と同じく invalid_input。新しい code は足さない)。
 	{engine.ErrInvalidAdjustInput, api.InvalidInput},
+	// 対戦の状態の値域外(最大 HP を超える残り HP・範囲の多段でない技の回数・範囲外の回数。ADR-0144 §6)。
+	{engine.ErrInvalidBattleState, api.InvalidInput},
 }
 
 // errFromEngine は engine が返したエラーを安定した code の httpError に写す。

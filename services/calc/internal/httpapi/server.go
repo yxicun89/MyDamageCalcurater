@@ -259,12 +259,17 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 		return err
 	}
 
+	state, err := battleStateFrom(req.BattleState)
+	if err != nil {
+		return err
+	}
+
 	if err := checkDeadline(ctx.Request().Context()); err != nil {
 		return err
 	}
 	res, err := engine.CalcDamage(engine.DamageInput{
 		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field,
-		Critical: criticalFrom(req.Options), TypeChart: s.store.TypeChart(),
+		Critical: criticalFrom(req.Options), TypeChart: s.store.TypeChart(), State: state,
 	})
 	if err != nil {
 		return errFromEngine(err)
@@ -274,7 +279,7 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
 	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
 		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
-		MoveID: req.MoveId, Field: req.Field, Options: req.Options,
+		MoveID: req.MoveId, Field: req.Field, Options: req.Options, BattleState: eventBattleState(req.BattleState),
 		MinPercent: result.MinPercent, MaxPercent: result.MaxPercent,
 	})
 	return ctx.JSON(http.StatusOK, result)

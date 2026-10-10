@@ -24,6 +24,8 @@ type moveRuleDTO struct {
 	FailsWithoutDefenderItem bool                 `json:"failsWithoutDefenderItem"`
 	SpreadInTerrain          string               `json:"spreadInTerrain"`
 	MoveSpecificResolved     bool                 `json:"moveSpecificResolved"`
+	FixedDamageFormula       string               `json:"fixedDamageFormula"` // ADR-0144
+	CategoryByStats          bool                 `json:"categoryByStats"`    // ADR-0144
 }
 
 type movePowerBoostDTO struct {
@@ -53,10 +55,14 @@ func (r *moveRuleDTO) toEngine(path string) (*engine.MoveRule, error) {
 	out := &engine.MoveRule{
 		PowerFormula: engine.PowerFormula(r.PowerFormula), IgnoresBurn: r.IgnoresBurn,
 		BreaksScreens: r.BreaksScreens, FailsWithoutDefenderItem: r.FailsWithoutDefenderItem,
-		MoveSpecificResolved: r.MoveSpecificResolved,
+		MoveSpecificResolved: r.MoveSpecificResolved, CategoryByStats: r.CategoryByStats,
+		FixedDamageFormula: engine.FixedDamageFormula(r.FixedDamageFormula),
 	}
 	if out.PowerFormula != "" && !out.PowerFormula.Known() {
 		return nil, enumError(path+".powerFormula", r.PowerFormula)
+	}
+	if out.FixedDamageFormula != "" && !out.FixedDamageFormula.Known() {
+		return nil, enumError(path+".fixedDamageFormula", r.FixedDamageFormula)
 	}
 	var err error
 	if r.PowerBoosts != nil {

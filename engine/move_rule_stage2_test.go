@@ -79,11 +79,14 @@ func TestMoveRuleVocabulary(t *testing.T) {
 	wantFormulas := []PowerFormula{
 		PowerFormulaPositiveBoosts, PowerFormulaSpeedRatio, PowerFormulaInverseSpeedRatio,
 		PowerFormulaTargetWeight, PowerFormulaWeightRatio, PowerFormulaHitIndex,
+		// 段階3(ADR-0144)で足した式。定義順の末尾に足す(値は TestStage3Vocabulary が見る)。
+		PowerFormulaAttackerHPScaled, PowerFormulaAttackerHPLow, PowerFormulaDefenderHPRatio, PowerFormulaAttackerItemFling,
 	}
 	if got := AllPowerFormulas(); !reflect.DeepEqual(got, wantFormulas) {
 		t.Errorf("AllPowerFormulas = %v, want %v(定義順)", got, wantFormulas)
 	}
-	wantValues := []string{"attacker_positive_boosts", "speed_ratio", "inverse_speed_ratio", "target_weight", "weight_ratio", "hit_index"}
+	wantValues := []string{"attacker_positive_boosts", "speed_ratio", "inverse_speed_ratio", "target_weight", "weight_ratio", "hit_index",
+		"attacker_hp_scaled", "attacker_hp_low", "defender_hp_ratio", "attacker_item_fling"}
 	for i, f := range wantFormulas {
 		if string(f) != wantValues[i] || !f.Known() {
 			t.Errorf("PowerFormula %q: 値 %q・Known が真であること", f, wantValues[i])

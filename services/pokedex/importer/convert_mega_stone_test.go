@@ -144,7 +144,7 @@ func TestDecodeShowdownSnapshotRequiresItemMegaStone(t *testing.T) {
 		}
 	})
 	t.Run("空のオブジェクトは通る", func(t *testing.T) {
-		s, err := importer.DecodeShowdownSnapshot(showdownSnapshotWithItems(`{"id":"testorb","name":"Test Orb","isNonstandard":null,"megaStone":{}}`))
+		s, err := importer.DecodeShowdownSnapshot(showdownSnapshotWithItems(`{"id":"testorb","name":"Test Orb","isNonstandard":null,"megaStone":{},"flingBasePower":null}`))
 		if err != nil {
 			t.Fatalf("err = %v", err)
 		}
@@ -154,7 +154,7 @@ func TestDecodeShowdownSnapshotRequiresItemMegaStone(t *testing.T) {
 	})
 	t.Run("基本種からメガへの対応を読む", func(t *testing.T) {
 		s, err := importer.DecodeShowdownSnapshot(showdownSnapshotWithItems(
-			`{"id":"testmonite","name":"Testmonite","isNonstandard":null,"megaStone":{"Testmon":"Testmon-M-Mega","Testmon-F":"Testmon-F-Mega"}}`))
+			`{"id":"testmonite","name":"Testmonite","isNonstandard":null,"megaStone":{"Testmon":"Testmon-M-Mega","Testmon-F":"Testmon-F-Mega"},"flingBasePower":null}`))
 		if err != nil {
 			t.Fatalf("err = %v", err)
 		}

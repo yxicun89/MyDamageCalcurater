@@ -127,7 +127,7 @@ func (m Move) ValidateParams(chart TypeChart) error {
 }
 
 // multiHitCount はこの入力での技1回の使用で当たる回数(多段でなければ 1)。固定回数はその値。範囲は
-// 攻撃側の特性の効果 MaxMultiHit(スキルリンク)があれば最大、無ければ 最小 + 1(oracle と同じ。ADR-0142 §3)。
+// 状態の回数 State.Hits の指定があればそれ、無ければ攻撃側の特性の効果 MaxMultiHit(スキルリンク)があれば最大、無ければ 最小 + 1(oracle と同じ。ADR-0142 §3)。
 func multiHitCount(in DamageInput) int {
 	mh := in.Move.Params.MultiHit
 	if mh == nil {
@@ -135,6 +135,9 @@ func multiHitCount(in DamageInput) int {
 	}
 	if mh.Min == mh.Max {
 		return mh.Min
+	}
+	if in.State.Hits != 0 {
+		return in.State.Hits // 指定は最大回数の特性に勝つ(oracle の options.hits。ADR-0144)
 	}
 	if ae := in.Attacker.Ability.Effect; ae != nil && ae.MaxMultiHit {
 		return mh.Max

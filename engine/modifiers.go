@@ -33,6 +33,8 @@ type ItemEffect struct {
 	// 表せない(計算に入れていない)ことの印(ADR-0123)。計算は補正なしで行い、結果に印を付ける。
 	UnsupportedAttacker bool
 	UnsupportedDefender bool
+	// Grounds は持ち物で接地する(くろいてっきゅう型。ADR-0144)。isGrounded でタイプ・特性より先に見る。
+	Grounds bool
 }
 
 // AbsorbEffect は吸収したときの副次効果(マスタの記述)。ゼロ値は「吸収するが副次効果は持たない」
@@ -209,9 +211,13 @@ func weatherDamageMod(w Weather, moveType Type) int {
 // isGrounded はその個体が接地しているかを返す(フィールドの補正の対象か。ADR-0116)。
 // @smogon/calc 0.12.0 の util.isGrounded のうち engine がモデル化している条件だけを見る:
 // ひこうタイプでない、かつ特性の効果が Airborne(ふゆう等)でない。
-// じゅうりょく・くろいてっきゅう(必ず接地)と、ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。
+// 持ち物による接地(ItemEffect.Grounds。くろいてっきゅう型)は最初に見る(ADR-0144)。
+// じゅうりょくと、ふうせん(浮く)は未モデル化(ADR-0116 §対象外)。
 // テラスタル中はテラスタイプで判定する(hasType。ADR-0224)。
 func isGrounded(in Individual) bool {
+	if e := itemEffect(in.Item); e != nil && e.Grounds {
+		return true
+	}
 	if hasType(in, TypeFlying) {
 		return false
 	}
