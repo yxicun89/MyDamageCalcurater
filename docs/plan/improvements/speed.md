@@ -11,3 +11,6 @@
 - 要望: 左(表)の一覧が長いのでスクロールに合わせて周辺だけ表示する。選んだポケモンが表のどこにいるか同じ高さで分かるようにする(usability-round2 F-06)。
 - [x] 表を `LazyVStack` で遅延描画。自分の位置を表の中(強調段・境界線)で示し、位置の読み上げ(全N段・自分はM段目)と「自分の位置へ」ボタンを追加(ADR-0517)
 - [x] 純粋なロジック `SpeedTableNavigation`(PokeCalcCore)の XCTest と、UI テスト(遅延描画・ジャンプ)を追加
+
+## 2026-10-11 使用感フィードバック第3回(docs/usability-round3.md の G-04)
+- [ ] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。テスト先行済み(speedNeighborhood.test.ts・SpeedNeighborhoodPanel.test.tsx)。実装は speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx を埋め、SpeedScreen の自分のカードに置く。iOS は後続 PR。
