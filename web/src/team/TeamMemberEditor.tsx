@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
-import { teamShowdownText } from "../i18n/team";
 import { itemRoleText } from "../i18n/items";
 import { megaStoneLabel } from "../domain/itemRoles";
 import { masterCapabilities } from "../master/capabilities";
@@ -33,7 +32,6 @@ import {
   swapSlots,
   teamInputFromMembers,
 } from "./teamSlots";
-import { TeamShowdownExport } from "./TeamShowdownExport";
 
 type Schemas = components["schemas"];
 
@@ -368,12 +366,6 @@ export function TeamMemberEditor({
           <p>{error.message}</p>
         </div>
       )}
-
-      <details className="ui-card team-fold">
-        <summary>{teamShowdownText.exportFoldLabel}</summary>
-        <p className="team-fold__help">{teamShowdownText.exportHelp}</p>
-        <TeamShowdownExport team={team} name={displayName} master={master} masterSearch={masterSearch} />
-      </details>
     </section>
   );
 }
