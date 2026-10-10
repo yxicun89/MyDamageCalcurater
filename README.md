@@ -27,7 +27,7 @@ API 契約・SQL から作る生成物(Go・TypeScript・iOS)は Git に置き�
 Go・SwiftPM のビルドキャッシュが効きます。
 
 表示された URL をブラウザで開きます。k3d(`make up` → `http://localhost:8080`)・iOS・DB を使う手順は
-[docs/verify-m1.md](docs/verify-m1.md) と [docs/runbooks/](docs/runbooks/) を上から実行してください。
+[docs/verify.md](docs/verify.md) と [docs/runbooks/](docs/runbooks/) を上から実行してください。
 
 ## データの扱い(第三者の著作物)
 

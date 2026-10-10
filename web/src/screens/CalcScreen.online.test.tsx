@@ -13,6 +13,7 @@
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test, vi } from "vitest";
+import { orderMoves } from "../domain/moveOrder";
 import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import type { Move } from "../engine/types";
 import { masterOnlineText } from "../i18n/ja";
@@ -38,6 +39,7 @@ import {
   type FakeSpeciesSearch,
 } from "../test/onlineMaster";
 import { CalcScreen } from "./CalcScreen";
+import { listedOption, listedOptions, moveTrigger, optionName } from "../test/movePicker";
 
 let example: MasterData;
 
@@ -62,7 +64,6 @@ function speciesAt(index: number): MasterSpecies {
 
 const attackerCard = () => screen.getByRole("region", { name: "攻撃側" });
 const defenderCard = () => screen.getByRole("region", { name: "防御側" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const compareToggle = () => screen.getByRole("checkbox", { name: /持ち物の候補/ });
 
 interface RenderResult {
@@ -130,8 +131,8 @@ async function chooseBySearch(
 describe("技が使えないマスタ(capabilities.moves === false。ADR-0304 §3・A-5)", () => {
   test("技のセレクトは残るが disabled で、技の選択肢が1件も無い", () => {
     renderScreen(limitedMaster(example, NO_MOVES));
-    expect(moveSelect()).toBeDisabled();
-    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(moveTrigger()).toBeDisabled();
+    expect(listedOptions()).toHaveLength(0);
   });
 
   test("技を選べないことを案内する", () => {
@@ -410,7 +411,7 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
 describe("capabilities を省いたマスタ(オフライン相当)は今までどおり", () => {
   test("技のセレクトは使え、案内も検索欄も出さない", () => {
     renderScreen(example);
-    expect(moveSelect()).not.toBeDisabled();
+    expect(moveTrigger()).not.toBeDisabled();
     expect(compareToggle()).not.toBeDisabled();
     expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
     expect(screen.queryByText(masterOnlineText.itemCandidatesUnavailable)).toBeNull();
@@ -478,16 +479,14 @@ function resolutionOf(species: MasterSpecies): MasterSpeciesResolution {
 
 /** いま技セレクトに並んでいる技の名前。 */
 function moveOptionNames(): string[] {
-  return within(moveSelect())
-    .queryAllByRole("option")
-    .map((option) => option.textContent);
+  return listedOptions().map((option) => optionName(option));
 }
 
 describe("オンラインのマスタ(種族も技も一覧が無い)で技が戻る(P4-17)", () => {
   test("攻撃側を選ぶ前は、技セレクトは残るが disabled で案内を出す", () => {
     renderScreen(onlineMaster(), onlineSearch());
-    expect(moveSelect()).toBeDisabled();
-    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(moveTrigger()).toBeDisabled();
+    expect(listedOptions()).toHaveLength(0);
     expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
   });
 
@@ -498,14 +497,14 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", attacker);
 
     await waitFor(() => {
-      expect(moveSelect()).not.toBeDisabled();
+      expect(moveTrigger()).not.toBeDisabled();
     });
     // 名前・分類・威力まで解決できている(ID の羅列ではない)ことを、既存の表示規則ごと確かめる。
     const expected = damagingLearnsetMoves(attacker, example.moves);
     expect(expected.length).toBeGreaterThan(0);
-    expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+    expect(listedOptions()).toHaveLength(expected.length);
     for (const move of expected) {
-      expect(within(moveSelect()).getByRole("option", { name: new RegExp(move.nameJa) })).toBeInTheDocument();
+      expect(listedOption(new RegExp(move.nameJa))).toBeInTheDocument();
     }
     expect(screen.queryByText(masterOnlineText.movesUnavailable)).toBeNull();
   });
@@ -515,8 +514,8 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
 
     await chooseBySearch(rendered, defenderCard(), "防御側のポケモン", speciesAt(1));
 
-    expect(moveSelect()).toBeDisabled();
-    expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(0);
+    expect(moveTrigger()).toBeDisabled();
+    expect(listedOptions()).toHaveLength(0);
   });
 
   test("種族の解決中(技がまだ届いていない間)は disabled のままで、解決したら有効になる", async () => {
@@ -538,7 +537,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
 
     // 種族を選んだ直後。resolveSpecies(= 技の解決)はまだ応答していない。
     expect(search.resolveCalls).toHaveLength(1);
-    expect(moveSelect()).toBeDisabled();
+    expect(moveTrigger()).toBeDisabled();
     expect(screen.getByText(masterOnlineText.movesUnavailable)).toBeInTheDocument();
 
     const resolveCall = search.resolveCalls[0];
@@ -550,7 +549,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     });
 
     await waitFor(() => {
-      expect(moveSelect()).not.toBeDisabled();
+      expect(moveTrigger()).not.toBeDisabled();
     });
   });
 
@@ -583,7 +582,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     expect(await within(attackerCard()).findByText(masterOnlineText.speciesSearchFailed)).toBeInTheDocument();
     // 種族そのものが選ばれていない(カードに名前が出ない)。
     expect(within(attackerCard()).queryByRole("heading", { name: attacker.nameJa })).toBeNull();
-    expect(moveSelect()).toBeDisabled();
+    expect(moveTrigger()).toBeDisabled();
     expect(rendered.engine.bulkRequests).toHaveLength(0);
   });
 
@@ -598,11 +597,13 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
       await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", species);
 
       await waitFor(() => {
-        expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(learnsetSize);
+        expect(listedOptions()).toHaveLength(learnsetSize);
       });
       // 先頭・末尾まで漏れていないこと(件数だけだと並び順の取り違えを見逃す)。
-      const first = moves[0];
-      const last = moves.at(-1);
+      // 並びはタイプ順だけ(G-01、ADR-0341)なので、期待する先頭・末尾も orderMoves の並びから取る。
+      const ordered = orderMoves(moves, onlineMaster().typeChart.types);
+      const first = ordered[0];
+      const last = ordered.at(-1);
       if (first === undefined || last === undefined) {
         throw new Error("技の fixture が空");
       }
@@ -620,7 +621,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", species);
 
     await waitFor(() => {
-      expect(within(moveSelect()).queryAllByRole("option")).toHaveLength(moves.length);
+      expect(listedOptions()).toHaveLength(moves.length);
     });
     expect(species.learnset).toHaveLength(moves.length + 1);
   });
@@ -650,7 +651,7 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     await chooseBySearch(rendered, attackerCard(), "攻撃側のポケモン", attacker);
     await chooseBySearch(rendered, defenderCard(), "防御側のポケモン", defender);
     await waitFor(() => {
-      expect(moveSelect()).not.toBeDisabled();
+      expect(moveTrigger()).not.toBeDisabled();
     });
 
     await rendered.user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
@@ -658,10 +659,10 @@ describe("オンラインのマスタ(種族も技も一覧が無い)で技が�
     const expected = damagingLearnsetMoves(defender, example.moves);
     expect(expected.length).toBeGreaterThan(0);
     await waitFor(() => {
-      expect(within(moveSelect()).getAllByRole("option")).toHaveLength(expected.length);
+      expect(listedOptions()).toHaveLength(expected.length);
     });
     for (const move of expected) {
-      expect(within(moveSelect()).getByRole("option", { name: new RegExp(move.nameJa) })).toBeInTheDocument();
+      expect(listedOption(new RegExp(move.nameJa))).toBeInTheDocument();
     }
 
     // critic指摘(P4-17): 候補一覧だけでなく、選択中の技(moveId)自体が新しい攻撃側の learnset から

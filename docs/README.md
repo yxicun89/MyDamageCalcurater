@@ -35,11 +35,7 @@
 | [design.md](design.md) | 画面・ビジュアルのデザインガイド |
 | [coding-rules.md](coding-rules.md) | コーディング規約(公開できる状態・ハードコード禁止・読みやすさ) |
 | [development-workflow.md](development-workflow.md) | Claude Code / Codex の開発ワークフロー対応 |
-| [verify-all.md](verify-all.md) | M1〜M4 の動作確認の索引と完了判定 |
-| [verify-m1.md](verify-m1.md) | M1 の動作確認手順(上から順に実行) |
-| [verify-m2.md](verify-m2.md) | M2(保存・構築)の動作確認手順 |
-| [verify-m3.md](verify-m3.md) | M3(iOS・タイプバランス画面)の動作確認手順 |
-| [verify-m4.md](verify-m4.md) | M4(監視・SLO・GitOps)の動作確認手順 |
+| [verify.md](verify.md) | 動作確認の手順(k3d 起動・Web・iOS・失敗時の見方) |
 | [type-balance-design.md](type-balance-design.md) | タイプバランスチェッカーの設計 |
 | [type-balance-test-strategy.md](type-balance-test-strategy.md) | タイプバランスのテスト戦略 |
 | [speed-design.md](speed-design.md) | 素早さ比較サービスの設計 |

@@ -21,7 +21,7 @@ import { itemsForRole } from "../domain/itemRoles";
 import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { damagingLearnsetMoves } from "../domain/moves";
 import { BATTLE_LEVEL, NEUTRAL_NATURE, selectableAbilities } from "../domain/requests";
-import type { Ability, Move, MoveCategory } from "../engine/types";
+import type { Ability, BattleState, Move, MoveCategory } from "../engine/types";
 import type { MasterItem, MasterNature, MasterSpecies } from "../master/types";
 
 type Schemas = components["schemas"];
@@ -45,6 +45,8 @@ export interface FavoriteCalcState {
   readonly defenderAbilityId: string;
   readonly attackerStatInputs: AttackerStatInputs;
   readonly conditions: CalcConditions;
+  /** 対戦の状態(残り HP・多段の回数。ADR-0144)。省略は満タン・既定の回数(保存しない)。 */
+  readonly battleState?: BattleState;
 }
 
 /** 復元で引く先(画面のマスタ。オンラインは検索で解決した分を足した一覧)。 */
@@ -131,6 +133,7 @@ export function favoriteCalcOf(input: FavoriteCalcOfInput): CalcRequest | null {
     moveId: state.moveId,
     ...(parts.field === undefined ? {} : { field: fieldOf(state.conditions) }),
     ...(parts.critical === undefined ? {} : { options: { critical: true } }),
+    ...(state.battleState === undefined ? {} : { battleState: state.battleState }),
   };
 }
 
@@ -339,6 +342,20 @@ function restoreConditions(calc: CalcRequest): CalcConditions {
   };
 }
 
+/** 保存された calc の battleState(指定したキーだけ)。無い・空なら何も足さない。 */
+function restoredBattleState(calc: CalcRequest): { readonly battleState?: BattleState } {
+  const saved = calc.battleState;
+  if (saved === undefined) {
+    return {};
+  }
+  const state: BattleState = {
+    ...(saved.attackerCurrentHp === undefined ? {} : { attackerCurrentHp: saved.attackerCurrentHp }),
+    ...(saved.defenderCurrentHp === undefined ? {} : { defenderCurrentHp: saved.defenderCurrentHp }),
+    ...(saved.hits === undefined ? {} : { hits: saved.hits }),
+  };
+  return Object.keys(state).length === 0 ? {} : { battleState: state };
+}
+
 export interface FavoriteRestoreResult {
   readonly state: FavoriteCalcState;
   readonly issues: readonly FavoriteRestoreIssue[];
@@ -386,6 +403,7 @@ export function restoreFavoriteCalc(calc: CalcRequest, lookup: FavoriteRestoreLo
       defenderAbilityId,
       attackerStatInputs: attacker.attackerStatInputs,
       conditions: restoreConditions(calc),
+      ...restoredBattleState(calc),
     },
     issues,
   };

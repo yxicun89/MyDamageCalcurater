@@ -62,14 +62,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public private(set) var itemOptionsReachedLimit = false
     /// 「直近の技検索の結果 ∩ 攻撃側の learnset の ID 集合」を learnset の順で並べたもの(6章)。
     public private(set) var moveOptions: [Move] = []
-    /// 技ピッカーの並び(F-02。習得順・五十音順・タイプ順)。表示順だけを変える: 選択中の技・要求・結果は変えず、再計算もしない。
-    /// 変えると `moveSortStore` に保存する(端末内。次の起動でも同じ並び)。
-    public var moveSortOrder: MoveSortOrder {
-        didSet { if moveSortOrder != oldValue { moveSortStore?.save(moveSortOrder) } }
-    }
-    /// `moveOptions` を `moveSortOrder` で並べたもの(技ピッカーが描く)。
-    public var displayedMoveOptions: [Move] { MoveSort.sorted(moveOptions, by: moveSortOrder) }
-    private let moveSortStore: MoveSortStore?
+    /// `moveOptions` をタイプ順に並べたもの(技ピッカーが描く。G-01。表示順だけで、選択中の技・要求・結果は変えない)。
+    public var displayedMoveOptions: [Move] { MoveSort.byType(moveOptions) }
     var natureOptions: [Nature] = []
     /// `load()` の二重実行を防ぐ(同じ画面から複数回 `load()` を呼んでも読み込みは1回だけ)。
     private var didLoad = false
@@ -476,12 +470,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     private var latestRequestToken = 0
 
     public init(
-        service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval,
-        moveSortStore: MoveSortStore? = nil
+        service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval
     ) {
         self.service = service
-        self.moveSortStore = moveSortStore
-        moveSortOrder = moveSortStore?.load() ?? .default
         self.teamStore = teamStore
         speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
             try await service.searchSpecies(query: query, limit: limit)

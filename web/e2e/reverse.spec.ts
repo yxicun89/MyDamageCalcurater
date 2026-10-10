@@ -47,7 +47,7 @@ test("与えたダメージのダメージ%を入れると、H32 前提の注記
   await expect(page.getByRole("radio", { name: "与えたダメージ", exact: true })).toBeChecked();
   await selectReverseMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   // 技は自分(攻撃側)の最初のダメージ技が自動で選ばれる(計算画面と同じ技)。
-  await expect(combobox(page, "技").locator("option:checked")).toContainText("威力");
+  await expect(combobox(page, "技").locator(".move-picker__power")).toHaveText(/^\d+$/);
 
   await page.getByRole("textbox", { name: "ダメージ1", exact: true }).fill(String(percent));
 

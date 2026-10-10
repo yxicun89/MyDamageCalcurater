@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# アプリをビルドしてシミュレータで起動する(F-14。手順書 docs/verify-m3.md)。
+# アプリをビルドしてシミュレータで起動する(F-14。手順書 docs/verify.md)。
 #
 #   ios/scripts/ios-run.sh <シミュレータ名>
 #

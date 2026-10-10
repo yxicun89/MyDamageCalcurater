@@ -19,6 +19,7 @@ import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
 import { PokemonImage } from "../images/PokemonImage";
 import "./SpeedScreen.css";
+import { SpeedNeighborhood } from "./SpeedNeighborhoodPanel";
 import type { components } from "./speed.gen";
 import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
 import {
@@ -633,6 +634,13 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
         {positionState.status === "success" && (
           <PositionResult value={positionState.value} trickRoom={trickRoom} />
+        )}
+        {tableState.status === "success" && (
+          <SpeedNeighborhood
+            tiers={tableState.value.tiers}
+            ownSpeed={positionState.status === "success" ? positionState.value.speed : null}
+            trickRoom={trickRoom}
+          />
         )}
       </section>
     </div>

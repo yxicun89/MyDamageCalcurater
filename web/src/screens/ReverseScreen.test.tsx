@@ -16,6 +16,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterAll, beforeAll, describe, expect, test, vi } from "vitest";
 import { resolveAttackerPreset } from "../domain/attackerPresets";
+import { orderMoves } from "../domain/moveOrder";
 import { damagingLearnsetMoves, firstDamagingMove, learnsetMoves } from "../domain/moves";
 import { OBSERVATION_INPUT_DEBOUNCE_MS } from "../domain/observations";
 import { NEUTRAL_NATURE, ZERO_SP, defaultAbility, toEngineSpecies } from "../domain/requests";
@@ -34,6 +35,7 @@ import {
   type PendingReverse,
 } from "../test/fakeEngine";
 import { ReverseScreen } from "./ReverseScreen";
+import { chooseMove, listedOption, listedOptions, moveTrigger, selectedMoveId } from "../test/movePicker";
 
 let master: MasterData;
 
@@ -85,7 +87,6 @@ const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダ�
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
 const myItemSelect = () => screen.getByRole("combobox", { name: "自分の持ち物" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const observationInput = (n: number) => screen.getByRole("textbox", { name: `ダメージ${String(n)}` });
 const unitGroup = (n: number) => screen.getByRole("radiogroup", { name: `ダメージ${String(n)}の単位` });
 const addObservationButton = () => screen.getByRole("button", { name: "ダメージを追加" });
@@ -148,7 +149,7 @@ describe("初期表示", () => {
     expect(mySpeciesSelect()).toBeInTheDocument();
     expect(theirSpeciesSelect()).toBeInTheDocument();
     expect(myItemSelect()).toBeInTheDocument();
-    expect(moveSelect()).toBeInTheDocument();
+    expect(moveTrigger()).toBeInTheDocument();
     expect(observationInput(1)).toHaveValue("");
     expect(within(unitGroup(1)).getByRole("radio", { name: "%" })).toBeChecked();
     expect(screen.queryByRole("textbox", { name: "ダメージ2" })).toBeNull();
@@ -160,7 +161,7 @@ describe("初期表示", () => {
   test("種族と技が揃っても、ダメージが空なら engine を呼ばない", async () => {
     const { user, engine } = renderScreen();
     await choosePair(user, speciesAt(0), speciesAt(1));
-    expect(moveSelect()).toHaveValue(firstMoveOf(speciesAt(0)).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(speciesAt(0)).id);
     expect(engine.reverseRequests).toHaveLength(0);
   });
 });
@@ -198,10 +199,10 @@ describe("与えたダメージ(side defender)", () => {
     const mine = speciesAt(0);
     const { user } = renderScreen();
     await choosePair(user, mine, speciesAt(1));
-    const options = within(moveSelect())
-      .getAllByRole("option")
-      .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(damagingLearnsetMoves(mine, master.moves).map((move) => move.id));
+    const options = listedOptions().map((option) => option.getAttribute("data-move-id"));
+    expect(options).toEqual(
+      orderMoves(damagingLearnsetMoves(mine, master.moves), master.typeChart.types).map((move) => move.id),
+    );
   });
 
   test("自分の調整(攻撃側プリセット)を選ぶと known の SP・性格に入る", async () => {
@@ -260,10 +261,12 @@ describe("受けたダメージ(side attacker)", () => {
     // issue #275: 自分が防御側のときは、自分の耐久(防御側プリセット)を選べる。既定は無振りで、
     // そのときのリクエストは issue #275 以前と同じ(SP 0・補正なし)になる(回帰。下の known の検証)。
     expect(within(myPresetGroup()).getByRole("radio", { name: "無振り" })).toBeChecked();
-    const options = within(moveSelect())
-      .getAllByRole("option")
-      .map((option) => option.getAttribute("value"));
-    expect(options).toEqual(damagingLearnsetMoves(theirs, master.moves).map((candidate) => candidate.id));
+    const options = listedOptions().map((option) => option.getAttribute("data-move-id"));
+    expect(options).toEqual(
+      orderMoves(damagingLearnsetMoves(theirs, master.moves), master.typeChart.types).map(
+        (candidate) => candidate.id,
+      ),
+    );
     await typeObservation(user, 1, "60");
 
     await waitFor(() => {
@@ -304,12 +307,12 @@ describe("受けたダメージ(side attacker)", () => {
     const theirs = speciesAt(1);
     const { user, engine } = renderScreen();
     await choosePair(user, mine, theirs);
-    expect(moveSelect()).toHaveValue(firstMoveOf(mine).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(mine).id);
 
     await chooseReceived(user);
-    expect(moveSelect()).toHaveValue(firstMoveOf(theirs).id);
+    expect(selectedMoveId()).toBe(firstMoveOf(theirs).id);
 
-    // moveSelect() の表示値だけだと、選び直しをしなくても(前の技の id が新しい learnset に無いとき)
+    // moveTrigger() の表示値だけだと、選び直しをしなくても(前の技の id が新しい learnset に無いとき)
     // ネイティブの select が黙って先頭の option を表示してしまい、見分けが付かない。engine に渡る技
     // (moveId が実際に新しい learnset の中の id として解決されていること)で確かめる。
     await typeObservation(user, 1, "60");
@@ -351,7 +354,7 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
   async function chooseReceivedWithMove(user: UserEvent, theirs: MasterSpecies, move: Move): Promise<void> {
     await chooseReceived(user);
     await choosePair(user, speciesAt(0), theirs);
-    await user.selectOptions(moveSelect(), move.id);
+    await chooseMove(user, move.id);
   }
 
   test("選択肢は技の分類で絞る(特殊技は D 系、物理技は B 系。カタログ順)", async () => {
@@ -360,7 +363,7 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
     await chooseReceivedWithMove(user, theirs, moveOf(theirs, "special"));
     expect(myPresetOptionLabels()).toEqual(["無振り", "H振り", "H振り+D補正", "HD振り", "HD特化"]);
 
-    await user.selectOptions(moveSelect(), moveOf(theirs, "physical").id);
+    await chooseMove(user, moveOf(theirs, "physical").id);
     expect(myPresetOptionLabels()).toEqual(["無振り", "H振り", "H振り+B補正", "HB振り", "HB特化"]);
   });
 
@@ -400,7 +403,7 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
     await chooseReceivedWithMove(user, theirs, moveOf(theirs, "special"));
     await user.click(within(myPresetGroup()).getByRole("radio", { name: "HD特化" }));
 
-    await user.selectOptions(moveSelect(), moveOf(theirs, "physical").id);
+    await chooseMove(user, moveOf(theirs, "physical").id);
     expect(within(myPresetGroup()).getByRole("radio", { name: "HB特化" })).toBeChecked();
 
     await typeObservation(user, 1, "60");
@@ -417,7 +420,7 @@ describe("受けたダメージ(side attacker)の自分の耐久(防御側プリ
     await chooseReceivedWithMove(user, theirs, moveOf(theirs, "physical"));
     await user.click(within(myPresetGroup()).getByRole("radio", { name: "HB特化" }));
 
-    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(listedOption(new RegExp(statusMove.nameJa))).toBeNull();
     expect(within(myPresetGroup()).getByRole("radio", { name: "HB特化" })).toBeChecked();
   });
 
@@ -797,7 +800,7 @@ describe("結果の表示", () => {
     const { user, engine } = renderScreen();
     await choosePair(user, species, speciesAt(1));
     await typeObservation(user, 1, "45");
-    expect(within(moveSelect()).queryByRole("option", { name: new RegExp(statusMove.nameJa) })).toBeNull();
+    expect(listedOption(new RegExp(statusMove.nameJa))).toBeNull();
     expect(screen.queryByText("変化技はダメージを計算しません")).toBeNull();
     await waitFor(() => {
       expect(engine.reverseRequests.length).toBeGreaterThan(0);
@@ -891,7 +894,7 @@ describe("結果の表示", () => {
       const { user } = renderScreen(engine);
       await showInitialResult(user, pending, mine, speciesAt(1));
 
-      await user.selectOptions(moveSelect(), secondMove.id);
+      await chooseMove(user, secondMove.id);
 
       expect(await expectBackToLoading()).toBeInTheDocument();
     });

@@ -20,6 +20,17 @@ import {
 } from "react";
 import { ATTACKER_PRESET_KEYS, attackerPresetLabel } from "../domain/attackerPresets";
 import {
+  DEFAULT_BATTLE_STATE_INPUTS,
+  exceedsMax,
+  inputsOfBattleState,
+  multiHitRangeOf,
+  resolveBattleState,
+  savedBattleState,
+  type BattleStateInputs,
+  type ScreenBattleState,
+} from "../domain/battleState";
+import { recalcRowsWithBattleState } from "../domain/battleStateRows";
+import {
   ATTACK_STATS,
   DEFAULT_ATTACKER_STAT_INPUTS,
   NATURE_MODIFIERS,
@@ -76,6 +87,7 @@ import type {
 } from "../engine/types";
 import {
   attackerStatText,
+  battleStateText,
   calcScreenText,
   frequentOpponentsText,
   isTypeId,
@@ -112,10 +124,10 @@ import { favoritesRestoreText } from "../i18n/favorites";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
-import { useMoveSort } from "../app/useMoveSort";
-import { MoveOptions, MoveSortChips } from "./MoveSortControls";
+import { MovePicker } from "./MovePicker";
 import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
@@ -324,6 +336,8 @@ interface CompletedCalc {
   readonly attackerAbility: Ability;
   readonly defenderAbilities: readonly Ability[];
   readonly conditions: CalcConditions;
+  /** 計算に使った対戦の状態(指定なしは undefined。ADR-0144)。 */
+  readonly battleState: ScreenBattleState | undefined;
   readonly result: EngineResult<BulkResult>;
 }
 
@@ -350,6 +364,8 @@ type RestoredFavorite =
   | {
       readonly kind: "calc";
       readonly state: ReturnType<typeof restoreFavoriteCalc>["state"];
+      /** 保存された battleState を画面の入力に戻したもの(防御側の実数値は無振りの最大 HP で割合に戻す)。 */
+      readonly battleInputs: BattleStateInputs;
       readonly issues: readonly FavoriteRestoreIssue[];
       readonly resolutions: readonly MasterSpeciesResolution[];
     }
@@ -422,7 +438,12 @@ async function restoreFavoriteInputs(input: RestoreFavoriteInputsInput): Promise
     };
   }
   const { state, issues } = restoreFavoriteCalc(calc, lookup);
-  return { kind: "calc", state, issues, resolutions };
+  const defenderBaseHp = lookup.defenderSpecies?.baseStats.hp;
+  const battleInputs = inputsOfBattleState(
+    state.battleState,
+    defenderBaseHp === undefined ? null : defenderBaseHp + 75,
+  );
+  return { kind: "calc", state, battleInputs, issues, resolutions };
 }
 
 /** お気に入りから戻した案内(開いた旨・戻せなかった項目の alert・メガの固定・反映しなかった項目)。 */
@@ -507,6 +528,18 @@ export function CalcScreen({
   const [defenderAbilityId, setDefenderAbilityId] = useState("");
   // 「詳細」の条件(issue 274、ADR-0312)。攻守入れ替え・種族・技の変更では消さない。
   const [conditions, setConditions] = useState<CalcConditions>(DEFAULT_CALC_CONDITIONS);
+  // ADR-0144 §3: 対戦の状態。残り HP は入力途中の文字列で持ち、回数は選んだ技に結びつけて持つ(技が変われば既定に戻る)。
+  const [battleInputs, setBattleInputs] = useState<Pick<BattleStateInputs, "attackerHp" | "defenderHp">>({
+    attackerHp: DEFAULT_BATTLE_STATE_INPUTS.attackerHp,
+    defenderHp: DEFAULT_BATTLE_STATE_INPUTS.defenderHp,
+  });
+  const [hitsState, setHitsState] = useState<{ readonly moveId: string; readonly value: number | null }>({
+    moveId: "",
+    value: null,
+  });
+  // 最大 HP の変更で残り HP を最大に合わせたときの案内(合わせた最大 HP。次に利用者がその欄を触ったら消す)。
+  const [seenMaxHp, setSeenMaxHp] = useState<number | null>(null);
+  const [clamped, setClamped] = useState<number | null>(null);
   // 攻撃側の「攻撃」「特攻」の入力(SP の文字列・性格補正)。技・種族・攻守入れ替えでは変えない
   // (ADR-0329 §6、ADR-0312 §6 と同じ寿命)。プリセットの選択状態は持たず、値から毎レンダー導く。
   const [attackerStatInputs, setAttackerStatInputs] = useState<AttackerStatInputs>(
@@ -564,6 +597,8 @@ export function CalcScreen({
     attackerStatInputs,
     conditions,
     compareItems,
+    battleInputs,
+    hitsState,
   ];
   if (restoreNotice !== null) {
     if (restoreNotice.baseline === null) {
@@ -603,6 +638,12 @@ export function CalcScreen({
         setDefenderAbilityId(state.defenderAbilityId);
         setAttackerStatInputs(state.attackerStatInputs);
         setConditions(state.conditions);
+        setBattleInputs({
+          attackerHp: restored.battleInputs.attackerHp,
+          defenderHp: restored.battleInputs.defenderHp,
+        });
+        setHitsState({ moveId: state.moveId, value: restored.battleInputs.hits });
+        setClamped(null);
       } else {
         const { attacker, attackerSpecies: species, moves } = restored;
         setAttackerKey(attacker.attackerKey);
@@ -743,6 +784,38 @@ export function CalcScreen({
     [attackerStatInputs, master.natures, move],
   );
 
+  // ADR-0144 §3: 対戦の状態。最大 HP(実数値)は 種族値 + 75 + SP。防御側は一括計算の行ごとに SP が違うので、どの行にも
+  // 当てはまる無振り(SP 0)の最大 HP を欄の上限にする。分からない側(種族が未選択・攻撃側の入力が不正)は欄を出さず送らない。
+  const attackerMaxHp =
+    attackerSpecies !== null && attackerStats.ok
+      ? attackerSpecies.baseStats.hp + 75 + attackerStats.sp.hp
+      : null;
+  // 防御側の残りHPは割合(%)で入力する。行ごとに最大 HP が違うので、実数値には行ごとに換算する(domain/battleState.ts)。
+  const defenderPresent = defenderSpecies !== null;
+  // お気に入りには実数値で保存する。行が特定できないので、無振り(SP 0)の最大 HP の行に換算する。
+  const defenderReferenceMaxHp = defenderSpecies === null ? null : defenderSpecies.baseStats.hp + 75;
+  // 攻撃側の最大 HP が変わって残り HP が最大を超えたら、最大に合わせて案内を出す(黙って送らない)。利用者が最大を超えて入力したときは
+  // 丸めず、欄の下に誤りを出す(最大が変わったときだけ丸める)。
+  if (seenMaxHp !== attackerMaxHp) {
+    setSeenMaxHp(attackerMaxHp);
+    if (attackerMaxHp !== null && exceedsMax(battleInputs.attackerHp, attackerMaxHp)) {
+      setBattleInputs({ ...battleInputs, attackerHp: String(attackerMaxHp) });
+      setClamped(attackerMaxHp);
+    }
+  }
+  const hitsRange = multiHitRangeOf(move);
+  const hits = hitsState.moveId === moveId ? hitsState.value : null;
+  const battle = useMemo(
+    () => resolveBattleState({ ...battleInputs, hits }, { attackerMaxHp, defenderPresent }, move),
+    [battleInputs, hits, attackerMaxHp, defenderPresent, move],
+  );
+  const battleState = battle.state;
+  const favoriteBattleState = useMemo(
+    () => (battleState === undefined ? undefined : savedBattleState(battleState, defenderReferenceMaxHp)),
+    [battleState, defenderReferenceMaxHp],
+  );
+  const battleInvalid = battle.attackerError || battle.defenderError;
+
   // P5-3c(ADR-0327 §2)・I-web-8(ADR-0333 §1): お気に入りに入れる内容。攻撃側(種族・性格・SP・持ち物)に、
   // 攻撃側・防御側・技が揃っていれば計算の入力(calc)も付ける。入力が不正なら入れない(ADR-0329 §7)。
   const favoriteInput = useMemo(() => {
@@ -767,6 +840,7 @@ export function CalcScreen({
               defenderAbilityId,
               attackerStatInputs,
               conditions,
+              ...(favoriteBattleState === undefined ? {} : { battleState: favoriteBattleState }),
             },
             natures: master.natures,
             moveCategory: move.category,
@@ -797,6 +871,7 @@ export function CalcScreen({
     defenderAbilityId,
     attackerStatInputs,
     conditions,
+    favoriteBattleState,
   ]);
 
   function selectAttacker(key: string): void {
@@ -1007,7 +1082,8 @@ export function CalcScreen({
       defenderSpecies === null ||
       move === null ||
       move.category === "status" ||
-      !attackerStats.ok
+      !attackerStats.ok ||
+      battleInvalid
     ) {
       return;
     }
@@ -1037,7 +1113,29 @@ export function CalcScreen({
     });
     // calcBulk は EngineResult(ok/not ok)で成否を運び、reject しない契約(ADR-0011 §5)。
     // それでも floating promise を残さないよう void で明示する。
-    void engine.calcBulk(request, controller.signal).then((result) => {
+    // 対戦の状態を指定したときだけ、各行を battleState つきの1対1の計算で計算し直す(一括の要求には付けない。ADR-0144 §3)。
+    const calcRows = async (): Promise<EngineResult<BulkResult>> => {
+      const bulk = await engine.calcBulk(request, controller.signal);
+      if (battleState === undefined || !bulk.ok) {
+        return bulk;
+      }
+      return recalcRowsWithBattleState({
+        engine,
+        bulk: bulk.value,
+        attacker: attackerIndividual,
+        defenderSpecies,
+        itemVariants: itemVariants ?? [null],
+        defenderAbilities,
+        move,
+        typeChart: master.typeChart,
+        battleState,
+        ...(parts.field === undefined ? {} : { field: parts.field }),
+        ...(parts.critical === undefined ? {} : { critical: parts.critical }),
+        ...(parts.defenderOverride === undefined ? {} : { defenderRanks: parts.defenderOverride.ranks }),
+        signal: controller.signal,
+      });
+    };
+    void calcRows().then((result) => {
       if (!cancelled) {
         setCompleted({
           attackerSpecies,
@@ -1050,6 +1148,7 @@ export function CalcScreen({
           attackerAbility,
           defenderAbilities,
           conditions,
+          battleState,
           result,
         });
       }
@@ -1073,6 +1172,8 @@ export function CalcScreen({
     defenderAbilities,
     conditions,
     itemVariantsResult,
+    battleState,
+    battleInvalid,
   ]);
 
   // idle・status-move は選ばれている入力から直接決まる。completed が無い、または今の入力と違う入力の
@@ -1082,8 +1183,9 @@ export function CalcScreen({
     outcome = { status: "idle" };
   } else if (isStatusMove(move)) {
     outcome = { status: "status-move" };
-  } else if (!attackerStats.ok) {
+  } else if (!attackerStats.ok || battleInvalid) {
     // 攻撃側の入力が不正なときは計算せず、古い行も出さない(理由は攻撃側の入力のすぐ下に出す。ADR-0329 §5)。
+    // 残り HP が範囲外のときも同じ(理由は「対戦の状態」の欄の下に出す。ADR-0144 §3)。
     outcome = { status: "idle" };
   } else if (
     completed === null ||
@@ -1096,7 +1198,8 @@ export function CalcScreen({
     completed.attackerStatInputs !== attackerStatInputs ||
     completed.attackerAbility !== attackerAbility ||
     completed.defenderAbilities !== defenderAbilities ||
-    completed.conditions !== conditions
+    completed.conditions !== conditions ||
+    completed.battleState !== battleState
   ) {
     outcome = { status: "loading" };
   } else {
@@ -1180,9 +1283,21 @@ export function CalcScreen({
         moves={attackerMoves}
         types={master.typeChart.types}
         value={moveId}
-        onChange={setMoveId}
-        disabled={!movesAvailable}
+        onChange={(id) => {
+          setMoveId(id);
+          setHitsState({ moveId: id, value: null });
+        }}
+        disabled={!movesAvailable || (attackerSpecies !== null && attackerMoves.length === 0)}
       />
+      {hitsRange !== null && (
+        <HitsSelect
+          range={hitsRange}
+          value={hits}
+          onChange={(value) => {
+            setHitsState({ moveId, value });
+          }}
+        />
+      )}
       {!movesAvailable && <p className="calc-screen__notice">{masterOnlineText.movesUnavailable}</p>}
       {attackerSpecies !== null && capabilities.moves && attackerMoves.length === 0 && (
         <p className="calc-screen__notice">{calcScreenText.noDamagingMovesNotice}</p>
@@ -1227,6 +1342,36 @@ export function CalcScreen({
         rankStat={rankStatFor(move?.category ?? null)}
         defenderRankStat={defenderRankStatFor(move?.category ?? null)}
       />
+
+      <BattleStatePanel
+        attackerHp={battleInputs.attackerHp}
+        defenderHp={battleInputs.defenderHp}
+        attackerMaxHp={attackerMaxHp}
+        defenderPresent={defenderPresent}
+        attackerClampedTo={clamped}
+        active={battleState !== undefined || battleInvalid}
+        onAttackerHpChange={(attackerHp) => {
+          setBattleInputs({ ...battleInputs, attackerHp });
+          setClamped(null);
+        }}
+        onDefenderHpChange={(defenderHp) => {
+          setBattleInputs({ ...battleInputs, defenderHp });
+        }}
+      />
+
+      {outcome.status === "success" && battleState !== undefined && (
+        <p className="calc-screen__battle-summary">
+          {battleStateText.summary([
+            ...(battleState.attackerCurrentHp === undefined || attackerMaxHp === null
+              ? []
+              : [battleStateText.summaryAttacker(battleState.attackerCurrentHp, attackerMaxHp)]),
+            ...(battleState.defenderPercent === undefined
+              ? []
+              : [battleStateText.summaryDefender(battleState.defenderPercent)]),
+            ...(battleState.hits === undefined ? [] : [battleStateText.summaryHits(battleState.hits)]),
+          ])}
+        </p>
+      )}
 
       <ResultsSection
         outcome={outcome}
@@ -1650,29 +1795,20 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ。並びはチップ群で選ぶ(既定は learnset の順)。分類と威力(変化技は威力を出さない)を併記する。 */
+/** 技セレクタ。技ピッカー(タイプ順だけ。G-01、ADR-0341)。 */
 function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
-  const moveSelectId = useId();
-  const [order] = useMoveSort();
   return (
-    <>
-      <label className="calc-screen__label" htmlFor={moveSelectId}>
-        {calcScreenText.moveLabel}
-      </label>
-      <MoveSortChips variant="calc" />
-      <select
-        id={moveSelectId}
-        className="calc-screen__move"
-        aria-label={calcScreenText.moveLabel}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        <MoveOptions moves={moves} types={types} order={order} value={value} showUnselected />
-      </select>
-    </>
+    <MovePicker
+      label={calcScreenText.moveLabel}
+      labelClassName="calc-screen__label"
+      triggerClassName="calc-screen__move"
+      moves={moves}
+      types={types}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      showUnselected
+    />
   );
 }
 

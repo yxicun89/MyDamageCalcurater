@@ -287,3 +287,54 @@
   font-size: var(--font-size-body);
   color: var(--text-secondary);
 }
+
+/* G-04: 自分の周りパネル(ADR-0609)。既存トークンのみ。表のスクロール領域の外に置く。 */
+.speed-neighbor {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-hairline);
+  padding-top: var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.speed-neighbor__heading {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-heading);
+}
+
+.speed-neighbor__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.speed-neighbor__tier,
+.speed-neighbor__self {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2);
+}
+
+.speed-neighbor__self {
+  border: 2px solid var(--text-secondary);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  font-weight: 600;
+}
+
+.speed-neighbor__badge {
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.speed-neighbor__total,
+.speed-neighbor__none,
+.speed-neighbor__empty {
+  margin: var(--space-1) 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}

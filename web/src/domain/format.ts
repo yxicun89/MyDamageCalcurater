@@ -4,6 +4,7 @@
 
 import type { CalcResult, KOChance, MoveCategory } from "../engine/types";
 import { resultText } from "../i18n/ja";
+import { movePickerText } from "../i18n/movePicker";
 
 /** 表示%を常に小数第1位まで書く("73.4"、"100.0"、"0.0")。 */
 export function formatPercent(value: number): string {
@@ -42,6 +43,11 @@ export function formatEffectiveness(value: CalcResult["effectiveness"]): string 
     return resultText.effectivenessNeutral;
   }
   return resultText.effectivenessSuper(value);
+}
+
+/** 技ピッカーでの技の分類の名前(ぶつり・とくしゅ・へんか。用語集の語。G-01、ADR-0341)。 */
+export function formatMovePickerCategory(category: MoveCategory): string {
+  return movePickerText.category[category];
 }
 
 /** 技の分類の表示名。 */

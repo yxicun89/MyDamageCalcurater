@@ -1,7 +1,7 @@
 // P4-9: ホロの pointermove で計算画面全体を再レンダーしない(docs/plan.md P4-9、design.md「パフォーマンス予算」
 // 計算結果の表示更新 100ms)。ホロの状態はカードの中に閉じ、結果一覧や技の選択は描き直さない。
 // 描き直したかどうかは、結果一覧(ResultsList)と技の選択(MoveSelect)がレンダーのたびに呼ぶ表示用の関数
-// (domain/format の formatPercentRange・formatMoveCategory)の呼び出し回数で確かめる(本体に計測用の口を足さない)。
+// (domain/format の formatPercentRange・formatMovePickerCategory。技ピッカーが分類名を出すたびに呼ぶ)の呼び出し回数で確かめる(本体に計測用の口を足さない)。
 // 中身は本物のまま、呼び出しを数えるだけの spy に差し替える。
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
@@ -19,7 +19,7 @@ vi.mock("../domain/format", async (importOriginal) => {
   return {
     ...actual,
     formatPercentRange: vi.fn(actual.formatPercentRange),
-    formatMoveCategory: vi.fn(actual.formatMoveCategory),
+    formatMovePickerCategory: vi.fn(actual.formatMovePickerCategory),
   };
 });
 
@@ -68,7 +68,7 @@ function nextFrame(): void {
 function renderCounts(): { results: number; moveSelect: number } {
   return {
     results: vi.mocked(format.formatPercentRange).mock.calls.length,
-    moveSelect: vi.mocked(format.formatMoveCategory).mock.calls.length,
+    moveSelect: vi.mocked(format.formatMovePickerCategory).mock.calls.length,
   };
 }
 
