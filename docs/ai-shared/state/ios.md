@@ -59,3 +59,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-10(F-12 iOS ビジュアルの基盤。ブランチ feat/ios-f12-visual。ADR-0521): `PokeCalcDesign` にポップ配色・タイトル/太さ・影・押下のトークンを追加し(値は Web と同じ。`PopPaletteTests`)、`ios/PokeCalc/PopComponents.swift` の部品(popCard〈タイプ色の帯〉・PillButtonStyle(kind:)・PopChipStyle・popRow・PopNoticeView・popScreenBackground・PopIcon/PopHeading/PopLabel)を全画面に適用。`glassCard` は廃止。識別子・ラベル・AX5 の分岐は不変。後続の画面の作り直し(F-08 構築・F-13 文言)はこの部品の上で行う。
 
 2026-10-10(F-02 技の並び。ブランチ feat/ios-f09-f02。ADR-0523): 計算画面の技ピッカー(検索シート)に「技の並び」(習得順〔既定〕・五十音順・タイプ順)を追加。Web の ADR-0335 と同じ語・規則(純粋関数 `MoveSort`・保存 `MoveSortStore`〈UserDefaults `pokecalc.moveSort`〉)。逆算・判定・構築の技ピッカーは未適用(`MoveSearchSheet` の `sortOrder` を渡せば付く)。
+
+2026-10-10(F-09 お気に入りから計算を復元。ブランチ feat/ios-f09-f02。ADR-0524): 計算画面の「攻撃側をお気に入りに追加」が `FavoriteInput.calc` を付ける(Web の ADR-0333 §1 と同じ省略規則)。お気に入り画面の calc つきの行に「計算に使う」→ 計算画面を push して `CalcViewModel.loadFavoriteCalc`(`loadHistoryCalc` と共通の `restoreCalc`)で復元し結果をすぐ出す。防御側の性格・SP・持ち物、攻撃側の壁、ダブルは戻さない(画面の文言と ADR に明記)。失敗は計算の失敗として表示し入力を書き換えない。calc の無い旧お気に入りは #613 の読み込み導線のまま。モック `POKECALC_MOCK_FAVORITES=calc`。

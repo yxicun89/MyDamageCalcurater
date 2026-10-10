@@ -7,6 +7,7 @@ import SwiftUI
 // ロジックは持たない。`FavoritesViewModel`・`CalcHistoryViewModel`・`OpponentHistoryViewModel`(PokeCalcCore)の状態を描き、
 // 操作を async メソッドへつなぐだけ。ここが失敗しても計算は使える(絶対ルール5)ので、失敗は画面の中の案内にとどめる。
 // 計算履歴の行をタップすると、その行の計算を計算画面に復元して開く(ADR-0519)。
+// 計算(calc)を持つお気に入りの行は「計算に使う」で同じように計算画面を開く(F-09・ADR-0524)。
 
 struct FavoritesScreenView: View {
     @State private var favorites: FavoritesViewModel
@@ -14,13 +15,14 @@ struct FavoritesScreenView: View {
     @State private var history: OpponentHistoryViewModel
     @State private var restoreTarget: CalcHistoryRestoreTarget?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
-    /// 履歴の行の計算を復元した計算画面を作る(この画面は計算画面の部品を知らない)。
-    private let calcScreen: (CalcHistoryCalc) -> AnyView
+    /// 履歴の行・お気に入りの計算を復元した計算画面を作る(この画面は計算画面の部品を知らない)。
+    /// 第2引数が非 nil ならお気に入りから開く(復元の案内を出す)。
+    private let calcScreen: (CalcHistoryCalc, RestoringFavorite?) -> AnyView
 
     init(
         favoritesService: (any FavoritesService)?, calcHistoryService: (any CalcHistoryService)?,
         frequentOpponentsService: any FrequentOpponentsService, resolver: any PokeCalcService,
-        calcScreen: @escaping (CalcHistoryCalc) -> AnyView
+        calcScreen: @escaping (CalcHistoryCalc, RestoringFavorite?) -> AnyView
     ) {
         _favorites = State(initialValue: FavoritesViewModel(service: favoritesService, resolver: resolver))
         _calcHistory = State(initialValue: CalcHistoryViewModel(service: calcHistoryService, resolver: resolver))
@@ -50,7 +52,7 @@ struct FavoritesScreenView: View {
             }
         }
         .navigationDestination(item: $restoreTarget) { target in
-            calcScreen(target.calc)
+            calcScreen(target.calc, target.favorite)
         }
         .task { await favorites.load() }
         .task { await calcHistory.load() }
@@ -93,26 +95,45 @@ struct FavoritesScreenView: View {
         let layout = isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x2))
             : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x3))
-        return layout {
-            VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                Text(row.title)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let subtitle = row.subtitle {
-                    captionText(subtitle)
+        return VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            layout {
+                VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                    Text(row.title)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle = row.subtitle {
+                        captionText(subtitle)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button {
+                    Task { await favorites.remove(id: row.id) }
+                } label: {
+                    PopLabel(title: FavoritesLabels.removeButton, systemImage: PopSymbol.delete)
+                }
+                .buttonStyle(PillButtonStyle(kind: .danger))
+                .disabled(favorites.removingIDs.contains(row.id))
+                .accessibilityLabel("\(FavoritesLabels.removeButton) \(row.title)")
+                .accessibilityIdentifier("favoriteDeleteButton-\(row.id)")
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            Button {
-                Task { await favorites.remove(id: row.id) }
-            } label: {
-                PopLabel(title: FavoritesLabels.removeButton, systemImage: PopSymbol.delete)
+            if let calc = row.favorite.calc {
+                // 保存した計算をそのまま開く(履歴の行と同じく計算画面へ push。結果はすぐ出る)。
+                Button {
+                    restoreTarget = CalcHistoryRestoreTarget(
+                        id: "favorite-\(row.id)", calc: calc,
+                        favorite: RestoringFavorite(favorite: row.favorite, title: row.title))
+                } label: {
+                    PopLabel(title: FavoritesLabels.useButton, systemImage: PopSymbol.calc)
+                }
+                .buttonStyle(PillButtonStyle(kind: .primary))
+                .accessibilityLabel(FavoritesLabels.useAccessibilityLabel(title: row.title))
+                .accessibilityHint(FavoritesLabels.restoreLimitNote)
+                .accessibilityIdentifier("favoriteUseButton-\(row.id)")
+            } else {
+                captionText(FavoritesLabels.legacyFavoriteHint)
+                    .accessibilityIdentifier("favoriteLegacyHint-\(row.id)")
             }
-            .buttonStyle(PillButtonStyle(kind: .danger))
-            .disabled(favorites.removingIDs.contains(row.id))
-            .accessibilityLabel("\(FavoritesLabels.removeButton) \(row.title)")
-            .accessibilityIdentifier("favoriteDeleteButton-\(row.id)")
         }
         .padding(SpacingToken.x3)
         .popRow(index: index)
@@ -165,7 +186,7 @@ struct FavoritesScreenView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x1))
             : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: SpacingToken.x3))
         return Button {
-            restoreTarget = CalcHistoryRestoreTarget(id: row.id, calc: row.entry.calc)
+            restoreTarget = CalcHistoryRestoreTarget(id: row.id, calc: row.entry.calc, favorite: nil)
         } label: {
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 Text(row.title)
@@ -273,6 +294,8 @@ struct FavoritesScreenView: View {
 struct CalcHistoryRestoreTarget: Identifiable, Hashable {
     let id: String
     let calc: CalcHistoryCalc
+    /// お気に入りから開くときだけ非 nil(F-09)。
+    let favorite: RestoringFavorite?
 
     static func == (lhs: CalcHistoryRestoreTarget, rhs: CalcHistoryRestoreTarget) -> Bool { lhs.id == rhs.id }
     func hash(into hasher: inout Hasher) { hasher.combine(id) }

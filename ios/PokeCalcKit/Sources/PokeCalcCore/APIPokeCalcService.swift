@@ -472,11 +472,11 @@ public struct APIPokeCalcService: PokeCalcService {
         )
     }
 
-    private static func generatedScreens(_ screens: Screens) -> Components.Schemas.Screens {
+    static func generatedScreens(_ screens: Screens) -> Components.Schemas.Screens {
         .init(reflect: screens.reflect, lightScreen: screens.lightScreen, auroraVeil: screens.auroraVeil)
     }
 
-    private static func generatedWeather(_ weather: Weather) -> Components.Schemas.Weather {
+    static func generatedWeather(_ weather: Weather) -> Components.Schemas.Weather {
         switch weather {
         case .none: return .none
         case .sun: return .sun
@@ -486,7 +486,7 @@ public struct APIPokeCalcService: PokeCalcService {
         }
     }
 
-    private static func generatedTerrain(_ terrain: Terrain) -> Components.Schemas.Terrain {
+    static func generatedTerrain(_ terrain: Terrain) -> Components.Schemas.Terrain {
         switch terrain {
         case .none: return .none
         case .electric: return .electric

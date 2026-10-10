@@ -23,6 +23,8 @@ struct CalcScreenView: View {
     private let backendDescription: String
     /// 計算履歴の行から開いたときの、復元する計算(ADR-0519)。nil は通常の起動(既定の入力)。
     private let restoring: CalcHistoryCalc?
+    /// お気に入り(計算つき)から開いたときの、復元するお気に入りと一覧での見出し(F-09・ADR-0524)。履歴から開いたときは nil。
+    private let restoringFavorite: RestoringFavorite?
     @State private var didRestore = false
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
@@ -34,7 +36,8 @@ struct CalcScreenView: View {
     init(
         service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
-        favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil
+        favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil,
+        restoringFavorite: RestoringFavorite? = nil
     ) {
         _viewModel = State(
             initialValue: CalcViewModel(service: service, teamStore: teamStore, moveSortStore: MoveSortStore.forApp()))
@@ -45,6 +48,7 @@ struct CalcScreenView: View {
         self.favoritesService = favoritesService
         self.backendDescription = backendDescription
         self.restoring = restoring
+        self.restoringFavorite = restoringFavorite
     }
 
     /// ダメージバー・相性の色に使う、選択中の技のタイプ色。技が無い(読み込み中)ときは無彩色にする。
@@ -83,6 +87,9 @@ struct CalcScreenView: View {
                 if favoritesService != nil {
                     FavoriteLoadEntryRows { favoriteLoadTarget = FavoriteLoadTarget(side: $0) }
                 }
+                if let restoringFavorite, viewModel.error == nil {
+                    FavoriteRestoreNoticeView(title: restoringFavorite.title)
+                }
                 if let notice = viewModel.favoriteLoadNotice {
                     FavoriteLoadNoticeView(notice: notice)
                 }
@@ -113,7 +120,10 @@ struct CalcScreenView: View {
             }
         }
         .task {
-            if let restoring, !didRestore {
+            if let restoringFavorite, !didRestore {
+                didRestore = true
+                await viewModel.loadFavoriteCalc(restoringFavorite.favorite)
+            } else if let restoring, !didRestore {
                 didRestore = true
                 await viewModel.loadHistoryCalc(restoring)
             } else {

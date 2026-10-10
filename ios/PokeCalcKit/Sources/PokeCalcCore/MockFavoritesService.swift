@@ -14,6 +14,9 @@ public enum MockFavoritesScenario: Equatable, Sendable {
     /// "303"(label「一部だけ」・9004-000・特性と持ち物がマスタに無い)、"302"(label「種族なし」・9999-000 = マスタに無い)、
     /// "301"(label なし・9003-000・特性あり・持ち物なし)。
     case loadable
+    /// 3件(計算の復元の確認用。F-09・ADR-0524): id "402"(label「雨で攻撃」・計算つき・9003→9001・とくしゅA・雨・最も新しい)、
+    /// "401"(label「技が消えた」・計算つき・マスタに無い技)、"400"(label「旧お気に入り」・calc なし・9003-000)。
+    case calc
     /// すべての操作が transport エラー。
     case failure
     /// すべての操作が 503 `store_unavailable`。
@@ -26,6 +29,7 @@ public enum MockFavoritesScenario: Equatable, Sendable {
         switch environmentValue {
         case "list": self = .list
         case "loadable": self = .loadable
+        case "calc": self = .calc
         case "fail": self = .failure
         case "unavailable": self = .unavailable
         case "full": self = .full
@@ -72,6 +76,28 @@ public actor MockFavoritesService: FavoritesService {
             ]
             nextID = 305
             clock = Self.baseTime + 300
+        case .calc:
+            let neutral = "test-nature-neutral"
+            let sp = StatBlock(hp: 0, atk: 32, def: 0, spa: 0, spd: 2, spe: 32)
+            func calc(move: String, field: FieldState = FieldState()) -> CalcHistoryCalc {
+                CalcHistoryCalc(
+                    format: .single, attacker: Individual(speciesKey: "9003-000", natureId: neutral, sp: sp),
+                    defender: Individual(
+                        speciesKey: "9001-000", natureId: neutral,
+                        sp: StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)),
+                    moveId: move, field: field)
+            }
+            stored = [
+                Self.make(
+                    "402", label: "雨で攻撃", key: "9003-000", nature: neutral, at: Self.baseTime + 200, sp: sp,
+                    calc: calc(move: "test-move-special-a", field: FieldState(weather: .rain))),
+                Self.make(
+                    "401", label: "技が消えた", key: "9003-000", nature: neutral, at: Self.baseTime + 100, sp: sp,
+                    calc: calc(move: "test-move-gone")),
+                Self.make("400", label: "旧お気に入り", key: "9003-000", nature: neutral, at: Self.baseTime),
+            ]
+            nextID = 403
+            clock = Self.baseTime + 200
         case .full:
             let count = RequestLimits.maxFavorites
             // id が大きいほど新しい。内容はすべて違う(natureId で区別)。
@@ -96,12 +122,12 @@ public actor MockFavoritesService: FavoritesService {
     private static func make(
         _ id: String, label: String?, key: String, nature: String, at time: TimeInterval,
         sp: StatBlock = StatBlock(hp: 32, atk: 0, def: 32, spa: 0, spd: 2, spe: 0),
-        ability: String? = nil, item: String? = nil
+        ability: String? = nil, item: String? = nil, calc: CalcHistoryCalc? = nil
     ) -> Favorite {
         Favorite(
             id: id, label: label,
             individual: Individual(speciesKey: key, natureId: nature, sp: sp, abilityId: ability, itemId: item),
-            createdAt: Date(timeIntervalSince1970: time), updatedAt: Date(timeIntervalSince1970: time))
+            createdAt: Date(timeIntervalSince1970: time), updatedAt: Date(timeIntervalSince1970: time), calc: calc)
     }
 
     private func failIfScripted() throws {
@@ -110,7 +136,7 @@ public actor MockFavoritesService: FavoritesService {
             throw PokeCalcError(code: PokeCalcError.Code.transport, message: "モックの通信エラー")
         case .unavailable:
             throw PokeCalcError(code: "store_unavailable", message: "モックの保存先の障害")
-        case .emptyStore, .list, .loadable, .full:
+        case .emptyStore, .list, .loadable, .calc, .full:
             return
         }
     }
@@ -120,11 +146,11 @@ public actor MockFavoritesService: FavoritesService {
         return stored
     }
 
-    public func addFavorite(label: String?, individual: Individual) async throws -> FavoriteSaveResult {
+    public func addFavorite(label: String?, individual: Individual, calc: CalcHistoryCalc?) async throws -> FavoriteSaveResult {
         try failIfScripted()
         let label = FavoriteLabel.normalize(label)
         clock += 1
-        if let index = stored.firstIndex(where: { $0.label == label && $0.individual == individual }) {
+        if let index = stored.firstIndex(where: { $0.label == label && $0.individual == individual && $0.calc == calc }) {
             var existing = stored.remove(at: index)
             existing.updatedAt = Date(timeIntervalSince1970: clock)
             stored.insert(existing, at: 0)
@@ -135,7 +161,7 @@ public actor MockFavoritesService: FavoritesService {
         }
         let now = Date(timeIntervalSince1970: clock)
         let favorite = Favorite(
-            id: "\(nextID)", label: label, individual: individual, createdAt: now, updatedAt: now)
+            id: "\(nextID)", label: label, individual: individual, createdAt: now, updatedAt: now, calc: calc)
         nextID += 1
         stored.insert(favorite, at: 0)
         return .created(favorite)

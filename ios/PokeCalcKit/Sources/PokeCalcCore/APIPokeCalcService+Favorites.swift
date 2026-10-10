@@ -22,9 +22,10 @@ extension APIPokeCalcService: FavoritesService {
         }
     }
 
-    public func addFavorite(label: String?, individual: Individual) async throws -> FavoriteSaveResult {
+    public func addFavorite(label: String?, individual: Individual, calc: CalcHistoryCalc?) async throws -> FavoriteSaveResult {
         let body = Components.Schemas.FavoriteInput(
-            label: FavoriteLabel.normalize(label), individual: Self.generatedIndividual(individual))
+            label: FavoriteLabel.normalize(label), individual: Self.generatedIndividual(individual),
+            calc: calc.map(Self.generatedFavoriteCalc))
         let output = try await send {
             try await client.createFavorite(
                 headers: .init(xDeviceId: identity.deviceID, xSessionId: identity.sessionID), body: .json(body))
@@ -66,7 +67,37 @@ extension APIPokeCalcService: FavoritesService {
     private static func domainFavorite(_ favorite: Components.Schemas.Favorite) -> Favorite {
         Favorite(
             id: favorite.id, label: favorite.label, individual: domainIndividual(favorite.individual),
-            createdAt: favorite.createdAt, updatedAt: favorite.updatedAt)
+            createdAt: favorite.createdAt, updatedAt: favorite.updatedAt, calc: favorite.calc.map(domainCalc))
+    }
+
+    /// 保存する `calc`(ADR-0524。Web の ADR-0333 §1 と同じく、既定のままの条件はキーごと省く)。
+    /// 重複判定(ADR-0227)がサーバーの既定値補完後の JSON で行われるので、省いても同じ内容は同じお気に入りになる。
+    private static func generatedFavoriteCalc(_ calc: CalcHistoryCalc) -> Components.Schemas.CalcRequest {
+        .init(
+            format: generatedFormat(calc.format),
+            attacker: compactIndividual(calc.attacker),
+            defender: compactIndividual(calc.defender),
+            moveId: calc.moveId,
+            field: compactField(calc.field),
+            options: calc.critical ? .init(critical: true) : nil)
+    }
+
+    /// 既定の項目(天候・フィールドなし、壁なし)は省いた場。すべて既定なら nil。
+    private static func compactField(_ field: FieldState) -> Components.Schemas.FieldState? {
+        guard field != FieldState() else { return nil }
+        return .init(
+            weather: field.weather == .none ? nil : generatedWeather(field.weather),
+            terrain: field.terrain == .none ? nil : generatedTerrain(field.terrain),
+            attackerScreens: field.attackerScreens == Screens() ? nil : generatedScreens(field.attackerScreens),
+            defenderScreens: field.defenderScreens == Screens() ? nil : generatedScreens(field.defenderScreens))
+    }
+
+    /// ランクがすべて 0 なら `ranks`、状態異常なしなら `status` を省いた個体。
+    private static func compactIndividual(_ individual: Individual) -> Components.Schemas.Individual {
+        var generated = generatedIndividual(individual)
+        if individual.ranks == RankBlock() { generated.ranks = nil }
+        if individual.status == .none { generated.status = nil }
+        return generated
     }
 
     /// 契約の `Individual` に `moveId` は無いので、常に nil(読まない)。
