@@ -224,3 +224,4 @@ Next(計算履歴の一覧 / ADR-0338): 実装済み・コミット前(ADR-0338 
 
 **見た目の作り直し方針(2026-10-11。ADR-0339。I-web-13 / G-05。ブランチ docs/web-visual-policy-g05)**: 方針だけ(文書のみ・コードの変更なし)。docs/design.md に「見た目の作り直し方針(G-05)」を足した。
 iOS は `decisions/2026-10-11-web-visual-policy-g05.md` の対応表で追う。Next: 実装・コミット前の方針は PR 化のみ。次は I-web-13a(共通の部品)→ 13b(計算。G-01 と同じ PR)。
+Status(追記 2026-10-11): I-web-14(ADR-0340)= 計算画面の「対戦の状態」(残りHP・多段の回数)を**データレーンが実装**(Web レーンの依頼を代行。critic・PR は後で)。`CalcScreen.tsx`・`BattleStatePanel.tsx`・`domain/battleState*.ts`・`favoriteCalc.ts`。

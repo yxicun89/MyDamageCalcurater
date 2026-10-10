@@ -488,6 +488,9 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
       if (options !== undefined) {
         body.options = options;
       }
+      if (request.battleState !== undefined) {
+        body.battleState = request.battleState satisfies Schemas["CalcBattleState"];
+      }
       const response = await postJson(CALC_PATHS.calc, body, isCalcResult, signal);
       if (!response.ok) {
         return response;
