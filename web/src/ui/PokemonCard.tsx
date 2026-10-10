@@ -13,6 +13,8 @@ export interface PokemonCardProps {
   readonly types: readonly string[];
   /** 持ち物の名前(あれば印として出す)。 */
   readonly itemName?: string;
+  /** 名前を見出し(h3)にする(領域の見出し h2 の下に置く画面用。既定は文字のまま)。 */
+  readonly nameAsHeading?: boolean;
   /** 小さいカード(素早さの縦の並びなど)。 */
   readonly small?: boolean;
   readonly onClick?: () => void;
@@ -24,6 +26,7 @@ export function PokemonCard({
   name,
   types,
   itemName,
+  nameAsHeading = false,
   small = false,
   onClick,
   className,
@@ -39,7 +42,11 @@ export function PokemonCard({
     <>
       <PokemonIcon speciesKey={speciesKey} typeId={types[0]} />
       <span className="ui-pokemon-card__text">
-        <span className="ui-pokemon-card__name">{name}</span>
+        {nameAsHeading ? (
+          <h3 className="ui-pokemon-card__name">{name}</h3>
+        ) : (
+          <span className="ui-pokemon-card__name">{name}</span>
+        )}
         {types.length > 0 && (
           <span className="ui-pokemon-card__types">
             {types.map((type) => (

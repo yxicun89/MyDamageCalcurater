@@ -79,7 +79,7 @@
 
 /* キーボードでハイライト中の候補(aria-activedescendant が指すもの。ADR-0304 A-12
    「List Autocomplete with Automatic Selection」)。ホバーと見分けが付くよう反転させる
-   (design.md にアクセントトークンは無いため、CalcScreen.css の .calc-preset__option--selected と同じ考え方)。 */
+   (design.md にアクセントトークンは無いため、CalcScreen.css の .ui-chip--selected と同じ考え方)。 */
 .species-search__option--active {
   background: var(--text-primary);
   color: var(--bg-base);

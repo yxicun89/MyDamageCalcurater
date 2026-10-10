@@ -111,6 +111,8 @@ describe("B-1 既定", () => {
     expect(screen.getByText("空なら満タンで計算します")).toBeInTheDocument();
     expect(screen.getByText(`/ ${attackerMax()}`)).toBeInTheDocument();
     expect(screen.getByText("%")).toBeInTheDocument();
+    // 長い説明は「説明」ボタンの奥(G-05。画面に説明の文を出し続けない)
+    await user.click(screen.getByRole("button", { name: "説明" }));
     expect(
       screen.getByText("割合(%)で入力します。確定数は残りHPから数えます(%表示は最大HPに対する値のまま)"),
     ).toBeInTheDocument();

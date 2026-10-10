@@ -5,10 +5,15 @@
 import { useId, useState, type ReactElement } from "react";
 import { DEFENDER_PERCENT_MAX, hitsOptions, parseHpInput, percentText } from "../domain/battleState";
 import { battleStateText } from "../i18n/ja";
+import { HelpButton } from "../ui/HelpButton";
+import { Icon } from "../ui/Icon";
 
 interface HpFieldProps {
   readonly label: string;
-  readonly hint: string;
+  /** 単位などの 1 行の補足(欄の下に出す)。 */
+  readonly hint?: string;
+  /** 長い説明(「説明」ボタンの奥に隠す。画面に出し続けない。G-05)。 */
+  readonly help?: string;
   readonly max: number;
   /** 防御側は割合(%)。実数値の欄と違い、割合の表示は出さず単位を「%」にする。 */
   readonly percent?: boolean;
@@ -20,6 +25,7 @@ interface HpFieldProps {
 function HpField({
   label,
   hint,
+  help,
   max,
   percent = false,
   value,
@@ -31,6 +37,9 @@ function HpField({
   const errorId = `${id}-error`;
   const parsed = parseHpInput(value, max);
   const invalid = parsed.kind === "error";
+  const describedBy =
+    [hint === undefined ? null : hintId, invalid ? errorId : null].filter((id) => id !== null).join(" ") ||
+    undefined;
   return (
     <div className="ui-field battle-state__field">
       <label htmlFor={id} className="battle-state__label">
@@ -45,7 +54,7 @@ function HpField({
           className="battle-state__input"
           value={value}
           aria-invalid={invalid}
-          aria-describedby={invalid ? `${hintId} ${errorId}` : hintId}
+          aria-describedby={describedBy}
           onChange={(event) => {
             onChange(event.target.value);
           }}
@@ -57,9 +66,12 @@ function HpField({
           <span className="battle-state__percent">{percentText(parsed.value, max)}</span>
         )}
       </div>
-      <p id={hintId} className="battle-state__hint">
-        {hint}
-      </p>
+      {hint !== undefined && (
+        <p id={hintId} className="battle-state__hint">
+          {hint}
+        </p>
+      )}
+      {help !== undefined && <HelpButton>{help}</HelpButton>}
       {invalid && (
         <p id={errorId} role="alert" className="battle-state__error">
           {battleStateText.hpError(max)}
@@ -115,6 +127,7 @@ export function BattleStatePanel({
           setOpen(!open);
         }}
       >
+        <Icon name="open" size={16} />
         {battleStateText.toggleLabel}
         {active && battleStateText.activeMark}
       </button>
@@ -134,7 +147,7 @@ export function BattleStatePanel({
             {defenderPresent && (
               <HpField
                 label={battleStateText.defenderHpLabel}
-                hint={battleStateText.defenderHpHint}
+                help={battleStateText.defenderHpHint}
                 max={DEFENDER_PERCENT_MAX}
                 percent
                 value={defenderHp}

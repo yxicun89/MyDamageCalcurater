@@ -19,6 +19,8 @@ export interface SegmentedControlProps<T extends string> {
   readonly value: T;
   readonly onChange: (value: T) => void;
   readonly disabled?: boolean;
+  /** 選べない選択肢がある理由など、説明の要素の id(aria-describedby)。 */
+  readonly describedBy?: string;
   readonly className?: string;
 }
 
@@ -31,6 +33,7 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   disabled = false,
+  describedBy,
   className,
 }: SegmentedControlProps<T>): ReactElement {
   if (options.length < MIN_OPTIONS || options.length > MAX_OPTIONS) {
@@ -95,6 +98,7 @@ export function SegmentedControl<T extends string>({
     <div
       role="radiogroup"
       aria-label={label}
+      aria-describedby={describedBy}
       className={className === undefined ? "ui-segmented" : `ui-segmented ${className}`}
     >
       {options.map((option, index) => {

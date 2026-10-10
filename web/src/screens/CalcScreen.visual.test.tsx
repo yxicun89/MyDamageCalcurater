@@ -109,14 +109,14 @@ describe("カード", () => {
     }
   });
 
-  test("タイプのバッジは ui-badge(既存の calc-card__type とタイプ色の塗りは残す)", async () => {
+  test("タイプのバッジは ui-badge(ポケモンカードの中。タイプ色の塗りは残す)", async () => {
     const user = renderScreen();
     const [attacker, defender] = pairWithDifferentPrimaryTypes();
     await choosePair(user, attacker, defender);
-    const badges = within(attackerCard()).getAllByRole("listitem");
+    const badges = attackerCard().querySelectorAll(".ui-pokemon-card .ui-badge");
     expect(badges.length).toBeGreaterThan(0);
     for (const badge of badges) {
-      expect(badge).toHaveClass("ui-badge", "calc-card__type");
+      expect(badge).toHaveClass("ui-badge");
     }
   });
 
@@ -124,7 +124,7 @@ describe("カード", () => {
     const user = renderScreen();
     const [attacker, defender] = pairWithDifferentPrimaryTypes();
     await choosePair(user, attacker, defender);
-    expect(within(attackerCard()).getByTestId("type-emblem")).toBeInTheDocument();
+    expect(within(attackerCard()).getByTestId("pokemon-icon-emblem")).toBeInTheDocument();
   });
 });
 

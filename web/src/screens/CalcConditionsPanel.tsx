@@ -17,6 +17,8 @@ import {
 } from "../domain/calcConditions";
 import type { Screens } from "../engine/types";
 import { calcConditionsText } from "../i18n/ja";
+import { Icon } from "../ui/Icon";
+import { ToggleChip } from "./ToggleChip";
 
 interface CalcConditionsPanelProps {
   readonly conditions: CalcConditions;
@@ -41,17 +43,16 @@ function RadioGroup<T extends string>({ legend, ids, labels, value, onChange }: 
     <fieldset className="calc-conditions__group">
       <legend className="calc-conditions__legend">{legend}</legend>
       {ids.map((id) => (
-        <label key={id} className="calc-conditions__option">
-          <input
-            type="radio"
-            name={name}
-            checked={id === value}
-            onChange={() => {
-              onChange(id);
-            }}
-          />
-          {labels[id]}
-        </label>
+        <ToggleChip
+          key={id}
+          type="radio"
+          name={name}
+          label={labels[id]}
+          checked={id === value}
+          onChange={() => {
+            onChange(id);
+          }}
+        />
       ))}
     </fieldset>
   );
@@ -92,32 +93,29 @@ export function CalcConditionsPanel({
           setOpen(!open);
         }}
       >
+        <Icon name="open" size={16} />
         {calcConditionsText.toggleLabel}
       </button>
       <div id={bodyId}>
         {open && (
           <div className="calc-conditions__body">
             <div className="calc-conditions__group">
-              <label className="calc-conditions__option">
-                <input
-                  type="checkbox"
-                  checked={conditions.critical}
-                  onChange={(event) => {
-                    onChange({ ...conditions, critical: event.target.checked });
-                  }}
-                />
-                {calcConditionsText.criticalLabel}
-              </label>
-              <label className="calc-conditions__option">
-                <input
-                  type="checkbox"
-                  checked={conditions.burned}
-                  onChange={(event) => {
-                    onChange({ ...conditions, burned: event.target.checked });
-                  }}
-                />
-                {calcConditionsText.burnLabel}
-              </label>
+              <ToggleChip
+                type="checkbox"
+                label={calcConditionsText.criticalLabel}
+                checked={conditions.critical}
+                onChange={(critical) => {
+                  onChange({ ...conditions, critical });
+                }}
+              />
+              <ToggleChip
+                type="checkbox"
+                label={calcConditionsText.burnLabel}
+                checked={conditions.burned}
+                onChange={(burned) => {
+                  onChange({ ...conditions, burned });
+                }}
+              />
             </div>
             <RadioGroup<WeatherId>
               legend={calcConditionsText.weatherLabel}
@@ -140,74 +138,77 @@ export function CalcConditionsPanel({
             <fieldset className="calc-conditions__group">
               <legend className="calc-conditions__legend">{calcConditionsText.screensLabel}</legend>
               {SCREEN_KEYS.map((key) => (
-                <label key={key} className="calc-conditions__option">
-                  <input
-                    type="checkbox"
-                    checked={conditions.defenderScreens[key]}
-                    onChange={(event) => {
-                      onChange({
-                        ...conditions,
-                        defenderScreens: { ...conditions.defenderScreens, [key]: event.target.checked },
-                      });
-                    }}
-                  />
-                  {calcConditionsText.screens[key]}
-                </label>
+                <ToggleChip
+                  key={key}
+                  type="checkbox"
+                  label={calcConditionsText.screens[key]}
+                  checked={conditions.defenderScreens[key]}
+                  onChange={(checked) => {
+                    onChange({
+                      ...conditions,
+                      defenderScreens: { ...conditions.defenderScreens, [key]: checked },
+                    });
+                  }}
+                />
               ))}
             </fieldset>
             <fieldset className="calc-conditions__group">
               <legend className="calc-conditions__legend">{calcConditionsText.ranksLabel}</legend>
-              <button
-                type="button"
-                className="calc-conditions__rank-button"
-                aria-label={calcConditionsText.rankDownLabel}
-                disabled={rank <= MIN_RANK}
-                onClick={() => {
-                  setRank(rank - 1);
-                }}
-              >
-                {calcConditionsText.rankDownSymbol}
-              </button>
-              <span className="calc-conditions__rank-value">{formatRank(rankStat, rank)}</span>
-              <button
-                type="button"
-                className="calc-conditions__rank-button"
-                aria-label={calcConditionsText.rankUpLabel}
-                disabled={rank >= MAX_RANK}
-                onClick={() => {
-                  setRank(rank + 1);
-                }}
-              >
-                {calcConditionsText.rankUpSymbol}
-              </button>
+              <div className="ui-stepper">
+                <button
+                  type="button"
+                  className="ui-stepper__button"
+                  aria-label={calcConditionsText.rankDownLabel}
+                  disabled={rank <= MIN_RANK}
+                  onClick={() => {
+                    setRank(rank - 1);
+                  }}
+                >
+                  <Icon name="minus" size={16} />
+                </button>
+                <span className="calc-conditions__rank-value">{formatRank(rankStat, rank)}</span>
+                <button
+                  type="button"
+                  className="ui-stepper__button"
+                  aria-label={calcConditionsText.rankUpLabel}
+                  disabled={rank >= MAX_RANK}
+                  onClick={() => {
+                    setRank(rank + 1);
+                  }}
+                >
+                  <Icon name="plus" size={16} />
+                </button>
+              </div>
             </fieldset>
             <fieldset className="calc-conditions__group">
               <legend className="calc-conditions__legend">{calcConditionsText.defenderRanksLabel}</legend>
-              <button
-                type="button"
-                className="calc-conditions__rank-button"
-                aria-label={calcConditionsText.defenderRankDownLabel}
-                disabled={defenderRank <= MIN_RANK}
-                onClick={() => {
-                  setDefenderRank(defenderRank - 1);
-                }}
-              >
-                {calcConditionsText.rankDownSymbol}
-              </button>
-              <span className="calc-conditions__rank-value">
-                {formatRank(defenderRankStat, defenderRank)}
-              </span>
-              <button
-                type="button"
-                className="calc-conditions__rank-button"
-                aria-label={calcConditionsText.defenderRankUpLabel}
-                disabled={defenderRank >= MAX_RANK}
-                onClick={() => {
-                  setDefenderRank(defenderRank + 1);
-                }}
-              >
-                {calcConditionsText.rankUpSymbol}
-              </button>
+              <div className="ui-stepper">
+                <button
+                  type="button"
+                  className="ui-stepper__button"
+                  aria-label={calcConditionsText.defenderRankDownLabel}
+                  disabled={defenderRank <= MIN_RANK}
+                  onClick={() => {
+                    setDefenderRank(defenderRank - 1);
+                  }}
+                >
+                  <Icon name="minus" size={16} />
+                </button>
+                <span className="calc-conditions__rank-value">
+                  {formatRank(defenderRankStat, defenderRank)}
+                </span>
+                <button
+                  type="button"
+                  className="ui-stepper__button"
+                  aria-label={calcConditionsText.defenderRankUpLabel}
+                  disabled={defenderRank >= MAX_RANK}
+                  onClick={() => {
+                    setDefenderRank(defenderRank + 1);
+                  }}
+                >
+                  <Icon name="plus" size={16} />
+                </button>
+              </div>
             </fieldset>
           </div>
         )}

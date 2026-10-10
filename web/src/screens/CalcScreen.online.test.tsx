@@ -243,7 +243,7 @@ describe("種族の一覧が無いマスタ(capabilities.speciesList === false�
 
     expect(search.resolvedKeys).toEqual([attacker.key]);
     expect(within(attackerCard()).getByRole("heading", { name: attacker.nameJa })).toBeInTheDocument();
-    expect(within(attackerCard()).getByTestId("type-emblem")).toBeInTheDocument();
+    expect(within(attackerCard()).getByTestId("pokemon-icon-emblem")).toBeInTheDocument();
   });
 
   test("攻守そろうと計算し、解決した種族と、解決で返った特性をリクエストに入れる", async () => {
