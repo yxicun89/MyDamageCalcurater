@@ -56,7 +56,7 @@ Web は ADR-0331(段階 A)と ADR-0177(段階 B。`ADJUST_GOALS_ENABLED`)で、�
 
 ### 5. 機能なしのとき(iOS 独自)
 
-`ADJUST_GOALS_ENABLED` はサーバーの設定(Web は定数で、サーバー側が無効なら使えない)。無効なサーバーはルートが無く、契約の `default` として 404 `not_found` が返る。
+`ADJUST_GOALS_ENABLED` は Web の定数で、calc は目標 API のルートを常に登録している。404 `not_found` が返るのは、目標 API を追加する前の古い版のサーバー(gateway か calc にルートが無い)に当たったときで、契約の `default` として返る。この状態は画面を開き直すまで戻らない(ViewModel の寿命の間)。
 その場合 **`goalsUnavailable` を立てて目標方式を引っ込め、従来の調整に戻し、「目標から振り方を決める機能は今は使えません。ほかの調整の内容をお使いください」を出す**。
 入力は消さず、従来の調整はそのまま使える(絶対ルール5)。通信失敗・503(`master_unavailable` 等)は一時的な失敗なので、目標方式のまま日本語のエラーだけを出す
 (`AdjustGoalsAvailability`)。`not_implemented`(501)は契約の `ErrorCode` に無く、受け取ると生成クライアントが decode エラーにするため判定に含めない。
