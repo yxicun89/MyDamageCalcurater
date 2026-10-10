@@ -32,6 +32,8 @@ public enum RequestLimits {
     public static let moveLearnersPageSize = 50
     /// `AdjustHits` の `maximum`(engine の `MaxAdjustHits`)。調整画面の発数の選択肢の上限(ADR-0502 §2)。
     public static let maxAdjustHits = 10
+    /// `AdjustGoalsRequest.goals.maxItems`。調整の「目標」の件数の上限(F-11。ADR-0331 §5・ADR-0525)。
+    public static let maxAdjustGoals = 6
 
     // MARK: - 判定(P6-25。ADR-0504 §2): services/judge/api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
 

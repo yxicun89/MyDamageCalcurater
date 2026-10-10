@@ -21,8 +21,11 @@ struct AdjustScreenView: View {
     /// 読み込み中インジケータの高さ(`ReverseScreenView` と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(service: any PokeCalcService, adjust: any AdjustService, backendDescription: String) {
-        _viewModel = State(initialValue: AdjustViewModel(service: service, adjust: adjust))
+    init(
+        service: any PokeCalcService, adjust: any AdjustService, goals: (any AdjustGoalsService)? = nil,
+        backendDescription: String
+    ) {
+        _viewModel = State(initialValue: AdjustViewModel(service: service, adjust: adjust, goals: goals))
         self.backendDescription = backendDescription
     }
 
@@ -32,6 +35,9 @@ struct AdjustScreenView: View {
                 backendBadge
                 AdjustOwnCardView(viewModel: viewModel, focus: $focus)
                 AdjustModeCardView(viewModel: viewModel, focus: $focus)
+                if viewModel.isGoalsMode {
+                    AdjustGoalsCardView(viewModel: viewModel)
+                }
                 if viewModel.needsOpponent {
                     AdjustOpponentCardView(viewModel: viewModel)
                     AdjustGoalCardView(viewModel: viewModel)
@@ -104,7 +110,7 @@ struct AdjustScreenView: View {
 #Preview {
     if let mock = try? MockPokeCalcService(), let adjust = try? MockAdjustService() {
         NavigationStack {
-            AdjustScreenView(service: mock, adjust: adjust, backendDescription: "モックデータで動作中")
+            AdjustScreenView(service: mock, adjust: adjust, goals: try? MockAdjustGoalsService(), backendDescription: "モックデータで動作中")
         }
     } else {
         Text("プレビュー用モックの読み込みに失敗")

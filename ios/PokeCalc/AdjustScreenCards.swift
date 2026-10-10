@@ -106,6 +106,7 @@ struct AdjustModeCardView: View {
 
     /// 回す能力(上限の欄を出す能力)。耐久は H・B・D、攻撃は A か C と S。
     private var rotatedStats: [StatKey] {
+        if viewModel.isGoalsMode { return [] }
         switch viewModel.mode {
         case .bulk: return [.hp, .def, .spd]
         case .offense: return [AttackerPreset.relevantStat(for: viewModel.offenseCategory), .spe]
@@ -116,20 +117,30 @@ struct AdjustModeCardView: View {
     var body: some View {
         AdjustCard(title: AdjustText.modeRegion, identifier: "adjustModeCard") {
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                // 目標方式(F-11)は先頭。サーバーが提供していないと分かったら出さない(従来の5つだけに戻る)。
+                if viewModel.goalsAvailable {
+                    AdjustChoiceButton(
+                        title: AdjustText.goalsModeLabel, isSelected: viewModel.isGoalsMode, identifier: "adjustMode-goals"
+                    ) {
+                        viewModel.selectGoalsMode()
+                    }
+                }
                 ForEach(AdjustMode.allCases, id: \.self) { mode in
                     AdjustChoiceButton(
-                        title: AdjustText.modeLabel(mode), isSelected: viewModel.mode == mode,
+                        title: AdjustText.modeLabel(mode), isSelected: !viewModel.isGoalsMode && viewModel.mode == mode,
                         identifier: "adjustMode-\(mode.rawValue)"
                     ) {
                         viewModel.selectMode(mode)
                     }
                 }
             }
-            if viewModel.mode == .bulk { focusChoices }
-            if viewModel.mode == .offense { categoryChoices }
-            if !rotatedStats.isEmpty { ceilingPickers }
-            if viewModel.mode == .offense { minSpeedField }
-            if viewModel.mode == .bulk || viewModel.mode == .offense { goalToggle }
+            if !viewModel.isGoalsMode {
+                if viewModel.mode == .bulk { focusChoices }
+                if viewModel.mode == .offense { categoryChoices }
+                if !rotatedStats.isEmpty { ceilingPickers }
+                if viewModel.mode == .offense { minSpeedField }
+                if viewModel.mode == .bulk || viewModel.mode == .offense { goalToggle }
+            }
         }
     }
 
