@@ -67,4 +67,7 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-11(F-13 文言のやさしい言い換え。ブランチ feat/ios-f13-wording。ADR-0526): ADR-0337 §4 の対応表と同じ文に iOS の文言(`AdjustText`・`SpeedLabels`・`BalanceErrorText`・`MegaItemText`・`DeviceDataText`・`RequestLimitLabels`・逆算の「観測」→「ダメージ」・接続先の表示など)を直し、`GlossaryTests` で禁止語の混入と「変えない語」の残りを検査。判定画面は触らない(判定レーン)。期待値を変えたテストは ADR-0501「F-13」章。
 
 2026-10-11(F-11 iOS 調整の目標方式。ブランチ feat/ios-f11-adjust-goals。ADR-0525): 「調整の内容」の先頭に「目標から振り方を決める」を追加(`AdjustMode` は増やさず `isGoalsMode`)。`AdjustGoalsService`(別プロトコル)・`APIPokeCalcService+AdjustGoals`・`MockAdjustGoalsService`(`POKECALC_MOCK_ADJUST_GOALS`: infeasible/unavailable/fail)・`AdjustViewModel+Goals`・`AdjustScreenGoals.swift`。サーバーが 404 を返したら案内を出して従来の調整へ戻る(Web に無い iOS 独自の扱い)。語・検査の順・結果の文は Web の ADR-0331 と同じ。後続: 目標の順序の入れ替え(満たせないとき前の目標を優先)は使用感を見て。
+
+2026-10-11(G-02 構築 3 体保存で画面が消える報告の調査。ブランチ fix/ios-g02-team-save。ADR-0501「G-02」章): Web の原因(team-svc が技 0 個の moveIds を省く)は iOS の端末内保存には無関係。1・3・5 体目だけ・技 0 個の構築の保存→一覧→開き直し→再保存→構築ピッカー→タイプバランス読込/分析を実物の `LocalTeamStore` で通す回帰テスト `TeamSparseSaveTests`(6 件)を追加。再現せず・実装変更なし。
+
 2026-10-11(G-01 技の行とタイプ順。ブランチ feat/ios-g01-move-rows。ADR-0527): 技の行をタイプ丸アイコン+技名+分類アイコン+威力の 1 行にし(読み上げは全情報)、並びをタイプ順だけにした(`MoveSortOrder`・`MoveSortStore`・チップを廃止。`MoveSort.byType`)。計算画面のみ群見出しつき。Web の ADR-0335 は Web レーンが更新する。
