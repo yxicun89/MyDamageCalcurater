@@ -4808,6 +4808,7 @@ XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。
 | `MegaItemLockTests`・`TeamEditViewModelItemRolesTests`・`ItemDisplayNameUnsupportedTests`・`MegaStoneOfficialNameTests`・`StubMegaMaster` | 「{基本種名}のメガストーン」→「{基本種名}専用のメガストーン」、「メガシンカ: メガストーンを持ちます」→「メガシンカするので、持ち物はメガストーンに決まっています」ほか(missing/compare/cleared も §4 の文) | ADR-0337 §4(メガ) |
 | `DeviceDataTextTests` | 「この端末に割り当てた ID」→「…番号」、「ID が変わると」→「番号が変わると」 | ADR-0337 §4(このアプリについて) |
 | `ReverseCandidateDisplayTests`・`AbilitySplitDisplayTests` | 「観測と一致」→「入力したダメージと一致」(件数表示も) | Web に同じ文が無い。用語集の「観測 → ダメージ」に従う(ADR-0526 決定2) |
+| (期待値を変えたテストなし)`ReverseScreenObservations`・`AppEnvironment` の表示 | 「観測を追加」→「ダメージを追加」、「観測n(単位)」→「ダメージn(単位)」、「この観測を削除」→「このダメージを削除」、「APIに接続中」→「サーバーに接続中」 | 用語集(観測 → ダメージ、API → サーバー)。識別子で引くので既存テストは不変 |
 | `FavoriteLoadLabelsTests` | 「いまのマスタに無い」→「いまのデータに無い」 | 用語集(マスタ → データ) |
 | `UITests`: `AdjustScreenUITests`(`adjustMinSpNotRequested`)・`MegaItemLockUITests`・`MegaStoneOfficialNameUITests`・`FavoriteLoadUITests`(通知の `contains`) | 上と同じ文言の置換(ラベルで比べている箇所だけ。識別子は不変) | 同上 |
 
