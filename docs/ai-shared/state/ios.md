@@ -67,3 +67,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-11(F-13 文言のやさしい言い換え。ブランチ feat/ios-f13-wording。ADR-0526): ADR-0337 §4 の対応表と同じ文に iOS の文言(`AdjustText`・`SpeedLabels`・`BalanceErrorText`・`MegaItemText`・`DeviceDataText`・`RequestLimitLabels`・逆算の「観測」→「ダメージ」・接続先の表示など)を直し、`GlossaryTests` で禁止語の混入と「変えない語」の残りを検査。判定画面は触らない(判定レーン)。期待値を変えたテストは ADR-0501「F-13」章。
 
 2026-10-11(F-11 iOS 調整の目標方式。ブランチ feat/ios-f11-adjust-goals。ADR-0525): 「調整の内容」の先頭に「目標から振り方を決める」を追加(`AdjustMode` は増やさず `isGoalsMode`)。`AdjustGoalsService`(別プロトコル)・`APIPokeCalcService+AdjustGoals`・`MockAdjustGoalsService`(`POKECALC_MOCK_ADJUST_GOALS`: infeasible/unavailable/fail)・`AdjustViewModel+Goals`・`AdjustScreenGoals.swift`。サーバーが 404 を返したら案内を出して従来の調整へ戻る(Web に無い iOS 独自の扱い)。語・検査の順・結果の文は Web の ADR-0331 と同じ。後続: 目標の順序の入れ替え(満たせないとき前の目標を優先)は使用感を見て。
+
+2026-10-11(G-03 Showdown 廃止。ブランチ feat/ios-g03-no-showdown。ADR-0528): 構築の Showdown 形式の取り込み(一覧)・書き出し(編集)を入口ごと廃止。`ShowdownText`・`ShowdownTransfer`・`TeamTextSections` の折りたたみ・関係テスト(Kit 52 件・UITest 10 件)と `TeamLabels` の Showdown 文言を削除。`TeamTextControls.buttonLabel`・`createTeam(members:)` は他で使うので残した。削除テストの一覧は ADR-0501「G-03」。
