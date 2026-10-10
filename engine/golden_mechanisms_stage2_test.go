@@ -179,6 +179,10 @@ func TestGoldenMechanismsStage2(t *testing.T) {
 		return m
 	}()) {
 		if movesSeen[name] == 0 {
+			// 段階3の語彙の技(ADR-0144)は mechanisms-stage3.json の網羅(TestGoldenMechanismsStage3)が見る。
+			if isStage3RuleJSON(t, rules[name]) {
+				continue
+			}
 			t.Errorf("moveRules の技 %q のベクタが無い(ADR-0143 §7 (a))", name)
 		}
 	}

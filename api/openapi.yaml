@@ -1455,6 +1455,8 @@ components:
             `MasterMove.rule` と同じ(キーは engine の MoveRule のフィールド名)。定義の無い技は**キーごと省く**。古いサーバーも返さない。
             pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeMoveRule`)で厳格に検証し、検証を通らない定義を含む応答は返さない
             (503 `master_unavailable`)。WASM の技の `rule` にそのまま渡せる(キーの大文字小文字は WASM が区別しない)。
+            段階3(ADR-0144 §1)で、残り HP・持ち物のなげつける威力で決まる威力の式と、`FixedDamageFormula`(残り HP で決まる固定ダメージ)・
+            `CategoryByStats`(能力値の比で分類を切り替える)のキーが加わった。古い WASM はこれらを拒否するので、Web は WASM と同時に更新する。
 
     MoveFlag:
       type: string
@@ -1493,6 +1495,13 @@ components:
             メガストーンか(ADR-0175 §2)。いずれかのメガ種族の `requiredItemId` に現れる持ち物が true。
             使用可能集合で絞らずに判定する。pokedex-svc は常に返す。メガストーンの `roles` は常に空配列。
             古いサーバーは返さないため、省略は「不明」と読む。
+        flingPower:
+          type: integer
+          minimum: 1
+          description: |
+            なげつけるの威力(items.fling_power。Showdown の `fling.basePower`。ADR-0144 §4)。投げられない・まだ取り込んでいない
+            持ち物は**キーごと省く**。古いサーバーも返さない。WASM の持ち物の `flingPower` にそのまま渡せる(渡さないと
+            なげつける型の技に未対応の印が付く)。
 
     ItemRole:
       type: string
@@ -1579,6 +1588,41 @@ components:
         moveId: { type: string, description: 使用する技 }
         field: { $ref: '#/components/schemas/FieldState' }
         options: { $ref: '#/components/schemas/CalcOptions' }
+        battleState:
+          allOf: [ { $ref: '#/components/schemas/CalcBattleState' } ]
+          description: |
+            対戦の状態(残り HP・多段の回数。ADR-0144)。省略・null・空のオブジェクトは従来と同じ結果(両側とも満タン・
+            多段は段階1の既定の回数)。`POST /api/calc` だけが計算に使う。お気に入り(`FavoriteInput.calc`)・計算履歴
+            (`CalcHistoryEntry.calc`)は、record-svc が対応するまでこの項目を保存しない(お気に入りに含めると 400 `unknown_field`。
+            計算履歴の行にも残らない。docs/ai-shared/decisions/2026-10-10-data-move-mechanisms-stage3.md の record レーンへの依頼)。
+
+    CalcBattleState:
+      type: object
+      description: |
+        対戦の状態(ADR-0144 §3)。すべて省略可。値は @smogon/calc 0.12.0 の Pokemon の `curHP`・Move の `hits` と同じ意味。
+        値域の外は 400 `invalid_input`(黙って丸めない。oracle は最大を超える curHP を最大に丸めるが、計算機は入力の誤りとして返す)。
+      properties:
+        attackerCurrentHp:
+          type: integer
+          minimum: 1
+          description: |
+            攻撃側の残り HP(実数値。1..攻撃側の最大 HP)。省略は満タン。攻撃側の残り HP で威力・ダメージが決まる技
+            (威力 × 残り HP / 最大 HP の技・残り HP が少ないほど威力が上がる技・残り HP と同じダメージの技・
+            防御側との差のダメージの技)に使う。HP が少ないときに強くなる特性(もうか 等)は計算に入れない(従来どおり未対応の印)。
+        defenderCurrentHp:
+          type: integer
+          minimum: 1
+          description: |
+            防御側の残り HP(実数値。1..防御側の最大 HP)。省略は満タン。防御側の残り HP で威力・ダメージが決まる技に使い、
+            **確定数(`ko`)はこの値を倒す回数で数える**。表示%(`minPercent`・`maxPercent`)と `defenderHP` は従来どおり最大 HP が分母。
+        hits:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: |
+            多段の回数。回数が範囲で決まる多段技(最小 < 最大)だけに書け、最小..最大の範囲で指定する。省略は段階1の既定
+            (最大回数の特性なら最大、それ以外は 最小 + 1)。多段でない技・回数が固定の技に書く、範囲の外は 400 `invalid_input`。
+            技の回数の範囲は `Move.mechanismParams.multiHit`。
 
     KOChance:
       type: object
@@ -2515,6 +2559,8 @@ components:
             閉じた語彙(MoveRule)で表したもの。**省略可**: 定義の無い技はキーを省く。古い pokedex-svc も返さない。calc-svc はキーが無い・
             null を「定義なし」として扱う(入れ替えの順序に依存させない。ADR-0223 §3)。
             形の検証は受け取った calc-svc が `services/internal/master.DecodeMoveRule` で行い、機構との対応は `master.Move` が確かめる。
+            段階3(ADR-0144 §1)のキー(`FixedDamageFormula`・`CategoryByStats`・威力の式の新しい値)は、calc-svc を先に入れ替えてから取り込む
+            (古い calc-svc は厳格なデコードで拒否し 503 になる。ADR-0144 §8 のデプロイ順)。
 
     MasterMoveMechanismParams:
       type: object
@@ -2583,6 +2629,12 @@ components:
         id: { type: string }
         nameJa: { type: string }
         effect: { $ref: '#/components/schemas/MasterEffect' }
+        flingPower:
+          type: integer
+          minimum: 1
+          description: |
+            なげつけるの威力(items.fling_power。ADR-0144 §4)。NULL(投げられない・取り込み前)はキーを省く。
+            calc-svc は省略を 0(不明。なげつける型の技に未対応の印)として engine の Item.FlingPower に写す。
 
     MasterAbility:
       type: object
