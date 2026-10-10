@@ -109,7 +109,7 @@ image は base のタグ → local overlay(および `make *-k3d-deploy`)が `:l
 
 - 全 Deployment は `replicas: 1`、`automountServiceAccountToken: false`、`readOnlyRootFilesystem`、`capabilities drop ALL`、`seccomp RuntimeDefault`。
 - 手動 import は `make import-k8s` が `kubectl create job --from=cronjob/pokedex-import pokedex-import-manual-<時刻>` で作る Job(`Makefile` の `import-k8s`。kubectl の context が `k3d-pokecalc` でなければ作らない)。
-- `overlays/local` は calc・gateway・web を `:local` タグで描画するが、`scripts/up.sh` はそれらの image を build/import しない(pokedex の migrate・server・importer の 3 image だけ)。`make up` だけでは calc・gateway・web は `ImagePullBackOff` で起動しない(`overlays/local/api/kustomization.yaml` の `newTag: local` から)。`make deploy-latest`(または `make api-k3d-deploy`・`make web-k3d-deploy`)で入れる。`pokedex` も、初回の import が済むまでは `0/1`(readiness が DB のマスタに連動する。ADR-0129)。`docs/verify-m1.md` §3 は、import → §4 の `make deploy-latest` の順にしてある。
+- `overlays/local` は calc・gateway・web を `:local` タグで描画するが、`scripts/up.sh` はそれらの image を build/import しない(pokedex の migrate・server・importer の 3 image だけ)。`make up` だけでは calc・gateway・web は `ImagePullBackOff` で起動しない(`overlays/local/api/kustomization.yaml` の `newTag: local` から)。`make deploy-latest`(または `make api-k3d-deploy`・`make web-k3d-deploy`)で入れる。`pokedex` も、初回の import が済むまでは `0/1`(readiness が DB のマスタに連動する。ADR-0129)。`docs/verify.md` §1-1 は、import → §4 の `make deploy-latest` の順にしてある。
 
 ## 5. Service(全件)
 
@@ -229,4 +229,4 @@ Component は `kustomize.config.k8s.io/v1alpha1`(`overlays/local/api`・`overlay
 - 読んだ範囲: `deploy/` の YAML、`services/{balance,speed,judge}/deploy/` の全 YAML(`kubectl kustomize` で描画)、各 Dockerfile の `FROM`/`ENTRYPOINT`/`USER`、`scripts/up.sh` 全行。base・local・local-api・local-web・cloud の描画の件数は 2026-10-01 に数え直した。それ以外の overlay の件数は 2026-09-24 のまま。
 - 読めていない箇所: `services/{balance,speed}/deploy/k8s/overlays/local/*.example.json` の中身、gitops overlay の digest 検査(`check-gitops.sh`)の判定ロジック、`services/balance/deploy/argocd` の Application の詳細(C)、`balance-registry` の image 配布の実動作。
 - 未実装・スタブ: cloud overlay(MySQL・Secret・image 配布経路が無い。CronJob は suspend)、`GATEWAY_ASSETS_URL`(画像配信。未設定 → 404。`deploy/k8s/base/gateway/deployment.yaml` のコメント)、speed の gitops digest(プレースホルダ)、`services/record`・`services/team`(空。architecture.md)。
-- 推測を含む記述: 「`make up` だけでは calc/gateway/web が `ImagePullBackOff` になる」(§4)は `up.sh` とマニフェストからの読み取りで、新しいクラスタで実行して確認していない(`docs/verify-m1.md` §3 の通し実行は人間の確認待ち)。
+- 推測を含む記述: 「`make up` だけでは calc/gateway/web が `ImagePullBackOff` になる」(§4)は `up.sh` とマニフェストからの読み取りで、新しいクラスタで実行して確認していない(`docs/verify.md` §1-1 の通し実行は人間の確認待ち)。

@@ -190,7 +190,7 @@ SC 3.3.2 ラベル又は説明)。読み上げ用の名前(accessible name)だ�
   普通の `center` にすると、はみ出した内容の先頭側にスクロールで到達できなくなるブラウザの既知の癖がある
   (centered flexbox overflow clipping)ため、`justify-content: safe center` を使う(はみ出すときは先頭寄せに
   自動で切り替わる。Chromium で実測確認済み)。`safe` キーワードの Safari 対応は人間の確認が要る
-  (docs/verify-m1.md §4 の Safari 確認〈P4-5〉と合わせて確認する)。
+  (docs/verify.md の Web の確認〈P4-5〉と合わせて確認する)。
 
 ## 画面: ダメージ計算
 
