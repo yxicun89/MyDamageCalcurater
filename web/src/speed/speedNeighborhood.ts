@@ -1,7 +1,6 @@
 // G-04(Web): 「自分の周り」パネルの純粋な切り出し(ADR-0609)。DOM を知らない。
 // 入力は表の並び(speed-svc の tiers。通常 = 速い順、トリックルーム = 遅い順 = 先に動く順。ADR-0607 §4)と
 // 自分の実数値。素早さは計算し直さず、tiers の実数値と自分の実数値の直接比較だけで位置を決める(ADR-0608 §3)。
-// ※ いまはスタブ(テスト先行)。実装者が中身を書く。
 
 /** 自分の前後に出す段の既定数。 */
 export const DEFAULT_NEIGHBOR_STEPS = 3;
@@ -58,12 +57,45 @@ export interface Neighborhood {
  * 自分より「先に動く側」は表の並びで自分より前、「後に動く側」は後ろ。
  * ownSpeed が null(まだ自分が決まっていない)なら null。
  */
-/* eslint-disable @typescript-eslint/no-unused-vars -- スタブ。実装時にこの行も消す */
 export function buildNeighborhood(
-  _tiers: readonly NeighborTierInput[],
-  _ownSpeed: number | null,
-  _trickRoom: boolean,
-  _options?: NeighborhoodOptions,
+  tiers: readonly NeighborTierInput[],
+  ownSpeed: number | null,
+  trickRoom: boolean,
+  options: NeighborhoodOptions = {},
 ): Neighborhood | null {
-  throw new Error("buildNeighborhood: 未実装(G-04)");
+  if (ownSpeed === null) {
+    return null;
+  }
+  const steps = options.steps ?? DEFAULT_NEIGHBOR_STEPS;
+  const namesPerTier = options.namesPerTier ?? DEFAULT_NAMES_PER_TIER;
+  const tieNames = options.tieNames ?? DEFAULT_TIE_NAMES;
+
+  // 表の並びで自分より前 = 先に動く側。通常(降順)は速い段、トリックルーム(昇順)は遅い段。
+  const isBefore = (speed: number): boolean => (trickRoom ? speed < ownSpeed : speed > ownSpeed);
+  const beforeAll = tiers.filter((t) => isBefore(t.speed));
+  const tieTier = tiers.find((t) => t.speed === ownSpeed);
+  const afterAll = tiers.filter((t) => t.speed !== ownSpeed && !isBefore(t.speed));
+
+  const toTier = (t: NeighborTierInput, limit: number): NeighborTier => {
+    const names = t.entries.slice(0, limit).map((e) => e.nameJa);
+    return {
+      speed: t.speed,
+      names,
+      moreCount: t.entries.length - names.length,
+      entryCount: t.entries.length,
+    };
+  };
+  const total = (list: readonly NeighborTierInput[]): number =>
+    list.reduce((sum, t) => sum + t.entries.length, 0);
+
+  return {
+    ownSpeed,
+    tie: tieTier === undefined ? null : toTier(tieTier, tieNames),
+    before: beforeAll.slice(Math.max(0, beforeAll.length - steps)).map((t) => toTier(t, namesPerTier)),
+    after: afterAll.slice(0, steps).map((t) => toTier(t, namesPerTier)),
+    beforeTotal: total(beforeAll),
+    afterTotal: total(afterAll),
+    beforeHasMore: beforeAll.length > steps,
+    afterHasMore: afterAll.length > steps,
+  };
 }

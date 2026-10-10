@@ -13,4 +13,4 @@
 - [x] 純粋なロジック `SpeedTableNavigation`(PokeCalcCore)の XCTest と、UI テスト(遅延描画・ジャンプ)を追加
 
 ## 2026-10-11 使用感フィードバック第3回(docs/usability-round3.md の G-04)
-- [ ] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。テスト先行済み(speedNeighborhood.test.ts・SpeedNeighborhoodPanel.test.tsx)。実装は speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx を埋め、SpeedScreen の自分のカードに置く。iOS は後続 PR。
+- [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。
