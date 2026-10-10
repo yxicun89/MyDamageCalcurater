@@ -413,6 +413,11 @@ func TestStage3Fling(t *testing.T) {
 		}
 	}
 
+	// 防御側向けの補正(防御・特防)だけの持ち物では攻撃側の印を付けない。
+	if got := mustCalcS3(t, mk(&Item{ID: "test-def", FlingPower: 30, Effect: &ItemEffect{StatMods: map[StatKey]int{StatDef: 6144}}})); got.Unsupported != nil {
+		t.Errorf("防御の補正だけの持ち物: 印 %v, want なし", got.Unsupported)
+	}
+
 	// 威力が不明(0)・メガストーンは印を残す(数値は従来どおり 0)。
 	for name, item := range map[string]*Item{
 		"威力が不明":  {ID: "test-unknown-fling"},

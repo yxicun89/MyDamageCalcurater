@@ -228,5 +228,5 @@ func flingKeepsAttackEffect(in DamageInput, e *ItemEffect) bool {
 	if r == nil || r.PowerFormula != PowerFormulaAttackerItemFling {
 		return false
 	}
-	return len(e.StatMods) > 0 || e.DamageMod != 0 || e.PowerMod != 0 || (e.BoostType != "" && e.BoostTypeMod != 0)
+	return e.StatMods[StatAtk] != 0 || e.StatMods[StatSpA] != 0 || e.DamageMod != 0 || e.PowerMod != 0 || (e.BoostType != "" && e.BoostTypeMod != 0)
 }

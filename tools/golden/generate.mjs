@@ -2024,7 +2024,9 @@ const hpLevels = max => uniqSorted([max, max - 1, Math.floor(max * 3 / 4), Math.
       powers.add(v.input.Attacker.Item.FlingPower);
     }
     addStage3(`fling/${id('Quick Claw')}/${a}/${d}/crit-reflect`, a, d, 'Fling', {a:{item:'Quick Claw', fling:true}, critical:true, screen:'Reflect'});
-    addStage3(`fling/${id('Quick Claw')}/${a}/${d}/technician`, a, d, 'Fling', {a:{item:'Quick Claw', fling:true, ability:'Technician'}});
+    // テクニシャン(威力 60 以下)は投げた持ち物の威力で判定される: 威力 30 の効果を持たない持ち物で確かめる。
+    const tech = addStage3(`fling/${id("King's Rock")}/${a}/${d}/technician`, a, d, 'Fling', {a:{item:"King's Rock", fling:true, ability:'Technician'}});
+    assert(tech.input.Attacker.Item.FlingPower <= 60, 'fling technician: 持ち物の威力が 60 以下でない');
     // 攻撃側がくろいてっきゅうを持つ(威力 130・接地)。
     const iron = addStage3(`fling/${id('Iron Ball')}/${a}/${d}`, a, d, 'Fling', {a:{item:'Iron Ball', fling:true}});
     assert.equal(iron.input.Attacker.Item.FlingPower, 130);
