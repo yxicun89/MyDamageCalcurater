@@ -30,7 +30,7 @@ flowchart LR
 |---|---|---|
 | 起動 | `make up` → `kubectl apply -k deploy/k8s/overlays/local`(`scripts/up.sh`)、`rollout status statefulset/mysql` | `make db-local-up` → `scripts/db-local-up.sh` |
 | 実体 | StatefulSet `mysql`(ns pokecalc)、Pod `mysql-0`、`mysql:9.7.2@sha256:29abb0a1…` | docker コンテナ `pokecalc-mysql-local`(同 image・同 digest) |
-| 到達 | クラスタ内 `mysql:3306`(headless Service)。ホストからは `kubectl port-forward svc/mysql 3306:3306`(手動。`docs/runbooks/speed.md`・`docs/verify-m1.md` §3) | `127.0.0.1:3306`(`-p 127.0.0.1:3306:3306`。`scripts/db-local-up.sh`) |
+| 到達 | クラスタ内 `mysql:3306`(headless Service)。ホストからは `kubectl port-forward svc/mysql 3306:3306`(手動。`docs/runbooks/speed.md`・`docs/verify.md` §1-1) | `127.0.0.1:3306`(`-p 127.0.0.1:3306:3306`。`scripts/db-local-up.sh`) |
 | root パスワード | Secret `mysql-auth` の `mysql-root-password`(`scripts/up.sh` が `openssl rand -hex 16` で生成。ほかに用途別ユーザーの DSN 3 つ(reader・importer・migrator)と root の DSN `pokedex-dsn`。計5キー) | `.env` の `MYSQL_ROOT_PASSWORD`(空なら失敗。`.env.example` は値なし) |
 | DB 作成 | `MYSQL_DATABASE=pokedex`(**初回起動時のみ有効**。`overlays/local/mysql/statefulset.yaml`) | 作らない(コンテナは DB を作らない。DSN 例は `.../pokedex?parseTime=true` だが `pokedex` DB の作成手順はスクリプトに無い) |
 | 文字コード・メモリ設定 | ConfigMap `mysql-config` の `charset.cnf`(utf8mb4 / `utf8mb4_0900_ai_ci`)と `memory.cnf`(`performance_schema=OFF`・`innodb_buffer_pool_size=128M`・`innodb_log_buffer_size=16M`・`max_connections=50`。Pod の上限 768Mi に収めるため。issue #437)。`overlays/local/mysql/configmap.yaml` | 起動引数 `--character-set-server=utf8mb4 --collation-server=utf8mb4_0900_ai_ci`(`scripts/db-local-up.sh`)。`memory.cnf` 相当は無い |
@@ -101,7 +101,7 @@ sequenceDiagram
 | `pokedex export` | 同上の env(k3d ではホストから手動で渡す) | 同上 | `cmd/pokedex/main.go` |
 | `pokedex-migrate`(Job) | `POKEDEX_PROVISION_DSN` ← `pokedex-dsn`(root。用途別ユーザーの作成と権限の付け直しだけ)、`POKEDEX_DATABASE_DSN` ← `pokedex-migrator-dsn`(migration の本体)、`POKEDEX_READER_DSN`・`POKEDEX_IMPORTER_DSN`(ユーザー・パスワードを知るためだけ) | `MultiStatements=true` を付与 | `deploy/k8s/base/pokedex/job-migrate.yaml`、`cmd/migrate/main.go` |
 | `pokedex-import`(CronJob/手動 Job) | env `POKEDEX_DATABASE_DSN` ← `pokedex-importer-dsn`(`pokedex_importer`。表ごとの SELECT/INSERT/UPDATE/DELETE) | なし。DSN 無しは exit 2(`-dry-run` のときは不要) | `cmd/import/main.go` |
-| ホストから(`make migrate-up` `make migrate-force` `make import` `make pokedex-export`) | 手動で `export POKEDEX_DATABASE_DSN=...`(用途に合うキーを選ぶ。migrate は `pokedex-migrator-dsn`) | k3d の場合 `kubectl get secret … \| base64 -d \| sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/'` でホストを書換え、port-forward 越しに繋ぐ | `docs/runbooks/data.md`・`docs/verify-m1.md` §3 |
+| ホストから(`make migrate-up` `make migrate-force` `make import` `make pokedex-export`) | 手動で `export POKEDEX_DATABASE_DSN=...`(用途に合うキーを選ぶ。migrate は `pokedex-migrator-dsn`) | k3d の場合 `kubectl get secret … \| base64 -d \| sed -E 's/@tcp\(mysql:[0-9]+\)/@tcp(127.0.0.1:13306)/'` でホストを書換え、port-forward 越しに繋ぐ | `docs/runbooks/data.md`・`docs/verify.md` §1-1 |
 
 - DSN の形式: go-sql-driver/mysql(`<user>:<pw>@tcp(mysql:3306)/pokedex?parseTime=true`)。5キーとも `scripts/up.sh` が乱数のパスワードで作る。エラー文に DSN(パスワード)を含めない。
 - root の `pokedex-dsn` は、プロビジョニング(migrate Job・`make deploy-latest` の migrate-up)と、DB の中身を人が見る運用の手順だけが使う。サービスの Pod は使わない。

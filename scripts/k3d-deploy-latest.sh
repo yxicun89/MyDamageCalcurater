@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # いまのチェックアウト(通常は main の最新)で全サービスのイメージを作り直し、k3d(make up 済み)へ入れ替える。
-# 動作確認(docs/verify-m1.md)の前に毎回実行する。古いイメージが残ると、画面は開くのに API が 404 になる
+# 動作確認(docs/verify.md)の前に毎回実行する。古いイメージが残ると、画面は開くのに API が 404 になる
 # (例: pokedex に新しいエンドポイントが無い)ことがあるため。
 #
 # 対象: pokedex の DB(migrate-up)・pokedex(サーバー)・pokedex-importer(CronJob・import-k8s が使う)・

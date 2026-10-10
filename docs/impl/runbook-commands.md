@@ -1,6 +1,6 @@
 # 手順書コマンドの解説
 
-- 対象: `README.md`・`docs/verify-m1.md`・`docs/runbooks/{api,data,balance,speed,ios,ios-device-install}.md` のコードブロックに出る**全コマンド**(重複は 1 行にまとめ、「出現」欄に出現箇所を並べる)。
+- 対象: `README.md`・`docs/verify.md`・`docs/runbooks/{api,data,balance,speed,ios,ios-device-install}.md` のコードブロックに出る**全コマンド**(重複は 1 行にまとめ、「出現」欄に出現箇所を並べる)。
 - 基準: `origin/main` 3379b03 取り込み後。行番号は同時点。
 - 略記: **host** = 開発機(Mac)のシェル / **k3d** = クラスタ `pokecalc`(kubectl context `k3d-pokecalc`)/ **docker** = ホストの Docker。全 make ターゲットの定義は [make-targets.md](make-targets.md)、リソースとポートは [k8s-local.md](k8s-local.md)、DB は [db-mysql.md](db-mysql.md)。
 - 全手順の先頭にある `cd "$(git rev-parse --show-toplevel)"` は、host のカレントをリポジトリルート(worktree のルート)へ移すだけ(副作用なし)。Makefile の相対パスがルート前提のため。
