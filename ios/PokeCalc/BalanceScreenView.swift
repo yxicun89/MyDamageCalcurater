@@ -42,7 +42,7 @@ struct BalanceScreenView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("balanceScreen")
         .toolbar {
             ToolbarItem(placement: .principal) {

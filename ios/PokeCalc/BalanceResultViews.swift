@@ -153,6 +153,7 @@ struct BalanceSectionHeader: View {
 
     var body: some View {
         HStack(spacing: SpacingToken.x2) {
+            PopIcon(PopSymbol.balance).foregroundStyle(ColorToken.brandPrimary.color)
             Text(title)
                 .font(TextStyleToken.heading.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
@@ -182,7 +183,7 @@ struct BalanceCard<Content: View>: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }

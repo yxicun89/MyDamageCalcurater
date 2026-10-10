@@ -52,7 +52,7 @@ struct ReverseScreenView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("reverseScreen")
         .toolbar {
             // .numberPad のキーボードには Return が無いので、閉じる手段を別に用意する。
@@ -72,7 +72,7 @@ struct ReverseScreenView: View {
             .foregroundStyle(ColorToken.textSecondary.color)
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x1)
-            .background(ColorToken.bgGlass.color, in: Capsule())
+            .background(ColorToken.tableZebra.color, in: Capsule())
             .accessibilityIdentifier("reverseBackendModeBadge")
     }
 
@@ -100,7 +100,7 @@ struct ReverseScreenView: View {
                 .padding(SpacingToken.x1)
             }
         }
-        .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.pill, style: .continuous))
+        .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.pill, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: RadiusToken.pill, style: .continuous)
                 .stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth)
@@ -114,7 +114,7 @@ struct ReverseScreenView: View {
         } label: {
             Text(side == .defender ? "与えたダメージ" : "受けたダメージ")
                 .font(TextStyleToken.body.font)
-                .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .lineLimit(1)
                 .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                 .frame(maxWidth: .infinity)
@@ -239,7 +239,7 @@ struct ReverseScreenView: View {
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
-            .glassCard(cornerRadius: RadiusToken.input)
+            .popCard(cornerRadius: RadiusToken.input)
         }
         .accessibilityIdentifier("reverseMovePicker")
         .sheet(isPresented: $isMoveSearchPresented) {
@@ -346,12 +346,12 @@ private struct PresetPillButton: View {
         Button(action: action) {
             Text(title)
                 .font(TextStyleToken.body.font)
-                .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .lineLimit(1)
                 .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingToken.x2)
-                .background(Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color))
+                .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
         .buttonStyle(.plain)

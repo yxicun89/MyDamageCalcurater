@@ -181,9 +181,10 @@ final class DesignTokenTests: XCTestCase {
 
     // MARK: - 文字・形・余白
 
-    /// design.md「文字」: 結果の%表示 28 / 見出し 17 / 本文 15 / 補足 12。
+    /// design.md「文字」: タイトル 22 / 結果の%表示 28 / 見出し 17 / 本文 15 / 補足 12。
     func testTextStyleSizesMatchDesignDoc() {
         let cases: [(TextStyleToken, CGFloat)] = [
+            (.title, 22),
             (.resultPercent, 28),
             (.heading, 17),
             (.body, 15),
@@ -192,7 +193,7 @@ final class DesignTokenTests: XCTestCase {
         for (style, size) in cases {
             XCTAssertEqual(style.size, size, "\(style)")
         }
-        XCTAssertEqual(TextStyleToken.allCases.count, 4, "design.md に無いサイズを足さない")
+        XCTAssertEqual(TextStyleToken.allCases.count, 5, "design.md に無いサイズを足さない")
     }
 
     /// design.md「形・余白」: 角丸 カード 20 / ボタン・チップ 999(ピル)/ 入力 12。

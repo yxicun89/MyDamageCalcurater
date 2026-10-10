@@ -96,7 +96,7 @@ struct CalcScreenView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("calcScreen")
         .toolbar {
             // 数値キーボードには確定キーが無いので、閉じる手段をキーボードのツールバーに置く。
@@ -129,7 +129,7 @@ struct CalcScreenView: View {
             .foregroundStyle(ColorToken.textSecondary.color)
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x1)
-            .background(ColorToken.bgGlass.color, in: Capsule())
+            .background(ColorToken.tableZebra.color, in: Capsule())
             .accessibilityIdentifier("calcBackendModeBadge")
     }
 
@@ -172,7 +172,7 @@ struct CalcScreenView: View {
                 .font(TextStyleToken.heading.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: Circle())
+                .background(ColorToken.tableZebra.color, in: Circle())
         }
         .padding(.top, SpacingToken.x6)
         .accessibilityIdentifier("swapSidesButton")
@@ -206,13 +206,13 @@ struct CalcScreenView: View {
             } label: {
                 Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
                     .font(TextStyleToken.body.font)
-                    .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                    .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                     .lineLimit(1)
                     .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, SpacingToken.x2)
                     .background(
-                        Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color)
+                        Capsule().fill(PopChipStyle.fill(isSelected: isSelected))
                     )
                     .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
@@ -262,7 +262,7 @@ struct CalcScreenView: View {
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
-            .glassCard(cornerRadius: RadiusToken.input)
+            .popCard(cornerRadius: RadiusToken.input)
         }
         .accessibilityIdentifier("movePicker")
         .sheet(isPresented: $isMoveSearchPresented) {

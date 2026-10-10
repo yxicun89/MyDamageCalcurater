@@ -8,7 +8,7 @@ import SwiftUI
 // 操作を `CalcViewModel.loadFavorite` につなぐだけ。取得が失敗しても計算は使える(絶対ルール5)ので、
 // 失敗はシートの中の案内にとどめる。
 
-/// 「構築から選ぶ」行の直下に置く入口2行(攻撃側・防御側)。見た目は `TeamSourceMenuRow` と同じ `glassCard`・幅いっぱい。
+/// 「構築から選ぶ」行の直下に置く入口2行(攻撃側・防御側)。見た目は `TeamSourceMenuRow` と同じ `popCard`・幅いっぱい。
 /// `Menu` ではなくシートで開く(お気に入りは最大 100 件)。
 struct FavoriteLoadEntryRows: View {
     let onOpen: (FavoriteLoadSide) -> Void
@@ -35,7 +35,7 @@ struct FavoriteLoadEntryRows: View {
             }
             .padding(SpacingToken.x3)
             .frame(maxWidth: .infinity)
-            .glassCard(cornerRadius: RadiusToken.input)
+            .popCard(cornerRadius: RadiusToken.input)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
@@ -97,7 +97,7 @@ struct FavoriteLoadSheet: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("favoriteLoadSheet")
         .task { await picker.load() }
     }
@@ -149,7 +149,7 @@ struct FavoriteLoadSheet: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SpacingToken.x3)
-            .glassCard()
+            .popCard()
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)

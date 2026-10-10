@@ -174,7 +174,7 @@ struct ResultRowView: View {
                     .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                     .padding(.horizontal, SpacingToken.x2)
                     .padding(.vertical, SpacingToken.x1)
-                    .background(ColorToken.bgGlass.color, in: Capsule())
+                    .background(ColorToken.tableZebra.color, in: Capsule())
                     .scaleEffect(badgeScale)
                     .accessibilityIdentifier("calcResultKO-\(display.id)")
             }
@@ -192,10 +192,10 @@ struct ResultRowView: View {
             }
         }
         .padding(SpacingToken.x3)
-        .glassCard(cornerRadius: RadiusToken.input)
+        .popCard(cornerRadius: RadiusToken.input)
         // `.contain`: コンテナ自体を1つの要素として見つけられるようにしつつ、中の各 `Text`
         // (`subtitleText`・`percentRangeTextView`・`koText`)は個別の要素のままにする
-        // (`CalcConditionsSection.calcConditionsPanel` と同じ理由。無いと `glassCard()` の
+        // (`CalcConditionsSection.calcConditionsPanel` と同じ理由。無いと `popCard()` の
         // コンテナに飲まれて同一 identifier が複数ヒットする。ADR-0501「P6-14」§2 の申し送り)。
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("calcResultRow-\(display.id)")
@@ -225,7 +225,7 @@ struct DamageBarView: View {
             let fillWidth = max(Self.minimumVisibleWidth, CGFloat(maxFraction - minFraction) * width)
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(ColorToken.bgGlass.color)
+                    .fill(ColorToken.tableZebra.color)
                     .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
                 Capsule()
                     .fill(color)
@@ -259,11 +259,11 @@ struct ChipButton: View {
                 // 折り返ることが無いよう、常に自然な1行の幅で描く。
                 .lineLimit(1)
                 .fixedSize()
-                .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
                 .background(
-                    Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color)
+                    Capsule().fill(PopChipStyle.fill(isSelected: isSelected))
                 )
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
@@ -276,7 +276,7 @@ struct ChipButton: View {
     }
 }
 
-/// エラー表示。design.md「danger」トークン。`identifier` は既定で計算画面の
+/// エラー表示。dangerSoft の淡い塗り + 注意アイコン + 文字(色だけで伝えない。ADR-0521)。`identifier` は既定で計算画面の
 /// `calcErrorMessage`(逆算画面もこれをそのまま再利用してきた)。構築画面(P6-2c)は
 /// ADR-0501「P6-2c」5章の契約どおり `teamListErrorMessage` / `teamEditErrorMessage` を
 /// 個別に持つ必要があるため、呼び出し側で指定できるようにする(呼び出し元を変えない
@@ -286,14 +286,7 @@ struct ErrorBannerView: View {
     var identifier: String = "calcErrorMessage"
 
     var body: some View {
-        Text(message)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.danger.color)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SpacingToken.x3)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
-            .accessibilityIdentifier(identifier)
+        PopNoticeView(kind: .error, message: message, identifier: identifier)
     }
 }
 

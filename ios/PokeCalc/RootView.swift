@@ -56,9 +56,9 @@ struct RootView: View {
                     VStack(spacing: SpacingToken.x4) {
                         ForEach(Self.rootButtons) { button in
                             NavigationLink(value: FeatureRoute(featureID: button.id)) {
-                                Text(button.title)
+                                PopLabel(title: button.title, systemImage: PopSymbol.forFeature(id: button.id))
                             }
-                            .buttonStyle(PillButtonStyle())
+                            .buttonStyle(PillButtonStyle(kind: .primary))
                             .accessibilityIdentifier(button.accessibilityIdentifier)
                         }
                     }
@@ -67,13 +67,13 @@ struct RootView: View {
             }
             .padding(SpacingToken.x4)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(ColorToken.bgBase.color.ignoresSafeArea())
+            .popScreenBackground()
             .toolbar {
                 // `navigationTitle` はシステムフォントに固定されるため、design.md の
                 // SF Pro Rounded を出すために principal 位置のカスタム View で置き換える。
                 ToolbarItem(placement: .principal) {
                     Text("PokeCalc")
-                        .font(TextStyleToken.heading.font)
+                        .font(TextStyleToken.title.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                 }
                 // P6-18(issue #328): 非公式の表示とデータの出典への控えめな入口。
@@ -129,7 +129,7 @@ struct RootView: View {
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: Capsule())
+                .background(ColorToken.tableZebra.color, in: Capsule())
                 .accessibilityIdentifier("backendModeBadge")
         case .configurationError(let message):
             Text(message)
@@ -138,23 +138,6 @@ struct RootView: View {
                 .multilineTextAlignment(.center)
                 .accessibilityIdentifier("backendModeBadge")
         }
-    }
-}
-
-/// design.md「ピルのボタン」。無彩色トークンだけを使う(色を持つのはタイプだけ、という方針。
-/// システムの既定色(青)に頼らない)。
-struct PillButtonStyle: ButtonStyle {
-    /// 押している間だけ少し薄くして、押せたことを示す(操作への反応だけの演出。design.md「動き」)。
-    private static let pressedOpacity = 0.7
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(TextStyleToken.heading.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .padding(.horizontal, SpacingToken.x6)
-            .padding(.vertical, SpacingToken.x3)
-            .background(ColorToken.bgGlass.color, in: Capsule())
-            .opacity(configuration.isPressed ? Self.pressedOpacity : 1.0)
     }
 }
 

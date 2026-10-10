@@ -49,7 +49,7 @@ struct TeamEditView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("teamEditScreen")
         .task { await viewModel.load() }
     }
@@ -69,7 +69,7 @@ struct TeamEditView: View {
             .font(TextStyleToken.heading.font)
             .foregroundStyle(ColorToken.textPrimary.color)
             .padding(SpacingToken.x3)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityIdentifier("teamNameField")
 
             if viewModel.nameError != nil {
@@ -154,10 +154,10 @@ struct TeamEditView: View {
                 }
             }
         } label: {
-            Text("保存")
+            PopLabel(title: "保存", systemImage: PopSymbol.save)
                 .frame(maxWidth: .infinity)
         }
-        .buttonStyle(PillButtonStyle())
+        .buttonStyle(PillButtonStyle(kind: .primary))
         .accessibilityIdentifier("saveTeamButton")
     }
 

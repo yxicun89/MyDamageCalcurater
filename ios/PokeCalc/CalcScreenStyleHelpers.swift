@@ -23,24 +23,3 @@ enum CalcScreenMetrics {
     /// 攻撃側の「攻撃」「特攻」ブロックの入力・選択肢の最小の高さ(design.md のタップ範囲 36pt 以上。ADR-0518)。
     static let minimumTapSide: CGFloat = 36
 }
-
-/// design.md「Liquid Glass 系のクリーン」の角丸カード背景。requirements のビジュアル B・ADR-0500 §1
-/// に合わせ、iOS 26+ の本物の Liquid Glass(`.glassEffect(_:in:)`)を使う。`ColorToken.bgGlass` を
-/// `Glass.tint(_:)` で載せ、design.md の bg.glass のトーンに近づける(不透明度はシステムの
-/// ガラス素材が持つため、そこは design.md の「+ ぼかし」の意図どおりシステムに委ねる)。
-extension View {
-    func glassCard(cornerRadius: CGFloat = RadiusToken.card) -> some View {
-        modifier(GlassCardModifier(cornerRadius: cornerRadius))
-    }
-}
-
-private struct GlassCardModifier: ViewModifier {
-    let cornerRadius: CGFloat
-
-    func body(content: Content) -> some View {
-        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        content
-            .glassEffect(.regular.tint(ColorToken.bgGlass.color), in: shape)
-            .overlay(shape.stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
-    }
-}

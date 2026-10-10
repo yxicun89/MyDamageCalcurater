@@ -40,7 +40,7 @@ struct JudgeIndividualCard: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.card)
+        .popCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifierPrefix)
     }
@@ -60,7 +60,7 @@ struct JudgeIndividualCard: View {
                         .font(TextStyleToken.body.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                         .padding(SpacingToken.x2)
-                        .background(ColorToken.bgGlass.color, in: Circle())
+                        .background(ColorToken.tableZebra.color, in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!removeAction.isEnabled)
@@ -115,7 +115,7 @@ struct JudgeIndividualCard: View {
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
                 .background(
-                    ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                    ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
@@ -265,7 +265,7 @@ private struct JudgeStepper: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(SpacingToken.x2)
                 .frame(minWidth: Self.stepButtonMinSide, minHeight: Self.stepButtonMinSide)
-                .background(ColorToken.bgGlass.color, in: Circle())
+                .background(ColorToken.tableZebra.color, in: Circle())
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)

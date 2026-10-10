@@ -93,6 +93,72 @@ public enum ColorToken {
     )
 }
 
+/// design.md「ポップ配色」(ADR-0334 / F-12)。名前は Web の CSS 変数(`--brand-primary` 等)の camelCase。
+/// `-ink` で終わる名前と `type` で始まる名前は使わない(タイプバッジ・タイプ色の命名)。
+extension ColorToken {
+    private static func solid(_ light: Int, _ dark: Int) -> ColorPair {
+        func rgba(_ hex: Int) -> RGBA {
+            RGBA(red: (hex >> 16) & 0xFF, green: (hex >> 8) & 0xFF, blue: hex & 0xFF, alpha: 1.0)
+        }
+        return ColorPair(light: rgba(light), dark: rgba(dark))
+    }
+
+    /// 主ボタン・選択中のタブとチップの塗り・リンク。
+    public static let brandPrimary = solid(0x1F5FD6, 0x7FA8FF)
+    /// `brandPrimary` の塗りの上の文字。
+    public static let onPrimary = solid(0xFFFFFF, 0x0E1015)
+    /// 塗りの装飾だけ(星・ハイライト)。文字色・境界線には使わない。
+    public static let brandAccent = solid(0xFFCB05, 0xFFD84D)
+    /// `brandAccent` の塗りの上の文字。
+    public static let onAccent = solid(0x14161A, 0x14161A)
+    /// 成功の文字・アイコン。
+    public static let success = solid(0x17743A, 0x5FD38A)
+    /// 成功の案内の塗り。
+    public static let successSoft = solid(0xE2F5E8, 0x12301F)
+    /// 注意の文字・アイコン。
+    public static let warning = solid(0x9A5B00, 0xFFB547)
+    /// 注意の案内の塗り。
+    public static let warningSoft = solid(0xFFF1D6, 0x33240B)
+    /// 情報・読み込み中の文字・アイコン。
+    public static let info = solid(0x0B6BA8, 0x5EC2F2)
+    /// 情報・読み込み中の案内の塗り。
+    public static let infoSoft = solid(0xDCEFFB, 0x0C2A3A)
+    /// エラーの案内の塗り(文字は `danger`)。
+    public static let dangerSoft = solid(0xFDE3E4, 0x3A1416)
+    /// `danger` の塗り(危険ボタン)の上の文字。
+    public static let onDanger = solid(0xFFFFFF, 0x0E1015)
+    /// カード・ボタン(副)の不透明な面。
+    public static let surfaceCard = solid(0xFFFFFF, 0x1A1D24)
+    /// 背景のやさしいグラデーション(上)。
+    public static let bgGradientStart = solid(0xFFF6E0, 0x14131C)
+    /// 背景のやさしいグラデーション(下)。
+    public static let bgGradientEnd = solid(0xE8F1FF, 0x0E1622)
+    /// 表の見出し行。
+    public static let tableHeader = solid(0xDCE7FB, 0x1C2638)
+    /// 表・一覧の偶数行。
+    public static let tableZebra = solid(0xEEF2F8, 0x151922)
+    /// 表・一覧の押下中の行(Web ではホバー)。
+    public static let tableHover = solid(0xE3ECFB, 0x1D2535)
+    /// フォーカスの輪。
+    public static let focusRing = solid(0x1F5FD6, 0x7FA8FF)
+    /// 影の色(黒 10% / 40%)。
+    public static let shadowColor = ColorPair(
+        light: RGBA(red: 0, green: 0, blue: 0, alpha: 0.10),
+        dark: RGBA(red: 0, green: 0, blue: 0, alpha: 0.40)
+    )
+
+    /// ポップ配色の全トークン(名前つき。テストと一覧用)。
+    public static let popPalette: [(name: String, pair: ColorPair)] = [
+        ("brandPrimary", brandPrimary), ("onPrimary", onPrimary), ("brandAccent", brandAccent),
+        ("onAccent", onAccent), ("success", success), ("successSoft", successSoft),
+        ("warning", warning), ("warningSoft", warningSoft), ("info", info), ("infoSoft", infoSoft),
+        ("dangerSoft", dangerSoft), ("onDanger", onDanger), ("surfaceCard", surfaceCard),
+        ("bgGradientStart", bgGradientStart), ("bgGradientEnd", bgGradientEnd),
+        ("tableHeader", tableHeader), ("tableZebra", tableZebra), ("tableHover", tableHover),
+        ("focusRing", focusRing), ("shadowColor", shadowColor),
+    ]
+}
+
 /// design.md「タイプ色(自作パレット)」。キーは `api/openapi.yaml` の `PokeType` enum の
 /// 英小文字 ID(normal, fire, ... fairy)。タイプ相性表と同じくレギュレーションに依存しないので
 /// マスタではなくコードの定数として持つ(CLAUDE.md ドメイン規約の「タイプ相性表」とは別物。
@@ -173,6 +239,8 @@ public enum TypeColorToken {
 
 /// design.md「文字」。iOS は SF Pro Rounded(`.rounded` デザインの system font で得られる)。
 public enum TextStyleToken: CaseIterable {
+    /// タイトル(22pt・太さ 800。画面の最上位の見出し)。
+    case title
     /// 結果の%表示(28pt)。
     case resultPercent
     /// 見出し(17pt)。
@@ -184,6 +252,7 @@ public enum TextStyleToken: CaseIterable {
 
     public var size: CGFloat {
         switch self {
+        case .title: return 22
         case .resultPercent: return 28
         case .heading: return 17
         case .body: return 15
@@ -191,28 +260,100 @@ public enum TextStyleToken: CaseIterable {
         }
     }
 
+    /// 太さ(design.md「文字」。タイトル 800 / 見出し 700 / 本文・補足 400。結果の%は従来どおり 400)。
+    public var weight: FontWeightToken {
+        switch self {
+        case .title: return .title
+        case .heading: return .heading
+        case .resultPercent, .body, .caption: return .body
+        }
+    }
+
     public var font: Font {
-        let base = Self.dynamicRoundedFont(size: size)
+        let base = Self.dynamicRoundedFont(size: size, weight: weight.weight)
         // design.md「数字は等幅(.monospacedDigit())」: 結果の%表示は数字が入れ替わっても
         // レイアウトが揺れないよう等幅数字にする。他のスタイルは通常の(可変幅の)数字でよい。
         switch self {
         case .resultPercent: return base.monospacedDigit()
-        case .heading, .body, .caption: return base
+        case .title, .heading, .body, .caption: return base
         }
     }
 
     /// SF Pro Rounded で、`size` を「既定の文字サイズでの基準値」として端末の Dynamic Type
     /// (アクセシビリティの文字サイズ設定)に応じて拡大される固定デザインのフォント。
     /// `size` 自体(design.md の 28/17/15/12)は変えない(`DesignTokenTests` が固定する値)。
-    private static func dynamicRoundedFont(size: CGFloat) -> Font {
+    private static func dynamicRoundedFont(size: CGFloat, weight: Font.Weight) -> Font {
         #if canImport(UIKit)
-        let base = UIFont.systemFont(ofSize: size, weight: .regular)
+        let base = UIFont.systemFont(ofSize: size, weight: weight.uiFontWeight)
         let rounded = base.fontDescriptor.withDesign(.rounded).map { UIFont(descriptor: $0, size: size) } ?? base
         return Font(UIFontMetrics(forTextStyle: .body).scaledFont(for: rounded))
         #else
         // macOS はパッケージテストのためだけの対象(Dynamic Type の主戦場は iOS)。固定サイズで返す。
-        return Font.system(size: size, design: .rounded)
+        return Font.system(size: size, weight: weight, design: .rounded)
         #endif
+    }
+}
+
+/// design.md「文字」の太さ(タイトル 800 / 見出し 700 / 強調 700 / 本文 400。ADR-0334)。
+public enum FontWeightToken: CaseIterable, Sendable {
+    case title
+    case heading
+    case strong
+    case body
+
+    /// CSS の font-weight の数値(Web と同じ)。
+    public var cssValue: Int {
+        switch self {
+        case .title: return 800
+        case .heading, .strong: return 700
+        case .body: return 400
+        }
+    }
+
+    public var weight: Font.Weight {
+        switch self {
+        case .title: return .heavy
+        case .heading, .strong: return .bold
+        case .body: return .regular
+        }
+    }
+}
+
+#if canImport(UIKit)
+extension Font.Weight {
+    fileprivate var uiFontWeight: UIFont.Weight {
+        switch self {
+        case .heavy: return .heavy
+        case .bold: return .bold
+        default: return .regular
+        }
+    }
+}
+#endif
+
+/// design.md「形・余白」の影(色は `ColorToken.shadowColor`)。Web の `box-shadow: 0 Ypx BLURpx` に対応。
+public struct ShadowToken: Equatable, Sendable {
+    public let offsetY: CGFloat
+    public let blur: CGFloat
+    /// SwiftUI の `.shadow(radius:)` は CSS の blur の半分。
+    public var radius: CGFloat { blur / 2 }
+
+    /// カード 0 2px 8px。
+    public static let card = ShadowToken(offsetY: 2, blur: 8)
+    /// 浮き上がり 0 6px 16px。
+    public static let raised = ShadowToken(offsetY: 6, blur: 16)
+}
+
+/// design.md「動き」の押下(ADR-0334)。常時動くアニメーションは持たない。
+public enum MotionToken {
+    /// ボタン・チップを押したとき少し縮む時間(秒)。
+    public static let pressDuration: Double = 0.15
+    /// 押下で縮む倍率。
+    public static let pressScale: Double = 0.96
+
+    /// 「視差効果を減らす」のときは 0 秒。
+    public static func pressDuration(reduceMotion: Bool) -> Double {
+        reduceMotion ? 0 : pressDuration
     }
 }
 

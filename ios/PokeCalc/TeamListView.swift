@@ -61,7 +61,7 @@ struct TeamListView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("teamListScreen")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -109,7 +109,7 @@ struct TeamListView: View {
         } label: {
             Label("新規作成", systemImage: "plus.circle")
                 .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
+                .foregroundStyle(ColorToken.brandPrimary.color)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("createTeamButton")
@@ -169,14 +169,14 @@ private struct TeamRowView: View {
             .accessibilityLabel("この構築を削除")
         }
         .padding(SpacingToken.x3)
-        .glassCard()
+        .popCard()
     }
 
     private var memberDots: some View {
         HStack(spacing: SpacingToken.x1) {
             ForEach(0..<TeamLimits.maxMembers, id: \.self) { index in
                 Circle()
-                    .fill(index < team.members.count ? ColorToken.textPrimary.color : ColorToken.borderHairline.color)
+                    .fill(index < team.members.count ? ColorToken.brandPrimary.color : ColorToken.borderHairline.color)
                     .frame(width: 6, height: 6)
             }
         }

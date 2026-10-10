@@ -35,9 +35,7 @@ struct JudgeScreenView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingToken.x4) {
-                Text(JudgeLabels.screenTitle)
-                    .font(TextStyleToken.heading.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
+                PopHeading(title: JudgeLabels.screenTitle, systemImage: PopSymbol.judge)
                 if viewModel.masterFailure != nil {
                     ErrorBannerView(message: JudgeLabels.masterLoadFailed, identifier: "judgeMasterError")
                 }
@@ -49,7 +47,7 @@ struct JudgeScreenView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("judgeScreen")
         .task { await viewModel.load() }
         .onDisappear { viewModel.cancelPendingWork() }
@@ -85,8 +83,7 @@ struct JudgeScreenView: View {
             Button {
                 viewModel.addCandidate()
             } label: {
-                Text(JudgeLabels.addCandidate)
-                    .multilineTextAlignment(.leading)
+                PopLabel(title: JudgeLabels.addCandidate, systemImage: PopSymbol.add)
             }
             .buttonStyle(PillButtonStyle())
             .disabled(!viewModel.canAddCandidate)
@@ -130,7 +127,7 @@ struct JudgeScreenView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.card)
+        .popCard(cornerRadius: RadiusToken.card)
     }
 
     private var submitSection: some View {
@@ -138,10 +135,9 @@ struct JudgeScreenView: View {
             Button {
                 viewModel.submit()
             } label: {
-                Text(JudgeLabels.submit)
-                    .multilineTextAlignment(.leading)
+                PopLabel(title: JudgeLabels.submit, systemImage: PopSymbol.judge)
             }
-            .buttonStyle(PillButtonStyle())
+            .buttonStyle(PillButtonStyle(kind: .primary))
             .accessibilityIdentifier("judgeSubmit")
             if let error = viewModel.validationError {
                 ErrorBannerView(message: error.message, identifier: "judgeValidationError")

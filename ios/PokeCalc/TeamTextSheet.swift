@@ -46,7 +46,7 @@ struct TeamTextSheet: View {
             .padding(SpacingToken.x4)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("teamTextSheet")
         .task {
             if let initialExportMembers { await export(initialExportMembers) }
@@ -115,7 +115,7 @@ struct TeamTextSheet: View {
                 }
                 .padding(SpacingToken.x3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .glassCard()
+                .popCard()
             }
         }
     }
@@ -160,7 +160,7 @@ struct TeamTextSheet: View {
                 }
             }
             .padding(SpacingToken.x2)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             actionButton(ShowdownTextLabels.analyzeButton, identifier: "analyzeImportTextButton") {
                 Task { await analyze() }
             }
@@ -225,7 +225,7 @@ struct TeamTextSheet: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard()
         .accessibilityElement(children: .contain)
         .accessibilityLabel(ShowdownTextLabels.rejectedTitle)
         .accessibilityIdentifier("importRejectedList")
@@ -263,7 +263,7 @@ struct TeamTextSheet: View {
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x3)
             .frame(maxWidth: .infinity)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
     }
 
     private func actionButton(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
