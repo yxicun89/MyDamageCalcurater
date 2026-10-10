@@ -34,8 +34,23 @@ xcode_test_lock_acquire "$label"
 result_bundle="$work_dir/result.xcresult"
 summary_json="$work_dir/summary.json"
 
+# 1 テストが止まったまま全体が何十分も進まない(ハング風)状態を、そのテストの失敗として気付けるようにする(F-15。ADR-0520)。
+# 実測の最長は約 133 秒(2026-10-09 の 188 件)なので、既定 300 秒・上限 600 秒(2 倍以上)。IOS_TEST_TIMEOUTS=0 で外せる。
+timeout_args=()
+if [ "${IOS_TEST_TIMEOUTS:-1}" != "0" ]; then
+  timeout_args=(-test-timeouts-enabled YES -default-test-execution-time-allowance 300 -maximum-test-execution-time-allowance 600)
+fi
+
+# アプリの UI テスト(label に ui を含む)は 2 並列で流す。シミュレータのクローン(Clone N of …)が増えるだけで、
+# 既存のシミュレータは止めない。結果バンドルの件数はクローンをまたいで合算される。
+# 2 並列は 36 件の部分集合で 795 秒→約 520 秒(3 回とも全件成功)。外すときは IOS_TEST_PARALLEL=0(ADR-0520)。
+parallel_args=()
+case "$label" in
+  *ui*) [ "${IOS_TEST_PARALLEL:-1}" = "0" ] || parallel_args=(-parallel-testing-enabled YES -maximum-parallel-testing-workers 2) ;;
+esac
+
 status=0
-xcodebuild test "$@" -resultBundlePath "$result_bundle" || status=$?
+xcodebuild test "$@" ${parallel_args[@]+"${parallel_args[@]}"} ${timeout_args[@]+"${timeout_args[@]}"} -resultBundlePath "$result_bundle" || status=$?
 
 if [ ! -d "$result_bundle" ]; then
   echo "$label: 結果バンドルが作られなかった(xcodebuild の終了コード $status)" >&2

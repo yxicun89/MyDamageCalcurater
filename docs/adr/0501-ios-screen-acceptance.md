@@ -4733,3 +4733,9 @@ XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で�
 | `FavoritesScreenUITests.testFailureStateNoHorizontalOverflowAtAX5` | 対象はお気に入りと相手履歴のエラー | 計算履歴のエラー・再読み込みも対象に追加(減らしていない) |
 
 `FavoritesLabels.pendingHistoryNote` は削除(参照していたテストは上の UITests だけ)。`CalcHistoryContractTests` は変更なし。
+
+## ios-test-ui の所要時間(ADR-0520。2026-10-10)
+
+実測・2 並列・テスト単位の上限の判断は ADR-0520。`ios/scripts/run-xcode-tests.sh` が ui のとき 2 並列と上限を付ける。
+受け入れ条件: (1) 件数の集計(`全 N 件 / 成功 N …`)が直列のときと同じ形で出る、(2) 0 件・失敗・スキップは従来どおり失敗、
+(3) `IOS_TEST_PARALLEL=0` で直列、`IOS_TEST_TIMEOUTS=0` で上限なしに戻せる。既存のテストの期待値は変えていない。
