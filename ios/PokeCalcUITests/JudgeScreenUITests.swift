@@ -385,14 +385,9 @@ final class JudgeScreenUITests: XCTestCase {
         openTeamList.tap()
         wait(element(app, "teamListScreen"), "構築一覧が開かない")
         element(app, "createTeamButton").tap()
-        let nameField = app.alerts.textFields.firstMatch
-        wait(nameField, "名前の入力欄が無い")
-        nameField.tap()
-        nameField.typeText("テストこうちくP6-25")
-        app.alerts.buttons["作成"].tap()
         wait(element(app, "teamEditScreen"), "編集画面が開かない")
-        let add = element(app, "addMemberButton")
-        wait(add, "addMemberButton が無い")
+        let add = element(app, "slotSpeciesPicker-1")
+        wait(add, "slotSpeciesPicker-1 が無い")
         add.tap()
         wait(element(app, "speciesSearchSheet"), "種族のシートが開かない")
         let option = app.buttons[Self.speciesTwo.name]
@@ -403,6 +398,8 @@ final class JudgeScreenUITests: XCTestCase {
         nickname.tap()
         nickname.typeText(Self.memberNickname)
         element(app, "saveTeamButton").tap()
+        wait(element(app, "teamSavedNotice"), "保存できない")
+        element(app, "backToListButton").tap()
         wait(element(app, "teamListScreen"), "保存して一覧に戻れない")
         app.navigationBars.buttons.element(boundBy: 0).tap()
     }

@@ -3,84 +3,93 @@ import PokeCalcDesign
 import SwiftUI
 import UIKit
 
-// TeamTextSheet: 構築のテキスト書き出し・取り込みのシート(P6-20・ADR-0501「P6-20」・ADR-0502)。
+// TeamTextSections: 構築の Showdown 形式の書き出し・取り込み(P6-20・ADR-0501「P6-20」・ADR-0502)。
 //
-// ロジックは持たない。`TeamTextTransferViewModel`(PokeCalcCore)の状態を描き、操作をつなぐだけ。
-// 文言は `ShowdownTextLabels` の1か所。`Menu` は使わない(identifier が UIKit に渡らないため)。確認は
-// alert/confirmationDialog ではなくカードで描く(P6-7。iOS 26 系の XCUITest が入れ子2つを返すため)。
+// F-08(ADR-0522)でシートをやめ、補助の入口として折りたたみの中に置く: 取り込みは一覧の下(新しい構築として作る)、
+// 書き出しは編集画面の下。ロジックは持たない。`TeamTextTransferViewModel`(PokeCalcCore)の状態を描き、
+// 操作をつなぐだけ。文言は `ShowdownTextLabels` / `TeamLabels` の1か所。`Menu` は使わない(identifier が UIKit に
+// 渡らないため)。確認は alert/confirmationDialog ではなくカードで描く(P6-7)。
 
-/// シートを開く依頼。`exportMembers` が非 nil なら開いた直後にその体を書き出す(メンバーカードの入口)。
-struct TeamTextRequest: Identifiable {
-    let id = UUID()
-    let exportMembers: [TeamMember]?
+/// 折りたたみ(閉じた状態で始まる)。`DisclosureGroup` ではなく自前のボタンで開閉する(識別子を確実に付けるため)。
+/// 開いている間だけ中身を出す。常時動くアニメーションは持たない。
+struct TeamFold<Content: View>: View {
+    let title: String
+    let identifier: String
+    @Binding var isOpen: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            Button {
+                isOpen.toggle()
+            } label: {
+                HStack(spacing: SpacingToken.x2) {
+                    Text(title)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: isOpen ? "chevron.up" : "chevron.down")
+                        .font(TextStyleToken.caption.font)
+                        .foregroundStyle(ColorToken.textSecondary.color)
+                        .accessibilityHidden(true)
+                }
+                .padding(SpacingToken.x3)
+                .frame(minHeight: CalcScreenMetrics.minimumTapSide)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isOpen ? "開いています" : "閉じています")
+            .accessibilityIdentifier("\(identifier)Toggle")
+            if isOpen {
+                VStack(alignment: .leading, spacing: SpacingToken.x3) {
+                    content()
+                }
+                .padding(.horizontal, SpacingToken.x3)
+                .padding(.bottom, SpacingToken.x3)
+                // 子の識別子を上書きしないよう、まとまりとして公開する。
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("\(identifier)Content")
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .popCard()
+    }
 }
 
-struct TeamTextSheet: View {
+// MARK: - 書き出し(編集画面の下の折りたたみ)
+
+/// 開いている構築のいまの内容を書き出す。
+struct TeamExportSection: View {
     @State private var model: TeamTextTransferViewModel
     let members: [TeamMember]
-    let initialExportMembers: [TeamMember]?
-    /// 追加を確定したとき、取り込める体を渡す(保存はしない。呼び出し側が `importMembers` へ渡す)。
-    let onImport: ([TeamMember]) -> Void
-    @Environment(\.dismiss) private var dismiss
     @State private var didCopy = false
-    @State private var showsEmptyNotice = false
 
-    init(
-        service: any PokeCalcService, members: [TeamMember], initialExportMembers: [TeamMember]?,
-        onImport: @escaping ([TeamMember]) -> Void
-    ) {
+    init(service: any PokeCalcService, members: [TeamMember]) {
         _model = State(initialValue: TeamTextTransferViewModel(service: service))
         self.members = members
-        self.initialExportMembers = initialExportMembers
-        self.onImport = onImport
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SpacingToken.x4) {
-                titleRow
-                exportSection
-                importSection
-                reviewSection
-            }
-            .padding(SpacingToken.x4)
-        }
-        .scrollDismissesKeyboard(.interactively)
-        .popScreenBackground()
-        .accessibilityIdentifier("teamTextSheet")
-        .task {
-            if let initialExportMembers { await export(initialExportMembers) }
-        }
-    }
-
-    // MARK: - 見出し
-
-    private var titleRow: some View {
-        HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
-            Text(ShowdownTextLabels.sheetTitle)
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(ShowdownTextLabels.closeButton) { dismiss() }
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .accessibilityIdentifier("closeTeamTextSheetButton")
-        }
-    }
-
-    // MARK: - 書き出し
-
-    private var exportSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            actionButton(ShowdownTextLabels.exportTeamButton, identifier: "exportTeamTextButton") {
-                Task { await export(members) }
+            Text(TeamLabels.exportHelp)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("teamExportHelp")
+            TeamTextControls.actionButton(ShowdownTextLabels.exportTeamButton, identifier: "exportTeamTextButton") {
+                Task {
+                    didCopy = false
+                    await model.prepareExport(members: members)
+                }
             }
+            .disabled(members.isEmpty)
             if model.isExporting {
                 ProgressView()
             }
             if model.exportError != nil {
-                noticeText(ShowdownTextLabels.lookupFailure, identifier: "exportFailureNotice", isError: true)
+                TeamTextControls.noticeText(ShowdownTextLabels.lookupFailure, identifier: "exportFailureNotice", isError: true)
             }
             if let text = model.exportText {
                 VStack(alignment: .leading, spacing: SpacingToken.x2) {
@@ -91,48 +100,86 @@ struct TeamTextSheet: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityIdentifier("exportedText")
-                    actionButton(ShowdownTextLabels.copyButton, identifier: "copyExportedTextButton") {
+                    TeamTextControls.actionButton(ShowdownTextLabels.copyButton, identifier: "copyExportedTextButton") {
                         UIPasteboard.general.string = text
                         didCopy = true
                     }
                     ShareLink(item: text) {
-                        buttonLabel(ShowdownTextLabels.shareButton)
+                        TeamTextControls.buttonLabel(ShowdownTextLabels.shareButton)
                     }
+                    .buttonStyle(PillButtonStyle(kind: .secondary))
                     .accessibilityIdentifier("shareExportedTextLink")
                     if model.exportUnresolvedCount > 0 {
-                        noticeText(
+                        TeamTextControls.noticeText(
                             ShowdownTextLabels.exportUnresolvedNotice(count: model.exportUnresolvedCount),
                             identifier: "exportUnresolvedNotice", isError: false)
                     }
                     if model.exportSkippedMemberCount > 0 {
-                        noticeText(
+                        TeamTextControls.noticeText(
                             ShowdownTextLabels.exportSkippedNotice(count: model.exportSkippedMemberCount),
                             identifier: "exportSkippedNotice", isError: false)
                     }
                     if didCopy {
-                        noticeText(ShowdownTextLabels.copiedNotice, identifier: "copiedNotice", isError: false)
+                        TeamTextControls.noticeText(ShowdownTextLabels.copiedNotice, identifier: "copiedNotice", isError: false)
                     }
                 }
                 .padding(SpacingToken.x3)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .popCard()
+                .popInset()
             }
         }
     }
+}
 
-    private func export(_ target: [TeamMember]) async {
-        didCopy = false
-        await model.prepareExport(members: target)
+// MARK: - 取り込み(一覧の下の折りたたみ。新しい構築として作る)
+
+struct TeamImportSection: View {
+    @State private var model: TeamTextTransferViewModel
+    /// 追加を確定したとき、取り込める体を渡す(呼び出し側が新しい構築として保存する)。
+    let onImport: ([TeamMember]) -> Void
+    @State private var showsEmptyNotice = false
+
+    init(service: any PokeCalcService, onImport: @escaping ([TeamMember]) -> Void) {
+        _model = State(initialValue: TeamTextTransferViewModel(service: service))
+        self.onImport = onImport
     }
 
-    // MARK: - 取り込み(貼り付け)
+    /// テキスト欄の最小の高さ(数行ぶん。値の意味は「貼り付け欄が潰れない下限」)。
+    private static let editorMinHeight: CGFloat = 120
 
-    private var importSection: some View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            helpAndExample
+            importEditor
+            reviewSection
+        }
+    }
+
+    // 説明と入力例(何を入れればよいかが分かるように)
+    private var helpAndExample: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Text(ShowdownTextLabels.importSectionTitle)
-                .font(TextStyleToken.heading.font)
+            Text(TeamLabels.importHelp)
+                .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("teamImportHelp")
+            Text(TeamLabels.importExampleLabel)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(TeamLabels.importExample)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(SpacingToken.x3)
+                .popInset()
+                .accessibilityIdentifier("teamImportExample")
+        }
+    }
+
+    private var importEditor: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
             ZStack(alignment: .topLeading) {
                 TextEditor(
                     text: Binding(
@@ -160,51 +207,46 @@ struct TeamTextSheet: View {
                 }
             }
             .padding(SpacingToken.x2)
-            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
-            actionButton(ShowdownTextLabels.analyzeButton, identifier: "analyzeImportTextButton") {
+            .popInset()
+            TeamTextControls.actionButton(ShowdownTextLabels.analyzeButton, identifier: "analyzeImportTextButton") {
                 Task { await analyze() }
             }
             if showsEmptyNotice {
-                noticeText(ShowdownTextLabels.emptyInput, identifier: "importEmptyNotice", isError: false)
+                TeamTextControls.noticeText(ShowdownTextLabels.emptyInput, identifier: "importEmptyNotice", isError: false)
             }
         }
     }
 
-    /// テキスト欄の最小の高さ(数行ぶん。値の意味は「貼り付け欄が潰れない下限」)。
-    private static let editorMinHeight: CGFloat = 120
-
     private func analyze() async {
         showsEmptyNotice = model.pastedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        await model.analyze(existingMemberCount: existingMemberCount)
+        // 取り込みは常に新しい構築を作るので、既存の体数は 0(1 つの構築は 6 体まで)。
+        await model.analyze(existingMemberCount: 0)
     }
 
-    private var existingMemberCount: Int { members.count }
-
-    // MARK: - 確認(取り込めなかった行と、取り込める分だけ追加するかの選択)
+    // MARK: 確認(取り込めなかった行と、取り込める分だけ追加するかの選択)
 
     @ViewBuilder
     private var reviewSection: some View {
         if model.phase == .reviewing {
             VStack(alignment: .leading, spacing: SpacingToken.x3) {
                 if model.importError != nil {
-                    noticeText(ShowdownTextLabels.lookupFailure, identifier: "importFailureNotice", isError: true)
+                    TeamTextControls.noticeText(ShowdownTextLabels.lookupFailure, identifier: "importFailureNotice", isError: true)
                 }
                 if !model.rejected.isEmpty {
                     rejectedCard
                 }
                 if model.importableCount == 0, model.importError == nil {
-                    noticeText(ShowdownTextLabels.nothingImportable, identifier: "importNothingNotice", isError: false)
+                    TeamTextControls.noticeText(ShowdownTextLabels.nothingImportable, identifier: "importNothingNotice", isError: false)
                 }
                 if model.canConfirm {
                     let label = model.needsDecision
                         ? ShowdownTextLabels.importValidOnlyButton(count: model.importableCount)
                         : ShowdownTextLabels.importAllButton(count: model.importableCount)
-                    actionButton(label, identifier: "confirmImportValidButton") {
+                    TeamTextControls.actionButton(label, identifier: "confirmImportValidButton") {
                         onImport(model.confirm())
-                        dismiss()
                     }
                 }
-                actionButton(ShowdownTextLabels.cancelButton, identifier: "cancelImportButton") {
+                TeamTextControls.actionButton(ShowdownTextLabels.cancelButton, identifier: "cancelImportButton") {
                     model.cancel()
                     showsEmptyNotice = false
                 }
@@ -251,34 +293,26 @@ struct TeamTextSheet: View {
         .accessibilityLabel("\(lineLabel) \(rejection.text) \(message)")
         .accessibilityIdentifier("importRejectedLine-\(rejection.lineNumber)")
     }
+}
 
-    // MARK: - 部品
+// MARK: - 部品
 
-    private func buttonLabel(_ title: String) -> some View {
+enum TeamTextControls {
+    static func buttonLabel(_ title: String) -> some View {
         Text(title)
             .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, SpacingToken.x3)
-            .padding(.vertical, SpacingToken.x3)
             .frame(maxWidth: .infinity)
-            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
     }
 
-    private func actionButton(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
+    static func actionButton(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) { buttonLabel(title) }
-            .buttonStyle(.plain)
+            .buttonStyle(PillButtonStyle(kind: .secondary))
             .accessibilityIdentifier(identifier)
     }
 
-    private func noticeText(_ text: String, identifier: String, isError: Bool) -> some View {
-        Text(text)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(isError ? ColorToken.danger.color : ColorToken.textSecondary.color)
-            .multilineTextAlignment(.leading)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier(identifier)
+    static func noticeText(_ text: String, identifier: String, isError: Bool) -> some View {
+        PopNoticeView(kind: isError ? .error : .info, message: text, identifier: identifier)
     }
 }

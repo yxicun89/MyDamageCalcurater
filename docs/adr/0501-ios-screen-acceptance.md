@@ -4753,3 +4753,26 @@ XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で�
 | `DesignTokenTests.testTextStyleSizesMatchDesignDoc` | サイズ 4 種・`allCases.count == 4` | `title`(22)を加えた 5 種・`count == 5` | design.md の文字の段階にタイトル 22 が加わったため(「design.md に無いサイズを足さない」の趣旨は維持) |
 
 XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。XCUITest は代表 14 クラス 133 件成功(失敗 0・スキップ 0)。
+
+## F-08 iOS 構築の作り直し(ADR-0522。2026-10-10)
+
+受け入れ条件: (1) 構築名の入力が無く、[新しい構築]で空の構築ができてすぐ編集画面が開く。一覧の表示名は既定名なら「構築 N」(作成の古い順)、旧データの名前はそのまま。
+(2) 編集画面に 1体目〜6体目の枠が最初から並ぶ。空の枠は「ポケモン」の欄と案内だけで、種族を選ぶと技 4 つ・持ち物・特性・性格・SP が出る。
+(3) 枠ごとに「N体目を上へ/下へ/外す」。外すと他の枠は動かない。(4) 保存は明示で、未保存なら「保存していない変更があります」。[一覧に戻る]は未保存なら「保存せずに戻る/編集を続ける」の 2 段階。
+(5) Showdown 形式の取り込みは一覧の下の閉じた折りたたみ(説明と 1 体分の入力例つき・新しい構築として作る)、書き出しは編集画面の下の折りたたみ。
+(6) 一覧はカード(アイコン・n/6体・最終更新・[開く]・[削除]〈2 段階〉)。(7) 旧データ(`updatedAt` なし・名前つき)を読める。AX5 で横にはみ出さない。
+
+### 既存テストの変更(絶対ルール6: 仕様変更に必然な箇所だけ。弱めていない)
+
+| テスト | 前 | 後 | 理由 |
+|---|---|---|---|
+| `TeamEditViewModelTests.testSetNameTrimsAndClearsError`・`testSetBlankNameSetsError` | `setName(_:)` の空白除去と `nameError` | 削除 | 構築名の入力 UI と `setName`/`nameError` を廃止したため(名前を直す経路が無い) |
+| `TeamScreenUITests.testCreateAddMemberSaveAndDeleteTeamFlow` | 名前アラート→[メンバーを追加]→保存で一覧へ→削除(1 段階) | `testNewTeamOpensEditorWithSixEmptySlots`・`testSavedTeamAppearsAsACardAndReopens`・`testDeleteAsksForConfirmationFirst` ほか 9 件 | 名前アラート・追加ボタン・保存後の遷移・1 段階の削除が無くなったため。同じ流れ(作る→種族を選ぶ→保存→一覧に出る→削除)を新しい UI で確かめ、行の `label == 構築名` は表示名「構築 N」に変えた |
+| `TeamScreenUITests.testMemberSpeciesAndMoveSlotSearchSheetsFilterAndSelect` | 追加後の種族・技スロットの検索シート | `testSpeciesAndMoveSlotSearchSheetsFilterAndSelect`(同じ操作・期待値。最初の種族を空の枠 `slotSpeciesPicker-1` で選ぶ) | 入口が空の枠に変わっただけ |
+| `TeamTextTransferUITests`(書き出し 2 件) | シートの[この1体を書き出す]/[全員を書き出す] | 編集画面の下の折りたたみの[全員を書き出す](`testExportShowsTextAndCopyAndShare`。1 体書き出しの入口は枠から外したため 1 件に統合) | 書き出しの入口を折りたたみに移したため。書き出したテキストの先頭行・性格行・コピー・共有の期待値は同じ |
+| `TeamTextTransferUITests`(取り込み 5 件) | 編集中の構築にメンバーを追加(`importedNotice` =「1体を追加しました。保存すると反映されます。」・カード数 +1) | 一覧の折りたたみから新しい構築を作る(`importedNotice` =「1体の構築を作りました」・構築カード数 +1) | 取り込みは新しい構築を作る決定(ADR-0332 §3 と同じ)。取り込めなかった行の表示・全か無かにしない選択・空入力の案内の期待値は同じ |
+| `CalcScreenUITests`・`ReverseScreenUITests`・`JudgeScreenUITests` の `createTeamWithOneMember` | 名前アラート→`addMemberButton`→保存で一覧へ | [新しい構築]→`slotSpeciesPicker-1`→保存→`teamSavedNotice`→`backToListButton` | 同じ事前条件(構築に 1 体)を新しい操作で作る。検査の中身は不変 |
+| `LargeTextLayoutUITests`(構築 4 件) | `teamNameField`・`addMemberButton`・`teamTextTransferButton`・`teamTextSheet` のはみ出し検査 | 新しい識別子(`backToListButton`・`teamSlot-N`・`slotSpeciesPicker-1`・折りたたみ・`slotMove*`)に差し替え、一覧のカード・取り込み/書き出しの折りたたみの AX5 検査を追加(減らしていない) | 画面の作り替え |
+
+
+検証: `swift test` 1646 件成功。XCUITest は構築関連 TeamScreenUITests(13)・TeamTextTransferUITests(6)・LargeTextLayoutUITests の構築 4 件・Calc/Reverse/Judge/FavoriteLoad/LargeText(78 件)を `run-xcode-tests.sh` 経由で実行し全件成功(失敗 0・スキップ 0)。
