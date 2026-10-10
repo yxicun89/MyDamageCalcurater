@@ -111,6 +111,34 @@ final class TeamEditViewModelSlotsTests: XCTestCase {
         XCTAssertEqual(viewModel.slotIDs, ["m0", "m1", nil, nil, nil, nil])
     }
 
+    /// 6 体全部が埋まっている境界(最後の枠が埋まっていても下へは動かせない・追加できない・保存できる)。
+    func testFullTeamBoundaries() async {
+        let store = StubTeamStore()
+        let viewModel = await makeViewModel(existing: 6, store: store)
+        XCTAssertFalse(viewModel.canMoveSlot(5, by: 1))
+        XCTAssertFalse(viewModel.moveSlot(5, by: 1))
+        XCTAssertFalse(viewModel.canMoveSlot(0, by: -1))
+        let added = await viewModel.addMember(speciesKey: StubMaster.beta.key)
+        XCTAssertFalse(added)
+        XCTAssertEqual(viewModel.teamError, .tooManyMembers)
+        XCTAssertEqual(viewModel.team.members.count, 6)
+        let ok = await viewModel.save()
+        XCTAssertTrue(ok)
+        let saved = await store.saveCalls.last
+        XCTAssertEqual(saved?.members.count, 6)
+    }
+
+    func testSavingAnEmptyTeamSucceeds() async {
+        let store = StubTeamStore()
+        let viewModel = await makeViewModel(existing: 0, store: store)
+        let ok = await viewModel.save()
+        XCTAssertTrue(ok)
+        XCTAssertTrue(viewModel.didSave)
+        XCTAssertNil(viewModel.error)
+        let saved = await store.saveCalls.last
+        XCTAssertEqual(saved?.members, [])
+    }
+
     func testEmptySlotCannotBeMoved() async {
         let viewModel = await makeViewModel(existing: 1)
         XCTAssertFalse(viewModel.canMoveSlot(3, by: 1), "空の枠には上下の操作が無い")
@@ -189,6 +217,7 @@ final class TeamEditViewModelSlotsTests: XCTestCase {
         XCTAssertEqual(saved?.members.count, 2)
         XCTAssertEqual(saved?.members.first?.id, "m1")
         XCTAssertEqual(saved?.members.last?.speciesKey, StubMaster.beta.key)
+        XCTAssertFalse(viewModel.hasUnsavedChanges, "保存直後は未保存ではない")
     }
 
     func testSavingAnOldNamedTeamKeepsItsName() async {

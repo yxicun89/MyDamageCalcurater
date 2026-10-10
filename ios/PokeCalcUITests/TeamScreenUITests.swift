@@ -225,6 +225,20 @@ final class TeamScreenUITests: XCTestCase {
         XCTAssertEqual(count.label, "0/6体", "保存していない変更は捨てられた")
     }
 
+    /// 左端から右へのスワイプ(システムの戻り)で未保存の編集が確認なしに消えない。
+    func testEdgeSwipeBackDoesNotDiscardUnsavedChanges() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        let window = app.windows.firstMatch
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.0, dy: 0.5))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(element(app, "teamEditScreen").exists, "編集画面に残る")
+        XCTAssertFalse(element(app, "teamListScreen").exists)
+        XCTAssertTrue(element(app, "teamUnsavedNotice").exists, "未保存の印が残る")
+        XCTAssertTrue(elementBeginningWith(app, "memberCard-").exists)
+    }
+
     /// 未保存の変更が無ければ、確認なしで一覧に戻る。
     func testLeavingWithoutChangesGoesStraightBack() {
         let app = launchEditor()
