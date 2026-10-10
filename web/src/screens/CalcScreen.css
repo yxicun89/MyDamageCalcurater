@@ -582,3 +582,59 @@
 .calc-screen__restore ul {
   padding-left: var(--space-4);
 }
+
+/* 「対戦の状態」(ADR-0144 §3、I-web-14): 残り HP の入力と多段の回数。色・余白はトークンのみ。 */
+.battle-state {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.battle-state__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.battle-state__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+}
+
+.battle-state__label {
+  color: var(--text-primary);
+  font-size: var(--font-size-body);
+}
+
+.battle-state__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.battle-state__input {
+  width: 6rem;
+  padding: var(--space-1) var(--space-2);
+}
+
+.battle-state__max,
+.battle-state__percent,
+.battle-state__hint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.battle-state__error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--font-size-caption);
+}
+
+.calc-screen__battle-summary {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}

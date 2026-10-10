@@ -53,5 +53,5 @@ ios-sim-run: ios-gen ## アプリをシミュレータでモック起動(IOS_SCR
 	@./ios/scripts/sim-run.sh "$(IOS_SIMULATOR)" "$(IOS_SCREEN)" "$(IOS_APPEARANCE)" "$(IOS_CONTENT_SIZE)"
 
 .PHONY: ios-run
-ios-run: ios-gen ## アプリをビルドしてシミュレータで起動(POKECALC_API_BASE_URL=... で実 API、IOS_RUN_MOCK=1 でモック強制。手順 docs/verify-m3.md)
+ios-run: ios-gen ## アプリをビルドしてシミュレータで起動(POKECALC_API_BASE_URL=... で実 API、IOS_RUN_MOCK=1 でモック強制。手順 docs/verify.md)
 	@./ios/scripts/ios-run.sh "$(IOS_SIMULATOR)"

@@ -104,6 +104,20 @@ function unavailableResult<T>(): TeamResult<T> {
 }
 
 /**
+ * 実サーバーは技が 0 個のメンバーの moveIds を応答から省く(api/openapi.yaml では必須でなく既定 [])。
+ * openapi-typescript は既定値のある項目を必須の型にするので、境界で [] にそろえて、読む側が undefined で落ちないようにする。
+ */
+function withMoveIds(team: Schemas["Team"]): Schemas["Team"] {
+  return {
+    ...team,
+    members: team.members.map((member) => ({
+      ...member,
+      moveIds: (member.moveIds as string[] | undefined) ?? [],
+    })),
+  };
+}
+
+/**
  * 構築 API のクライアント実装(ADR-0309 §3)。
  * 応答をそのまま運び、Web で並べ替え・整形をしない。通信・応答の失敗は team_unavailable にする。
  */
@@ -159,18 +173,29 @@ export function createTeamClient(input: CreateTeamClientInput): TeamClient & Tea
     return { ok: true, value: parsed as T };
   }
 
+  /** Team の応答を、技が 0 個のメンバーの moveIds([] の既定)を補った形にして返す(G-02)。 */
+  async function requestTeam(
+    path: string,
+    method: string,
+    body: unknown,
+  ): Promise<TeamResult<Schemas["Team"]>> {
+    const result = await request<Schemas["Team"]>(path, method, body, false);
+    return result.ok ? { ok: true, value: withMoveIds(result.value) } : result;
+  }
+
   return {
-    list() {
-      return request<Schemas["Team"][]>(TEAM_PATHS.teams, "GET", undefined, false);
+    async list() {
+      const result = await request<Schemas["Team"][]>(TEAM_PATHS.teams, "GET", undefined, false);
+      return result.ok ? { ok: true, value: result.value.map(withMoveIds) } : result;
     },
     create(teamInput) {
-      return request<Schemas["Team"]>(TEAM_PATHS.teams, "POST", teamInput, false);
+      return requestTeam(TEAM_PATHS.teams, "POST", teamInput);
     },
     get(teamId) {
-      return request<Schemas["Team"]>(TEAM_PATHS.team(teamId), "GET", undefined, false);
+      return requestTeam(TEAM_PATHS.team(teamId), "GET", undefined);
     },
     update(teamId, teamInput) {
-      return request<Schemas["Team"]>(TEAM_PATHS.team(teamId), "PUT", teamInput, false);
+      return requestTeam(TEAM_PATHS.team(teamId), "PUT", teamInput);
     },
     remove(teamId) {
       // T は remove() の宣言(Promise<TeamResult<void>>)から推論させる(void を明示の型引数にすると

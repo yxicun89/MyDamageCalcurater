@@ -14,7 +14,7 @@ kubeAPI:
   hostIP: "127.0.0.1"
 ports:
   # Ingress はホストの全インターフェースで待ち受ける(iOS 実機が同じ LAN の Mac の IP で 8080 に届く必要がある。
-  # verify-m1 §7)。127.0.0.1 に限定するかは #302(needs-decision)で決める。
+  # docs/verify.md §3)。127.0.0.1 に限定するかは #302(needs-decision)で決める。
   - port: 8080:80
     nodeFilters:
       - loadbalancer

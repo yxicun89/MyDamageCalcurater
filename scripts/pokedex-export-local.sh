@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # k3d の mysql から balance/speed 向けの read model(data/generated/readmodel/ の6ファイル)を書き出す。
-# docs/verify-m1.md §3 の「port-forward → pokedex_reader の DSN を読む → make pokedex-export」を1コマンドにしたもの
+# docs/verify.md §1-1 の「port-forward → pokedex_reader の DSN を読む → make pokedex-export」を1コマンドにしたもの
 # (DSN は Secret mysql-auth の pokedex-reader-dsn から読み、画面にも履歴にも出さない。SELECT のみのロール。ADR-0110)。
 # 前提: make up 済み・マスタ投入済み(make import-k8s)。出力先は .gitignore 済み(ADR-0002。実データは Git に入れない)。
 set -euo pipefail

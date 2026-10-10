@@ -82,7 +82,7 @@ test-tools:
 	@cd tools && $(GO) test ./...
 	@node --test tools/importer/showdown-cache.test.mjs tools/importer/pokeapi-csv.test.mjs tools/importer/prune.test.mjs tools/importer/integrity.test.mjs tools/importer/fetch-integrity.test.mjs tools/importer/fetch-snapshot-shape.test.mjs tools/importer/fetch-showdown-megastone.test.mjs tools/importer/fetch-move-flags.test.mjs tools/importer/fetch-species-weight.test.mjs
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
-	@node --test tools/assets/convert.test.mjs
+	@node --test tools/assets/convert.test.mjs tools/assets/fetch.test.mjs
 
 .PHONY: test-scripts
 test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo CD 導入 ADR-0405・監視スタック導入 ADR-0406・計算API SLO ADR-0407・ルートの e2e ADR-0306・GitOps の AppProject/共通スクリプト/レジストリ ADR-0408・Makefile の help と未実装ターゲット。クラスタ・ネットワークに触らない)
@@ -382,6 +382,10 @@ k8s-render-kubectl:
 assets: ## 手元の画像(data/generated/images/src)を WebP 2サイズ + manifest に変換する(画像なしでも成功。ADR-0808。ASSETS_SRC・ASSETS_OUT で場所を変更)
 	@[ -d tools/assets/node_modules ] || (cd tools/assets && npm ci --silent)
 	@cd tools/assets && node convert.mjs
+
+.PHONY: assets-fetch
+assets-fetch: ## 取り込み済みの種族の画像を Pokémon Showdown から data/generated/images/src へ取得する(個人利用。既存は取り直さない。LIMIT=5 で件数制限・DRY_RUN=1 で計画のみ。ネットワークが要る。ADR-0810)
+	@node tools/assets/fetch.mjs $(if $(LIMIT),--limit $(LIMIT)) $(if $(DRY_RUN),--dry-run)
 
 .PHONY: images-k3d
 images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0808)
