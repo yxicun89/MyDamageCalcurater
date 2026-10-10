@@ -125,6 +125,7 @@ struct AdjustChoiceButton: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.vertical, SpacingToken.x1)
+            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
@@ -146,8 +147,8 @@ struct AdjustPillButton: View {
                 .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingToken.x2)
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                .padding(.vertical, SpacingToken.x1)
                 .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }

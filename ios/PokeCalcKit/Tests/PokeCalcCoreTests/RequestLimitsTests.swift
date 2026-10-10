@@ -24,6 +24,11 @@ final class RequestLimitsTests: XCTestCase {
         XCTAssertEqual(RequestLimits.maxMoveBatchIds, 64, "getMovesByIds の ids(クエリ).maxItems")
     }
 
+    /// F-11(ADR-0525): 調整の目標の件数の上限は `AdjustGoalsRequest.goals.maxItems`(`ios-check-request-limits` が契約と照合する)。
+    func testAdjustGoalsLimitMatchesTheOpenAPIContract() {
+        XCTAssertEqual(RequestLimits.maxAdjustGoals, 6, "AdjustGoalsRequest.goals.maxItems")
+    }
+
     /// ADR 3章: 送る配列の先頭に入る null(持ち物なし)も `uniqueItems` の1件なので、
     /// トグルで選べる ID の数は上限より1つ少ない。
     func testSelectableCountsLeaveRoomForTheNoItemEntry() {

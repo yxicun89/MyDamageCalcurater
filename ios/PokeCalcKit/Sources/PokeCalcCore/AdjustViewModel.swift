@@ -31,6 +31,8 @@ public enum AdjustModeResult: Equatable, Sendable {
     case ko(AdjustKOResult, hits: Int)
     case survive(AdjustSurviveResult, hits: Int)
     case allocation(AdjustAllocationResult, mode: AllocMode, goalRequested: Bool, speedTargetRequested: Bool)
+    /// 目標方式(F-11)。送信時の名前の写しを一緒に持つ。
+    case goals(AdjustGoalsPresentation)
 }
 
 /// 1回の送信の結果(indices とモードの結果の両方がそろったときだけ作る)。
@@ -93,25 +95,41 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     private static let ceilingRange = 0...SPLimits.maxPerStat
 
     private let service: any PokeCalcService
-    private let adjust: any AdjustService
+    let adjust: any AdjustService
+    /// 目標方式の API(F-11。nil なら目標方式を出さない)。
+    let goalsService: (any AdjustGoalsService)?
     private let speciesSearch: MasterSpeciesSearchField
     /// 送信と「覚えるポケモン」の Task を1つずつだけ保持する(issue #113。画面を閉じたら `cancelPendingWork()`)。
     private let submitRunner = LatestTaskRunner()
     private let learnersRunner = LatestTaskRunner()
     /// 「最新の送信だけを反映する」世代番号(取り消しに失敗した古い応答で上書きしない)。
-    private var submitGeneration = 0
+    var submitGeneration = 0
     private var learnersGeneration = 0
     private var ownSpeciesGeneration = 0
     private var opponentSpeciesGeneration = 0
     /// 一度でも見た種族(検索結果・`species(key:)` の応答から合流する。`ownSpecies` / `opponentSpecies` を引く)。
-    private var speciesDictionary: [String: SpeciesSummary] = [:]
+    var speciesDictionary: [String: SpeciesSummary] = [:]
     /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
-    private var megaInfo: [String: MegaSpeciesInfo] = [:]
+    var megaInfo: [String: MegaSpeciesInfo] = [:]
     private var didLoad = false
 
-    public init(service: any PokeCalcService, adjust: any AdjustService, searchDebounce: Duration = MasterSearch.debounceInterval) {
+    // 目標方式の状態(F-11。操作は AdjustViewModel+Goals.swift)。
+    /// 「目標から振り方を決める」が選ばれているか(`mode` とは別。`selectMode` で外れる)。
+    public internal(set) var isGoalsMode = false
+    /// 画面に出す目標(追加順)。
+    public internal(set) var goalDrafts: [AdjustGoalDraft] = []
+    /// サーバーが目標の操作を提供していないと分かった(以後、目標方式の選択肢を出さない)。
+    public internal(set) var goalsUnavailable = false
+    var nextGoalSerial = 0
+    var goalOpponentGenerations: [Int: Int] = [:]
+
+    public init(
+        service: any PokeCalcService, adjust: any AdjustService, goals: (any AdjustGoalsService)? = nil,
+        searchDebounce: Duration = MasterSearch.debounceInterval
+    ) {
         self.service = service
         self.adjust = adjust
+        goalsService = goals
         speciesSearch = MasterSpeciesSearchField(debounce: searchDebounce) { query, limit in
             try await service.searchSpecies(query: query, limit: limit)
         }
@@ -256,7 +274,11 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     // MARK: - 調整の内容
 
     public private(set) var mode: AdjustMode = .indices
-    public func selectMode(_ mode: AdjustMode) { self.mode = mode }
+    public func selectMode(_ mode: AdjustMode) {
+        self.mode = mode
+        isGoalsMode = false
+    }
+
     public private(set) var bulkFocus: BulkFocus = .both
     public func selectBulkFocus(_ focus: BulkFocus) { bulkFocus = focus }
     public private(set) var offenseCategory: MoveCategory = .physical
@@ -284,6 +306,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 
     /// 相手が要るモードか(minKo・minSurvive、bulk / offense で目標を指定したとき)。
     public var needsOpponent: Bool {
+        if isGoalsMode { return false }
         switch mode {
         case .indices: return false
         case .minKo, .minSurvive: return true
@@ -293,6 +316,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 
     /// 相手が攻撃する側か(minSurvive と bulk の目標)。true なら相手の技と攻撃側プリセットを出す。
     public var opponentAttacks: Bool {
+        if isGoalsMode { return false }
         switch mode {
         case .minSurvive: return true
         case .bulk: return useGoal
@@ -340,7 +364,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     }
 
     /// 種族の詳細と、その learnset のダメージ技(変化技を除く。learnset の順)。失敗は `alertMessage` に出して nil。
-    private func loadSpecies(key: String) async -> (detail: SpeciesDetail, moves: [Move])? {
+    func loadSpecies(key: String) async -> (detail: SpeciesDetail, moves: [Move])? {
         do {
             let detail = try await service.species(key: key)
             let moves = try await service.moves(ids: detail.learnset)
@@ -361,14 +385,14 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 
     // MARK: - 送信
 
-    public private(set) var isLoading = false
+    public internal(set) var isLoading = false
     /// 送信前の検査の違反・API の失敗の文(日本語)。無ければ nil。
-    public private(set) var alertMessage: String?
+    public internal(set) var alertMessage: String?
     /// 文を出すたびに増える(同じ文が続いても View が VoiceOver に読み直させるため)。
     public private(set) var alertSerial = 0
-    public private(set) var outcome: AdjustOutcome?
+    public internal(set) var outcome: AdjustOutcome?
 
-    private func showAlert(_ message: String) {
+    func showAlert(_ message: String) {
         alertMessage = message
         alertSerial += 1
     }
@@ -379,10 +403,14 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
         let token = submitGeneration
         alertMessage = nil
         outcome = nil
+        if isGoalsMode {
+            await submitGoals(token: token)
+            return
+        }
         let plan: SubmitPlan
         do {
             plan = try makePlan()
-        } catch let rejection as Rejection {
+        } catch let rejection as AdjustRejection {
             outcome = nil
             isLoading = false
             showAlert(rejection.message)
@@ -434,7 +462,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     // MARK: - 送信前の検査と要求の組み立て
 
     /// 検査の違反(画面に出す文)。
-    private struct Rejection: Error {
+    struct AdjustRejection: Error {
         let message: String
     }
 
@@ -468,25 +496,30 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
 
     /// ADR-0502 §5 の順(Web の AdjustScreen.tsx と同じ)に検査し、先に当たった1つで止める。通れば送る内容を返す。
     private func makePlan() throws -> SubmitPlan {
-        // 1. 自分のポケモンと性格
-        guard let speciesKey = ownSpeciesKey, let natureId = ownNatureId else {
-            throw Rejection(message: AdjustText.ownRequired)
-        }
-        // 2・3. 固定 SP
-        var sp = StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
-        for stat in StatKey.allCases {
-            guard let value = Self.parseSP(fixedSPText(for: stat)) else { throw Rejection(message: AdjustText.spRangeInvalid) }
-            Self.set(&sp, stat, value)
-        }
-        guard fixedSPTotal <= SPLimits.maxTotal else { throw Rejection(message: AdjustText.spTotalExceeded) }
-        let own = Individual(
-            speciesKey: speciesKey, natureId: natureId, sp: sp, abilityId: ownAbilityId, itemId: ownItemId)
+        // 1〜3. 自分のポケモン・性格・固定 SP
+        let (own, sp) = try makeOwnIndividual()
         let ownMove = ownMoveId.flatMap { id in ownMoveOptions.first { $0.id == id } }
         // 4〜8. モードごとの必須・上限・分類・素早さ・プリセット
         let modeCall = try makeModeCall(own: own, ownMove: ownMove, fixed: sp)
         let indices = AdjustIndicesRequest(
             individual: own, moveId: ownMove?.id, modifier: isSameTypeAttackBonus(ownMove) ? Self.stabModifier : nil)
         return SubmitPlan(indices: indices, modeCall: modeCall)
+    }
+
+    /// 1〜3. 自分のポケモンと性格、固定 SP(目標方式と共通)。違反は先に当たった1つで止める。
+    func makeOwnIndividual() throws -> (individual: Individual, fixed: StatBlock) {
+        guard let speciesKey = ownSpeciesKey, let natureId = ownNatureId else {
+            throw AdjustRejection(message: AdjustText.ownRequired)
+        }
+        var sp = StatBlock(hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0)
+        for stat in StatKey.allCases {
+            guard let value = Self.parseSP(fixedSPText(for: stat)) else { throw AdjustRejection(message: AdjustText.spRangeInvalid) }
+            Self.set(&sp, stat, value)
+        }
+        guard fixedSPTotal <= SPLimits.maxTotal else { throw AdjustRejection(message: AdjustText.spTotalExceeded) }
+        let own = Individual(
+            speciesKey: speciesKey, natureId: natureId, sp: sp, abilityId: ownAbilityId, itemId: ownItemId)
+        return (own, sp)
     }
 
     private func makeModeCall(own: Individual, ownMove: Move?, fixed: StatBlock) throws -> ModeCall {
@@ -523,13 +556,13 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
             let attackStat = AttackerPreset.relevantStat(for: offenseCategory)
             try checkCeiling(rotated: [attackStat, .spe], fixed: fixed)
             guard let minSpeed = Self.parseNonNegativeInteger(minSpeedText) else {
-                throw Rejection(message: AdjustText.minSpeedInvalid)
+                throw AdjustRejection(message: AdjustText.minSpeedInvalid)
             }
             var goal: AdjustAllocGoal?
             if useGoal {
-                guard let ownMove else { throw Rejection(message: AdjustText.ownMoveRequired) }
+                guard let ownMove else { throw AdjustRejection(message: AdjustText.ownMoveRequired) }
                 try checkCategoryMatches(ownMove)
-                guard let opponentSpeciesKey else { throw Rejection(message: AdjustText.opponentRequired) }
+                guard let opponentSpeciesKey else { throw AdjustRejection(message: AdjustText.opponentRequired) }
                 goal = AdjustAllocGoal(
                     format: .single, opponent: try defenderIndividual(opponentSpeciesKey, moveCategory: ownMove.category),
                     moveId: ownMove.id, hits: hits, thresholdPercent: threshold)
@@ -546,25 +579,25 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     }
 
     private func requireOwnMoveAndOpponent(_ ownMove: Move?) throws -> (Move, String) {
-        guard let ownMove else { throw Rejection(message: AdjustText.ownMoveRequired) }
-        guard let opponentSpeciesKey else { throw Rejection(message: AdjustText.opponentRequired) }
+        guard let ownMove else { throw AdjustRejection(message: AdjustText.ownMoveRequired) }
+        guard let opponentSpeciesKey else { throw AdjustRejection(message: AdjustText.opponentRequired) }
         return (ownMove, opponentSpeciesKey)
     }
 
     private func requireOpponentAndMove(_ opponentMove: Move?) throws -> (String, Move) {
-        guard let opponentSpeciesKey else { throw Rejection(message: AdjustText.opponentRequired) }
-        guard let opponentMove else { throw Rejection(message: AdjustText.opponentMoveRequired) }
+        guard let opponentSpeciesKey else { throw AdjustRejection(message: AdjustText.opponentRequired) }
+        guard let opponentMove else { throw AdjustRejection(message: AdjustText.opponentMoveRequired) }
         return (opponentSpeciesKey, opponentMove)
     }
 
     private func checkCeiling(rotated: [StatKey], fixed: StatBlock) throws {
         for stat in rotated where ceiling(for: stat) < Self.value(of: fixed, stat) {
-            throw Rejection(message: AdjustText.ceilingBelowFixed)
+            throw AdjustRejection(message: AdjustText.ceilingBelowFixed)
         }
     }
 
     private func checkCategoryMatches(_ ownMove: Move) throws {
-        guard ownMove.category == offenseCategory else { throw Rejection(message: AdjustText.categoryMismatch) }
+        guard ownMove.category == offenseCategory else { throw AdjustRejection(message: AdjustText.categoryMismatch) }
     }
 
     /// 相手が攻撃する側(攻撃側プリセット)。性格がマスタに無ければ `natureNotFound`。
@@ -573,7 +606,7 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
             let build = try AttackerPreset.build(opponentAttackerPreset, moveCategory: moveCategory, natures: natureOptions)
             return Individual(speciesKey: speciesKey, natureId: build.natureId, sp: build.sp)
         } catch {
-            throw Rejection(message: AdjustText.natureNotFound)
+            throw AdjustRejection(message: AdjustText.natureNotFound)
         }
     }
 
@@ -583,12 +616,12 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
             let build = try KnownDefenderPreset.build(opponentDefenderPreset, moveCategory: moveCategory, natures: natureOptions)
             return Individual(speciesKey: speciesKey, natureId: build.natureId, sp: build.sp)
         } catch {
-            throw Rejection(message: AdjustText.natureNotFound)
+            throw AdjustRejection(message: AdjustText.natureNotFound)
         }
     }
 
     /// 技のタイプが自分の種族のタイプに含まれるか(タイプ一致。補正 ×1.5)。
-    private func isSameTypeAttackBonus(_ move: Move?) -> Bool {
+    func isSameTypeAttackBonus(_ move: Move?) -> Bool {
         guard let move, let types = ownSpecies?.types else { return false }
         return types.contains(move.type)
     }
@@ -616,15 +649,16 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     }
 
     /// モードの結果の未対応の印を1回だけの注記にする(名前は見た技・持ち物・特性から引く。数値は変えない)。
-    private func unsupportedNotice(for result: AdjustModeResult?) -> String? {
+    func unsupportedNotice(for result: AdjustModeResult?) -> String? {
         let marks: [UnsupportedMark]
         switch result {
         case .ko(let ko, _): marks = ko.unsupported
         case .survive(let survive, _): marks = survive.unsupported
         case .allocation(let allocation, _, _, _): marks = allocation.unsupported
+        case .goals(let goals): marks = goals.result.unsupported
         case nil: marks = []
         }
-        let names = UnsupportedMarkNames(moves: ownMoveOptions + opponentMoveOptions, items: ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames), abilities: ownAbilityOptions)
+        let names = UnsupportedMarkNames(moves: ownMoveOptions + opponentMoveOptions + goalDrafts.flatMap(\.opponentMoves), items: ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames), abilities: ownAbilityOptions)
         return UnsupportedNoticeText.summary(marks, names: names)
     }
 

@@ -4791,3 +4791,18 @@ XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。
 
 
 検証: `swift test` 1646 件成功。XCUITest は構築関連 TeamScreenUITests(13)・TeamTextTransferUITests(6)・LargeTextLayoutUITests の構築 4 件・Calc/Reverse/Judge/FavoriteLoad/LargeText(78 件)を `run-xcode-tests.sh` 経由で実行し全件成功(失敗 0・スキップ 0)。
+
+## F-11 iOS 調整の「目標から振り方を決める」(ADR-0525。2026-10-11)
+
+受け入れ条件: (1) 「調整の内容」の先頭に「目標から振り方を決める」が加わり、選ぶと「目標」の領域が出る(従来の相手・発数/確率の領域は出ない)。従来の5つのモードの挙動・識別子は不変で、選ぶと目標方式を外れる。
+(2) 目標を追加(6 件で無効 + 「目標は 6 つまでです」)・外す(番号を詰める)・種類の切り替え(相手は保ち、振り方・技は新しい種類の既定)。選択は sheet/チップ(Menu 不使用)。
+(3) 「調整する」で indices と `adjustGoals` を並行して呼び、両方そろってから「目標をすべて満たす振り方」(満たせなければ「目標に一番近い振り方」+「すべての目標は満たせませんでした」)と目標ごとの結果を出す。最新の応答だけを採用する。
+(4) 送信前の検査(目標なし・目標 n の相手・技・性格)は API を呼ばない。要求は省略可の欄を送らず(素早さの hits・しきい値 100)、相手がメガならストーンを持たせる。
+(5) サーバーが目標の操作を提供していない(404)とき、案内を出して従来の調整に戻り、画面は壊れない。一時的な失敗は目標方式のまま日本語のエラー。(6) AX5 で横にはみ出さない。
+
+### 既存テストの変更
+
+なし(追加のみ。`AdjustMode` を増やさず、`AdjustService` に足さず、既存の期待値を変えない設計にしたため)。モックの `natures.json` に「素早さ上昇」を1件足し(最速のプリセット用)、
+`AdjustChoiceButton`・`AdjustPillButton` に最小の高さ 36pt を足した(タップ範囲。見た目の変化は縦に数 pt)。
+
+検証: `swift test` 1687 件成功。XCUITest は Adjust 系(AdjustGoalsUITests 9・AdjustGoalsLargeTextUITests 2・AdjustScreenUITests 8・AdjustLargeTextLayoutUITests 3 = 22 件)を `run-xcode-tests.sh` 経由で実行し全件成功。

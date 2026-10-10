@@ -156,7 +156,7 @@ extension APIPokeCalcService: AdjustService {
         )
     }
 
-    private static func generatedCeiling(_ ceiling: AdjustCeiling) -> Components.Schemas.AdjustCeiling {
+    static func generatedCeiling(_ ceiling: AdjustCeiling) -> Components.Schemas.AdjustCeiling {
         .init(hp: ceiling.hp, atk: ceiling.atk, def: ceiling.def, spa: ceiling.spa, spd: ceiling.spd, spe: ceiling.spe)
     }
 
