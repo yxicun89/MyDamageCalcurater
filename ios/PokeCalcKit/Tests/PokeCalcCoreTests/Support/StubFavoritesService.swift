@@ -15,6 +15,8 @@ actor StubFavoritesService: FavoritesService {
 
     private(set) var listCalls = 0
     private(set) var addRequests: [(label: String?, individual: Individual)] = []
+    /// `addRequests` と同じ順で、各要求の `calc`(F-09)。
+    private(set) var addCalcs: [CalcHistoryCalc?] = []
     private(set) var removeRequests: [String] = []
 
     private var listScript: [Step<[Favorite]>]
@@ -58,9 +60,10 @@ actor StubFavoritesService: FavoritesService {
         }
     }
 
-    func addFavorite(label: String?, individual: Individual) async throws -> FavoriteSaveResult {
+    func addFavorite(label: String?, individual: Individual, calc: CalcHistoryCalc?) async throws -> FavoriteSaveResult {
         let index = addRequests.count
         addRequests.append((label, individual))
+        addCalcs.append(calc)
         guard !addScript.isEmpty else { return .created(Self.favorite("1", key: individual.speciesKey)) }
         switch addScript.removeFirst() {
         case .result(let value): return value

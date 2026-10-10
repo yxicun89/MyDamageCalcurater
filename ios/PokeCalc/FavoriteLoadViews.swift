@@ -164,3 +164,31 @@ struct FavoriteLoadTarget: Identifiable {
     let side: FavoriteLoadSide
     var id: String { side == .attacker ? "attacker" : "defender" }
 }
+
+/// お気に入り(計算つき)から計算画面を開くときの対象(F-09・ADR-0524)。`title` は一覧での見出し(案内に出す)。
+struct RestoringFavorite {
+    let favorite: Favorite
+    let title: String
+}
+
+/// お気に入りの計算を開いたときの案内(結果が出る前でも出す。復元に失敗したときは出さず、計算の失敗の帯だけを出す)。
+/// 復元しない範囲(防御側の性格・SP・持ち物)も一緒に明記する。
+struct FavoriteRestoreNoticeView: View {
+    let title: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Text(FavoritesLabels.restoredNotice(title: title))
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+            Text(FavoritesLabels.restoreLimitNote)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, SpacingToken.x1)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("favoriteRestoreNotice")
+    }
+}

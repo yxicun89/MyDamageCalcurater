@@ -11,11 +11,12 @@ struct FavoritePinSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            // 攻撃側は今の計算の入力(calc)つきで保存し、お気に入りから開くと結果がすぐ出る(F-09・ADR-0524)。
             pinButton(FavoritesLabels.pinAttackerButton, identifier: "pinAttackerFavoriteButton") {
-                try calc.attackerIndividualForFavorite()
+                try calc.attackerFavoritePin()
             }
             pinButton(FavoritesLabels.pinDefenderButton, identifier: "pinDefenderFavoriteButton") {
-                try calc.defenderIndividualForFavorite()
+                FavoritePinTarget(label: nil, individual: try calc.defenderIndividualForFavorite())
             }
             if let text = statusText {
                 Text(text)
@@ -31,11 +32,11 @@ struct FavoritePinSection: View {
         .onChange(of: calc.defenderSpeciesKey) { pin.reset() }
     }
 
-    private func pinButton(_ title: String, identifier: String, individual: @escaping () throws -> Individual)
+    private func pinButton(_ title: String, identifier: String, target: @escaping () throws -> FavoritePinTarget)
         -> some View
     {
         Button {
-            guard let target = try? individual() else { return }
+            guard let target = try? target() else { return }
             Task { await pin.pin(target) }
         } label: {
             PopLabel(title: title, systemImage: PopSymbol.favorites)

@@ -19,13 +19,40 @@ public struct Favorite: Equatable, Sendable, Identifiable {
     public var individual: Individual
     public var createdAt: Date
     public var updatedAt: Date
+    /// 保存したときの計算の入力全体(openapi `Favorite.calc` = `CalcRequest`。ADR-0228・ADR-0524)。
+    /// 無い(旧いお気に入り・旧クライアントの作成)は nil で、従来どおり `individual` だけを読み込む。
+    public var calc: CalcHistoryCalc?
 
-    public init(id: String, label: String?, individual: Individual, createdAt: Date, updatedAt: Date) {
+    public init(
+        id: String, label: String?, individual: Individual, createdAt: Date, updatedAt: Date,
+        calc: CalcHistoryCalc? = nil
+    ) {
         self.id = id
         self.label = label
         self.individual = individual
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.calc = calc
+    }
+}
+
+/// 計算画面の「お気に入りに追加」が送る内容(攻撃側)。`calc` は今の計算入力で、付けられないときは nil。
+public struct FavoritePinTarget: Equatable, Sendable {
+    public var label: String?
+    public var individual: Individual
+    public var calc: CalcHistoryCalc?
+
+    public init(label: String?, individual: Individual, calc: CalcHistoryCalc? = nil) {
+        self.label = label
+        self.individual = individual
+        self.calc = calc
+    }
+}
+
+/// 計算つきお気に入りの見出し(Web の `favoriteLabelOf` と同じ「{攻撃側}→{防御側}({技})」。長さは `FavoriteLabel.normalize` が切る)。
+public enum FavoriteCalcLabel {
+    public static func text(attacker: String, defender: String, move: String) -> String {
+        "\(attacker)→\(defender)(\(move))"
     }
 }
 
@@ -41,10 +68,17 @@ public enum FavoriteSaveResult: Equatable, Sendable {
 public protocol FavoritesService: Sendable {
     /// サーバーの順(`updatedAt` 降順・同時刻は `id` 降順)のまま返す。無ければ空配列。
     func favorites() async throws -> [Favorite]
-    /// `label` は `FavoriteLabel.normalize` を通して送る。
-    func addFavorite(label: String?, individual: Individual) async throws -> FavoriteSaveResult
+    /// `label` は `FavoriteLabel.normalize` を通して送る。`calc` は計算の入力全体(付けないときは nil。ADR-0524)。
+    func addFavorite(label: String?, individual: Individual, calc: CalcHistoryCalc?) async throws -> FavoriteSaveResult
     /// 204 で正常終了。持っていない ID は `PokeCalcError(code: "not_found")`。
     func removeFavorite(id: String) async throws
+}
+
+extension FavoritesService {
+    /// `calc` なしの追加(従来の呼び出し)。
+    public func addFavorite(label: String?, individual: Individual) async throws -> FavoriteSaveResult {
+        try await addFavorite(label: label, individual: individual, calc: nil)
+    }
 }
 
 // MARK: - 定数・ラベルの正規化
@@ -146,6 +180,16 @@ public enum FavoritesLabels {
     public static let unknownSpecies = "不明なポケモン"
     public static let limitNote = "お気に入りは最大\(RequestLimits.maxFavorites)件までです。"
 
+    // F-09: 計算つきのお気に入りを計算画面に復元する(Web の ADR-0333 と同じ語。ADR-0524)。
+    public static let useButton = "計算に使う"
+    public static func useAccessibilityLabel(title: String) -> String { "「\(title)」を計算に使う" }
+    public static func restoredNotice(title: String) -> String { "「\(title)」の計算を開きました" }
+    /// calc の無い旧お気に入りの行に添える案内。
+    public static let legacyFavoriteHint = "攻撃側・防御側の個体だけ(計算の条件は保存されていません)。計算画面の「お気に入りから読み込む」で使えます。"
+    /// 復元しない範囲(履歴の復元と同じ限界。ADR-0519・ADR-0524)。計算を開いた画面に1回だけ添える。
+    public static let restoreLimitNote =
+        "防御側の性格・能力ポイント・持ち物は戻しません(防御側は代表的な調整の一覧で計算します)。ダブルで保存した計算もシングルで開きます。"
+
     public static let transportFailure = "通信に失敗しました。接続を確認してもう一度お試しください。"
     public static let genericFailure = "うまくいきませんでした。時間をおいてもう一度お試しください。"
     public static let loadFavoritesUnavailable = "お気に入りを読み込めません。計算はそのまま使えます。しばらくしてからもう一度お試しください。"
@@ -169,6 +213,8 @@ public struct FavoriteRow: Equatable, Sendable, Identifiable {
     }
 
     public var id: String { favorite.id }
+    /// 計算の入力を持つ(行の「計算に使う」を出す)。持たない旧お気に入りは従来の読み込み導線のまま。
+    public var hasCalc: Bool { favorite.calc != nil }
     /// `label ?? speciesName ?? FavoritesLabels.unknownSpecies`。
     public var title: String {
         favorite.label ?? speciesName ?? FavoritesLabels.unknownSpecies
@@ -326,10 +372,15 @@ public final class FavoritePinViewModel {
 
     /// ラベル無しで個体をそのまま1回追加する。保存中の再呼び出しは無視する(要求は1回)。
     public func pin(_ individual: Individual) async {
+        await pin(FavoritePinTarget(label: nil, individual: individual))
+    }
+
+    /// 見出しと計算の入力(`calc`)つきで1回追加する(F-09)。保存中の再呼び出しは無視する(要求は1回)。
+    public func pin(_ target: FavoritePinTarget) async {
         guard let service, status != .saving else { return }
         status = .saving
         do {
-            switch try await service.addFavorite(label: nil, individual: individual) {
+            switch try await service.addFavorite(label: target.label, individual: target.individual, calc: target.calc) {
             case .created: status = .pinned
             case .alreadyPinned: status = .alreadyPinned
             }

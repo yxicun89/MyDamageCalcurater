@@ -62,6 +62,14 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     public private(set) var itemOptionsReachedLimit = false
     /// 「直近の技検索の結果 ∩ 攻撃側の learnset の ID 集合」を learnset の順で並べたもの(6章)。
     public private(set) var moveOptions: [Move] = []
+    /// 技ピッカーの並び(F-02。習得順・五十音順・タイプ順)。表示順だけを変える: 選択中の技・要求・結果は変えず、再計算もしない。
+    /// 変えると `moveSortStore` に保存する(端末内。次の起動でも同じ並び)。
+    public var moveSortOrder: MoveSortOrder {
+        didSet { if moveSortOrder != oldValue { moveSortStore?.save(moveSortOrder) } }
+    }
+    /// `moveOptions` を `moveSortOrder` で並べたもの(技ピッカーが描く)。
+    public var displayedMoveOptions: [Move] { MoveSort.sorted(moveOptions, by: moveSortOrder) }
+    private let moveSortStore: MoveSortStore?
     var natureOptions: [Nature] = []
     /// `load()` の二重実行を防ぐ(同じ画面から複数回 `load()` を呼んでも読み込みは1回だけ)。
     private var didLoad = false
@@ -383,6 +391,19 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// - マスタに無い種族・技・性格などは「読めなかった項目を黙って落とす」のではなく計算の失敗として表示する(既存の失敗経路)。
     ///   詳細・技の取得に失敗したら、画面の入力は何も書き換えない。
     public func loadHistoryCalc(_ calc: CalcHistoryCalc) async {
+        await restoreCalc(calc, teamID: CalcHistory.sourceTeamID, memberID: CalcHistory.sourceTeamID)
+    }
+
+    /// お気に入りの `calc` から入力を復元して計算を1回出す(F-09・ADR-0524)。復元の規則・失敗の扱いは `loadHistoryCalc` と同じ
+    /// (履歴の `CalcHistoryCalc` と `Favorite.calc` は同じ型)。`calc` の無い旧お気に入りは何もしない
+    /// (従来の読み込み導線 `loadFavorite` で個体だけを入れる)。
+    public func loadFavoriteCalc(_ favorite: Favorite) async {
+        guard let calc = favorite.calc else { return }
+        await restoreCalc(calc, teamID: FavoriteLoad.sourceTeamID, memberID: favorite.id)
+    }
+
+    /// `loadHistoryCalc` / `loadFavoriteCalc` の共通の実体。`teamID`・`memberID` は攻撃側の出どころの印。
+    private func restoreCalc(_ calc: CalcHistoryCalc, teamID: String, memberID: String) async {
         await load()
         let token = beginInput()
         isLoading = true
@@ -419,7 +440,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         isAttackerBurned = saved.status == .burn
         attackerBuildSource = .team(
             TeamIndividualSelection(
-                teamID: CalcHistory.sourceTeamID, memberID: CalcHistory.sourceTeamID, displayName: attackerDetail.nameJa,
+                teamID: teamID, memberID: memberID, displayName: attackerDetail.nameJa,
                 individual: Individual(
                     speciesKey: attackerDetail.key, natureId: saved.natureId, sp: saved.sp, abilityId: attackerAbilityId,
                     itemId: attackerItemId, teraType: saved.teraType)))
@@ -454,8 +475,13 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// (species の応答も含めて世代を守る。M1)。値そのものに意味は無い。
     private var latestRequestToken = 0
 
-    public init(service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval) {
+    public init(
+        service: any PokeCalcService, teamStore: (any TeamStore)? = nil, searchDebounce: Duration = MasterSearch.debounceInterval,
+        moveSortStore: MoveSortStore? = nil
+    ) {
         self.service = service
+        self.moveSortStore = moveSortStore
+        moveSortOrder = moveSortStore?.load() ?? .default
         self.teamStore = teamStore
         speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
             try await service.searchSpecies(query: query, limit: limit)
@@ -963,6 +989,29 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// いまの攻撃側(計算に使う個体そのまま)。お気に入りへ追加するときに使う(ADR-0509)。
     public func attackerIndividualForFavorite() throws -> Individual {
         try buildRequest().attacker
+    }
+
+    /// 計算画面の「攻撃側をお気に入りに追加」の内容(F-09・ADR-0524)。個体は従来どおり(`attackerIndividualForFavorite`)。
+    /// `calc` は今の計算入力(攻撃側の個体・防御側の無振り個体・技・場・急所)。防御側の性格が決まらないときは付けない。
+    /// 見出しは Web と同じ「{攻撃側}→{防御側}({技})」(名前が揃わなければ nil = 種族名で出る)。
+    public func attackerFavoritePin() throws -> FavoritePinTarget {
+        let request = try buildRequest()
+        let attacker = request.attacker
+        guard let defender = try? defenderIndividualForFavorite(), let move = selectedMove else {
+            return FavoritePinTarget(label: nil, individual: attacker)
+        }
+        var defenderIndividual = defender
+        defenderIndividual.ranks = defenderRanks
+        if case .locked(let stoneId, _) = defenderItemLock { defenderIndividual.itemId = stoneId }
+        let calc = CalcHistoryCalc(
+            format: .single, attacker: attacker, defender: defenderIndividual, moveId: move.id,
+            field: request.field, critical: request.critical)
+        let label = attackerSpecies.flatMap { attackerSpecies in
+            defenderSpecies.map {
+                FavoriteCalcLabel.text(attacker: attackerSpecies.nameJa, defender: $0.nameJa, move: move.nameJa)
+            }
+        }
+        return FavoritePinTarget(label: label, individual: attacker, calc: calc)
     }
 
     /// いまの防御側。計算は防御側を種族(+特性の上書き)だけで指定するので、無補正の性格・SP 0 の個体として返す

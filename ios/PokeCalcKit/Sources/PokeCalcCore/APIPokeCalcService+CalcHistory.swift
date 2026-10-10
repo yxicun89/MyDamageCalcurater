@@ -28,25 +28,28 @@ extension APIPokeCalcService: CalcHistoryService {
     // MARK: - 生成型 → ドメイン
 
     private static func domainHistoryEntry(_ entry: Components.Schemas.CalcHistoryEntry) -> CalcHistoryEntry {
-        let calc = entry.calc
-        let field = calc.field
-        return CalcHistoryEntry(
-            occurredAt: entry.occurredAt,
-            calc: CalcHistoryCalc(
-                format: Format(rawValue: calc.format.rawValue) ?? .single,
-                attacker: domainIndividual(calc.attacker),
-                defender: domainIndividual(calc.defender),
-                moveId: calc.moveId,
-                field: FieldState(
-                    weather: field?.weather.flatMap { Weather(rawValue: $0.rawValue) } ?? .none,
-                    terrain: field?.terrain.flatMap { Terrain(rawValue: $0.rawValue) } ?? .none,
-                    attackerScreens: domainScreens(field?.attackerScreens),
-                    defenderScreens: domainScreens(field?.defenderScreens)),
-                critical: calc.options?.critical ?? false),
+        CalcHistoryEntry(
+            occurredAt: entry.occurredAt, calc: domainCalc(entry.calc),
             minPercent: entry.result.minPercent, maxPercent: entry.result.maxPercent)
     }
 
-    private static func domainScreens(_ screens: Components.Schemas.Screens?) -> Screens {
+    /// `CalcRequest` → ドメイン(履歴の行とお気に入りの `calc` で共通。ADR-0524)。
+    static func domainCalc(_ calc: Components.Schemas.CalcRequest) -> CalcHistoryCalc {
+        let field = calc.field
+        return CalcHistoryCalc(
+            format: Format(rawValue: calc.format.rawValue) ?? .single,
+            attacker: domainIndividual(calc.attacker),
+            defender: domainIndividual(calc.defender),
+            moveId: calc.moveId,
+            field: FieldState(
+                weather: field?.weather.flatMap { Weather(rawValue: $0.rawValue) } ?? .none,
+                terrain: field?.terrain.flatMap { Terrain(rawValue: $0.rawValue) } ?? .none,
+                attackerScreens: domainScreens(field?.attackerScreens),
+                defenderScreens: domainScreens(field?.defenderScreens)),
+            critical: calc.options?.critical ?? false)
+    }
+
+    static func domainScreens(_ screens: Components.Schemas.Screens?) -> Screens {
         Screens(
             reflect: screens?.reflect ?? false, lightScreen: screens?.lightScreen ?? false,
             auroraVeil: screens?.auroraVeil ?? false)
