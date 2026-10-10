@@ -25,6 +25,7 @@ import { balanceErrorText, balanceScreenText, masterOnlineText, typeNameJa } fro
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
 import { typeAccentStyle } from "../ui/typeAccent";
+import { PokemonIcon } from "../images/PokemonIcon";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions, type SpeciesResolutions } from "./speciesResolution";
 import "./BalanceScreen.css";
@@ -656,7 +657,10 @@ function MemberFields({
   const abilitySelectId = useId();
   return (
     <fieldset className="ui-card ui-card--typed balance-member" style={typeAccentStyle(species?.types[0])}>
-      <legend>{groupLabel}</legend>
+      <legend>
+        {species !== null && <PokemonIcon speciesKey={species.key} typeId={species.types[0]} />}
+        {groupLabel}
+      </legend>
       {speciesListAvailable ? (
         <>
           <label className="balance-member__label" htmlFor={speciesSelectId}>
