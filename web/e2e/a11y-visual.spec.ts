@@ -96,6 +96,14 @@ for (const scheme of ["light", "dark"] as const) {
       await expectNoAxeViolations(page);
     });
 
+    test("技ピッカーを開いた状態(計算画面)に axe の違反が無い(G-01)", async ({ page }) => {
+      await openApp(page);
+      await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
+      await page.getByRole("combobox", { name: "技", exact: true }).click();
+      await expect(page.getByRole("listbox", { name: "技" })).toBeVisible();
+      await expectNoAxeViolations(page);
+    });
+
     test("タイプ色のカード(種族を選んだ計算画面)に axe の違反が無い", async ({ page }) => {
       await openApp(page);
       await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);

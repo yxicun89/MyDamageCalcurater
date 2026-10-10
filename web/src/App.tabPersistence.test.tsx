@@ -21,6 +21,7 @@ import { App } from "./App";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
+import { selectedMoveId } from "./test/movePicker";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -67,18 +68,6 @@ function tabButton(name: string): HTMLElement {
   return screen.getByRole("tab", { name });
 }
 
-/**
- * select の value(選択肢が1つも無い select は `toHaveValue("")` が undefined になるので、
- * 値そのものを見る)。
- */
-function selectValue(name: string): string {
-  const element = calcCombobox(name);
-  if (!(element instanceof HTMLSelectElement)) {
-    throw new Error(`「${name}」は select ではない`);
-  }
-  return element.value;
-}
-
 /** fetch の呼び出しのうち speed API(api/speed/…)のものの件数(App.test.tsx の urlOf と同じ形)。 */
 function speedCallCount(calls: readonly (readonly [string | URL | Request, ...unknown[]])[]): number {
   const urlOf = (input: string | URL | Request): string =>
@@ -103,7 +92,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     await user.selectOptions(calcCombobox("防御側のポケモン"), defenderKey);
     await user.selectOptions(calcCombobox("攻撃側の持ち物"), itemId);
     // 攻撃側を選ぶと技が自動で選ばれる(CalcScreen の resolveMoveId)。その値も往復後に残ること。
-    const moveIdBefore = selectValue("技");
+    const moveIdBefore = selectedMoveId();
     expect(moveIdBefore).not.toBe("");
 
     await user.click(tabButton("逆算"));
@@ -116,7 +105,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attackerKey);
     expect(calcCombobox("防御側のポケモン")).toHaveValue(defenderKey);
     expect(calcCombobox("攻撃側の持ち物")).toHaveValue(itemId);
-    expect(calcCombobox("技")).toHaveValue(moveIdBefore);
+    expect(selectedMoveId()).toBe(moveIdBefore);
   });
 
   test("逆算タブの種族とダメージは、計算タブへ行って戻っても残る", async () => {
@@ -333,7 +322,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     // 古いマスタの key が選ばれたまま残っていない(ADR-0308 決定3: 画面ごと作り直す)。
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue("");
     expect(calcCombobox("攻撃側の持ち物")).toHaveValue("");
-    expect(selectValue("技")).toBe("");
+    expect(selectedMoveId()).toBe("");
     // 古いマスタで計算した結果(切り替え直前に実際に出していたもの)も残らない。
     expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();
   });

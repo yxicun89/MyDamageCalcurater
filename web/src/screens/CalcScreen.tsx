@@ -124,8 +124,7 @@ import { favoritesRestoreText } from "../i18n/favorites";
 import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
-import { useMoveSort } from "../app/useMoveSort";
-import { MoveOptions, MoveSortChips } from "./MoveSortControls";
+import { MovePicker } from "./MovePicker";
 import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
@@ -1288,7 +1287,7 @@ export function CalcScreen({
           setMoveId(id);
           setHitsState({ moveId: id, value: null });
         }}
-        disabled={!movesAvailable}
+        disabled={!movesAvailable || (attackerSpecies !== null && attackerMoves.length === 0)}
       />
       {hitsRange !== null && (
         <HitsSelect
@@ -1796,29 +1795,20 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ。並びはチップ群で選ぶ(既定は learnset の順)。分類と威力(変化技は威力を出さない)を併記する。 */
+/** 技セレクタ。技ピッカー(タイプ順だけ。G-01、ADR-0341)。 */
 function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
-  const moveSelectId = useId();
-  const [order] = useMoveSort();
   return (
-    <>
-      <label className="calc-screen__label" htmlFor={moveSelectId}>
-        {calcScreenText.moveLabel}
-      </label>
-      <MoveSortChips variant="calc" />
-      <select
-        id={moveSelectId}
-        className="calc-screen__move"
-        aria-label={calcScreenText.moveLabel}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        <MoveOptions moves={moves} types={types} order={order} value={value} showUnselected />
-      </select>
-    </>
+    <MovePicker
+      label={calcScreenText.moveLabel}
+      labelClassName="calc-screen__label"
+      triggerClassName="calc-screen__move"
+      moves={moves}
+      types={types}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      showUnselected
+    />
   );
 }
 
