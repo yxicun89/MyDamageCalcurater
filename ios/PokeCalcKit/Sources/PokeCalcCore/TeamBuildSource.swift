@@ -99,7 +99,9 @@ public struct TeamPickerGroup: Identifiable, Equatable, Sendable {
 public enum TeamIndividualOptions {
     /// メンバーが0体の構築は出さない(選べるものが無いため)。構築・メンバーの並び順はそのまま保つ。
     public static func groups(from teams: [Team], species: [SpeciesSummary]) -> [TeamPickerGroup] {
-        teams.compactMap { team in
+        // 名前は表示名(既定名の構築は「構築 N」。ADR-0522)。
+        let displayNames = TeamNaming.displayNames(for: teams)
+        return teams.compactMap { team in
             guard !team.members.isEmpty else { return nil }
             let members = team.members.map { member in
                 TeamMemberOption(
@@ -108,7 +110,7 @@ public enum TeamIndividualOptions {
                     speciesKey: member.speciesKey
                 )
             }
-            return TeamPickerGroup(id: team.id, name: team.name, members: members)
+            return TeamPickerGroup(id: team.id, name: displayNames[team.id] ?? team.name, members: members)
         }
     }
 

@@ -13,13 +13,12 @@ import XCTest
 // - `team: Team`(private(set))・`speciesOptions: [SpeciesSummary]`・`itemOptions: [Item]`・`natureOptions: [Nature]`
 //   ・`moveOptionsByMember: [String: [Move]]`(メンバー id → 現在の種族の learnset の順・マスタにある技だけ。
 //   `CalcViewModel.moveOptions` と同じ規則)・`abilityOptionsByMember: [String: [Ability]]`
-//   ・`isLoading: Bool`・`error: TeamScreenError?`・`nameError: TeamFieldError?`(名前が空)
+//   ・`isLoading: Bool`・`error: TeamScreenError?`
 //   ・`teamError: TeamFieldError?`(6体を超える追加の試み)・`memberErrors: [String: TeamMemberFieldError]`
 //   (メンバー id → 直近の入力エラー。技の重複・上限・SP の超過)。
 // - `load()`: マスタ(species/items/natures)を読み、**既存の各メンバー**について `species(key:)` を呼んで
 //   `moveOptionsByMember` / `abilityOptionsByMember` を作る。
-// - `setName(_:)`: 前後空白を落として `team.name` に入れる。空になったら `nameError = .emptyName`、
-//   それ以外では nil にする(保存を止めはしない。保存時に再検証する)。
+// - `setName(_:)` / `nameError` は F-08(ADR-0522)で廃止した(構築名の入力 UI を無くしたため)。
 // - `addMember(speciesKey:) async -> Bool`: 既に `TeamLimits.maxMembers` 体あれば追加せず false を返し
 //   `teamError = .tooManyMembers`。そうでなければ新しい `TeamMember`(性格は `natureOptions.first`、
 //   他は既定値)を作り、`species(key:)` を呼んで `moveOptionsByMember` / `abilityOptionsByMember` を用意してから
@@ -385,21 +384,6 @@ final class TeamEditViewModelTests: XCTestCase {
         let ok = viewModel.setMemberSP(id: "member-alpha", stat: .atk, value: -1)
         XCTAssertFalse(ok)
         XCTAssertEqual(viewModel.memberErrors["member-alpha"], .spPerStatExceeded)
-    }
-
-    // MARK: - setName
-
-    func testSetNameTrimsAndClearsError() async {
-        let (viewModel, _) = await loadedViewModel()
-        viewModel.setName("  テストあたらしい名前  ")
-        XCTAssertEqual(viewModel.team.name, "テストあたらしい名前")
-        XCTAssertNil(viewModel.nameError)
-    }
-
-    func testSetBlankNameSetsError() async {
-        let (viewModel, _) = await loadedViewModel()
-        viewModel.setName("   ")
-        XCTAssertEqual(viewModel.nameError, .emptyName)
     }
 
     // MARK: - save

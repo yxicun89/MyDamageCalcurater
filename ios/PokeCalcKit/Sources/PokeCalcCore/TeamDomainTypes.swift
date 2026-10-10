@@ -58,11 +58,15 @@ public struct Team: Equatable, Sendable, Codable {
     public var name: String
     /// 0〜6。`TeamValidator` が上限を確かめる。
     public var members: [TeamMember]
+    /// 最終更新(保存の時刻)。F-08 で足した任意項目。古い保存データには無いので `Optional`
+    /// (`Codable` の合成は `decodeIfPresent`。ADR-0522)。
+    public var updatedAt: Date?
 
-    public init(id: String = UUID().uuidString, name: String, members: [TeamMember] = []) {
+    public init(id: String = UUID().uuidString, name: String, members: [TeamMember] = [], updatedAt: Date? = nil) {
         self.id = id
         self.name = name
         self.members = members
+        self.updatedAt = updatedAt
     }
 }
 
