@@ -53956,6 +53956,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -54119,6 +54120,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -54277,6 +54279,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -57456,6 +57459,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -57618,6 +57622,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -57775,6 +57780,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -60954,6 +60960,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -61116,6 +61123,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -61273,6 +61281,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -64452,6 +64461,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -64614,6 +64624,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {
@@ -64771,6 +64782,7 @@
         "Item": {
           "ID": "Iron Ball",
           "Effect": {
+            "Grounds": true,
             "UnsupportedDefender": true,
             "SpeedMods": [
               {

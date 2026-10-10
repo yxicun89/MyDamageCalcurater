@@ -152,7 +152,14 @@ func buildItems(list []api.MasterItem, megaItems map[string]string, chart engine
 		if err != nil {
 			return nil, fmt.Errorf("%w: 持ち物 %q の効果を読めない: %v", ErrInvalidMaster, it.Id, err)
 		}
-		item, err := sharedmaster.Item(sharedmaster.ItemRow{ID: it.Id, NameJa: it.NameJa, Effect: effect}, chart)
+		flingPower := 0 // 省略(古い pokedex-svc・投げられない持ち物)は 0 = 不明
+		if it.FlingPower != nil {
+			if *it.FlingPower < 1 {
+				return nil, fmt.Errorf("%w: 持ち物 %q の flingPower は 1 以上: %d", ErrInvalidMaster, it.Id, *it.FlingPower)
+			}
+			flingPower = *it.FlingPower
+		}
+		item, err := sharedmaster.Item(sharedmaster.ItemRow{ID: it.Id, NameJa: it.NameJa, Effect: effect, FlingPower: flingPower}, chart)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %w", ErrInvalidMaster, err)
 		}

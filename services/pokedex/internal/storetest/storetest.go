@@ -561,7 +561,7 @@ func (q *Querier) SearchItems(_ context.Context, arg store.SearchItemsParams) ([
 	var out []store.SearchItemsRow
 	for _, it := range q.Items {
 		if in[it.ID] && strings.HasPrefix(it.NameJa, prefix) && len(out) < int(arg.Limit) {
-			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID], IsMegaStone: it.IsMegaStone || megaStones[it.ID]})
+			out = append(out, store.SearchItemsRow{ID: it.ID, NameJa: it.NameJa, Effect: effects[it.ID], IsMegaStone: it.IsMegaStone || megaStones[it.ID], FlingPower: it.FlingPower})
 		}
 	}
 	return out, nil

@@ -63,6 +63,9 @@ type CalcDetail struct {
 	MoveID  string           `json:"moveId"`
 	Field   *api.FieldState  `json:"field,omitempty"`
 	Options *api.CalcOptions `json:"options,omitempty"`
+	// BattleState は対戦の状態(残り HP・多段の回数。ADR-0144)。指定が無ければキーごと出さない(既存のイベントと同じ形)。
+	// 受け手(record-svc)を先に入れ替えてから calc-svc を入れ替える。
+	BattleState *api.CalcBattleState `json:"battleState,omitempty"`
 
 	// MinPercent/MaxPercent は api.CalcResult.MinPercent/MaxPercent(表示%。丸め後の値)を
 	// そのまま写す。MinPercent は切り捨て・MaxPercent は四捨五入で丸め方向が異なる(ADR-0010 §3)。

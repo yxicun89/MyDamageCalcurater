@@ -8,7 +8,8 @@ package importer_test
 //     moves 表に無い技のキーは警告 effect-unused。変化技・機構と対応しない・形の不正は ErrInvalidData。
 //   - 種族の重さは Showdown・calc とも必須(キーが無い取得物は ErrInvalidInput)。小数1桁までの10進を浮動小数を経ずに hg の
 //     整数にする(90.5 → 905)。小数2桁以上・0 以下は ErrInvalidData。両方にある種族で値が違えば Blocker species-mismatch(Detail weightkg)。
-//   - 本番の data/importer/effects.json の moveRules は 36 技で、ADR-0143 §測定の語彙ごとの件数どおり。
+//   - 本番の data/importer/effects.json の moveRules は 46 技(ADR-0143 の段階2 36 技 + ADR-0144 の段階3 10 技)で、
+//     両 ADR の測定の語彙ごとの件数どおり。
 //
 // fixture(testdata/fictional)の重さ: testmon 90.5kg・testmonmega 120kg・testleaf 6.9kg・testbug 0.1kg(calc も同じ値)。
 
@@ -234,8 +235,9 @@ func TestProductionMoveRulesMatchADR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("data/importer/effects.json: %v", err)
 	}
-	if len(prod.MoveRules) != 36 {
-		t.Fatalf("moveRules = %d 技, want 36(ADR-0143 §測定の段階2の対象)", len(prod.MoveRules))
+	// 段階2の 36 技(ADR-0143 §測定)に、段階3の 10 技(ADR-0144 §測定: 残り HP 8・なげつける 1・分類の切り替え 1)を足した数。
+	if len(prod.MoveRules) != 46 {
+		t.Fatalf("moveRules = %d 技, want 46(ADR-0143 の 36 + ADR-0144 の 10)", len(prod.MoveRules))
 	}
 	type boost struct {
 		Condition string
@@ -265,12 +267,17 @@ func TestProductionMoveRulesMatchADR(t *testing.T) {
 		}
 	}
 	wantFormulas := map[string]int{"attacker_positive_boosts": 2, "speed_ratio": 1, "inverse_speed_ratio": 1,
-		"target_weight": 2, "weight_ratio": 2, "hit_index": 1}
+		"target_weight": 2, "weight_ratio": 2, "hit_index": 1,
+		// 段階3(ADR-0144): ふんか・しおふき型 2・きしかいせい・じたばた型 2・ハードプレス型 1・なげつける型 1。
+		"attacker_hp_scaled": 2, "attacker_hp_low": 2, "defender_hp_ratio": 1, "attacker_item_fling": 1}
 	wantConditions := map[string]int{"attacker_status": 1, "defender_status": 4, "attacker_no_item": 1,
 		"defender_item_removable": 1, "weather": 3, "terrain_attacker_grounded": 3, "terrain_defender_grounded": 1}
 	wantFlags := map[string]int{"IgnoresBurn": 1, "TerrainPowerMods": 2, "TypeByWeather": 1, "TypeByTerrain": 1,
 		"ExtraEffectivenessType": 1, "SuperEffectiveAgainst": 1, "PriorityBoost": 1, "BreaksScreens": 2,
-		"FailsWithoutDefenderItem": 1, "SpreadInTerrain": 1, "MoveSpecificResolved": 15}
+		"FailsWithoutDefenderItem": 1, "SpreadInTerrain": 1,
+		// 段階3(ADR-0144): いのちがけ・いかりのまえば・がむしゃら型 3・シェルアームズ型 1。MoveSpecificResolved は
+		// なげつける型・シェルアームズ型の 2 を足す。
+		"FixedDamageFormula": 3, "CategoryByStats": 1, "MoveSpecificResolved": 17}
 	if !reflect.DeepEqual(formulas, wantFormulas) {
 		t.Errorf("PowerFormula の件数 = %v, want %v", formulas, wantFormulas)
 	}
@@ -279,6 +286,18 @@ func TestProductionMoveRulesMatchADR(t *testing.T) {
 	}
 	if !reflect.DeepEqual(flags, wantFlags) {
 		t.Errorf("その他の項目の件数 = %v, want %v", flags, wantFlags)
+	}
+
+	// 持ち物による接地(ADR-0144 §1)。防御側の地面技の相性(浮いている側に当たる)は表せないので印は残す。
+	{
+		var got, w any
+		if err := json.Unmarshal(prod.Items["ironball"], &got); err != nil {
+			t.Fatalf("items[ironball]: %v", err)
+		}
+		_ = json.Unmarshal([]byte(`{"Grounds":true,"UnsupportedDefender":true}`), &w)
+		if !reflect.DeepEqual(got, w) {
+			t.Errorf("items[ironball] = %s, want {\"Grounds\":true,\"UnsupportedDefender\":true}", prod.Items["ironball"])
+		}
 	}
 
 	// 重さの補正の特性(oracle の defenderAbilityIgnored にあるので Breakable)。

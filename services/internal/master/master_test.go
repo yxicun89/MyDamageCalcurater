@@ -412,6 +412,7 @@ func fullItemEffect() engine.ItemEffect {
 		// 未対応の印(ADR-0123)。本番のデータでは補正と混ぜないが(生成器が確かめる)、形としては往復できる。
 		UnsupportedAttacker: true,
 		UnsupportedDefender: true,
+		Grounds:             true, // 持ち物による接地(ADR-0144)
 	}
 }
 

@@ -228,7 +228,7 @@ func buildMasterExportFrom(ctx context.Context, q store.Querier) (api.MasterExpo
 		if err != nil {
 			return api.MasterExport{}, err
 		}
-		masterItems = append(masterItems, api.MasterItem{Id: it.ID, NameJa: it.NameJa, Effect: effect})
+		masterItems = append(masterItems, api.MasterItem{Id: it.ID, NameJa: it.NameJa, Effect: effect, FlingPower: flingPowerOf(it.FlingPower)})
 	}
 	masterAbilities := make([]api.MasterAbility, 0, len(abilities))
 	for _, a := range abilities {

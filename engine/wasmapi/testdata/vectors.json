@@ -6685,6 +6685,115 @@
         "maxCandidates": 8
       },
       "expectError": "invalid_input"
+    },
+    {
+      "name": "calc/battle-state-hp-and-hits",
+      "fn": "calc",
+      "tags": [
+        "battleState"
+      ],
+      "source": "ADR-0144 の対戦の状態(残り HP・多段の回数)。手書き",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "magmortar",
+            "types": [
+              "fire"
+            ],
+            "baseStats": {
+              "hp": 75,
+              "atk": 95,
+              "def": 67,
+              "spa": 125,
+              "spd": 95,
+              "spe": 83
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "abomasnow",
+            "types": [
+              "grass",
+              "ice"
+            ],
+            "baseStats": {
+              "hp": 90,
+              "atk": 92,
+              "def": 75,
+              "spa": 92,
+              "spd": 85,
+              "spe": 60
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "move": {
+          "id": "flamethrower",
+          "type": "fire",
+          "category": "special",
+          "power": 25,
+          "priority": 0,
+          "mechanisms": [
+            "multi_hit"
+          ],
+          "mechanismParams": {
+            "multiHit": {
+              "min": 2,
+              "max": 5
+            }
+          }
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "critical": false,
+        "battleState": {
+          "attackerCurrentHp": 100,
+          "defenderCurrentHp": 120,
+          "hits": 4
+        }
+      }
     }
   ]
 }

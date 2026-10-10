@@ -447,6 +447,8 @@ type itemEffectDTO struct {
 	// UnsupportedAttacker / UnsupportedDefender は「未対応」の印(ADR-0123)。
 	UnsupportedAttacker bool `json:"unsupportedAttacker"`
 	UnsupportedDefender bool `json:"unsupportedDefender"`
+	// Grounds は持ち物で接地する(くろいてっきゅう型。ADR-0144)。
+	Grounds bool `json:"grounds"`
 }
 
 func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
@@ -454,6 +456,7 @@ func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
 		DamageMod: e.DamageMod, PowerMod: e.PowerMod, OnlySuperEffective: e.OnlySuperEffective,
 		BoostTypeMod:        e.BoostTypeMod,
 		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
+		Grounds: e.Grounds,
 	}
 	if e.StatMods != nil {
 		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
@@ -488,6 +491,8 @@ type itemDTO struct {
 	Effect *itemEffectDTO `json:"effect"`
 	// IsMegaStone はメガストーンか(ADR-0143。防御側の持ち物を払い落とす技の補正に使う)。省略は偽。
 	IsMegaStone bool `json:"isMegaStone"`
+	// FlingPower はなげつけるの威力(ADR-0144)。省略は 0(不明)。負は個体の検証で invalid_input。
+	FlingPower int `json:"flingPower"`
 }
 
 // itemToEngine は nil(持ち物なし)を nil のまま返す。
@@ -495,7 +500,7 @@ func itemToEngine(path string, d *itemDTO) (*engine.Item, error) {
 	if d == nil {
 		return nil, nil
 	}
-	item := &engine.Item{ID: d.ID, NameJa: d.NameJa, MegaStone: d.IsMegaStone}
+	item := &engine.Item{ID: d.ID, NameJa: d.NameJa, MegaStone: d.IsMegaStone, FlingPower: d.FlingPower}
 	if d.Effect != nil {
 		eff, err := d.Effect.toEngine(path + ".effect")
 		if err != nil {

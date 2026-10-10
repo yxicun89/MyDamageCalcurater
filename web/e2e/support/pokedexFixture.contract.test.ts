@@ -37,6 +37,8 @@ const ITEM_OPTIONAL_KEYS = [
   "effect",
   "roles",
   "isMegaStone",
+  // なげつけるの威力(ADR-0144 §4)。投げられない・取り込み前の持ち物は省く。
+  "flingPower",
 ] as const satisfies readonly (keyof Schemas["Item"])[];
 export type ItemKeysAreComplete = AssertNever<
   Exclude<keyof Schemas["Item"], (typeof ITEM_KEYS)[number] | (typeof ITEM_OPTIONAL_KEYS)[number]>

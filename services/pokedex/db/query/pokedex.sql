@@ -241,8 +241,9 @@ INSERT INTO abilities (id, name_ja, name_ja_source, name_en)
 VALUES (?, ?, ?, ?);
 
 -- name: InsertItem :exec
-INSERT INTO items (id, name_ja, name_ja_source, name_en, is_mega_stone)
-VALUES (?, ?, ?, ?, ?);
+-- fling_power: なげつけるの威力(ADR-0144 §5)。NULL は投げられない・取り込み前。
+INSERT INTO items (id, name_ja, name_ja_source, name_en, is_mega_stone, fling_power)
+VALUES (?, ?, ?, ?, ?, ?);
 
 -- name: InsertMove :exec
 INSERT INTO moves (id, name_ja, name_ja_source, name_en, type, category, power, accuracy, pp, priority, target)
@@ -347,7 +348,7 @@ FROM species_abilities
 ORDER BY species_key, slot;
 
 -- name: ListItems :many
-SELECT id, name_ja, name_ja_source, name_en, is_mega_stone
+SELECT id, name_ja, name_ja_source, name_en, is_mega_stone, fling_power
 FROM items
 ORDER BY id;
 
@@ -418,7 +419,8 @@ LIMIT ?;
 -- (ADR-0175 §2。使用可能集合で絞らない。species.required_item_id の外部キーの索引を使う)。
 -- `= TRUE` は sqlc に bool と推論させるため(OR 式だけだと NullBool・interface になる)。
 SELECT i.id, i.name_ja, ie.effect,
-       (i.is_mega_stone OR EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id)) = TRUE AS is_mega_stone
+       (i.is_mega_stone OR EXISTS (SELECT 1 FROM species s WHERE s.is_mega = 1 AND s.required_item_id = i.id)) = TRUE AS is_mega_stone,
+       i.fling_power
 FROM items i
 JOIN regulation_items ri ON ri.item_id = i.id
 LEFT JOIN item_effects ie ON ie.item_id = i.id

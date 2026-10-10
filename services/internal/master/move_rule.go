@@ -23,6 +23,7 @@ var (
 		"TypeByWeather": true, "TypeByTerrain": true, "ExtraEffectivenessType": true, "SuperEffectiveAgainst": true,
 		"PriorityBoost": true, "BreaksScreens": true, "FailsWithoutDefenderItem": true, "SpreadInTerrain": true,
 		"MoveSpecificResolved": true,
+		"FixedDamageFormula":   true, "CategoryByStats": true, // 段階3(ADR-0144)
 	}
 	movePowerBoostFields  = map[string]bool{"Condition": true, "Statuses": true, "Weathers": true, "Terrains": true, "BaseMultiplier": true, "Modifier": true}
 	terrainPowerModFields = map[string]bool{"Terrain": true, "Modifier": true}
@@ -50,6 +51,13 @@ func DecodeMoveRule(raw []byte, chart engine.TypeChart) (*engine.MoveRule, error
 		}
 		r.PowerFormula = engine.PowerFormula(s)
 	}
+	if v, ok := fields["FixedDamageFormula"]; ok {
+		s, err := decodeNonEmptyString(v, "FixedDamageFormula")
+		if err != nil {
+			return nil, err
+		}
+		r.FixedDamageFormula = engine.FixedDamageFormula(s)
+	}
 	if v, ok := fields["PowerBoosts"]; ok {
 		if r.PowerBoosts, err = decodeMovePowerBoosts(v); err != nil {
 			return nil, err
@@ -58,6 +66,7 @@ func DecodeMoveRule(raw []byte, chart engine.TypeChart) (*engine.MoveRule, error
 	for name, dst := range map[string]*bool{
 		"IgnoresBurn": &r.IgnoresBurn, "BreaksScreens": &r.BreaksScreens,
 		"FailsWithoutDefenderItem": &r.FailsWithoutDefenderItem, "MoveSpecificResolved": &r.MoveSpecificResolved,
+		"CategoryByStats": &r.CategoryByStats,
 	} {
 		v, ok := fields[name]
 		if !ok {
@@ -116,7 +125,7 @@ func DecodeMoveRule(raw []byte, chart engine.TypeChart) (*engine.MoveRule, error
 	}
 	// 語彙・値域・一覧の形は engine の検証に任せる。機構との対応は実際の技で確かめる(Move)ので、ここでは全機構を持つ技で通す。
 	probe := engine.Move{
-		ID: "rule", Category: engine.CategoryPhysical, Mechanisms: engine.AllMoveMechanisms(),
+		ID: "rule", Category: engine.CategoryPhysical, Power: 1, Mechanisms: engine.AllMoveMechanisms(),
 		Params: engine.MechanismParams{MultiHit: &engine.MultiHit{Min: 2, Max: 2}}, Rule: &r,
 	}
 	if err := probe.ValidateRule(chart); err != nil {
@@ -388,6 +397,12 @@ func EncodeMoveRule(r engine.MoveRule) ([]byte, error) {
 	}
 	if r.MoveSpecificResolved {
 		w.field("MoveSpecificResolved", []byte("true"))
+	}
+	if r.FixedDamageFormula != "" {
+		w.field("FixedDamageFormula", quoteJSON(string(r.FixedDamageFormula)))
+	}
+	if r.CategoryByStats {
+		w.field("CategoryByStats", []byte("true"))
 	}
 	return w.bytes()
 }

@@ -29,11 +29,17 @@ const (
 	PowerFormulaTargetWeight      PowerFormula = "target_weight"            // けたぐり型の表(防御側の重さ)
 	PowerFormulaWeightRatio       PowerFormula = "weight_ratio"             // ヘビーボンバー型の表(攻撃側 / 防御側)
 	PowerFormulaHitIndex          PowerFormula = "hit_index"                // h 発目の威力 = 威力 × h(多段の中身が要る)
+	// 段階3(ADR-0144)。
+	PowerFormulaAttackerHPScaled  PowerFormula = "attacker_hp_scaled"  // max(1, floor(威力 × 攻撃側の残り / 最大))。威力 1 以上が必要
+	PowerFormulaAttackerHPLow     PowerFormula = "attacker_hp_low"     // 48 分率の段(きしかいせい型)
+	PowerFormulaDefenderHPRatio   PowerFormula = "defender_hp_ratio"   // ハードプレス型の式
+	PowerFormulaAttackerItemFling PowerFormula = "attacker_item_fling" // 攻撃側の持ち物の Item.FlingPower
 )
 
 var allPowerFormulas = []PowerFormula{
 	PowerFormulaPositiveBoosts, PowerFormulaSpeedRatio, PowerFormulaInverseSpeedRatio,
 	PowerFormulaTargetWeight, PowerFormulaWeightRatio, PowerFormulaHitIndex,
+	PowerFormulaAttackerHPScaled, PowerFormulaAttackerHPLow, PowerFormulaDefenderHPRatio, PowerFormulaAttackerItemFling,
 }
 
 // AllPowerFormulas は語彙のすべてを定義順で返す(呼び出しごとに新しいスライス)。
@@ -41,6 +47,25 @@ func AllPowerFormulas() []PowerFormula { return slices.Clone(allPowerFormulas) }
 
 // Known は f が語彙にあるか(大文字小文字を区別する)。
 func (f PowerFormula) Known() bool { return slices.Contains(allPowerFormulas, f) }
+
+// FixedDamageFormula は固定ダメージの式(機構 fixed_damage と対応。ADR-0144)。"" は式なし。
+type FixedDamageFormula string
+
+const (
+	FixedDamageAttackerCurrentHP       FixedDamageFormula = "attacker_current_hp"        // 攻撃側の残り HP
+	FixedDamageDefenderHalfHP          FixedDamageFormula = "defender_current_hp_half"   // max(1, floor(防御側の残り / 2))
+	FixedDamageDefenderMinusAttackerHP FixedDamageFormula = "defender_minus_attacker_hp" // 防御側の残り − 攻撃側の残り(≤ 0 は失敗)
+)
+
+var allFixedDamageFormulas = []FixedDamageFormula{
+	FixedDamageAttackerCurrentHP, FixedDamageDefenderHalfHP, FixedDamageDefenderMinusAttackerHP,
+}
+
+// AllFixedDamageFormulas は語彙のすべてを定義順で返す(呼び出しごとに新しいスライス)。
+func AllFixedDamageFormulas() []FixedDamageFormula { return slices.Clone(allFixedDamageFormulas) }
+
+// Known は f が語彙にあるか(大文字小文字を区別する)。
+func (f FixedDamageFormula) Known() bool { return slices.Contains(allFixedDamageFormulas, f) }
 
 // MoveCondition は条件つきの威力(MovePowerBoost)の条件。
 type MoveCondition string
@@ -102,9 +127,11 @@ type MoveRule struct {
 	SuperEffectiveAgainst    []Type           // このタイプへの相性を 2 にする
 	PriorityBoost            *PriorityBoost
 	BreaksScreens            bool
-	FailsWithoutDefenderItem bool    // 防御側が持ち物なしなら 0(Nullified = move_failed)
-	SpreadInTerrain          Terrain // そのフィールドで攻撃側が接地なら全体技(ダブルの補正)
-	MoveSpecificResolved     bool    // move_specific のハンドラは上の中身以外にダメージへ効かない(oracle で確かめた)
+	FailsWithoutDefenderItem bool               // 防御側が持ち物なしなら 0(Nullified = move_failed)
+	SpreadInTerrain          Terrain            // そのフィールドで攻撃側が接地なら全体技(ダブルの補正)
+	MoveSpecificResolved     bool               // move_specific のハンドラは上の中身以外にダメージへ効かない(oracle で確かめた)
+	FixedDamageFormula       FixedDamageFormula // "" はなし。機構 fixed_damage が必要。Params.FixedDamage・威力の中身と排他(ADR-0144)
+	CategoryByStats          bool               // 分類の切り替え(攻撃 / 防御 と 特攻 / 特防 の比)。機構 move_specific が必要(ADR-0144)
 }
 
 // hasPowerContent は威力の中身(式・条件つきの威力・やけど無視)があるか。
@@ -116,7 +143,8 @@ func (r MoveRule) hasPowerContent() bool {
 func (r MoveRule) isEmpty() bool {
 	return !r.hasPowerContent() && len(r.TerrainPowerMods) == 0 && len(r.TypeByWeather) == 0 && len(r.TypeByTerrain) == 0 &&
 		r.ExtraEffectivenessType == TypeNone && len(r.SuperEffectiveAgainst) == 0 && r.PriorityBoost == nil &&
-		!r.BreaksScreens && !r.FailsWithoutDefenderItem && r.SpreadInTerrain == "" && !r.MoveSpecificResolved
+		!r.BreaksScreens && !r.FailsWithoutDefenderItem && r.SpreadInTerrain == "" && !r.MoveSpecificResolved &&
+		r.FixedDamageFormula == "" && !r.CategoryByStats
 }
 
 // ValidateRule は定義が語彙・機構・値域に収まることを確かめる(ADR-0143 §1)。定義なしは常に通る。
@@ -146,6 +174,23 @@ func (m Move) ValidateRule(chart TypeChart) error {
 		}
 		if r.PowerFormula == PowerFormulaHitIndex && m.Params.MultiHit == nil {
 			return bad("hit_index には多段の中身(MultiHit)が要る")
+		}
+		if r.PowerFormula == PowerFormulaAttackerHPScaled && m.Power <= 0 {
+			return bad("attacker_hp_scaled には威力 1 以上が要る: %d", m.Power)
+		}
+	}
+	if r.FixedDamageFormula != "" {
+		if !r.FixedDamageFormula.Known() {
+			return bad("未知の固定ダメージの式 %q", r.FixedDamageFormula)
+		}
+		if !has(MechanismFixedDamage) {
+			return bad("FixedDamageFormula に対応する機構 fixed_damage が無い")
+		}
+		if m.Params.FixedDamage != nil {
+			return bad("FixedDamageFormula と Params.FixedDamage は同時に指定できない")
+		}
+		if r.hasPowerContent() {
+			return bad("FixedDamageFormula と威力の中身は同時に指定できない")
 		}
 	}
 	for i, b := range r.PowerBoosts {
@@ -216,8 +261,8 @@ func (m Move) ValidateRule(chart TypeChart) error {
 	if r.SpreadInTerrain != "" && !knownTerrain(r.SpreadInTerrain) {
 		return bad("SpreadInTerrain が不正: %q", r.SpreadInTerrain)
 	}
-	if (r.BreaksScreens || r.FailsWithoutDefenderItem || r.SpreadInTerrain != "" || r.MoveSpecificResolved) && !has(MechanismMoveSpecific) {
-		return bad("BreaksScreens / FailsWithoutDefenderItem / SpreadInTerrain / MoveSpecificResolved に対応する機構 move_specific が無い")
+	if (r.BreaksScreens || r.FailsWithoutDefenderItem || r.SpreadInTerrain != "" || r.MoveSpecificResolved || r.CategoryByStats) && !has(MechanismMoveSpecific) {
+		return bad("BreaksScreens / FailsWithoutDefenderItem / SpreadInTerrain / MoveSpecificResolved / CategoryByStats に対応する機構 move_specific が無い")
 	}
 	return nil
 }
@@ -514,8 +559,16 @@ func (r *MoveRule) formulaComputable(in DamageInput) bool {
 		return in.Defender.Species.WeightHg > 0
 	case PowerFormulaWeightRatio:
 		return in.Attacker.Species.WeightHg > 0 && in.Defender.Species.WeightHg > 0
+	case PowerFormulaAttackerItemFling:
+		it := in.Attacker.Item
+		return it != nil && it.FlingPower > 0 && !it.MegaStone
 	}
 	return true
+}
+
+// flingWithoutItem は攻撃側が持ち物なしのなげつける型(失敗する。ADR-0144 §2)か。
+func (r *MoveRule) flingWithoutItem(in DamageInput) bool {
+	return r.PowerFormula == PowerFormulaAttackerItemFling && in.Attacker.Item == nil
 }
 
 // ruleBasePower はこの入力での基本威力を返す。hit は多段の何発目か(0 始まり。hit_index だけが使う)。
@@ -544,6 +597,14 @@ func ruleBasePower(in DamageInput, hit int) int {
 			power = weightRatioPower(effectiveWeight(in.Attacker), effectiveWeight(in.Defender))
 		case PowerFormulaHitIndex:
 			power *= hit + 1
+		case PowerFormulaAttackerHPScaled:
+			power = max(1, power*attackerCurrentHP(in)/RealStats(in.Attacker).HP)
+		case PowerFormulaAttackerHPLow:
+			power = attackerHPLowPower(attackerCurrentHP(in), RealStats(in.Attacker).HP)
+		case PowerFormulaDefenderHPRatio:
+			power = defenderHPRatioPower(defenderCurrentHP(in), RealStats(in.Defender).HP)
+		case PowerFormulaAttackerItemFling:
+			power = in.Attacker.Item.FlingPower
 		}
 	}
 	for _, b := range r.PowerBoosts {
@@ -610,9 +671,55 @@ func ruleTerrainPowerMods(in DamageInput) []int {
 	return mods
 }
 
-// ruleFailed は防御側が持ち物なしで失敗する技(FailsWithoutDefenderItem)か。
+// ruleFailed は技が失敗する入力か: 防御側が持ち物なしで失敗する技(FailsWithoutDefenderItem)・攻撃側が持ち物なしのなげつける型・
+// 攻撃側の残りが防御側以上のがむしゃら型(ADR-0143 §2・ADR-0144 §2)。
 func ruleFailed(in DamageInput) bool {
-	return in.Move.Rule != nil && in.Move.Rule.FailsWithoutDefenderItem && in.Defender.Item == nil
+	r := in.Move.Rule
+	if r == nil {
+		return false
+	}
+	return (r.FailsWithoutDefenderItem && in.Defender.Item == nil) || r.flingWithoutItem(in) ||
+		(r.FixedDamageFormula == FixedDamageDefenderMinusAttackerHP && defenderCurrentHP(in) <= attackerCurrentHP(in))
+}
+
+// ruleFixedDamage は固定ダメージの式(FixedDamageFormula)の値。式が無ければ ok が偽。
+func ruleFixedDamage(in DamageInput) (v int, ok bool) {
+	r := in.Move.Rule
+	if r == nil {
+		return 0, false
+	}
+	switch r.FixedDamageFormula {
+	case FixedDamageAttackerCurrentHP:
+		return attackerCurrentHP(in), true
+	case FixedDamageDefenderHalfHP:
+		return max(1, defenderCurrentHP(in)/2), true
+	case FixedDamageDefenderMinusAttackerHP:
+		return defenderCurrentHP(in) - attackerCurrentHP(in), true
+	}
+	return 0, false
+}
+
+// applyCategoryByStats は分類の切り替え(CategoryByStats)を反映したコピーを返す。ランク補正後の実数値で
+// 攻撃 / 防御側の防御 > 特攻 / 防御側の特防 なら物理(接触あり)、それ以外は特殊(oracle の getShellSideArmCategory。
+// 整数の掛け算で比べる)。技のフラグが分かるときだけ接触を足す/外す(ADR-0144 §2)。
+func applyCategoryByStats(in DamageInput) DamageInput {
+	r := in.Move.Rule
+	if r == nil || !r.CategoryByStats || in.Move.Category == CategoryStatus {
+		return in
+	}
+	atk := applyStatStage(RealStats(in.Attacker).Atk, in.Attacker.Ranks.Atk)
+	def := applyStatStage(RealStats(in.Defender).Def, in.Defender.Ranks.Def)
+	spa := applyStatStage(RealStats(in.Attacker).SpA, in.Attacker.Ranks.SpA)
+	spd := applyStatStage(RealStats(in.Defender).SpD, in.Defender.Ranks.SpD)
+	if atk*spd > spa*def {
+		in.Move.Category = CategoryPhysical
+		if in.Move.FlagsKnown && !in.Move.hasFlag(MoveFlagContact) {
+			in.Move.Flags = append(slices.Clone(in.Move.Flags), MoveFlagContact)
+		}
+	} else {
+		in.Move.Category = CategorySpecial
+	}
+	return in
 }
 
 // ruleIgnoresBurn はやけどの攻撃半減を受けない技か。
@@ -627,7 +734,7 @@ func ruleHandlesVariablePower(in DamageInput) bool {
 	if r == nil || (r.PowerFormula == "" && len(r.PowerBoosts) == 0) {
 		return false
 	}
-	if !r.formulaComputable(in) {
+	if !r.formulaComputable(in) && !r.flingWithoutItem(in) {
 		return false
 	}
 	// 防御側がメガストーンを持つと、防御側の種族に合うかを engine は知らないので安全側で印を残す。
@@ -644,5 +751,10 @@ func ruleHandlesVariablePower(in DamageInput) bool {
 // ruleHasComputableFormula は威力 0 の技の威力が、計算できる式で決まるか(zero_power の印を外す条件)。
 func ruleHasComputableFormula(in DamageInput) bool {
 	r := in.Move.Rule
-	return r != nil && r.PowerFormula != "" && r.formulaComputable(in)
+	return r != nil && r.PowerFormula != "" && (r.formulaComputable(in) || r.flingWithoutItem(in))
+}
+
+// ruleHasFixedFormula は固定ダメージの式があるか(fixed_damage・zero_power の印を外す条件)。
+func ruleHasFixedFormula(in DamageInput) bool {
+	return in.Move.Rule != nil && in.Move.Rule.FixedDamageFormula != ""
 }

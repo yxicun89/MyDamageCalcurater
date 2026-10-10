@@ -61,6 +61,8 @@ type Item struct {
 	Effect *ItemEffect
 	// MegaStone はメガストーンか(ADR-0143。はたきおとす型は、メガストーンを払い落とせないものとして扱う)。
 	MegaStone bool
+	// FlingPower はなげつけるの威力(ADR-0144)。0 は不明・投げられない(なげつける型の印を残す)。負は Individual.Validate が拒否する。
+	FlingPower int
 }
 
 // Ability は特性データ。Effect はダメージ補正の定義(マスタから解決)。nil は補正なし。
@@ -191,6 +193,9 @@ func (in Individual) Validate() error {
 	if len(in.Species.Types) == 2 && in.Species.Types[0] == in.Species.Types[1] {
 		// 同じタイプを2つ持つと相性を2回掛けてしまう(等倍が 4/4、抜群が4倍。issue #255)。
 		return fmt.Errorf("タイプ %q が重複している", in.Species.Types[0])
+	}
+	if in.Item != nil && in.Item.FlingPower < 0 {
+		return fmt.Errorf("持ち物 %q の FlingPower は 0(不明)以上: %d", in.Item.ID, in.Item.FlingPower)
 	}
 	if in.Item != nil && in.Item.Effect != nil {
 		if err := in.Item.Effect.validate(); err != nil {

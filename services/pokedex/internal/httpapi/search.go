@@ -320,7 +320,7 @@ func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) er
 			apiRoles = append(apiRoles, api.ItemRole(role))
 		}
 		isMegaStone := r.IsMegaStone
-		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa, Effect: effect, Roles: &apiRoles, IsMegaStone: &isMegaStone})
+		out = append(out, api.Item{Id: r.ID, NameJa: r.NameJa, Effect: effect, Roles: &apiRoles, IsMegaStone: &isMegaStone, FlingPower: flingPowerOf(r.FlingPower)})
 	}
 	// 読み終えたらすぐ閉じて接続を返す(応答の書き込みを待たない)。エラー経路は defer の Rollback が閉じる。
 	if err := tx.Commit(); err != nil {
@@ -583,4 +583,13 @@ func (s *Server) ListMoveLearners(ctx *echo.Context, key string, params api.List
 		out = append(out, api.SpeciesSummary{Key: r.Key, DexNo: int(r.DexNo), Form: int(r.Form), NameJa: r.NameJa, Types: typesOf(r.Type1, r.Type2)})
 	}
 	return ctx.JSON(http.StatusOK, out)
+}
+
+// flingPowerOf はなげつけるの威力(NULL は nil = キーを省く。ADR-0144 §6)。
+func flingPowerOf(v sql.NullInt16) *int {
+	if !v.Valid {
+		return nil
+	}
+	n := int(v.Int16)
+	return &n
 }

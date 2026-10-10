@@ -11,6 +11,8 @@ type ItemRow struct {
 	ID     string
 	NameJa string
 	Effect []byte
+	// FlingPower はなげつけるの威力(ADR-0144)。0 は不明・投げられない。負は ErrInvalidRow。
+	FlingPower int
 }
 
 // AbilityRow は abilities + ability_effects の行。Effect は ability_effects に行が無ければ nil。
@@ -36,7 +38,10 @@ func Item(row ItemRow, chart engine.TypeChart) (engine.Item, error) {
 		}
 		effect = e
 	}
-	return engine.Item{ID: row.ID, NameJa: row.NameJa, Effect: effect}, nil
+	if row.FlingPower < 0 {
+		return engine.Item{}, fmt.Errorf("%w: 持ち物 %q の FlingPower が負: %d", ErrInvalidRow, row.ID, row.FlingPower)
+	}
+	return engine.Item{ID: row.ID, NameJa: row.NameJa, Effect: effect, FlingPower: row.FlingPower}, nil
 }
 
 // Ability は特性の行を engine.Ability に写像する。Effect が nil なら補正なし。

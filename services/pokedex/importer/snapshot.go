@@ -172,6 +172,9 @@ type ShowdownItem struct {
 	// MegaStone は Showdown の Item.megaStone(基本種名 → メガ種族名)。ストーンでなければ空のオブジェクト。
 	// キーが無い(nil)古いスナップショットはデコードで拒否する(ADR-0140)。
 	MegaStone map[string]string `json:"megaStone"`
+	// FlingBasePower は Showdown の fling.basePower(投げられない持ち物は null)。キーが無い(nil)古いスナップショットは
+	// デコードで拒否する(ADR-0144)。値の検証(1..255 の整数)は Convert が行う。
+	FlingBasePower json.RawMessage `json:"flingBasePower"`
 }
 
 // ShowdownAbility は Showdown の特性1件。
