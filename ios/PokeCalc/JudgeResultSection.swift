@@ -86,7 +86,7 @@ private struct JudgeRowView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.card)
+        .popCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("judgeRow-\(index)")
     }

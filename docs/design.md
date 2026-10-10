@@ -104,6 +104,9 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 | shadow.color | 黒 10% | 黒 40% | 影の色 |
 
 - body の背景は `linear-gradient(180deg, bg.gradient-start, bg.gradient-end)` を画面に固定(`background-attachment: fixed`)。下地の bg.base は残す
+- iOS(ADR-0521): 同じ名前(camelCase。`brandPrimary`・`onPrimary`・`bgGradientStart`・`shadowColor` など)で `PokeCalcDesign` の `ColorToken` に置き、値は上の表と同じ。
+  背景は `popScreenBackground()` が bgBase の上に上→下のグラデーションを画面に固定する。`tableHover` は押下中の行(iOS にホバーは無い)。
+  iOS のカード・ボタン・チップは Liquid Glass(`glassEffect`)をやめ、不透明の surfaceCard にする(下の「共通の部品」)。値の検査は `PopPaletteTests`
 
 ### 共通の部品
 `web/src/styles/components.css` の `.ui-*` クラス(ADR-0334 §2)。画面の CSS は配置だけを持ち、見た目はこれらを足して使う。色・角丸・影・時間はトークンだけを参照する。
@@ -126,6 +129,21 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 
 - `:hover` は `@media (hover: hover)` の中だけ。`.ui-button / .ui-tab / .ui-chip / .ui-field` は `:focus-visible` で focus.ring の輪(2px・offset 2px)
 - components.css に `animation` を置かない。transition の時間は `duration.press` だけ
+
+#### iOS の対応(ADR-0521。`ios/PokeCalc/PopComponents.swift`)
+
+| Web | iOS |
+|---|---|
+| `.ui-card` / `--typed` / `__band` | `popCard(typeID:cornerRadius:)`(surfaceCard・ヘアライン・`ShadowToken.card`。角丸がカード 20 のときだけ上端 4pt の帯。タイプ色、未選択・未知はブランド色)。カードの中の面は `popInset()` |
+| `.ui-heading` | `PopHeading`(装飾アイコン + 文字。文字は見出しの特性) |
+| `.ui-button` + `--primary/--secondary/--danger` | `PillButtonStyle(kind:)`(押下で `MotionToken.pressScale` 0.96。最小高さ 36pt。「視差効果を減らす」で 0 秒) |
+| `.ui-chip` / `--selected` | `PopChipStyle`(選択中は brandPrimary / onPrimary、未選択は tableZebra) |
+| `.ui-rows` | `popRow(index:)`(奇数行 surfaceCard・偶数行 tableZebra・ヘアライン)。行がボタンのときは `PopRowButtonStyle`(押下中 tableHover) |
+| `.ui-notice` | `PopNoticeView(kind:)`(empty / error / loading / info。種類ごとのアイコンと文字を併記) |
+| `.ui-icon` | `PopIcon`(SF Symbols。装飾なので支援技術から隠す)。画面ごとの割り当ては `PopSymbol` |
+
+- 文字: タイトル 22/800・見出し 700・本文 400(`TextStyleToken.title`・`FontWeightToken`)。影: `ShadowToken.card` 0 2 8・`raised` 0 6 16(SwiftUI の radius は blur の半分)
+- iOS の表(素早さ)は 1 段 1 行のカードなので、ゼブラは段の通し番号で付ける。自分の段は brandPrimary の 2pt の枠 + 「自分」のバッジ(色だけに頼らない)
 
 ## 入力のラベル
 

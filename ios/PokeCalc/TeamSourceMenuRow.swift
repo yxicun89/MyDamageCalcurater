@@ -6,7 +6,7 @@ import SwiftUI
 //
 // 計算画面(自分側)・逆算画面(いま表示している側)の両方で使う共通部品。既存の3択ピル行の
 // 直下に置く独立した1行(4つ目のピルにしない。ADR 5章「判断」)。見た目は `CalcScreenView.moveSelector`
-// と同じ部品(`Menu` + `glassCard`)を再利用し、新しい視覚言語は作らない。
+// と同じ部品(`Menu` + `popCard`)を再利用し、新しい視覚言語は作らない。
 
 /// 「構築から選ぶ」の入口の行。`identifierPrefix` は `attackerTeam` / `reverseTeam`
 /// (ADR-0501「P6-2d」7章の identifier 契約: `<prefix>SourceButton` / `<prefix>Member-<teamID>-<memberID>` /
@@ -65,7 +65,7 @@ struct TeamSourceMenuRow: View {
                 }
                 .padding(SpacingToken.x3)
                 .frame(maxWidth: .infinity)
-                .glassCard(cornerRadius: RadiusToken.input)
+                .popCard(cornerRadius: RadiusToken.input)
             }
             .disabled(isEmpty)
             .accessibilityIdentifier("\(identifierPrefix)SourceButton")

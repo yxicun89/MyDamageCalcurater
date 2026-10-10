@@ -40,7 +40,7 @@ struct FavoritesScreenView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("favoritesScreen")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -61,11 +61,11 @@ struct FavoritesScreenView: View {
 
     private var favoritesSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            sectionHeading(FavoritesLabels.favoritesSectionTitle)
+            sectionHeading(FavoritesLabels.favoritesSectionTitle, systemImage: PopSymbol.favorites)
             // 読み込み中は、見出しだけだと子が1つになり `.contain` の識別子が見出しに畳まれる(P6-25 で判明)ので、
             // 読み込み中の目印を常に子に足す。
             if favorites.loadState == .idle || favorites.loadState == .loading {
-                ProgressView().accessibilityIdentifier("favoritesLoading")
+                ProgressView().popNotice(.loading).accessibilityIdentifier("favoritesLoading")
             }
             if let actionError = favorites.actionError {
                 ErrorBannerView(message: actionError.message(for: .removeFavorite), identifier: "favoritesActionError")
@@ -75,10 +75,10 @@ struct FavoritesScreenView: View {
                 retryButton(identifier: "favoritesRetryButton") { await favorites.load() }
             }
             if favorites.loadState == .loaded && favorites.items.isEmpty {
-                bodyText(FavoritesLabels.emptyFavorites).accessibilityIdentifier("favoritesEmpty")
+                PopNoticeView(kind: .empty, message: FavoritesLabels.emptyFavorites, identifier: "favoritesEmpty")
             }
-            ForEach(favorites.items) { row in
-                favoriteRow(row)
+            ForEach(Array(favorites.items.enumerated()), id: \.element.id) { index, row in
+                favoriteRow(row, index: index)
             }
             if favorites.isAtLimit {
                 captionText(FavoritesLabels.limitNote)
@@ -89,7 +89,7 @@ struct FavoritesScreenView: View {
         .accessibilityIdentifier("favoritesSection")
     }
 
-    private func favoriteRow(_ row: FavoriteRow) -> some View {
+    private func favoriteRow(_ row: FavoriteRow, index: Int) -> some View {
         let layout = isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x2))
             : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x3))
@@ -104,16 +104,18 @@ struct FavoritesScreenView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            Button(FavoritesLabels.removeButton) {
+            Button {
                 Task { await favorites.remove(id: row.id) }
+            } label: {
+                PopLabel(title: FavoritesLabels.removeButton, systemImage: PopSymbol.delete)
             }
-            .buttonStyle(PillButtonStyle())
+            .buttonStyle(PillButtonStyle(kind: .danger))
             .disabled(favorites.removingIDs.contains(row.id))
             .accessibilityLabel("\(FavoritesLabels.removeButton) \(row.title)")
             .accessibilityIdentifier("favoriteDeleteButton-\(row.id)")
         }
         .padding(SpacingToken.x3)
-        .glassCard()
+        .popRow(index: index)
         .accessibilityElement(children: .contain)
         .accessibilityLabel([row.title, row.subtitle].compactMap { $0 }.joined(separator: " "))
         .accessibilityIdentifier("favoriteRow-\(row.id)")
@@ -123,7 +125,7 @@ struct FavoritesScreenView: View {
 
     private var calcHistorySection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            sectionHeading(CalcHistoryLabels.sectionTitle)
+            sectionHeading(CalcHistoryLabels.sectionTitle, systemImage: PopSymbol.history)
             // 読み込み中は見出しだけだと子が1つになり `.contain` の識別子が見出しに畳まれるので、目印を常に子に足す。
             if (calcHistory.loadState == .idle || calcHistory.loadState == .loading) && calcHistory.rows.isEmpty {
                 ProgressView().accessibilityIdentifier("calcHistoryLoading")
@@ -133,10 +135,10 @@ struct FavoritesScreenView: View {
                 retryButton(identifier: "calcHistoryRetryButton") { await calcHistory.load() }
             }
             if calcHistory.isEmpty {
-                bodyText(CalcHistoryLabels.emptyHistory).accessibilityIdentifier("calcHistoryEmpty")
+                PopNoticeView(kind: .empty, message: CalcHistoryLabels.emptyHistory, identifier: "calcHistoryEmpty")
             }
-            ForEach(calcHistory.rows) { row in
-                calcHistoryRow(row)
+            ForEach(Array(calcHistory.rows.enumerated()), id: \.element.id) { index, row in
+                calcHistoryRow(row, index: index)
             }
             if let moreError = calcHistory.loadMoreError {
                 ErrorBannerView(message: moreError.message(for: .loadHistory), identifier: "calcHistoryMoreError")
@@ -145,7 +147,7 @@ struct FavoritesScreenView: View {
                 if calcHistory.isLoadingMore {
                     ProgressView().accessibilityIdentifier("calcHistoryLoadingMore")
                 } else {
-                    Button(CalcHistoryLabels.loadMoreButton) { Task { await calcHistory.loadMore() } }
+                    Button { Task { await calcHistory.loadMore() } } label: { PopLabel(title: CalcHistoryLabels.loadMoreButton, systemImage: PopSymbol.reload) }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("calcHistoryLoadMoreButton")
                 }
@@ -157,7 +159,7 @@ struct FavoritesScreenView: View {
         .accessibilityIdentifier("calcHistorySection")
     }
 
-    private func calcHistoryRow(_ row: CalcHistoryRow) -> some View {
+    private func calcHistoryRow(_ row: CalcHistoryRow, index: Int) -> some View {
         let dateText = row.occurredText(now: Date(), calendar: .current)
         let detailLayout = isAccessibilitySize
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x1))
@@ -182,9 +184,8 @@ struct FavoritesScreenView: View {
             }
             .padding(SpacingToken.x3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard()
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PopRowButtonStyle(index: index))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(row.title) \(row.moveText) \(row.percentText) \(dateText)")
         .accessibilityHint(CalcHistoryLabels.rowHint)
@@ -196,16 +197,16 @@ struct FavoritesScreenView: View {
 
     private var historySection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            sectionHeading(FavoritesLabels.historySectionTitle)
+            sectionHeading(FavoritesLabels.historySectionTitle, systemImage: PopSymbol.calc)
             if case .failed(let error) = history.loadState {
                 ErrorBannerView(message: error.message(for: .loadHistory), identifier: "opponentHistoryError")
                 retryButton(identifier: "opponentHistoryRetryButton") { await history.load() }
             }
             if history.loadState == .loaded && history.items.isEmpty {
-                bodyText(FavoritesLabels.emptyHistory).accessibilityIdentifier("opponentHistoryEmpty")
+                PopNoticeView(kind: .empty, message: FavoritesLabels.emptyHistory, identifier: "opponentHistoryEmpty")
             }
-            ForEach(history.items) { row in
-                historyRow(row)
+            ForEach(Array(history.items.enumerated()), id: \.element.id) { index, row in
+                historyRow(row, index: index)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -213,7 +214,7 @@ struct FavoritesScreenView: View {
         .accessibilityIdentifier("opponentHistorySection")
     }
 
-    private func historyRow(_ row: OpponentHistoryRow) -> some View {
+    private func historyRow(_ row: OpponentHistoryRow, index: Int) -> some View {
         let countText = OpponentHistoryLabels.countText(row.count)
         let lastText = OpponentHistoryLabels.lastCalculatedText(
             row.lastCalculatedAt, now: Date(), calendar: .current)
@@ -234,7 +235,7 @@ struct FavoritesScreenView: View {
             }
         }
         .padding(SpacingToken.x3)
-        .glassCard()
+        .popRow(index: index)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(row.title) \(countText) \(lastText)")
         .accessibilityIdentifier("opponentHistoryRow-\(row.speciesKey)")
@@ -242,20 +243,15 @@ struct FavoritesScreenView: View {
 
     // MARK: - 部品
 
-    private func sectionHeading(_ text: String) -> some View {
-        Text(text)
-            .font(TextStyleToken.heading.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityAddTraits(.isHeader)
-    }
-
-    private func bodyText(_ text: String) -> some View {
-        Text(text)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    private func sectionHeading(_ text: String, systemImage: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+            PopIcon(systemImage).foregroundStyle(ColorToken.brandPrimary.color)
+            Text(text)
+                .font(TextStyleToken.heading.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+        }
     }
 
     private func captionText(_ text: String) -> some View {
@@ -267,7 +263,7 @@ struct FavoritesScreenView: View {
     }
 
     private func retryButton(identifier: String, action: @escaping () async -> Void) -> some View {
-        Button(FavoritesLabels.retryButton) { Task { await action() } }
+        Button { Task { await action() } } label: { PopLabel(title: FavoritesLabels.retryButton, systemImage: PopSymbol.reload) }
             .buttonStyle(PillButtonStyle())
             .accessibilityIdentifier(identifier)
     }

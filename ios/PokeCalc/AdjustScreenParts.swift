@@ -14,15 +14,12 @@ struct AdjustCard<Content: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(title)
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .accessibilityAddTraits(.isHeader)
+            PopHeading(title: title, systemImage: PopSymbol.adjust)
             content()
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(identifier)
     }
@@ -146,12 +143,12 @@ struct AdjustPillButton: View {
         Button(action: action) {
             Text(title)
                 .font(TextStyleToken.body.font)
-                .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .multilineTextAlignment(.center)
                 .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, SpacingToken.x2)
-                .background(Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color))
+                .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
         .buttonStyle(.plain)
@@ -203,7 +200,7 @@ struct AdjustNumberFieldRow: View {
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x2)
             .frame(maxWidth: Self.fieldMaxWidth)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityLabel(title)
             .accessibilityHint(hint ?? "")
             .accessibilityIdentifier(identifier)
@@ -247,7 +244,7 @@ struct AdjustLearnersButton: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: Capsule())
+                .background(ColorToken.tableZebra.color, in: Capsule())
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
         .buttonStyle(.plain)

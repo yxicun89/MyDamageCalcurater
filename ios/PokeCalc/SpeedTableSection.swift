@@ -15,9 +15,7 @@ struct SpeedTableSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(SpeedLabels.tableRegion)
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
+            PopHeading(title: SpeedLabels.tableRegion, systemImage: PopSymbol.speed)
             filterGroup
             fieldGroup
             positionSummary
@@ -25,7 +23,7 @@ struct SpeedTableSection: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.card)
+        .popCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("speedTable")
     }
@@ -90,7 +88,8 @@ struct SpeedTableSection: View {
         case .loading:
             Text(SpeedLabels.loading)
                 .font(TextStyleToken.caption.font)
-                .foregroundStyle(ColorToken.textSecondary.color)
+                .foregroundStyle(ColorToken.info.color)
+                .popNotice(.loading)
                 .accessibilityIdentifier("speedTableLoading")
         case .failed(let failure):
             ErrorBannerView(message: failure.message, identifier: "speedTableError")
@@ -99,7 +98,7 @@ struct SpeedTableSection: View {
                 ForEach(Array(viewModel.tableRows.enumerated()), id: \.element.id) { index, row in
                     Group {
                         switch row {
-                        case .tier(let tier): SpeedTierView(tier: tier)
+                        case .tier(let tier): SpeedTierView(tier: tier, index: index)
                         case .selfBoundary: SpeedBoundaryView()
                         }
                     }
@@ -115,6 +114,8 @@ struct SpeedTableSection: View {
 /// 表の 1 段(同じ実数値)。2 行以上なら同速のバッジ、自分と同じ段なら強調する。
 private struct SpeedTierView: View {
     let tier: SpeedTierDisplay
+    /// 表の中の行の位置(ゼブラの偶数行の判定用)。
+    let index: Int
     private static let selfBorderWidth: CGFloat = 2
 
     var body: some View {
@@ -140,16 +141,14 @@ private struct SpeedTierView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            ColorToken.bgGlass.color,
-            in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
-                .stroke(
-                    tier.isSelf ? ColorToken.textPrimary.color : ColorToken.borderHairline.color,
-                    lineWidth: tier.isSelf ? Self.selfBorderWidth : CalcScreenMetrics.hairlineBorderWidth)
-        )
+        .popRow(index: index)
+        .overlay {
+            // 自分の段は主色の太い枠で強調する(文字の「自分」バッジも併記。色だけで伝えない)。
+            if tier.isSelf {
+                RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                    .stroke(ColorToken.brandPrimary.color, lineWidth: Self.selfBorderWidth)
+            }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("speedTier-\(tier.speed)")
     }
@@ -173,7 +172,7 @@ private struct SpeedBoundaryView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
             Rectangle()
-                .fill(ColorToken.textPrimary.color)
+                .fill(ColorToken.brandPrimary.color)
                 .frame(height: Self.lineHeight)
             Text(SpeedLabels.selfBoundary)
                 .font(TextStyleToken.caption.font)

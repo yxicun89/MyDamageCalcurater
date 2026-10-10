@@ -171,7 +171,7 @@ struct AdjustLearnersCardView: View {
             }
             .padding(SpacingToken.x3)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .glassCard()
+            .popCard()
             .accessibilityElement(children: .contain)
             .accessibilityLabel(AdjustText.learnersRegion)
             .accessibilityIdentifier("adjustLearnersCard")
@@ -185,7 +185,7 @@ struct AdjustLearnersCardView: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: Capsule())
+                .background(ColorToken.tableZebra.color, in: Capsule())
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }
         .buttonStyle(.plain)

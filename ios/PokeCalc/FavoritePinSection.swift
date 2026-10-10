@@ -34,9 +34,11 @@ struct FavoritePinSection: View {
     private func pinButton(_ title: String, identifier: String, individual: @escaping () throws -> Individual)
         -> some View
     {
-        Button(title) {
+        Button {
             guard let target = try? individual() else { return }
             Task { await pin.pin(target) }
+        } label: {
+            PopLabel(title: title, systemImage: PopSymbol.favorites)
         }
         .buttonStyle(PillButtonStyle())
         .disabled(pin.status == .saving)

@@ -84,7 +84,7 @@ private struct AttackerStatBlockView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.input)
+        .popCard(cornerRadius: RadiusToken.input)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("attackerStatBlock-\(stat.rawValue)")
     }
@@ -132,9 +132,9 @@ private struct AttackerStatBlockView: View {
             } label: {
                 Text(AttackerStatLabels.modifierName(choice))
                     .font(TextStyleToken.body.font)
-                    .foregroundStyle(isSelected ? ColorToken.bgBase.color : ColorToken.textPrimary.color)
+                    .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                     .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
-                    .background(Capsule().fill(isSelected ? ColorToken.textPrimary.color : ColorToken.bgGlass.color))
+                    .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
                     .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
             .buttonStyle(.plain)
@@ -173,7 +173,7 @@ private struct AttackerSPField: View {
             .foregroundStyle(ColorToken.textPrimary.color)
             .padding(.horizontal, SpacingToken.x3)
             .frame(minHeight: CalcScreenMetrics.minimumTapSide)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityLabel(AttackerStatLabels.spLabel(stat))
             .accessibilityIdentifier("attackerSPField-\(stat.rawValue)")
             .onChange(of: draft) { _, newValue in

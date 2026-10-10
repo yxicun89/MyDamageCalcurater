@@ -41,7 +41,7 @@ struct CalcConditionsSection: View {
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
-            .glassCard(cornerRadius: RadiusToken.input)
+            .popCard(cornerRadius: RadiusToken.input)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier("calcConditionsToggle")
@@ -62,9 +62,9 @@ struct CalcConditionsSection: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.input)
+        .popCard(cornerRadius: RadiusToken.input)
         // `.contain`: コンテナ自体を1つの要素として見つけられるようにしつつ、中の各入力は個別の要素の
-        // ままにする(`AttackerCardView`/`DefenderCardView` と同じ理由。これが無いと、`glassCard()` の
+        // ままにする(`AttackerCardView`/`DefenderCardView` と同じ理由。これが無いと、`popCard()` の
         // Liquid Glass コンテナの外にある子〈= 横スクロールの中でない子〉の `accessibilityIdentifier` が
         // このコンテナの id に飲まれる。XCUITest の要素ダンプで実際に踏んだ不具合)。
         .accessibilityElement(children: .contain)
@@ -171,7 +171,7 @@ struct CalcConditionsSection: View {
                 .padding(SpacingToken.x2)
                 // 「−」「+」の記号は細いので、タップ範囲を 36pt 以上にそろえる(受け入れ条件 5)。
                 .frame(minWidth: Self.rankStepButtonMinSide, minHeight: Self.rankStepButtonMinSide)
-                .background(ColorToken.bgGlass.color, in: Circle())
+                .background(ColorToken.tableZebra.color, in: Circle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)

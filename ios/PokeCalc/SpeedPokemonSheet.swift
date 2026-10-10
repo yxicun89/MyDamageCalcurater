@@ -71,7 +71,7 @@ struct SpeedPokemonSheet: View {
         .autocorrectionDisabled()
         .textInputAutocapitalization(.never)
         .padding(SpacingToken.x3)
-        .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+        .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
         .accessibilityIdentifier("speedPokemonSearchField")
     }
 

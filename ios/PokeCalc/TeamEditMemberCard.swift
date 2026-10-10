@@ -52,7 +52,7 @@ struct MemberCardView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: species?.types.first?.rawValue)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("memberCard-\(member.id)")
     }
@@ -104,7 +104,7 @@ struct MemberCardView: View {
         .foregroundStyle(ColorToken.textPrimary.color)
         .padding(.horizontal, SpacingToken.x2)
         .padding(.vertical, SpacingToken.x1)
-        .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+        .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
         .accessibilityIdentifier("memberNickname-\(member.id)")
     }
 

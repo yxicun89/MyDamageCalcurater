@@ -47,7 +47,7 @@ struct AdjustScreenView: View {
             .padding(SpacingToken.x4)
         }
         .scrollDismissesKeyboard(.interactively)
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("adjustScreen")
         .navigationTitle(AdjustText.screenTitle)
         .navigationBarTitleDisplayMode(.inline)
@@ -73,7 +73,7 @@ struct AdjustScreenView: View {
             .foregroundStyle(ColorToken.textSecondary.color)
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x1)
-            .background(ColorToken.bgGlass.color, in: Capsule())
+            .background(ColorToken.tableZebra.color, in: Capsule())
             .accessibilityIdentifier("adjustBackendModeBadge")
     }
 
@@ -82,9 +82,9 @@ struct AdjustScreenView: View {
             focus = nil
             viewModel.scheduleSubmit()
         } label: {
-            Text(AdjustText.submitButton)
+            PopLabel(title: AdjustText.submitButton, systemImage: PopSymbol.adjust)
         }
-        .buttonStyle(PillButtonStyle())
+        .buttonStyle(PillButtonStyle(kind: .primary))
         .frame(maxWidth: .infinity)
         .accessibilityIdentifier("adjustSubmitButton")
     }

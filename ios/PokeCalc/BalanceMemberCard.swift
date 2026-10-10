@@ -38,7 +38,7 @@ struct BalanceMemberCard: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: member.types.first?.rawValue)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(kind.groupLabel(number))
         .accessibilityIdentifier("balanceMemberCard-\(member.id)")

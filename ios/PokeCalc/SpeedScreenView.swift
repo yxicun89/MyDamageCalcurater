@@ -29,7 +29,7 @@ struct SpeedScreenView: View {
                 .padding(SpacingToken.x4)
             }
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("speedScreen")
         .task { await viewModel.load() }
         .onDisappear { viewModel.cancelPendingWork() }
@@ -46,9 +46,7 @@ private struct SpeedSelfSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(SpeedLabels.selfRegion)
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
+            PopHeading(title: SpeedLabels.selfRegion, systemImage: PopSymbol.speed)
             modePills
             pokemonRow
             switch viewModel.mode {
@@ -60,7 +58,7 @@ private struct SpeedSelfSection: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard(cornerRadius: RadiusToken.card)
+        .popCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
     }
 
@@ -95,7 +93,7 @@ private struct SpeedSelfSection: View {
                 }
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: Capsule())
+                .background(ColorToken.tableZebra.color, in: Capsule())
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
             .buttonStyle(.plain)
@@ -177,7 +175,7 @@ private struct SpeedSelfSection: View {
             .font(TextStyleToken.body.font)
             .foregroundStyle(ColorToken.textPrimary.color)
             .padding(SpacingToken.x3)
-            .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityIdentifier("speedRawValueField")
             if let message = viewModel.rawValueError {
                 Text(message)

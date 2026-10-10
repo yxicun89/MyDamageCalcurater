@@ -48,7 +48,7 @@ struct ReverseMyCardView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: species?.types.first?.rawValue)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reverseMyCard")
         // 受けたダメージでは自分の変更で詳細を読まないので、View が種族の変更ごとに読む(ADR-0509 §4 L2)。
@@ -111,7 +111,7 @@ struct ReverseOpponentCardView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: species?.types.first?.rawValue)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reverseOpponentCard")
     }

@@ -28,7 +28,7 @@ struct AboutView: View {
             }
             .padding(SpacingToken.x4)
         }
-        .background(ColorToken.bgBase.color.ignoresSafeArea())
+        .popScreenBackground()
         .accessibilityIdentifier("aboutScreen")
         .toolbar {
             ToolbarItem(placement: .principal) {
@@ -48,15 +48,13 @@ struct AboutView: View {
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SpacingToken.x3)
-            .glassCard()
+            .popCard()
             .accessibilityIdentifier("aboutUnofficialNotice")
     }
 
     private var dataSourcesSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text("データの出典")
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
+            PopHeading(title: "データの出典", systemImage: PopSymbol.info)
 
             ForEach(Array(AboutText.dataSources.enumerated()), id: \.offset) { index, source in
                 AboutDataSourceRow(source: source)
@@ -78,9 +76,7 @@ private struct DeviceDataSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(DeviceDataText.sectionTitle)
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
+            PopHeading(title: DeviceDataText.sectionTitle, systemImage: PopSymbol.delete)
 
             ForEach(Array(DeviceDataText.explanation.enumerated()), id: \.offset) { index, sentence in
                 Text(sentence)
@@ -94,8 +90,8 @@ private struct DeviceDataSection: View {
             if viewModel.phase == .confirming {
                 confirmationCard
             } else {
-                Button(DeviceDataText.deleteButton) { viewModel.requestDeletion() }
-                    .buttonStyle(PillButtonStyle())
+                Button { viewModel.requestDeletion() } label: { PopLabel(title: DeviceDataText.deleteButton, systemImage: PopSymbol.delete) }
+                    .buttonStyle(PillButtonStyle(kind: .danger))
                     .disabled(viewModel.phase == .deleting)
                     .accessibilityIdentifier("deleteDeviceDataButton")
             }
@@ -136,14 +132,14 @@ private struct DeviceDataSection: View {
             Button(DeviceDataText.confirmAction) {
                 task = Task { await viewModel.confirmDeletion() }
             }
-            .buttonStyle(PillButtonStyle())
+            .buttonStyle(PillButtonStyle(kind: .danger))
             .accessibilityIdentifier("confirmDeleteDeviceDataButton")
             Button(DeviceDataText.cancelAction) { viewModel.cancelConfirmation() }
                 .buttonStyle(PillButtonStyle())
                 .accessibilityIdentifier("cancelDeleteDeviceDataButton")
         }
         .padding(SpacingToken.x3)
-        .glassCard()
+        .popCard()
     }
 }
 
@@ -164,8 +160,8 @@ private struct AboutDataSourceRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(SpacingToken.x3)
-        .glassCard()
-        // `CalcScreenResults.swift`(`calcResultRow-*`)と同じ理由: `glassCard()` のコンテナが
+        .popCard()
+        // `CalcScreenResults.swift`(`calcResultRow-*`)と同じ理由: `popCard()` のコンテナが
         // 複数の `Text` を持つ場合、これが無いと同じ identifier の要素が複数見つかってしまう。
         .accessibilityElement(children: .contain)
     }

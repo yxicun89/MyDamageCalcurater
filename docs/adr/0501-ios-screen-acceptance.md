@@ -4739,3 +4739,17 @@ XCUITest(`FavoriteLoadUITests` 12 件): iPhone 17e・iPhone 18 Pro の両方で�
 実測・2 並列・テスト単位の上限の判断は ADR-0520。`ios/scripts/run-xcode-tests.sh` が ui のとき 2 並列と上限を付ける。
 受け入れ条件: (1) 件数の集計(`全 N 件 / 成功 N …`)が直列のときと同じ形で出る、(2) 0 件・失敗・スキップは従来どおり失敗、
 (3) `IOS_TEST_PARALLEL=0` で直列、`IOS_TEST_TIMEOUTS=0` で上限なしに戻せる。既存のテストの期待値は変えていない。
+
+## F-12 iOS ビジュアルの基盤(ポップ・カラフル。ADR-0521。2026-10-10)
+
+受け入れ条件: (1) ポップ配色 20 色・タイトル 22/800・影・押下のトークンが design.md の値と一致し、ライト/ダークとも文字のコントラスト 4.5:1(枠・輪は 3:1)を満たす(`PopPaletteTests`)。
+(2) 全画面のカード・ボタン・チップ・一覧・案内・背景が部品経由(色の直書きなし)。(3) アクセシビリティ識別子・ラベル文字・`isAccessibilitySize` の分岐・36pt 以上のタップ領域は不変。
+(4) 押下の縮みは操作時のみ、「視差効果を減らす」で 0 秒。常時動くものなし。(5) アイコンは装飾(accessibilityHidden)で、状態は文字・アイコンを併記する。
+
+### 既存テストの変更(弱めていない)
+
+| テスト | 前 | 後 | 理由 |
+|---|---|---|---|
+| `DesignTokenTests.testTextStyleSizesMatchDesignDoc` | サイズ 4 種・`allCases.count == 4` | `title`(22)を加えた 5 種・`count == 5` | design.md の文字の段階にタイトル 22 が加わったため(「design.md に無いサイズを足さない」の趣旨は維持) |
+
+XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。XCUITest は代表 14 クラス 133 件成功(失敗 0・スキップ 0)。

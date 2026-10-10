@@ -53,7 +53,7 @@ struct AttackerCardView: View {
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: species?.types.first?.rawValue)
         // `.contain`: カード自体を1つの要素として見つけられるようにしつつ、中の名前・セレクタは
         // 個別の要素のまま残す(XCUITest が種族名の入れ替わりを検査できるように)。
         .accessibilityElement(children: .contain)
@@ -128,7 +128,7 @@ struct DefenderCardView: View {
         .task(id: viewModel.defenderSpeciesKey) { await viewModel.loadDefenderAbilityOptions() }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .glassCard()
+        .popCard(typeID: species?.types.first?.rawValue)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("defenderCard")
     }
@@ -249,6 +249,6 @@ struct MenuLabelChip: View {
         }
         .padding(.horizontal, SpacingToken.x3)
         .padding(.vertical, SpacingToken.x2)
-        .background(ColorToken.bgGlass.color, in: Capsule())
+        .background(ColorToken.tableZebra.color, in: Capsule())
     }
 }

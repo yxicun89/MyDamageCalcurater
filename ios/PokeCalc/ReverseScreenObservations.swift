@@ -30,7 +30,7 @@ struct ReverseObservationListView: View {
             } label: {
                 Label("観測を追加", systemImage: "plus.circle")
                     .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .foregroundStyle(ColorToken.brandPrimary.color)
             }
             .buttonStyle(.plain)
             .disabled(viewModel.observationsReachedLimit)
@@ -83,7 +83,7 @@ private struct ReverseObservationRowView: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
-                .background(ColorToken.bgGlass.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+                .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
                 .accessibilityIdentifier("reverseObservationField-\(index)")
                 .accessibilityLabel("観測\(index + 1)(\(unitLabel))")
 
