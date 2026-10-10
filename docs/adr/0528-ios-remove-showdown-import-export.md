@@ -23,3 +23,10 @@
 
 - API・契約・Web は変更なし(Web は別ブランチ)。保存済みの構築は影響を受けない。
 - 構築の移し替え手段は、当面なし(必要になれば ADR で別方式を決める)。
+
+## 追記: 製品コードから呼ばれなくなったが残すもの(critic 指摘)
+
+`TeamEditViewModel.importMembers` と `Support/ConcurrencyProbeService.swift` は、入口の廃止で製品コードからの呼び出しが無くなった。
+前者は `TeamEditViewModelImportTests`・`TeamEditViewModelSlotsTests` が枠の積み込み(6 体の境界・重複)の検査に使っており、
+これらはテストの削除(絶対ルール6)を避けるため、構築の移し替えを別の形で再導入するときの土台として**残す**。
+使い道が決まらないまま 1 年以上残る場合は別の変更で整理する。
