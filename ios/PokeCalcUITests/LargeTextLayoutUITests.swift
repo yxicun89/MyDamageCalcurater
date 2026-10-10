@@ -575,7 +575,6 @@ final class LargeTextLayoutUITests: XCTestCase {
     private static let teamListIdentifiers = [
         "teamListScreen",
         "createTeamButton",
-        "teamImportFoldToggle",
     ]
 
     private static let teamEditIdentifiers = [
@@ -586,7 +585,6 @@ final class LargeTextLayoutUITests: XCTestCase {
         "slotSpeciesPicker-1",
         "slotEmptyHint-1",
         "teamSlot-6",
-        "teamExportFoldToggle",
     ]
 
     /// 1体目の枠が埋まったあとの編集画面(1体目の「ポケモン」欄・案内は無くなり、2体目の欄が残る)。
@@ -597,7 +595,6 @@ final class LargeTextLayoutUITests: XCTestCase {
         "teamSlot-1",
         "slotSpeciesPicker-2",
         "teamSlot-6",
-        "teamExportFoldToggle",
     ]
 
     /// `RootView.makeTeamStore()` が `POKECALC_USE_MOCK=1` のとき起動のたびに専用 UserDefaults suite
@@ -676,41 +673,6 @@ final class LargeTextLayoutUITests: XCTestCase {
 
         assertNoHorizontalOverflow(app, identifiers: Self.teamEditFilledIdentifiers + ["slotMoveUp-1", "slotMoveDown-1", "slotRemove-1", "teamUnsavedNotice"])
         assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.teamEditMemberCardPrefixes)
-    }
-
-    // MARK: - Showdown 形式の折りたたみ(取り込み = 一覧の下・書き出し = 編集画面の下。P6-20 / F-08)
-
-    /// AX5(最大の文字サイズ)で、取り込みの折りたたみの中身(説明・入力例・貼り付け欄・取り込めなかった行の一覧・
-    /// 追加/やめるのボタン)が横にはみ出さない。
-    func testShowdownImportFoldNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openTeamListScreen(app)
-        element(app, "teamImportFoldToggle").tap()
-        assertNoHorizontalOverflow(app, identifiers: [
-            "teamImportFoldToggle", "teamImportFoldContent", "teamImportHelp", "teamImportExample",
-            "importTextEditor", "analyzeImportTextButton",
-        ])
-        let editor = element(app, "importTextEditor")
-        editor.tap()
-        editor.typeText("テストモンさん\nEVs: 252 SpA")
-        element(app, "analyzeImportTextButton").tap()
-        assertNoHorizontalOverflow(app, identifiers: [
-            "importRejectedList", "importRejectedLine-2", "confirmImportValidButton", "cancelImportButton",
-        ])
-    }
-
-    /// AX5 で、書き出しの折りたたみの中身(書き出したテキスト・コピー・共有)が横にはみ出さない。
-    func testShowdownExportFoldNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openTeamListScreen(app)
-        createTeamAndOpenEditScreen(app)
-        fillFirstSlot(app)
-        element(app, "teamExportFoldToggle").tap()
-        element(app, "exportTeamTextButton").tap()
-        assertNoHorizontalOverflow(app, identifiers: [
-            "teamExportFoldContent", "teamExportHelp", "exportTeamTextButton", "exportedText",
-            "copyExportedTextButton", "shareExportedTextLink",
-        ])
     }
 
     /// AX5 で、一覧のカード(アイコン・n/6体・最終更新・[開く][削除]・削除の確認)が横にはみ出さない。

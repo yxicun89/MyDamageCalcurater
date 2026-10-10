@@ -62,24 +62,4 @@ public enum TeamLabels {
     public static func moveUp(_ number: Int) -> String { "\(number)体目を上へ" }
     public static func moveDown(_ number: Int) -> String { "\(number)体目を下へ" }
     public static func remove(_ number: Int) -> String { "\(number)体目を外す" }
-
-    // Showdown 形式(補助)
-    public static let importFold = "Showdown 形式で取り込む"
-    public static let exportFold = "Showdown 形式で書き出す"
-    public static let importHelp =
-        "Pokémon Showdown などで作った構築のテキストを貼り付けると、新しい構築として取り込めます。ポケモン・持ち物・特性・技は日本語の名前で書き、ポケモンごとに空の行で区切ります"
-    public static let importExampleLabel = "入力の例(1体分)"
-    /// 入力例。実在のポケモン名・技名を書かないひな形(ADR-0002)。書式はこのアプリのパーサに合わせる
-    /// (能力ポイントは `SP:`。ADR-0502)。
-    public static let importExample = [
-        "ポケモンの名前 @ 持ち物の名前",
-        "Ability: 特性の名前",
-        "Nature: 性格の名前",
-        "SP: 32 Atk / 32 Spe",
-        "- 1つ目の技の名前",
-        "- 2つ目の技の名前",
-        "- 3つ目の技の名前",
-    ].joined(separator: "\n")
-    public static let exportHelp = "いまの内容を Showdown 形式のテキストにします。コピーして他のアプリに貼り付けられます"
-    public static func importCreatedNotice(count: Int) -> String { "\(count)体の構築を作りました" }
 }

@@ -18,13 +18,10 @@ struct TeamEditView: View {
     @Environment(\.dismiss) private var dismiss
     /// 見出しに出す表示名(「構築 N」または旧データの名前)。
     private let title: String
-    private let service: any PokeCalcService
     /// 「保存していない変更があります。保存せずに一覧に戻りますか」の確認を出している。
     @State private var isConfirmingLeave = false
-    @State private var isExportFoldOpen = false
 
     init(store: any TeamStore, service: any PokeCalcService, team: Team, title: String) {
-        self.service = service
         self.title = title
         _viewModel = State(initialValue: TeamEditViewModel(store: store, service: service, team: team))
     }
@@ -65,11 +62,6 @@ struct TeamEditView: View {
             slotsSection
             if let teamError = viewModel.teamError {
                 PopNoticeView(kind: .error, message: teamError.uiMessage, identifier: "teamLimitMessage")
-            }
-            TeamFold(
-                title: TeamLabels.exportFold, identifier: "teamExportFold", isOpen: $isExportFoldOpen
-            ) {
-                TeamExportSection(service: service, members: viewModel.team.members)
             }
         }
         .padding(SpacingToken.x4)

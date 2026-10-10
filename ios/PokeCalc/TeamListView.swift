@@ -12,8 +12,8 @@ import SwiftUI
 // スタックそのものを増やさなくても済む)。
 //
 // F-08(ADR-0522)で作り直し: 構築名の入力を廃止(表示は「構築 N」)、[新しい構築]で空の構築を作ってすぐ編集画面を開く、
-// 各構築はカード(6体のアイコン・n/6体・最終更新・[開く]・[削除]〈2段階〉)、Showdown 形式の取り込みは
-// 一覧の下の閉じた折りたたみ(新しい構築として作る)。
+// 各構築はカード(6体のアイコン・n/6体・最終更新・[開く]・[削除]〈2段階〉)。
+// Showdown 形式の取り込みは G-03(ADR-0528)で廃止した。
 
 /// 構築一覧画面。
 struct TeamListView: View {
@@ -24,9 +24,6 @@ struct TeamListView: View {
     @Binding var path: NavigationPath
 
     @State private var isCreating = false
-    @State private var isImportFoldOpen = false
-    /// 取り込みで作った構築の体数の通知(次の取り込みまで残す)。
-    @State private var importedCount: Int?
 
     /// 読み込み中インジケータの高さ(Calc/Reverse 画面と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
@@ -55,7 +52,6 @@ struct TeamListView: View {
                         TeamCardView(viewModel: viewModel, team: team) { path.append(team.id) }
                     }
                 }
-                importFold
             }
             .padding(SpacingToken.x4)
         }
@@ -97,25 +93,6 @@ struct TeamListView: View {
         .buttonStyle(PillButtonStyle(kind: .primary))
         .disabled(isCreating)
         .accessibilityIdentifier("createTeamButton")
-    }
-
-    /// Showdown 形式は補助の入口: 閉じた折りたたみ。取り込みは新しい構築を作り、編集画面へは移らない(続けて取り込める)。
-    private var importFold: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            TeamFold(title: TeamLabels.importFold, identifier: "teamImportFold", isOpen: $isImportFoldOpen) {
-                TeamImportSection(service: service) { imported in
-                    Task {
-                        if await viewModel.createTeam(members: imported) != nil {
-                            importedCount = imported.count
-                        }
-                    }
-                }
-            }
-            if let importedCount {
-                PopNoticeView(
-                    kind: .info, message: TeamLabels.importCreatedNotice(count: importedCount), identifier: "importedNotice")
-            }
-        }
     }
 
     private var loadingSlot: some View {
