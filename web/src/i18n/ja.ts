@@ -193,6 +193,29 @@ export const calcConditionsText = {
   rankDownSymbol: "-",
 } as const;
 
+/** 計算画面の「対戦の状態」(残り HP・多段の回数。ADR-0144 §3、I-web-13)。 */
+export const battleStateText = {
+  toggleLabel: "対戦の状態",
+  /** 設定中の目印(閉じていても分かるように)。 */
+  activeMark: "(設定中)",
+  attackerHpLabel: "攻撃側の残りHP",
+  attackerHpHint: "空なら満タンで計算します",
+  defenderHpLabel: "防御側の残りHP",
+  defenderHpHint: "確定数は残りHPから数えます(%表示は最大HPに対する値のまま)",
+  /** 横に出す「/ 最大」と割合。 */
+  maxSuffix: (max: number): string => `/ ${max}`,
+  hpError: (max: number): string => `1〜${max}で入力してください`,
+  clamped: (max: number): string => `最大HP(${max})に合わせました`,
+  hitsLabel: "回数",
+  hitsDefault: (min: number, max: number): string => `既定(通常 ${min + 1} 回/スキルリンク等 ${max} 回)`,
+  hitsOption: (count: number): string => `${count} 回`,
+  /** 結果の近くに出す、前提にした状態。 */
+  summary: (parts: readonly string[]): string => `対戦の状態: ${parts.join("・")}`,
+  summaryAttacker: (hp: number, max: number): string => `攻撃側 HP ${hp}/${max}`,
+  summaryDefender: (hp: number, max: number): string => `防御側 HP ${hp}/${max}`,
+  summaryHits: (count: number): string => `${count} 回`,
+} as const;
+
 /**
  * 攻撃側プリセット(domain/attackerPresets.ts、P4-3、ADR-0300 §5)の文言。
  * X は技の分類で決まる関連ステータス(物理・変化 = atk、特殊 = spa)。

@@ -221,3 +221,4 @@ Next(F-12 PR-2 残り画面 / I-web-12): 実装済み・コミット前(ADR-0336
 Next(F-13 文言のやさしい言い換え / I-web-11): 実装済み・コミット前(ADR-0337 採用)。残りは PR 化のみ。用語集 `docs/glossary.md` を画面の言葉の正にした(判定画面 judge.ts は判定レーンの担当で例外)。iOS は `decisions/2026-10-04-web-plain-wording.md` の語に揃える。次は I-web-10(F-06 素早さ表)。
 
 Next(計算履歴の一覧 / ADR-0338): 実装済み・コミット前(ADR-0338 採用)。残りは PR 化のみ。お気に入りの画面の第2の節(`favorites/CalcHistorySection.tsx`)。種族・技は key 表示(名前の解決は要望が出たら別 ADR)。iOS は `decisions/2026-10-09-web-calc-history.md` の語・挙動に揃える。
+Status(追記 2026-10-11): I-web-13(ADR-0339)= 計算画面の「対戦の状態」(残りHP・多段の回数)を**データレーンが実装**(Web レーンの依頼を代行。critic・PR は後で)。`CalcScreen.tsx`・`BattleStatePanel.tsx`・`domain/battleState*.ts`・`favoriteCalc.ts`。
