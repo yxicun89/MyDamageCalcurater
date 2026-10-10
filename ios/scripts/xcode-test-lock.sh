@@ -37,8 +37,16 @@ xcode_test_lock_acquire() {
     holder_pid="$(cat "$dir/pid" 2>/dev/null || true)"
     holder_info="$(cat "$dir/info" 2>/dev/null || true)"
     if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
-      echo "$label: 保持者(pid $holder_pid)が終了しているロックを解除します" >&2
-      rm -rf "$dir"
+      # 読んでから消すまでの間に、保持者が解放して別のセッションが新しく取ることがある。そのまま rm -rf すると
+      # 他人の新しいロックを消して同時に2つが保持してしまうので、まず別名へ移して(原子的)中の pid を確かめる。
+      if mv "$dir" "$dir.stale.$$" 2>/dev/null; then
+        if [ "$(cat "$dir.stale.$$/pid" 2>/dev/null || true)" = "$holder_pid" ]; then
+          echo "$label: 保持者(pid $holder_pid)が終了しているロックを解除します" >&2
+          rm -rf "$dir.stale.$$"
+        elif ! mv "$dir.stale.$$" "$dir" 2>/dev/null; then
+          rm -rf "$dir.stale.$$"
+        fi
+      fi
       continue
     fi
     # mkdir の直後で pid をまだ書いていない一瞬を除き、pid が書かれないまま長く残るロックも古いとみなす。
