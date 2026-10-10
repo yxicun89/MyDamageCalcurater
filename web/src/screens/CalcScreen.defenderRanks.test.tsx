@@ -12,6 +12,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { bulkRow, createDeferredEngine, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
+import { chooseMove } from "../test/movePicker";
 
 const PHYSICAL = "examplemovetackle";
 const SPECIAL = "examplemovewaterblast";
@@ -32,7 +33,6 @@ beforeAll(async () => {
 });
 
 const toggle = () => screen.getByRole("button", { name: "詳細" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const group = (name: string) => screen.getByRole("group", { name });
 const up = () => screen.getByRole("button", { name: "防御側のランクを上げる" });
 const down = () => screen.getByRole("button", { name: "防御側のランクを下げる" });
@@ -45,7 +45,7 @@ async function start(
   render(<CalcScreen engine={engine} master={master} />);
   await user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
   await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-  await user.selectOptions(moveSelect(), PHYSICAL);
+  await chooseMove(user, PHYSICAL);
   return { user, engine };
 }
 
@@ -90,7 +90,7 @@ describe("置き場所と文言", () => {
   test("特殊技は D を編集する(表示「D -2」)", async () => {
     const { user } = await start();
     await openDetails(user);
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     expect(display().getByText("D ±0")).toBeInTheDocument();
     await user.click(down());
     await user.click(down());
@@ -124,12 +124,12 @@ describe("要求への載せ方", () => {
     const { user, engine } = await start();
     await openDetails(user);
     await user.click(up()); // B +1
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     await user.click(down());
     await user.click(down()); // D -2
     let request = await lastRequest(engine, (r) => r.move.id === SPECIAL && r.defenderOverride !== undefined);
     expect(request.defenderOverride?.ranks).toEqual({ atk: 0, def: 1, spa: 0, spd: -2, spe: 0 });
-    await user.selectOptions(moveSelect(), PHYSICAL);
+    await chooseMove(user, PHYSICAL);
     expect(display().getByText("B +1")).toBeInTheDocument();
     request = await lastRequest(engine, (r) => r.move.id === PHYSICAL);
     expect(request.defenderOverride?.ranks).toEqual({ atk: 0, def: 1, spa: 0, spd: -2, spe: 0 });
@@ -186,7 +186,7 @@ describe("条件の寿命と古い結果", () => {
     await user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-    await user.selectOptions(moveSelect(), PHYSICAL);
+    await chooseMove(user, PHYSICAL);
     const request = await lastRequest(engine, (r) => r.move.id === PHYSICAL);
     expect(request.defenderOverride?.ranks?.def).toBe(1);
     await openDetails(user);

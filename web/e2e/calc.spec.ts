@@ -26,8 +26,8 @@ test("攻撃側・防御側を選ぶと技が自動で選ばれ、既定の5行�
 
   // 技は攻撃側の最初のダメージ技(威力つき)が選ばれている。
   const move = combobox(page, "技");
-  await expect(move).not.toHaveValue("");
-  await expect(move.locator("option:checked")).toContainText("威力");
+  await expect(move).not.toHaveAttribute("data-value", "");
+  await expect(move.locator(".move-picker__power")).toHaveText(/^\d+$/);
 
   const rows = calcRows(page);
   const texts = await rowTexts(rows, DEFAULT_ROW_COUNT);
@@ -106,7 +106,7 @@ test("攻守入れ替えで攻撃側・防御側の名前が入れ替わり、�
   ).toHaveText(SPECIES.fire.nameJa);
 
   // 技は新しい攻撃側(テストみず)の learnset から選び直され、結果は入れ替え前と異なる。
-  await expect(combobox(page, "技").locator("option:checked")).toContainText("威力");
+  await expect(combobox(page, "技").locator(".move-picker__power")).toHaveText(/^\d+$/);
   await expect.poll(async () => rowTexts(rows, DEFAULT_ROW_COUNT)).not.toEqual(before);
   for (const text of await rowTexts(rows, DEFAULT_ROW_COUNT)) {
     expect(text).toMatch(PERCENT_RANGE_PATTERN);
@@ -175,27 +175,29 @@ test("「詳細」で防御側のランク B を +1 にすると、物理技の�
     .toBeLessThan(beforeMax);
 });
 
-test("技の並びを 五十音順 に切り替えると、技の選択肢が並び替わり、選んでいた技は変わらない(I-web-9 = F-02)", async ({
+test("技ピッカー: 並びはタイプ順だけで、開いて選ぶと選択中の技が変わる(G-01 = I-web-15)", async ({
   page,
 }) => {
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   const move = combobox(page, "技");
-  const optionNames = () => move.locator("option").allTextContents();
-  const nameOf = (text: string) => text.split("・")[0] ?? text;
+  const rowNames = () =>
+    page.getByRole("listbox", { name: "技" }).locator(".move-picker__name").allTextContents();
 
-  // 既定は習得順(テストほのお: たいあたり → かえんパンチ)。選ばれている技を覚えておく。
-  const selectedBefore = await move.inputValue();
-  expect((await optionNames()).map(nameOf)).toEqual(["テストたいあたり", "テストかえんパンチ"]);
+  // 並びの切り替え(習得順・五十音順)は無い。
+  await expect(page.getByRole("radiogroup", { name: "技の並び" })).toHaveCount(0);
+  const selectedBefore = await move.getAttribute("data-value");
+  await move.click();
+  // タイプ順(マスタのタイプ表の並び。ほのお → ノーマル)。習得順(たいあたり → かえんパンチ)ではない。
+  await expect.poll(rowNames).toEqual(["テストかえんパンチ", "テストたいあたり"]);
 
-  await chooseRadio(page, "技の並び", "五十音順");
-  // 五十音順(か行 → た行)に入れ替わる。
-  await expect
-    .poll(async () => (await optionNames()).map(nameOf))
-    .toEqual(["テストかえんパンチ", "テストたいあたり"]);
-  await expect(move).toHaveValue(selectedBefore);
+  // Esc は選ばず閉じる。
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("listbox", { name: "技" })).toHaveCount(0);
+  await expect(move).toHaveAttribute("data-value", selectedBefore ?? "");
 
-  await chooseRadio(page, "技の並び", "習得順");
-  await expect
-    .poll(async () => (await optionNames()).map(nameOf))
-    .toEqual(["テストたいあたり", "テストかえんパンチ"]);
+  // 開いて、もう一方の行を押すと選択中の技が変わる。
+  await move.click();
+  await page.getByRole("option", { name: /^テストかえんパンチ/ }).click();
+  await expect(move).toContainText("テストかえんパンチ");
+  await expect(move).not.toHaveAttribute("data-value", selectedBefore ?? "");
 });

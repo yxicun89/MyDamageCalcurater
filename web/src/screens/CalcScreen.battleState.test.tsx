@@ -18,6 +18,7 @@ import type { MasterData, MasterSpecies } from "../master/types";
 import type { RecordClient, RecordResult } from "../record/recordClient";
 import { bulkResultFor, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
+import { chooseMove } from "../test/movePicker";
 
 type Favorite = components["schemas"]["Favorite"];
 
@@ -72,7 +73,7 @@ async function start(
   render(<CalcScreen engine={engine} master={master} />);
   await user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
   await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-  await user.selectOptions(screen.getByRole("combobox", { name: "技" }), moveId);
+  await chooseMove(user, moveId);
   await screen.findByRole("list", { name: "計算結果" });
   return { user, engine };
 }
@@ -205,9 +206,9 @@ describe("B-4 多段の回数", () => {
   test("範囲の多段技のときだけ「回数」を出す(固定回数・多段でない技では出さない)", async () => {
     const { user } = await start();
     expect(screen.queryByRole("combobox", { name: "回数" })).toBeNull();
-    await user.selectOptions(screen.getByRole("combobox", { name: "技" }), MULTI_FIXED);
+    await chooseMove(user, MULTI_FIXED);
     expect(screen.queryByRole("combobox", { name: "回数" })).toBeNull();
-    await user.selectOptions(screen.getByRole("combobox", { name: "技" }), MULTI);
+    await chooseMove(user, MULTI);
     const hits = screen.getByRole("combobox", { name: "回数" });
     expect(
       within(hits)
@@ -228,9 +229,9 @@ describe("B-4 多段の回数", () => {
     for (const request of engine.bulkRequests) {
       expect(Object.keys(request)).not.toContain("battleState");
     }
-    await user.selectOptions(screen.getByRole("combobox", { name: "技" }), PLAIN);
+    await chooseMove(user, PLAIN);
     expect(screen.queryByRole("combobox", { name: "回数" })).toBeNull();
-    await user.selectOptions(screen.getByRole("combobox", { name: "技" }), MULTI);
+    await chooseMove(user, MULTI);
     expect(screen.getByRole("combobox", { name: "回数" })).toHaveValue("");
     const before = engine.calcRequests.length;
     await screen.findByRole("list", { name: "計算結果" });
@@ -327,7 +328,7 @@ describe("B-6 お気に入りの保存と復元", () => {
     render(<CalcScreen engine={engine} master={master} recordClient={client} />);
     await user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-    await user.selectOptions(screen.getByRole("combobox", { name: "技" }), MULTI);
+    await chooseMove(user, MULTI);
     await user.selectOptions(screen.getByRole("combobox", { name: "回数" }), "3");
     await user.click(toggle());
     await enter(user, defenderHp(), "50");

@@ -55,6 +55,26 @@ const ICON_SHAPES = {
   info: ["M4 5h16v11H9l-5 4z", "M12 9v3", "M12 14h.01"],
   // 完了: チェック
   check: ["M5 12.5l4.5 4.5L19 7"],
+  // 技の分類(G-01、ADR-0341): ぶつり=放射状の衝撃
+  movePhysical: [
+    "M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
+    "M12 3v4",
+    "M12 17v4",
+    "M3 12h4",
+    "M17 12h4",
+    "M5.6 5.6l2.8 2.8",
+    "M15.6 15.6l2.8 2.8",
+    "M5.6 18.4l2.8-2.8",
+    "M15.6 8.4l2.8-2.8",
+  ],
+  // 技の分類: とくしゅ=同心の波
+  moveSpecial: [
+    "M12 10.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z",
+    "M12 6.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z",
+    "M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z",
+  ],
+  // 技の分類: へんか=半分の円
+  moveStatus: ["M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z", "M12 4v16"],
 } as const satisfies Record<string, readonly string[]>;
 
 export type IconName = keyof typeof ICON_SHAPES;

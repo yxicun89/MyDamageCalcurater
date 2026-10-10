@@ -110,8 +110,7 @@ import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
-import { useMoveSort } from "../app/useMoveSort";
-import { MoveOptions, MoveSortChips } from "./MoveSortControls";
+import { MovePicker } from "./MovePicker";
 import "./ReverseScreen.css";
 
 /**
@@ -1157,29 +1156,19 @@ interface MoveSelectProps {
   readonly disabled?: boolean;
 }
 
-/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。並びはチップ群で選ぶ(既定は learnset の順)。 */
+/** 技セレクタ(CalcScreen.tsx の MoveSelect と同じ表記)。技ピッカー(タイプ順だけ。G-01、ADR-0341)。 */
 function MoveSelect({ moves, types, value, onChange, disabled = false }: MoveSelectProps) {
-  const moveSelectId = useId();
-  const [order] = useMoveSort();
   return (
-    <>
-      <label className="reverse-screen__label" htmlFor={moveSelectId}>
-        {calcScreenText.moveLabel}
-      </label>
-      <MoveSortChips variant="reverse" />
-      <select
-        id={moveSelectId}
-        className="reverse-screen__move"
-        aria-label={calcScreenText.moveLabel}
-        value={value}
-        disabled={disabled}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      >
-        <MoveOptions moves={moves} types={types} order={order} value={value} />
-      </select>
-    </>
+    <MovePicker
+      label={calcScreenText.moveLabel}
+      labelClassName="reverse-screen__label"
+      triggerClassName="reverse-screen__move"
+      moves={moves}
+      types={types}
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+    />
   );
 }
 

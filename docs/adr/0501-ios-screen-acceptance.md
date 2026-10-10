@@ -4855,3 +4855,20 @@ XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。
 - `TeamLabelsTests.testSlotLabelsUseSameWordsAsWeb`: `importFold`・`exportFold` の 2 行の期待値を削除(ほかの行は不変)。
 - `GlossaryTests`: `ShowdownText` の文字列群の登録 1 行を削除(型が無くなったため。禁止語の検査自体は不変)。
 - `LargeTextLayoutUITests` の `teamListIdentifiers`・`teamEditIdentifiers`・`teamEditFilledIdentifiers` から折りたたみのトグルの識別子を削除(ほかの識別子の検査は不変)。
+
+## G-01 技の行を縦に短くし、並びをタイプ順だけにする(ADR-0527。2026-10-11)
+
+受け入れ条件: (1) 技の行は「タイプの丸アイコン + 技名」を主、分類の小さなアイコンと威力を副にした 1 行(36pt 以上)。読み上げはタイプ・分類・威力を含む。
+(2) 計算画面の技ピッカーはタイプ順(群の中は五十音順、見出しはタイプ名)だけ。切り替え・保存は無い。(3) 選択中の技・要求・結果は変わらず、既定の技は learnset の先頭のまま。
+
+### 既存テストの変更(廃止した機能の分だけ。残る規則は弱めていない)
+
+| テスト | 扱い | 理由 |
+|---|---|---|
+| `MoveSortTests` 種類・既定・ラベル / 習得順 | 削除 | `MoveSortOrder`・`MoveSortLabels`・習得順を廃止 |
+| `MoveSortTests` 五十音 5 件・タイプ順 3 件 | `MoveSort.byType` へ付け替え(入力・期待値は同じ) | 群の中の並びとして残る |
+| `MoveSortStoreTests` | 削除 | `MoveSortStore` を廃止 |
+| `CalcViewModelMoveSortTests` | `CalcViewModelMoveTypeOrderTests` に置換 | 保存・切り替えを廃止。既定の技・再計算しないは維持 |
+| `CalcMoveSortUITests` 切り替え 2 件 | 並び・見出し・切り替え無し・選択・AX5 の行の 3 件に置換 | チップを廃止 |
+
+検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。
