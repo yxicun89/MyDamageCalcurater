@@ -4,6 +4,7 @@ import XCTest
 /// 書式は日本語名の Showdown 風(実 Showdown とは互換にしない。ADR-0502)。名前はモックの架空データ
 /// (`Resources/*.json` の 9001〜9004)。文言は ADR-0501「P6-20」3章の表をそのまま書く
 /// (UI テストは App のターゲットに依存しない)。実装前は identifier が無いので失敗してよい。
+/// F-08(ADR-0522)で、取り込みは一覧の下の閉じた折りたたみ(新しい構築として作る)、書き出しは編集画面の下の折りたたみに移った。
 /// 注意: `Menu` の中の identifier は UIKit に渡らないので、入口・操作はすべて `Menu` の外の通常のボタンに置く。
 @MainActor
 final class TeamTextTransferUITests: XCTestCase {
@@ -22,32 +23,37 @@ final class TeamTextTransferUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix))
     }
 
-    /// 構築を新規作成して編集画面を開き、先頭の種族のメンバーを1体追加する。
-    private func launchEditorWithOneMember() -> XCUIApplication {
+    private func elementBeginningWith(_ app: XCUIApplication, _ prefix: String) -> XCUIElement {
+        elements(app, beginningWith: prefix).firstMatch
+    }
+
+    /// 構築一覧を開く(取り込みは一覧の下の折りたたみ)。
+    private func launchTeamList() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
         app.buttons["openTeamListScreen"].tap()
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+        return app
+    }
+
+    /// 構築を新規作成して編集画面を開き、1体目の枠に先頭の種族を選ぶ(書き出しは編集画面の下の折りたたみ)。
+    private func launchEditorWithOneMember() -> XCUIApplication {
+        let app = launchTeamList()
         element(app, "createTeamButton").tap()
-        let nameField = app.alerts.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
-        nameField.tap()
-        nameField.typeText("テキスト取り込みUI")
-        app.alerts.buttons["作成"].tap()
         XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
-        element(app, "addMemberButton").tap()
+        element(app, "slotSpeciesPicker-1").tap()
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         app.buttons[Self.firstSpeciesName].tap()
         XCTAssertTrue(elements(app, beginningWith: "memberCard-").firstMatch.waitForExistence(timeout: Self.existenceTimeout))
         return app
     }
 
-    private func openSheet(_ app: XCUIApplication) {
-        let open = element(app, "teamTextTransferButton")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
-        XCTAssertTrue(element(app, "teamTextSheet").waitForExistence(timeout: Self.existenceTimeout))
+    private func openImportFold(_ app: XCUIApplication) {
+        let toggle = element(app, "teamImportFoldToggle")
+        XCTAssertTrue(toggle.waitForExistence(timeout: Self.existenceTimeout))
+        toggle.tap()
+        XCTAssertTrue(element(app, "importTextEditor").waitForExistence(timeout: Self.existenceTimeout))
     }
 
     private func typeAndAnalyze(_ app: XCUIApplication, _ text: String) {
@@ -58,18 +64,18 @@ final class TeamTextTransferUITests: XCTestCase {
         element(app, "analyzeImportTextButton").tap()
     }
 
-    private func memberCardCount(_ app: XCUIApplication) -> Int {
-        elements(app, beginningWith: "memberCard-").count
+    /// 一覧の構築カードの数(取り込みは新しい構築を作る)。
+    private func teamCardCount(_ app: XCUIApplication) -> Int {
+        elements(app, beginningWith: "teamCard-").count
     }
 
-    // MARK: 書き出し
+    // MARK: 書き出し(編集画面の下の折りたたみ)
 
-    func testExportOneMemberShowsTextAndCopyAndShare() {
+    func testExportShowsTextAndCopyAndShare() {
         let app = launchEditorWithOneMember()
-        let exportButton = elements(app, beginningWith: "exportMemberTextButton-").firstMatch
-        XCTAssertTrue(exportButton.waitForExistence(timeout: Self.existenceTimeout))
-        exportButton.tap()
-        XCTAssertTrue(element(app, "teamTextSheet").waitForExistence(timeout: Self.existenceTimeout))
+        element(app, "teamExportFoldToggle").tap()
+        XCTAssertTrue(element(app, "exportTeamTextButton").waitForExistence(timeout: Self.existenceTimeout))
+        element(app, "exportTeamTextButton").tap()
 
         let text = element(app, "exportedText")
         XCTAssertTrue(text.waitForExistence(timeout: Self.existenceTimeout))
@@ -82,21 +88,12 @@ final class TeamTextTransferUITests: XCTestCase {
         XCTAssertEqual(element(app, "copiedNotice").label, "コピーしました。")
     }
 
-    func testExportWholeTeamFromTheSheet() {
-        let app = launchEditorWithOneMember()
-        openSheet(app)
-        element(app, "exportTeamTextButton").tap()
-        let text = element(app, "exportedText")
-        XCTAssertTrue(text.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(text.label.hasPrefix(Self.firstSpeciesName))
-    }
+    // MARK: 取り込み(一覧の下の折りたたみ。新しい構築として作る)
 
-    // MARK: 取り込み
-
-    func testImportWithRejectedLineLetsTheUserAddOnlyTheValidMember() {
-        let app = launchEditorWithOneMember()
-        let before = memberCardCount(app)
-        openSheet(app)
+    func testImportWithRejectedLineLetsTheUserCreateATeamFromOnlyTheValidMember() {
+        let app = launchTeamList()
+        let before = teamCardCount(app)
+        openImportFold(app)
         typeAndAnalyze(app, "テストモンさん\nEVs: 252 SpA\n- テストわざとくしゅA")
 
         XCTAssertTrue(element(app, "importRejectedList").waitForExistence(timeout: Self.existenceTimeout))
@@ -111,18 +108,20 @@ final class TeamTextTransferUITests: XCTestCase {
         XCTAssertTrue(confirm.exists)
         XCTAssertEqual(confirm.label, "取り込める1体だけ追加")
         XCTAssertTrue(element(app, "cancelImportButton").exists, "全か無かにしない: やめる選択肢もある")
-        XCTAssertEqual(memberCardCount(app), before, "確定するまで追加しない")
+        XCTAssertEqual(teamCardCount(app), before, "確定するまで作らない")
         confirm.tap()
 
         XCTAssertTrue(element(app, "importedNotice").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertEqual(element(app, "importedNotice").label, "1体を追加しました。保存すると反映されます。")
-        XCTAssertEqual(memberCardCount(app), before + 1)
+        XCTAssertEqual(element(app, "importedNotice").label, "1体の構築を作りました")
+        XCTAssertEqual(teamCardCount(app), before + 1, "新しい構築が一覧に出る")
+        XCTAssertEqual(elementBeginningWith(app, "teamCount-").label, "1/6体")
+        XCTAssertEqual(elementBeginningWith(app, "teamName-").label, "構築 1")
     }
 
     func testImportWithoutRejectedLinesNeedsNoDecision() {
-        let app = launchEditorWithOneMember()
-        let before = memberCardCount(app)
-        openSheet(app)
+        let app = launchTeamList()
+        let before = teamCardCount(app)
+        openImportFold(app)
         typeAndAnalyze(app, "テストモンさん\nNature: テストせいかく特攻上昇")
         XCTAssertFalse(element(app, "importRejectedList").exists)
         let confirm = element(app, "confirmImportValidButton")
@@ -130,38 +129,36 @@ final class TeamTextTransferUITests: XCTestCase {
         XCTAssertEqual(confirm.label, "1体を追加")
         confirm.tap()
         XCTAssertTrue(element(app, "importedNotice").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertEqual(memberCardCount(app), before + 1)
+        XCTAssertEqual(teamCardCount(app), before + 1)
     }
 
     func testNothingImportableShowsTheListAndNoConfirm() {
-        let app = launchEditorWithOneMember()
-        let before = memberCardCount(app)
-        openSheet(app)
+        let app = launchTeamList()
+        let before = teamCardCount(app)
+        openImportFold(app)
         typeAndAnalyze(app, "そんなポケ")
         XCTAssertTrue(element(app, "importRejectedLine-1").waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(element(app, "importRejectedLine-1").label.contains("ポケモンが見つかりません"))
         XCTAssertEqual(element(app, "importNothingNotice").label, "取り込めるポケモンがありません。")
         XCTAssertFalse(element(app, "confirmImportValidButton").exists)
-        element(app, "closeTeamTextSheetButton").tap()
-        XCTAssertEqual(memberCardCount(app), before, "何も追加されない")
+        XCTAssertEqual(teamCardCount(app), before, "何も作られない")
     }
 
-    func testCancelAfterReviewAddsNothing() {
-        let app = launchEditorWithOneMember()
-        let before = memberCardCount(app)
-        openSheet(app)
+    func testCancelAfterReviewCreatesNothing() {
+        let app = launchTeamList()
+        let before = teamCardCount(app)
+        openImportFold(app)
         typeAndAnalyze(app, "テストモンさん\nEVs: 252 SpA")
         XCTAssertTrue(element(app, "cancelImportButton").waitForExistence(timeout: Self.existenceTimeout))
         element(app, "cancelImportButton").tap()
         XCTAssertFalse(element(app, "importRejectedList").exists)
         XCTAssertFalse(element(app, "confirmImportValidButton").exists)
-        element(app, "closeTeamTextSheetButton").tap()
-        XCTAssertEqual(memberCardCount(app), before)
+        XCTAssertEqual(teamCardCount(app), before)
     }
 
     func testEmptyInputShowsAGuideInsteadOfAnalyzing() {
-        let app = launchEditorWithOneMember()
-        openSheet(app)
+        let app = launchTeamList()
+        openImportFold(app)
         let analyze = element(app, "analyzeImportTextButton")
         XCTAssertTrue(analyze.waitForExistence(timeout: Self.existenceTimeout))
         analyze.tap()

@@ -9,9 +9,11 @@ import SwiftUI
 // そのまま共有する(`NavigationStack` を入れ子にすると SwiftUI が警告アイコンだけを表示して
 // 中身を描かなくなる実機での不具合に当たったため。`navigationDestination(for:)` は宣言した
 // 場所に関わらず最も近い祖先の `NavigationStack` に登録される[Apple のドキュメントどおり]ので、
-// スタックそのものを増やさなくても済む)。design.md には構築ビルダーの節が無いため、
-// 見た目(カード/ホロ風の行・ドットでメンバー数を示す)は implementer の判断(ADR-0501「P6-2c」
-// 「### 7 確認事項」に追記した)。
+// スタックそのものを増やさなくても済む)。
+//
+// F-08(ADR-0522)で作り直し: 構築名の入力を廃止(表示は「構築 N」)、[新しい構築]で空の構築を作ってすぐ編集画面を開く、
+// 各構築はカード(6体のアイコン・n/6体・最終更新・[開く]・[削除]〈2段階〉)、Showdown 形式の取り込みは
+// 一覧の下の閉じた折りたたみ(新しい構築として作る)。
 
 /// 構築一覧画面。
 struct TeamListView: View {
@@ -21,8 +23,10 @@ struct TeamListView: View {
     /// `RootView` が持つ `NavigationStack` の `path` をそのまま共有する(上記コメント参照)。
     @Binding var path: NavigationPath
 
-    @State private var isPresentingCreateAlert = false
-    @State private var newTeamName = ""
+    @State private var isCreating = false
+    @State private var isImportFoldOpen = false
+    /// 取り込みで作った構築の体数の通知(次の取り込みまで残す)。
+    @State private var importedCount: Int?
 
     /// 読み込み中インジケータの高さ(Calc/Reverse 画面と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
@@ -31,7 +35,7 @@ struct TeamListView: View {
         self.store = store
         self.service = service
         _path = path
-        _viewModel = State(initialValue: TeamListViewModel(store: store))
+        _viewModel = State(initialValue: TeamListViewModel(store: store, service: service))
     }
 
     var body: some View {
@@ -40,24 +44,18 @@ struct TeamListView: View {
                 if let error = viewModel.error {
                     ErrorBannerView(message: error.message, identifier: "teamListErrorMessage")
                 }
+                createButton
                 loadingSlot
                 if viewModel.teams.isEmpty {
                     if !viewModel.isLoading {
-                        Text("まだ構築がありません。「新規作成」から始めましょう。")
-                            .font(TextStyleToken.body.font)
-                            .foregroundStyle(ColorToken.textSecondary.color)
-                            .accessibilityIdentifier("teamListEmpty")
+                        PopNoticeView(kind: .empty, message: TeamLabels.emptyList, identifier: "teamListEmpty")
                     }
                 } else {
                     ForEach(viewModel.teams, id: \.id) { team in
-                        TeamRowView(
-                            team: team,
-                            onTap: { path.append(team.id) },
-                            onDelete: { Task { await viewModel.deleteTeam(id: team.id) } }
-                        )
+                        TeamCardView(viewModel: viewModel, team: team) { path.append(team.id) }
                     }
                 }
-                createButton
+                importFold
             }
             .padding(SpacingToken.x4)
         }
@@ -72,29 +70,8 @@ struct TeamListView: View {
         }
         .navigationDestination(for: String.self) { teamID in
             if let team = viewModel.teams.first(where: { $0.id == teamID }) {
-                TeamEditView(store: store, service: service, team: team)
+                TeamEditView(store: store, service: service, team: team, title: viewModel.displayName(for: team.id))
             }
-        }
-        .alert("新しい構築", isPresented: $isPresentingCreateAlert) {
-            // `.alert` の中身は UIKit の `UIAlertController` が生成する `UITextField` に写像され、
-            // SwiftUI 側の `.accessibilityIdentifier` はそこへ橋渡しされない(実装時に XCUITest で
-            // 確認した実機の制約。ADR-0501「P6-2c」「### 7 確認事項」に追記)。XCUITest 側は
-            // `app.alerts.textFields.firstMatch` で辿る(アラートに入力欄は1つしか無い)。
-            TextField("構築名", text: $newTeamName)
-            Button("キャンセル", role: .cancel) {
-                newTeamName = ""
-            }
-            Button("作成") {
-                let name = newTeamName
-                newTeamName = ""
-                Task {
-                    if let created = await viewModel.createTeam(name: name) {
-                        path.append(created.id)
-                    }
-                }
-            }
-        } message: {
-            Text("構築の名前を入力してください")
         }
         // `.task` は初回表示の1回しか走らないため、編集画面から戻るたびの再読み込みは
         // `onAppear` で行う(`TeamListViewModel.load()` は何度呼んでもよい設計。
@@ -102,17 +79,43 @@ struct TeamListView: View {
         .onAppear { Task { await viewModel.load() } }
     }
 
+    /// 空の構築を作って、すぐその編集画面を開く(作成中は押せない)。
     private var createButton: some View {
         Button {
-            newTeamName = ""
-            isPresentingCreateAlert = true
+            guard !isCreating else { return }
+            isCreating = true
+            Task {
+                if let created = await viewModel.createTeam() {
+                    path.append(created.id)
+                }
+                isCreating = false
+            }
         } label: {
-            Label("新規作成", systemImage: "plus.circle")
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.brandPrimary.color)
+            PopLabel(title: TeamLabels.createButton, systemImage: PopSymbol.add)
+                .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PillButtonStyle(kind: .primary))
+        .disabled(isCreating)
         .accessibilityIdentifier("createTeamButton")
+    }
+
+    /// Showdown 形式は補助の入口: 閉じた折りたたみ。取り込みは新しい構築を作り、編集画面へは移らない(続けて取り込める)。
+    private var importFold: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            TeamFold(title: TeamLabels.importFold, identifier: "teamImportFold", isOpen: $isImportFoldOpen) {
+                TeamImportSection(service: service) { imported in
+                    Task {
+                        if await viewModel.createTeam(members: imported) != nil {
+                            importedCount = imported.count
+                        }
+                    }
+                }
+            }
+            if let importedCount {
+                PopNoticeView(
+                    kind: .info, message: TeamLabels.importCreatedNotice(count: importedCount), identifier: "importedNotice")
+            }
+        }
     }
 
     private var loadingSlot: some View {
@@ -127,60 +130,110 @@ struct TeamListView: View {
     }
 }
 
-/// 一覧の1行: チーム名・メンバー数(ドット表示)・開く/削除。design.md「カード/ホロのコレクション風」
-/// の角丸カードを踏襲する(実データは無いのでタイプ色は使わず無彩色のドットで数を示す)。
-private struct TeamRowView: View {
+/// 一覧の 1 つの構築のカード: 表示名・6 体のアイコン・n/6体・最終更新・[開く]・[削除](2 段階)。
+private struct TeamCardView: View {
+    let viewModel: TeamListViewModel
     let team: Team
-    let onTap: () -> Void
-    let onDelete: () -> Void
+    let onOpen: () -> Void
+
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var name: String { viewModel.displayName(for: team.id) }
+    private var isConfirmingDelete: Bool { viewModel.pendingDeleteID == team.id }
 
     var body: some View {
-        HStack(spacing: SpacingToken.x3) {
-            Button(action: onTap) {
-                HStack(spacing: SpacingToken.x3) {
-                    VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                        Text(team.name)
-                            .font(TextStyleToken.heading.font)
-                            .foregroundStyle(ColorToken.textPrimary.color)
-                            .lineLimit(1)
-                        Text("メンバー \(team.members.count)/\(TeamLimits.maxMembers)")
-                            .font(TextStyleToken.caption.font)
-                            .foregroundStyle(ColorToken.textSecondary.color)
-                        memberDots
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .foregroundStyle(ColorToken.textSecondary.color)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            Text(name)
+                .font(TextStyleToken.heading.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("teamName-\(team.id)")
+            icons
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                Text(TeamLabels.memberCount(team.members.count))
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .accessibilityIdentifier("teamCount-\(team.id)")
+                Text(TeamLabels.updatedText(team.updatedAt))
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("teamUpdated-\(team.id)")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("teamRow-\(team.id)")
-            .accessibilityLabel(team.name)
-            .accessibilityHint("開く")
-
-            Button(action: onDelete) {
-                Image(systemName: "trash")
-                    .foregroundStyle(ColorToken.danger.color)
+            if isConfirmingDelete {
+                deleteConfirmation
+            } else {
+                actions
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("teamDelete-\(team.id)")
-            .accessibilityLabel("この構築を削除")
         }
         .padding(SpacingToken.x3)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .popCard()
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("teamCard-\(team.id)")
     }
 
-    private var memberDots: some View {
-        HStack(spacing: SpacingToken.x1) {
-            ForEach(0..<TeamLimits.maxMembers, id: \.self) { index in
-                Circle()
-                    .fill(index < team.members.count ? ColorToken.brandPrimary.color : ColorToken.borderHairline.color)
-                    .frame(width: 6, height: 6)
+    /// 6 体のアイコン。画像が無ければタイプ色のエンブレム(種族が引けなければ無彩色のエンブレム)。
+    private var icons: some View {
+        let names = team.members.enumerated().map { offset, member in
+            viewModel.speciesSummary(forKey: member.speciesKey)?.nameJa ?? TeamLabels.slotTitle(offset + 1)
+        }
+        return HStack(spacing: SpacingToken.x1) {
+            ForEach(Array(team.members.enumerated()), id: \.element.id) { _, member in
+                let species = viewModel.speciesSummary(forKey: member.speciesKey)
+                SpeciesImageView(speciesKey: member.speciesKey, name: species?.nameJa ?? "-", types: species?.types ?? [])
             }
         }
-        .accessibilityHidden(true)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(names.isEmpty ? "ポケモンはまだいません" : names.joined(separator: "、"))
+        .accessibilityIdentifier("teamIcons-\(team.id)")
+    }
+
+    private var actions: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x2))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x2))
+        return layout {
+            Button(action: onOpen) {
+                PopLabel(title: TeamLabels.openButton, systemImage: PopSymbol.edit)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PillButtonStyle(kind: .primary))
+            .accessibilityLabel(TeamLabels.openHint(name: name))
+            .accessibilityIdentifier("teamOpen-\(team.id)")
+
+            Button {
+                viewModel.requestDelete(id: team.id)
+            } label: {
+                PopLabel(title: TeamLabels.deleteButton, systemImage: PopSymbol.delete)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PillButtonStyle(kind: .secondary))
+            .accessibilityLabel(TeamLabels.deleteHint(name: name))
+            .accessibilityIdentifier("teamDelete-\(team.id)")
+        }
+    }
+
+    private var deleteConfirmation: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopNoticeView(
+                kind: .error, message: TeamLabels.deleteConfirmNotice(name: name),
+                identifier: "teamDeleteConfirmNotice-\(team.id)")
+            Button {
+                Task { await viewModel.confirmDelete() }
+            } label: {
+                TeamTextControls.buttonLabel(TeamLabels.deleteConfirmButton)
+            }
+            .buttonStyle(PillButtonStyle(kind: .danger))
+            .accessibilityIdentifier("teamDeleteConfirm-\(team.id)")
+            Button {
+                viewModel.cancelDelete()
+            } label: {
+                TeamTextControls.buttonLabel(TeamLabels.deleteCancelButton)
+            }
+            .buttonStyle(PillButtonStyle(kind: .secondary))
+            .accessibilityIdentifier("teamDeleteCancel-\(team.id)")
+        }
     }
 }
 

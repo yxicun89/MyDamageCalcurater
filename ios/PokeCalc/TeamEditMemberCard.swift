@@ -4,14 +4,12 @@ import SwiftUI
 
 // TeamEditMemberCard: 構築編集画面のメンバー1体分のカード(P6-2c・ADR-0501「P6-2c」5章)。
 // `CalcScreenCards.swift` / `ReverseScreenCards.swift` の部品(`SpeciesHeaderMenuLabel` /
-// `MenuLabelChip`)を再利用する。
+// `MenuLabelChip`)を再利用する。F-08(ADR-0522)で、外す・入れ替え・書き出しは枠(`TeamEditView`)側に移した。
 
 /// メンバー1体のカード: 種族・ニックネーム・持ち物・特性・性格・テラスタイプ・技(最大4)・SP・エラー。
 struct MemberCardView: View {
     let viewModel: TeamEditViewModel
     let member: TeamMember
-    /// 「この1体を書き出す」(P6-20)。シートを開く処理は画面側が持つ。
-    let onExport: () -> Void
     /// ニックネーム欄はローカルの `@State` を真とし、`viewModel.setMemberNickname(_:)` へ同期的に
     /// 反映する(`TeamEditView.nameField` の理由と同じ: ViewModel 側は空白除去・空文字→nil の
     /// 正規化を行うため、入力中の生の文字列をそのまま TextField に戻すとカーソル位置が揺れうる)。
@@ -23,10 +21,9 @@ struct MemberCardView: View {
     /// 1つだが、メンバー内では「いま編集中のスロット」を覚える必要がある。ADR-0501「issue #68」8章)。
     @State private var moveSearchSlot: MoveSlotTarget?
 
-    init(viewModel: TeamEditViewModel, member: TeamMember, onExport: @escaping () -> Void) {
+    init(viewModel: TeamEditViewModel, member: TeamMember) {
         self.viewModel = viewModel
         self.member = member
-        self.onExport = onExport
         _nicknameText = State(initialValue: member.nickname ?? "")
     }
 
@@ -42,7 +39,6 @@ struct MemberCardView: View {
             selectorGrid
             movesSection
             spSection
-            exportButton
             if let memberError = viewModel.memberErrors[member.id] {
                 Text(memberError.uiMessage)
                     .font(TextStyleToken.caption.font)
@@ -74,15 +70,6 @@ struct MemberCardView: View {
                 }
             }
 
-            Button {
-                viewModel.removeMember(id: member.id)
-            } label: {
-                Image(systemName: "trash")
-                    .foregroundStyle(ColorToken.danger.color)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("memberDelete-\(member.id)")
-            .accessibilityLabel("このメンバーを削除")
         }
     }
 
@@ -263,16 +250,6 @@ struct MemberCardView: View {
             MenuLabelChip(text: label)
         }
         .accessibilityIdentifier("memberMoveSlot-\(member.id)-\(index)")
-    }
-
-    /// P6-20: この1体をテキストで書き出す(`Menu` に入れない通常のボタン)。
-    private var exportButton: some View {
-        Button(action: onExport) {
-            Label(ShowdownTextLabels.exportMemberButton, systemImage: "square.and.arrow.up")
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-        }
-        .accessibilityIdentifier("exportMemberTextButton-\(member.id)")
     }
 
     // MARK: - SP(能力ポイント。1ステータス最大32・合計66)
