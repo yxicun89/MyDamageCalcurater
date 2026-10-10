@@ -54,7 +54,7 @@ public struct MegaSpeciesInfo: Equatable, Sendable {
 public enum MegaItemLock: Equatable, Sendable {
     /// メガではない(持ち物は自由に選べる)。
     case none
-    /// メガ。持ち物は `itemId` に固定し、`displayName`(「{基本種名}のメガストーン」)を見せる。
+    /// メガ。持ち物は `itemId` に固定し、`displayName`(「{基本種名}専用のメガストーン」)を見せる。
     case locked(itemId: String, displayName: String)
     /// メガだが、ストーンをマスタの持ち物から引けない(持ち物は空・欄は操作不可)。
     case missing
@@ -114,7 +114,7 @@ public enum MegaItemCorrection: Equatable, Sendable {
 }
 
 /// 持ち物の表示名の唯一の関数(ADR-0509 §6。2026-10-04 に更新)。メガストーンは、マスタの `nameJa` が日本語の正式名称ならそのまま出し、
-/// 英語名のフォールバックのときだけ「{基本種名}のメガストーン」を組み立てる(`megaStoneName`)。
+/// 英語名のフォールバックのときだけ「{基本種名}専用のメガストーン」を組み立てる(`megaStoneName`)。
 public enum ItemDisplayName {
     /// nil →「持ち物なし」/ `megaStoneNames` にある → その名前 / `isMegaStone == true` → `megaStoneName(for:baseSpeciesNameJa: nil)`(正式名称、無ければ「メガストーン」)/
     /// それ以外 → `nameJa`(マスタに無い ID は ID のまま)。
@@ -162,18 +162,18 @@ public enum ItemDisplayName {
 
 /// メガの持ち物固定の文言(Web `web/src/i18n/ja.ts` の `megaItemText` と同じ語。ADR-0509 §7)。
 public enum MegaItemText {
-    /// 「{基本種名}のメガストーン」。基本種名が nil なら「メガストーン」だけ(名前を推測しない)。
+    /// 「{基本種名}専用のメガストーン」。基本種名が nil なら「メガストーン」だけ(名前を推測しない)。
     public static func stoneName(baseSpeciesNameJa: String?) -> String {
         guard let baseSpeciesNameJa else { return "メガストーン" }
-        return "\(baseSpeciesNameJa)のメガストーン"
+        return "\(baseSpeciesNameJa)専用のメガストーン"
     }
 
-    public static let lockedReason = "メガシンカ: メガストーンを持ちます"
-    public static let missingReason = "メガシンカ: メガストーンがマスタに見つかりません"
-    public static let compareDisabledReason = "メガシンカ: 防御側の持ち物はメガストーンに固定されるため、候補は比較しません"
+    public static let lockedReason = "メガシンカするので、持ち物はメガストーンに決まっています"
+    public static let missingReason = "メガシンカに使うメガストーンが、データに見つかりません"
+    public static let compareDisabledReason = "防御側はメガシンカするので持ち物がメガストーンに決まっています。持ち物の候補は比べません"
     public static func fixedItemName(_ name: String) -> String { "持ち物: \(name)" }
     public static func correctedNotice(_ itemName: String) -> String {
         "メガシンカのため持ち物を\(itemName)に直しました。保存すると反映されます"
     }
-    public static let clearedNotice = "メガシンカのメガストーンがマスタに無いため、持ち物を空にしました。保存すると反映されます"
+    public static let clearedNotice = "メガシンカに使うメガストーンがデータに無いため、持ち物を空にしました。保存すると反映されます"
 }

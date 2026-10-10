@@ -78,24 +78,24 @@ public enum AdjustText {
     public static let ceilingBelowFixed = "上限は固定する能力ポイント以上にしてください"
     public static let categoryMismatch = "攻撃の分類と自分の技の分類をそろえてください"
     public static let minSpeedInvalid = "素早さの目標は0以上の整数で入力してください"
-    public static let natureNotFound = "相手の調整に合う性格がマスタにありません"
+    public static let natureNotFound = "相手の調整に合う性格がデータにありません"
 
     // MARK: - 結果の見出し・固定文
 
-    public static let indicesHeading = "今の振り方の指数"
-    public static let firepowerIndexLabel = "火力指数"
+    public static let indicesHeading = "今の振り方の強さ(目安)"
+    public static let firepowerIndexLabel = "火力の目安"
     public static let firepowerIndexNone = "技を選ぶと出します"
-    public static let physicalBulkLabel = "物理耐久指数"
-    public static let specialBulkLabel = "特殊耐久指数"
-    public static let indexNote = "火力指数の補正はタイプ一致だけを含めます(持ち物・特性・テラスタルは含めません)"
-    public static let hpLineHeading = "HP の 16n"
-    public static let next16nLabel = "次の 16n"
-    public static let prev16nLabel = "前の 16n"
-    public static let next16nMinus1Label = "次の 16n-1"
-    public static let prev16nMinus1Label = "前の 16n-1"
-    public static let maxIndexHeading = "指数が最大になる振り方"
-    public static let minSpHeading = "目標を満たす最小の振り方"
-    public static let minSpNotRequested = "目標を指定すると、目標を満たす最小の振り方も出します"
+    public static let physicalBulkLabel = "物理耐久の目安"
+    public static let specialBulkLabel = "特殊耐久の目安"
+    public static let indexNote = "火力の目安には、タイプ一致だけを含めます(持ち物・特性・テラスタルは含めません)"
+    public static let hpLineHeading = "HP と 16 の倍数"
+    public static let next16nLabel = "次の16の倍数"
+    public static let prev16nLabel = "前の16の倍数"
+    public static let next16nMinus1Label = "次の16の倍数-1"
+    public static let prev16nMinus1Label = "前の16の倍数-1"
+    public static let maxIndexHeading = "いちばん強くなる振り方"
+    public static let minSpHeading = "目標に届くいちばん少ない振り方"
+    public static let minSpNotRequested = "目標を指定すると、目標に届くいちばん少ない振り方も出します"
     public static let speedMet = "素早さの目標を満たします"
     public static let speedNotMet = "素早さの目標に届きません"
 
@@ -114,7 +114,7 @@ public enum AdjustText {
     // MARK: - エラー(code → 日本語。Web の adjustErrorText と同じ語)
 
     /// 通信できない・応答が読めない(Web の `adjust_unavailable` と同じ文)。
-    public static let unavailable = "調整の API に接続できません"
+    public static let unavailable = "調整のサーバーに接続できません"
     /// 下のどれにも当たらないコード。
     public static let errorFallback = "調整に失敗しました"
     /// openapi `ErrorCode` → 文言。
@@ -123,16 +123,16 @@ public enum AdjustText {
         "unknown_field": "入力の形が正しくありません",
         "invalid_enum": "選んだ項目の値が正しくありません",
         "invalid_input": "入力の値が範囲の外です。能力ポイント・上限・発数・確率を確かめてください",
-        "unknown_species": "このポケモンはマスタにありません",
-        "unknown_move": "この技はマスタにありません",
-        "unknown_nature": "この性格はマスタにありません",
-        "unknown_item": "この持ち物はマスタにありません",
-        "unknown_ability": "この特性はマスタにありません",
+        "unknown_species": "このポケモンはデータにありません",
+        "unknown_move": "この技はデータにありません",
+        "unknown_nature": "この性格はデータにありません",
+        "unknown_item": "この持ち物はデータにありません",
+        "unknown_ability": "この特性はデータにありません",
         "not_found": "見つかりませんでした。入力を確かめてください",
-        "missing_header": "端末の識別子を送れませんでした。アプリを開き直してください",
-        "invalid_header": "端末の識別子を送れませんでした。アプリを開き直してください",
+        "missing_header": "端末の情報を送れませんでした。アプリを開き直してください",
+        "invalid_header": "端末の情報を送れませんでした。アプリを開き直してください",
         "type_chart_missing": "タイプ相性表を読み込めていません。しばらくしてからお試しください",
-        "master_unavailable": "マスタの準備ができていません。しばらくしてからお試しください",
+        "master_unavailable": "ポケモンのデータの準備ができていません。しばらくしてからお試しください",
         "upstream_unavailable": "調整に必要なサービスに接続できません",
     ]
 
@@ -140,11 +140,11 @@ public enum AdjustText {
 
     public static func modeLabel(_ mode: AdjustMode) -> String {
         switch mode {
-        case .indices: return "指数と 16n を見る"
+        case .indices: return "今の耐久・火力と HP を見る"
         case .bulk: return "耐久に振る"
         case .offense: return "攻撃と素早さに振る"
-        case .minKo: return "倒せる最小の振り方"
-        case .minSurvive: return "耐えられる最小の振り方"
+        case .minKo: return "倒せるいちばん少ない振り方"
+        case .minSurvive: return "耐えられるいちばん少ない振り方"
         }
     }
 
@@ -178,9 +178,9 @@ public enum AdjustText {
 
     public static func hpLineKindLabel(_ kind: HPLineKind) -> String {
         switch kind {
-        case .none: return "16n でも 16n-1 でもない"
-        case .line16n: return "16n"
-        case .line16nMinus1: return "16n-1"
+        case .none: return "16の倍数でも、16の倍数-1でもない"
+        case .line16n: return "16の倍数"
+        case .line16nMinus1: return "16の倍数-1"
         }
     }
 

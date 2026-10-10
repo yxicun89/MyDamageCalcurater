@@ -11,8 +11,8 @@ final class MegaStoneOfficialNameUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
     private static let officialMegaSpeciesName = "テストメガモンいち"
     private static let officialStoneName = "テストどうぐメガいし"
-    private static let composedStoneName = "テストモンいちのメガストーン"
-    private static let lockedReason = "メガシンカ: メガストーンを持ちます"
+    private static let composedStoneName = "テストモンいち専用のメガストーン"
+    private static let lockedReason = "メガシンカするので、持ち物はメガストーンに決まっています"
 
     override func setUp() {
         continueAfterFailure = false
@@ -56,7 +56,7 @@ final class MegaStoneOfficialNameUITests: XCTestCase {
         XCTAssertFalse(itemPicker.isEnabled, "固定中は操作できない")
         XCTAssertEqual(element(app, "attackerItemLockReason").label, Self.lockedReason)
         let composed = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS %@", Self.composedStoneName))
-        XCTAssertEqual(composed.count, 0, "正式名称があるときは「{基本種名}のメガストーン」を出さない")
+        XCTAssertEqual(composed.count, 0, "正式名称があるときは「{基本種名}専用のメガストーン」を出さない")
     }
 
     /// 持ち物の選択肢には、正式名称のメガストーンも出ない(役割で外す。ADR-0509 §2)。

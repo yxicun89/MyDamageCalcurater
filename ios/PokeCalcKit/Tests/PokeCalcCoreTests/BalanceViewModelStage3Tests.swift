@@ -281,7 +281,7 @@ final class BalanceViewModelStage3Tests: XCTestCase {
         await settleAll(viewModel)
 
         XCTAssertEqual(viewModel.threatsError?.code, "unknown_move")
-        XCTAssertEqual(viewModel.threatsError?.message, "選んだ技がサーバーのマスタにありません。選び直してください")
+        XCTAssertEqual(viewModel.threatsError?.message, "選んだ技がサーバーのデータにありません。選び直してください")
         XCTAssertNil(viewModel.threats)
         XCTAssertNotNil(viewModel.analysis, "threats の失敗は analyze を止めない")
         XCTAssertNil(viewModel.analysisError)
@@ -295,7 +295,7 @@ final class BalanceViewModelStage3Tests: XCTestCase {
         _ = await viewModel.addThreat(speciesKey: StubMaster.beta.key)
         await settleAll(viewModel)
 
-        XCTAssertEqual(viewModel.threatsError?.message, "タイプバランスの API に接続できません")
+        XCTAssertEqual(viewModel.threatsError?.message, "タイプバランスのサーバーに接続できません")
     }
 
     func testStaleThreatsResponsesAreIgnored() async {
@@ -536,7 +536,7 @@ final class BalanceViewModelStage3Tests: XCTestCase {
         await balance.waitForMoveRangeRequests(2)
         await settleAll(viewModel)
 
-        XCTAssertEqual(viewModel.moveRangeError?.message, "リクエストが正しくありません。入力を見直してください")
+        XCTAssertEqual(viewModel.moveRangeError?.message, "入力の内容が正しくありません。見直してください")
         XCTAssertNil(viewModel.moveRange)
     }
 

@@ -222,7 +222,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             guard species.count >= Self.minimumSpeciesCount else {
                 throw PokeCalcError(
                     code: PokeCalcError.Code.insufficientSpecies,
-                    message: "計算に必要な種族が足りません(\(species.count) 件)"
+                    message: "計算に必要なポケモンのデータが足りません(\(species.count) 件)"
                 )
             }
             side = .defender
@@ -717,7 +717,7 @@ public final class ReverseViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             moveId = move.id
             return
         }
-        throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚えるダメージ技がマスタに見つかりません")
+        throw PokeCalcError(code: PokeCalcError.Code.moveUnavailable, message: "覚えるダメージ技がデータに見つかりません")
     }
 
     /// `CalcViewModel.resolveMove` と同じ(`move(id:)` を呼び、成功したら技の辞書に入れて返す。

@@ -31,7 +31,7 @@ final class AdjustTextTests: XCTestCase {
 
     func testErrorTableCoversWebVocabulary() {
         XCTAssertEqual(AdjustText.errorMessages["invalid_input"], "入力の値が範囲の外です。能力ポイント・上限・発数・確率を確かめてください")
-        XCTAssertEqual(AdjustText.errorMessages["master_unavailable"], "マスタの準備ができていません。しばらくしてからお試しください")
+        XCTAssertEqual(AdjustText.errorMessages["master_unavailable"], "ポケモンのデータの準備ができていません。しばらくしてからお試しください")
         XCTAssertEqual(AdjustText.errorMessages["not_found"], "見つかりませんでした。入力を確かめてください")
     }
 
@@ -42,7 +42,7 @@ final class AdjustTextTests: XCTestCase {
 
     func testTransportAndDecodeMapToUnavailable() {
         for code in [PokeCalcError.Code.transport, PokeCalcError.Code.decode] {
-            XCTAssertEqual(AdjustText.errorMessage(for: PokeCalcError(code: code, message: "URLError -1009")), "調整の API に接続できません", code)
+            XCTAssertEqual(AdjustText.errorMessage(for: PokeCalcError(code: code, message: "URLError -1009")), "調整のサーバーに接続できません", code)
         }
     }
 
@@ -67,7 +67,7 @@ final class AdjustTextTests: XCTestCase {
 
     func testModeLabelsFollowWebOrder() {
         XCTAssertEqual(AdjustMode.allCases.map(AdjustText.modeLabel), [
-            "指数と 16n を見る", "耐久に振る", "攻撃と素早さに振る", "倒せる最小の振り方", "耐えられる最小の振り方",
+            "今の耐久・火力と HP を見る", "耐久に振る", "攻撃と素早さに振る", "倒せるいちばん少ない振り方", "耐えられるいちばん少ない振り方",
         ])
     }
 
@@ -77,10 +77,10 @@ final class AdjustTextTests: XCTestCase {
         XCTAssertEqual(
             AdjustText.statsLine(StatBlock(hp: 155, atk: 100, def: 90, spa: 80, spd: 85, spe: 120)),
             "実数値 H 155 / A 100 / B 90 / C 80 / D 85 / S 120")
-        XCTAssertEqual(AdjustText.indexLine("火力指数", 12000), "火力指数 12000")
-        XCTAssertEqual(AdjustText.hpCurrent(HPLineReport(hp: 160, sp: 5, current: .line16n)), "HP 160(16n)")
+        XCTAssertEqual(AdjustText.indexLine("火力の目安", 12000), "火力の目安 12000")
+        XCTAssertEqual(AdjustText.hpCurrent(HPLineReport(hp: 160, sp: 5, current: .line16n)), "HP 160(16の倍数)")
         XCTAssertEqual(
-            AdjustText.hpCurrent(HPLineReport(hp: 155, sp: 0, current: .none)), "HP 155(16n でも 16n-1 でもない)")
+            AdjustText.hpCurrent(HPLineReport(hp: 155, sp: 0, current: .none)), "HP 155(16の倍数でも、16の倍数-1でもない)")
     }
 
     func testHPLinePointsInFixedOrderWithSignedDeltaAndNone() {
@@ -90,10 +90,10 @@ final class AdjustTextTests: XCTestCase {
             next16nMinus1: HPLinePoint(hp: 175, sp: 20, spDelta: 15), prev16nMinus1: HPLinePoint(hp: 159, sp: 4, spDelta: -1)
         )
         XCTAssertEqual(AdjustText.hpLinePoints(report), [
-            "次の 16n: なし",
-            "前の 16n: HP 144(H 0、-5)",
-            "次の 16n-1: HP 175(H 20、+15)",
-            "前の 16n-1: HP 159(H 4、-1)",
+            "次の16の倍数: なし",
+            "前の16の倍数: HP 144(H 0、-5)",
+            "次の16の倍数-1: HP 175(H 20、+15)",
+            "前の16の倍数-1: HP 159(H 4、-1)",
         ])
     }
 

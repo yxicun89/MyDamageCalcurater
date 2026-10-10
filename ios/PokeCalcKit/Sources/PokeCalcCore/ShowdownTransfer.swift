@@ -269,7 +269,7 @@ public struct ShowdownTransferService: Sendable {
     }
 
     private static var missingSpeciesError: PokeCalcError {
-        PokeCalcError(code: PokeCalcError.Code.notFound, message: "種族をマスタから引けませんでした")
+        PokeCalcError(code: PokeCalcError.Code.notFound, message: "種族をデータから引けませんでした")
     }
 
     private static func header(of member: ShowdownParsedMember, reason: ShowdownRejectionReason) -> ShowdownRejection {

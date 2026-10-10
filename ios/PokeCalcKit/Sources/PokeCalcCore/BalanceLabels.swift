@@ -170,23 +170,23 @@ public enum BalanceErrorText {
         case "missing_header", "invalid_header", "missing_request_context":
             return headerProblem
         case "invalid_request":
-            return "リクエストが正しくありません。入力を見直してください"
+            return "入力の内容が正しくありません。見直してください"
         case "request_too_large":
             return "入力が大きすぎます。メンバーや技を減らしてください"
         case "unknown_pokemon":
-            return "選んだポケモンがサーバーのマスタにありません。選び直してください"
+            return "選んだポケモンがサーバーのデータにありません。選び直してください"
         case "unknown_move":
-            return "選んだ技がサーバーのマスタにありません。選び直してください"
+            return "選んだ技がサーバーのデータにありません。選び直してください"
         case "unknown_ability":
-            return "選んだ特性がサーバーのマスタにありません。選び直してください"
+            return "選んだ特性がサーバーのデータにありません。選び直してください"
         case "master_unavailable":
-            return "サーバーのマスタを読み込めません。しばらくしてからもう一度お試しください"
+            return "サーバーのデータを読み込めません。しばらくしてからもう一度お試しください"
         case "overloaded":
             return "サーバーが混み合っています。しばらくしてからもう一度お試しください"
         case "internal_error":
             return "サーバーでエラーが起きました。しばらくしてからもう一度お試しください"
         case unavailableCode:
-            return "タイプバランスの API に接続できません"
+            return "タイプバランスのサーバーに接続できません"
         default:
             return fallback
         }

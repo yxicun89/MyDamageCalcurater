@@ -14,7 +14,7 @@ final class ItemDisplayNameUnsupportedTests: XCTestCase {
     }
 
     func testKnownMegaStoneUsesBaseSpeciesName() {
-        XCTAssertEqual(noteName(megaStoneNames: [Self.stone.id: "テストルカのメガストーン"]), "テストルカのメガストーン")
+        XCTAssertEqual(noteName(megaStoneNames: [Self.stone.id: "テストルカ専用のメガストーン"]), "テストルカ専用のメガストーン")
     }
 
     func testUnknownMegaStoneIsGeneric() {

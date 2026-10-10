@@ -219,6 +219,6 @@ final class AbilitySplitDisplayTests: XCTestCase {
             "特性: テストとくせいA", "特性: テストとくせいA",
             "特性: テストとくせいB / テストとくせいC", "特性: テストとくせいB / テストとくせいC",
         ])
-        XCTAssertEqual(display.exactCountText, "観測と一致: 2 件 / 候補 4 件", "件数は分かれた候補をそのまま数える")
+        XCTAssertEqual(display.exactCountText, "入力したダメージと一致: 2 件 / 候補 4 件", "件数は分かれた候補をそのまま数える")
     }
 }

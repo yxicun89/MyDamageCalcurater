@@ -159,7 +159,7 @@ final class SpeedViewModelAsyncTests: XCTestCase {
         await viewModel.settle()
         XCTAssertEqual(viewModel.positionState, .loaded(StubSpeed.position(speed: 100)), "位置は表の失敗に巻き込まれない")
         if case .failed(let failure) = viewModel.tableState {
-            XCTAssertEqual(failure.message, "ポケモンのマスタを読み込めません", "サーバーの英語 message は出さない")
+            XCTAssertEqual(failure.message, "ポケモンのデータを読み込めません", "サーバーの英語 message は出さない")
         }
     }
 
@@ -168,7 +168,7 @@ final class SpeedViewModelAsyncTests: XCTestCase {
         await stub.setPokemonResult(.failure(PokeCalcError(code: PokeCalcError.Code.transport, message: "offline")))
         let (viewModel, _) = await loaded(stub)
         XCTAssertEqual(viewModel.pokemonState, .failed(SpeedFailure(code: PokeCalcError.Code.transport)))
-        XCTAssertEqual(SpeedFailure(code: PokeCalcError.Code.transport).message, "素早さの API に接続できません")
+        XCTAssertEqual(SpeedFailure(code: PokeCalcError.Code.transport).message, "素早さのサーバーに接続できません")
         XCTAssertEqual(viewModel.tableState, .loaded(StubSpeed.table()))
         XCTAssertEqual(viewModel.filteredPokemon, [], "一覧が無いのでピッカーは空")
 

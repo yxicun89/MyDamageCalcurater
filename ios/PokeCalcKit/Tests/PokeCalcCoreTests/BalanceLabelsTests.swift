@@ -102,18 +102,18 @@ final class BalanceLabelsTests: XCTestCase {
     // MARK: - エラー文言(Web の balanceErrorText と同じ。サーバーの英語 message は出さない)
 
     func testErrorTextByCode() {
-        XCTAssertEqual(BalanceErrorText.message(forCode: "invalid_request"), "リクエストが正しくありません。入力を見直してください")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "invalid_request"), "入力の内容が正しくありません。見直してください")
         XCTAssertEqual(BalanceErrorText.message(forCode: "request_too_large"), "入力が大きすぎます。メンバーや技を減らしてください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_pokemon"), "選んだポケモンがサーバーのマスタにありません。選び直してください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_move"), "選んだ技がサーバーのマスタにありません。選び直してください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_ability"), "選んだ特性がサーバーのマスタにありません。選び直してください")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_pokemon"), "選んだポケモンがサーバーのデータにありません。選び直してください")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_move"), "選んだ技がサーバーのデータにありません。選び直してください")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_ability"), "選んだ特性がサーバーのデータにありません。選び直してください")
         XCTAssertEqual(
             BalanceErrorText.message(forCode: "master_unavailable"),
-            "サーバーのマスタを読み込めません。しばらくしてからもう一度お試しください"
+            "サーバーのデータを読み込めません。しばらくしてからもう一度お試しください"
         )
         XCTAssertEqual(BalanceErrorText.message(forCode: "overloaded"), "サーバーが混み合っています。しばらくしてからもう一度お試しください")
         XCTAssertEqual(BalanceErrorText.message(forCode: "internal_error"), "サーバーでエラーが起きました。しばらくしてからもう一度お試しください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "balance_unavailable"), "タイプバランスの API に接続できません")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "balance_unavailable"), "タイプバランスのサーバーに接続できません")
     }
 
     /// 端末 ID・セッション ID の不備(balance 0.8.0 の `missing_header`/`invalid_header`、0.7.0 の `missing_request_context`)。
@@ -138,7 +138,7 @@ final class BalanceLabelsTests: XCTestCase {
     func testScreenErrorMapsTransportAndDecodeToUnavailable() {
         let transport = BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.transport, message: "URLError"))
         XCTAssertEqual(transport.code, "balance_unavailable")
-        XCTAssertEqual(transport.message, "タイプバランスの API に接続できません")
+        XCTAssertEqual(transport.message, "タイプバランスのサーバーに接続できません")
 
         let decode = BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.decode, message: "typeMismatch"))
         XCTAssertEqual(decode.code, "balance_unavailable")

@@ -29,7 +29,7 @@ final class FavoriteLoadLabelsTests: XCTestCase {
         XCTAssertEqual(
             FavoriteLoadNotice.partial([.nature]).text, "一部は読み込めませんでした(性格と能力ポイント)。読み込めた分だけ設定しました。")
         XCTAssertEqual(
-            FavoriteLoadNotice.speciesMissing.text, "このお気に入りのポケモンはいまのマスタに無いため、読み込めませんでした。何も変えていません。")
+            FavoriteLoadNotice.speciesMissing.text, "このお気に入りのポケモンはいまのデータに無いため、読み込めませんでした。何も変えていません。")
         XCTAssertEqual(FavoriteLoadNotice.unavailable.text, "お気に入りを読み込めませんでした。何も変えていません。もう一度お試しください。")
     }
 

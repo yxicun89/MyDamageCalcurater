@@ -44,12 +44,12 @@ final class MegaStoneOfficialNameTests: XCTestCase {
         let cases: [(name: String, item: Item, base: String?, expected: String)] = [
             ("正式名称 + 基本種名 → 正式名称", Self.official, Self.baseName, Self.officialName),
             ("正式名称 + 基本種名なし → 正式名称(推測せず、ある名前を出す)", Self.official, nil, Self.officialName),
-            ("英語名 + 基本種名 → 従来の組み立て", Self.english, Self.baseName, "\(Self.baseName)のメガストーン"),
+            ("英語名 + 基本種名 → 従来の組み立て", Self.english, Self.baseName, "\(Self.baseName)専用のメガストーン"),
             ("英語名 + 基本種名なし → メガストーン", Self.english, nil, "メガストーン"),
             ("空の nameJa + 基本種名 → 従来の組み立て",
-             Item(id: "x", nameJa: "", roles: [], isMegaStone: true), Self.baseName, "\(Self.baseName)のメガストーン"),
+             Item(id: "x", nameJa: "", roles: [], isMegaStone: true), Self.baseName, "\(Self.baseName)専用のメガストーン"),
             ("全角英字の nameJa → 従来の組み立て",
-             Item(id: "x", nameJa: "Ｍｅｇａ", roles: [], isMegaStone: true), Self.baseName, "\(Self.baseName)のメガストーン"),
+             Item(id: "x", nameJa: "Ｍｅｇａ", roles: [], isMegaStone: true), Self.baseName, "\(Self.baseName)専用のメガストーン"),
         ]
         for testCase in cases {
             XCTAssertEqual(ItemDisplayName.megaStoneName(for: testCase.item, baseSpeciesNameJa: testCase.base), testCase.expected, testCase.name)
@@ -64,15 +64,15 @@ final class MegaStoneOfficialNameTests: XCTestCase {
 
     func testTextWithMegaStoneNamesStillWinsForEnglish() {
         let items = [Self.official, Self.english]
-        let names = [Self.english.id: "\(Self.baseName)のメガストーン"]
-        XCTAssertEqual(ItemDisplayName.text(itemId: Self.english.id, items: items, megaStoneNames: names), "\(Self.baseName)のメガストーン")
+        let names = [Self.english.id: "\(Self.baseName)専用のメガストーン"]
+        XCTAssertEqual(ItemDisplayName.text(itemId: Self.english.id, items: items, megaStoneNames: names), "\(Self.baseName)専用のメガストーン")
         XCTAssertEqual(ItemDisplayName.text(itemId: Self.official.id, items: items, megaStoneNames: names), Self.officialName)
     }
 
     func testDisplayItemsKeepOfficialNameAndFlag() {
-        let items = ItemDisplayName.displayItems([Self.official, Self.english], megaStoneNames: [Self.english.id: "\(Self.baseName)のメガストーン"])
+        let items = ItemDisplayName.displayItems([Self.official, Self.english], megaStoneNames: [Self.english.id: "\(Self.baseName)専用のメガストーン"])
         XCTAssertEqual(items.first(where: { $0.id == Self.official.id })?.nameJa, Self.officialName)
-        XCTAssertEqual(items.first(where: { $0.id == Self.english.id })?.nameJa, "\(Self.baseName)のメガストーン")
+        XCTAssertEqual(items.first(where: { $0.id == Self.english.id })?.nameJa, "\(Self.baseName)専用のメガストーン")
         XCTAssertEqual(items.map(\.id), [Self.official.id, Self.english.id], "順序・ID は変わらない")
     }
 
@@ -95,7 +95,7 @@ final class MegaStoneOfficialNameTests: XCTestCase {
         let englishInfo = MegaSpeciesInfo(isMega: true, requiredItemId: Self.english.id, baseSpeciesNameJa: Self.baseName)
         XCTAssertEqual(
             MegaItemLock.make(for: englishInfo, allItems: [Self.english]),
-            .locked(itemId: Self.english.id, displayName: "\(Self.baseName)のメガストーン"), "英語名は従来どおり")
+            .locked(itemId: Self.english.id, displayName: "\(Self.baseName)専用のメガストーン"), "英語名は従来どおり")
     }
 
     func testCorrectionNoticeCarriesOfficialName() {

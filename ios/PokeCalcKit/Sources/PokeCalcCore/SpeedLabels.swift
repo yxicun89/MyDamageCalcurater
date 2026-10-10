@@ -59,7 +59,7 @@ public enum SpeedLabels {
 
     public static func mode(_ mode: SpeedInputMode) -> String {
         switch mode {
-        case .preset: return "プリセット"
+        case .preset: return "定番の振り方"
         case .custom: return "カスタム"
         case .raw: return "実数値"
         }
@@ -109,7 +109,7 @@ public enum SpeedLabels {
     public static func movesAfter(_ rows: Int) -> String { "自分より後に動く \(rows)行" }
 
     // ---- エラー(サーバーの英語 message は出さず、code から日本語にする) ----
-    public static let unavailable = "素早さの API に接続できません"
+    public static let unavailable = "素早さのサーバーに接続できません"
     public static let errorFallback = "素早さの計算に失敗しました"
 
     /// `PokeCalcError.code` → 日本語。契約の `ErrorCode` はすべて持つ。通信失敗・応答が読めないときは
@@ -117,11 +117,11 @@ public enum SpeedLabels {
     public static func errorMessage(forCode code: String) -> String {
         switch code {
         case "invalid_request": return "入力の形が正しくありません。値の範囲を確認してください"
-        case "missing_header": return "端末の識別情報が送られていません"
-        case "invalid_header": return "端末の識別情報の形が正しくありません"
-        case "unknown_pokemon": return "このポケモンはマスタにありません"
+        case "missing_header": return "端末の情報が送られていません。アプリを開き直してください"
+        case "invalid_header": return "端末の情報が正しくありません。アプリを開き直してください"
+        case "unknown_pokemon": return "このポケモンはデータにありません"
         case "request_too_large": return "入力が大きすぎます"
-        case "master_unavailable": return "ポケモンのマスタを読み込めません"
+        case "master_unavailable": return "ポケモンのデータを読み込めません"
         case PokeCalcError.Code.transport, PokeCalcError.Code.decode: return unavailable
         default: return errorFallback  // internal_error・not_found・未知の code
         }

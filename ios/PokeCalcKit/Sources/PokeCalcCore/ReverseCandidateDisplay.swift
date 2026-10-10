@@ -94,7 +94,7 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
 
     /// 「観測と一致」/「一致なし(最も近い SP)」。
     public static func matchLabel(exact: Bool) -> String {
-        exact ? "観測と一致" : "一致なし(最も近い SP)"
+        exact ? "入力したダメージと一致" : "一致なし(最も近い SP)"
     }
 
     /// 目安の名前(Web の ADR-0300 §7 と同じ規則。ADR-0010 §R3「表示層が付けてよい」)。
@@ -181,7 +181,7 @@ public struct ReverseResultDisplay: Sendable {
             )
         }
         exactCount = result.exactCount
-        exactCountText = "観測と一致: \(result.exactCount) 件 / 候補 \(result.candidates.count) 件"
+        exactCountText = "入力したダメージと一致: \(result.exactCount) 件 / 候補 \(result.candidates.count) 件"
         premiseText = result.side == .defender
             ? "相手の HP の SP を \(result.assumedHPSP)(H\(result.assumedHPSP))と仮定した結果です"
             : nil
