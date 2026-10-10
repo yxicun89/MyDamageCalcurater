@@ -52,14 +52,11 @@ final class CalcScreenUITests: XCTestCase {
         let createButton = element(app, "createTeamButton")
         XCTAssertTrue(createButton.waitForExistence(timeout: Self.existenceTimeout))
         createButton.tap()
-        let nameField = app.alerts.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
-        nameField.tap()
-        nameField.typeText("テストこうちくP6-2d")
-        app.alerts.buttons["作成"].tap()
+        // F-08(ADR-0522): 構築名は無く、[新しい構築]で空の構築ができてすぐ編集画面が開く。
 
         XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
-        let addMemberButton = element(app, "addMemberButton")
+        // 6 つの空の枠の 1 体目で種族を選ぶ(F-08)。
+        let addMemberButton = element(app, "slotSpeciesPicker-1")
         XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
         addMemberButton.tap()
         // issue #68: 種族は検索シート経由で選ぶ(`Menu` ではなくなった)。計算画面の既定の攻撃側
@@ -81,6 +78,10 @@ final class CalcScreenUITests: XCTestCase {
         let saveButton = element(app, "saveTeamButton")
         XCTAssertTrue(saveButton.waitForExistence(timeout: Self.existenceTimeout))
         saveButton.tap()
+        // 保存は明示で、保存後も編集画面に残る(F-08)。保存済みなので[一覧に戻る]は確認なしで戻る。
+        let backButton = element(app, "backToListButton")
+        XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout))
+        backButton.tap()
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         // ルートへ戻る(構築一覧の戻るボタン)。

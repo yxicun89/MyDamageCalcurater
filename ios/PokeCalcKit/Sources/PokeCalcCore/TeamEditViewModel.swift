@@ -1,3 +1,4 @@
+import Foundation
 import Observation
 
 // TeamEditViewModel: 構築編集画面の状態(P6-2c・ADR-0500 §1)。
@@ -61,8 +62,19 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     public private(set) var team: Team
     public private(set) var isLoading = false
     public private(set) var error: TeamScreenError?
-    public private(set) var nameError: TeamFieldError?
     public private(set) var teamError: TeamFieldError?
+
+    // MARK: - 6 つの枠と未保存の判定(F-08。ADR-0522)
+
+    /// 6 つの枠。メンバー id か nil(空の枠)。`team.members` はここに並ぶ id を枠の順に詰めた並びを保つ。
+    public private(set) var slotIDs: [String?]
+    /// 保存済み(または開いた直後)の内容。`hasUnsavedChanges` の比較元。
+    private var savedMembers: [TeamMember]
+    private var savedSlotIDs: [String?]
+    private var savedOnce = false
+    /// 保存に成功していて、以降に編集していない(「保存しました」の表示用)。
+    public var didSave: Bool { savedOnce && !hasUnsavedChanges }
+    private let now: @Sendable () -> Date
     /// メンバー id → 直近の入力エラー(技の重複・上限・SP の超過)。
     public private(set) var memberErrors: [String: TeamMemberFieldError] = [:]
 
@@ -70,10 +82,18 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     /// 世代保護[M1]と同じ理由)。メンバーごとに独立させ、他のメンバーの選択をブロックしない。
     private var memberSpeciesGeneration: [String: Int] = [:]
 
-    public init(store: any TeamStore, service: any PokeCalcService, team: Team, searchDebounce: Duration = MasterSearch.debounceInterval) {
+    public init(
+        store: any TeamStore, service: any PokeCalcService, team: Team,
+        searchDebounce: Duration = MasterSearch.debounceInterval, now: @escaping @Sendable () -> Date = { Date() }
+    ) {
         self.store = store
         self.service = service
         self.team = team
+        self.now = now
+        let slots = Self.initialSlotIDs(for: team.members)
+        slotIDs = slots
+        savedMembers = team.members
+        savedSlotIDs = slots
         speciesSearch = MasterSearchField(debounce: searchDebounce) { query, limit in
             try await service.searchSpecies(query: query, limit: limit)
         }
@@ -128,34 +148,37 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         isLoading = false
     }
 
-    // MARK: - チーム名
-
-    /// 前後空白を落として `team.name` に入れる。空になったら `nameError = .emptyName`、
-    /// それ以外では nil にする(保存を止めはしない。保存時に `TeamValidator` で再検証する)。
-    public func setName(_ name: String) {
-        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        team.name = trimmedName
-        nameError = trimmedName.isEmpty ? .emptyName : nil
-    }
-
     // MARK: - メンバーの追加・削除
 
-    /// 既に `TeamLimits.maxMembers` 体あれば追加せず false を返し `teamError = .tooManyMembers`。
-    /// そうでなければ新しいメンバー(性格は `natureOptions.first`、他は既定値)を追加し、
-    /// `species(key:)` を呼んで選択肢を用意する。
+    /// 最初の空の枠に追加する。空きが無ければ追加せず false を返し `teamError = .tooManyMembers`。
+    /// 新しいメンバー(性格は `natureOptions.first`、他は既定値)を作り、`species(key:)` を呼んで選択肢を用意する。
     @discardableResult
     public func addMember(speciesKey: String) async -> Bool {
-        guard team.members.count < TeamLimits.maxMembers else {
+        guard let slot = slotIDs.firstIndex(where: { $0 == nil }) else {
             teamError = .tooManyMembers
             return false
         }
+        await selectSpecies(slot: slot, speciesKey: speciesKey)
+        return true
+    }
+
+    /// 枠の種族を選ぶ。空の枠なら新しいメンバーでその枠を埋め、埋まっている枠なら種族を差し替える
+    /// (`setMemberSpecies` と同じ。技・特性は新しい種族に合わせて直す)。範囲外の枠は何もしない。
+    public func selectSpecies(slot: Int, speciesKey: String) async {
+        guard slotIDs.indices.contains(slot) else { return }
+        if let id = slotIDs[slot] {
+            await setMemberSpecies(id: id, speciesKey: speciesKey)
+            return
+        }
         let member = TeamMember(speciesKey: speciesKey, natureId: natureOptions.first?.id ?? "")
+        slotIDs[slot] = member.id
         team.members.append(member)
+        rebuildMembersFromSlots()
         teamError = nil
         let token = nextMemberSpeciesToken(for: member.id)
         do {
             let detail = try await service.species(key: speciesKey)
-            guard token == memberSpeciesGeneration[member.id] else { return true }
+            guard token == memberSpeciesGeneration[member.id] else { return }
             speciesDictionary[detail.key] = SpeciesSummary(detail: detail)
             megaInfo[detail.key] = MegaSpeciesInfo(detail: detail)
             learnsetIdsByMember[member.id] = detail.learnset
@@ -167,10 +190,59 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
                     previous: .none, next: MegaItemLock.make(for: megaInfo[detail.key], allItems: itemOptions), currentItemId: $0.itemId)
             }
         } catch {
-            guard token == memberSpeciesGeneration[member.id] else { return true }
+            guard token == memberSpeciesGeneration[member.id] else { return }
             self.error = TeamScreenError(error)
         }
+    }
+
+    public func member(atSlot slot: Int) -> TeamMember? {
+        guard slotIDs.indices.contains(slot), let id = slotIDs[slot] else { return nil }
+        return team.members.first(where: { $0.id == id })
+    }
+
+    /// 枠を空に戻す(他の枠は動かさない)。空の枠・範囲外は何もしない。
+    public func removeSlot(_ slot: Int) {
+        guard slotIDs.indices.contains(slot), let id = slotIDs[slot] else { return }
+        removeMember(id: id)
+    }
+
+    /// 隣の枠と入れ替えられるか(埋まっている枠で、1 体目の上・6 体目の下ではない)。
+    public func canMoveSlot(_ slot: Int, by offset: Int) -> Bool {
+        guard slotIDs.indices.contains(slot), slotIDs[slot] != nil else { return false }
+        return slotIDs.indices.contains(slot + offset)
+    }
+
+    /// 隣の枠(空の枠を含む)と入れ替える。入れ替えたら true。
+    @discardableResult
+    public func moveSlot(_ slot: Int, by offset: Int) -> Bool {
+        guard canMoveSlot(slot, by: offset) else { return false }
+        slotIDs.swapAt(slot, slot + offset)
+        rebuildMembersFromSlots()
         return true
+    }
+
+    /// 開いた直後の枠: 保存済みのメンバーを先頭から詰める(空き枠の位置は保存しない)。
+    private static func initialSlotIDs(for members: [TeamMember]) -> [String?] {
+        (0..<TeamLimits.maxMembers).map { members.indices.contains($0) ? members[$0].id : nil }
+    }
+
+    /// `team.members` の並びを枠の順に直す。枠に無いメンバーは先頭の空き枠に入れ、
+    /// `team.members` に無い id は枠から消す(追加・取り込みの経路が `team.members` を直接触っても枠と食い違わない)。
+    private func rebuildMembersFromSlots() {
+        let known = Set(team.members.map(\.id))
+        for index in slotIDs.indices {
+            if let id = slotIDs[index], !known.contains(id) { slotIDs[index] = nil }
+        }
+        for member in team.members where !slotIDs.contains(where: { $0 == member.id }) {
+            if let empty = slotIDs.firstIndex(where: { $0 == nil }) { slotIDs[empty] = member.id }
+        }
+        let byID = Dictionary(team.members.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        team.members = slotIDs.compactMap { id in id.flatMap { byID[$0] } }
+    }
+
+    /// 保存済みの内容と下書きが違う(枠の並びも含む)。開いた直後・保存の成功後は false。
+    public var hasUnsavedChanges: Bool {
+        team.members != savedMembers || slotIDs != savedSlotIDs
     }
 
     /// 取り込んだメンバーを末尾に追加する(P6-20。ADR-0501「P6-20」)。**保存はしない**(`addMember` と同じ。
@@ -190,6 +262,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
         guard !accepted.isEmpty else { return 0 }
 
         team.members.append(contentsOf: accepted)
+        rebuildMembersFromSlots()
         let tokens = Dictionary(uniqueKeysWithValues: accepted.map { ($0.id, nextMemberSpeciesToken(for: $0.id)) })
         var detailsByKey: [String: SpeciesDetail] = [:]
         for member in accepted {
@@ -218,6 +291,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     /// `team.members` から取り除き、対応する選択肢・エラー・世代も消す。
     public func removeMember(id: String) {
         team.members.removeAll(where: { $0.id == id })
+        for index in slotIDs.indices where slotIDs[index] == id { slotIDs[index] = nil }
         moveOptionsByMember[id] = nil
         abilityOptionsByMember[id] = nil
         memberErrors[id] = nil
@@ -446,11 +520,18 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
 
     // MARK: - 保存
 
-    /// `store.save(team)` を呼ぶ。成功で true、失敗で `error` を立てて false。
+    /// 最終更新を刻んで `store.save(team)` を呼ぶ。成功で true(保存済みの内容を更新し `didSave`)、
+    /// 失敗で `error` を立てて false(下書きは残す)。名前は変えない(旧データの名前も保つ)。
     @discardableResult
     public func save() async -> Bool {
+        var toSave = team
+        toSave.updatedAt = now()
         do {
-            try await store.save(team)
+            try await store.save(toSave)
+            team = toSave
+            savedMembers = team.members
+            savedSlotIDs = slotIDs
+            savedOnce = true
             error = nil
             return true
         } catch {

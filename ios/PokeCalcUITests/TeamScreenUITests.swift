@@ -1,21 +1,19 @@
 import XCTest
 
-/// 構築ビルダー(P6-2c)の骨組みを確かめる。`POKECALC_USE_MOCK=1` で起動してモックを強制する
-/// (ADR-0501「P6-2c」5章)。一覧・編集の識別子は ADR の契約どおりだが、構築・メンバーの id は
-/// 実行時に生成される UUID なので `BEGINSWITH` の述語で辿る。数値の正しさではなく操作が
-/// つながることだけを見る(CalcScreenUITests / ReverseScreenUITests と同じ粒度)。
+/// 構築(P6-2c。F-08 で作り直し: ADR-0522)。`POKECALC_USE_MOCK=1` で起動してモックを強制する
+/// (ADR-0501「P6-2c」5章)。構築・メンバーの id は実行時に生成される UUID なので `BEGINSWITH` の述語で辿る。
+/// 数値の正しさではなく操作がつながることだけを見る(CalcScreenUITests / ReverseScreenUITests と同じ粒度)。
+/// 文言は Web と同じ語(「新しい構築」「N体目」「一覧に戻る」「保存していない変更があります」「構築 N」)。
 @MainActor
 final class TeamScreenUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
-    /// `Resources/species.json` の先頭(モックの種族一覧の並びはフィクスチャの並び順のまま。
-    /// `MockPokeCalcService.matchingByPrefix` は空クエリなら並べ替えない)。
+    /// `Resources/species.json` の先頭(モックの種族一覧の並びはフィクスチャの並び順のまま)。
     private static let firstMockSpeciesName = "テストモンいち"
-    /// `Resources/species.json` の3番目(issue #68: 種族検索シートで打ってから選ぶ確認用。
-    /// メンバー追加時の既定=先頭とは別の種族にして、変更したことを検査できるようにする)。
+    private static let secondMockSpeciesName = "テストモンに"
+    /// `Resources/species.json` の3番目(種族検索シートで打ってから選ぶ確認用)。
     private static let thirdMockSpeciesName = "テストモンさん"
     private static let thirdMockSpeciesKey = "9003-000"
-    /// `Resources/moves.json` のうち、3番目の種族(`thirdMockSpeciesKey`)の learnset にある技
-    /// (issue #68: 技検索シートで打ってから技スロットに入れる確認用)。
+    /// 3番目の種族の learnset にある技(技検索シートで打ってから技スロットに入れる確認用)。
     private static let searchableMoveName = "テストわざとくしゅB"
     private static let searchableMoveID = "test-move-special-b"
 
@@ -28,10 +26,12 @@ final class TeamScreenUITests: XCTestCase {
         app.descendants(matching: .any)[identifier]
     }
 
-    /// id を含む動的な identifier(`teamRow-<id>` 等)を前方一致で探す。このテストは構築を1つしか
-    /// 作らないので、前方一致でも一意に定まる。
+    private func elements(_ app: XCUIApplication, beginningWith prefix: String) -> XCUIElementQuery {
+        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix))
+    }
+
     private func elementBeginningWith(_ app: XCUIApplication, _ prefix: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+        elements(app, beginningWith: prefix).firstMatch
     }
 
     private func launchTeamList() -> XCUIApplication {
@@ -45,89 +45,85 @@ final class TeamScreenUITests: XCTestCase {
         return app
     }
 
-    /// 「一覧を開く→新規作成→名前を付けて保存→一覧に出る→開いてメンバーを1体追加して保存→
-    /// 一覧から削除できる」の一連(ADR-0501「P6-2c」5章)。`RootView.makeTeamStore()` が
-    /// `POKECALC_USE_MOCK=1` のとき起動のたびに専用 UserDefaults suite を空にするため、
-    /// 開いた直後は必ず0件から始まる。
-    func testCreateAddMemberSaveAndDeleteTeamFlow() {
-        let app = launchTeamList()
-        XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "開いた直後は0件")
-
-        // 新規作成: `createTeamButton` → アラートに名前を入れて「作成」。
-        let teamName = "テストパーティUI"
+    /// [新しい構築]を押して、できた構築の編集画面を開く。
+    private func createTeam(_ app: XCUIApplication) {
         let createButton = element(app, "createTeamButton")
         XCTAssertTrue(createButton.waitForExistence(timeout: Self.existenceTimeout))
         createButton.tap()
-
-        // アラートの `TextField` は UIKit の `UIAlertController` が作る `UITextField` に写像され、
-        // SwiftUI 側の `.accessibilityIdentifier` が橋渡しされない(実装時に確認した制約。
-        // ADR-0501「P6-2c」「### 7 確認事項」)。アラートに入力欄は1つしか無いので `firstMatch` で辿る。
-        let nameField = app.alerts.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
-        nameField.tap()
-        nameField.typeText(teamName)
-        app.alerts.buttons["作成"].tap()
-
-        // 保存されて編集画面へ遷移する。
         XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertFalse(elementBeginningWith(app, "memberCard-").exists, "追加する前はメンバーが無い")
-
-        // メンバーを1体追加する(`addMemberButton` → issue #68: 検索シートで種族を選ぶ)。
-        let addMemberButton = element(app, "addMemberButton")
-        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
-        addMemberButton.tap()
-        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
-        let firstSpeciesOption = app.buttons[Self.firstMockSpeciesName]
-        XCTAssertTrue(firstSpeciesOption.waitForExistence(timeout: Self.existenceTimeout))
-        firstSpeciesOption.tap()
-        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
-
-        let memberCard = elementBeginningWith(app, "memberCard-")
-        XCTAssertTrue(memberCard.waitForExistence(timeout: Self.existenceTimeout), "追加したメンバーのカードが出る")
-
-        // 保存すると一覧に戻る。
-        let saveButton = element(app, "saveTeamButton")
-        XCTAssertTrue(saveButton.waitForExistence(timeout: Self.existenceTimeout))
-        saveButton.tap()
-        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
-
-        let row = elementBeginningWith(app, "teamRow-")
-        XCTAssertTrue(row.waitForExistence(timeout: Self.existenceTimeout), "保存した構築が一覧に出る")
-        XCTAssertEqual(row.label, teamName)
-
-        // 削除すると一覧から消え、空の案内に戻る。
-        let deleteButton = elementBeginningWith(app, "teamDelete-")
-        XCTAssertTrue(deleteButton.waitForExistence(timeout: Self.existenceTimeout))
-        deleteButton.tap()
-        XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "削除すると0件に戻る")
     }
 
-    /// issue #68: メンバーの種族セレクタ(`memberSpeciesPicker-<id>`)・技スロット
-    /// (`memberMoveSlot-<id>-<index>`)もどちらも検索シート経由(`Menu` ではなくなった)。
-    /// 検索欄に打って絞り込み、1件タップするとシートが閉じて選択が反映されることを確かめる。
-    func testMemberSpeciesAndMoveSlotSearchSheetsFilterAndSelect() {
+    private func launchEditor() -> XCUIApplication {
         let app = launchTeamList()
-        let createButton = element(app, "createTeamButton")
-        XCTAssertTrue(createButton.waitForExistence(timeout: Self.existenceTimeout))
-        createButton.tap()
-        let nameField = app.alerts.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
-        nameField.tap()
-        nameField.typeText("テスト検索シートUI")
-        app.alerts.buttons["作成"].tap()
-        XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
+        createTeam(app)
+        return app
+    }
 
-        let addMemberButton = element(app, "addMemberButton")
-        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
-        addMemberButton.tap()
+    /// 空の枠 `slot`(1 始まり)の種族を、検索シートで `name` に決める。
+    private func pickSpecies(_ app: XCUIApplication, slot: Int, name: String) {
+        let picker = element(app, "slotSpeciesPicker-\(slot)")
+        XCTAssertTrue(picker.waitForExistence(timeout: Self.existenceTimeout), "\(slot)体目の「ポケモン」欄")
+        picker.tap()
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
-        let firstSpeciesOption = app.buttons[Self.firstMockSpeciesName]
-        XCTAssertTrue(firstSpeciesOption.waitForExistence(timeout: Self.existenceTimeout))
-        firstSpeciesOption.tap()
-        let memberCard = elementBeginningWith(app, "memberCard-")
-        XCTAssertTrue(memberCard.waitForExistence(timeout: Self.existenceTimeout))
+        let option = app.buttons[name]
+        XCTAssertTrue(option.waitForExistence(timeout: Self.existenceTimeout))
+        option.tap()
+        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
+    }
 
-        // メンバーの種族を検索シートで3番目の種族に変える(打って絞り込んでから選ぶ)。
+    private func save(_ app: XCUIApplication) {
+        element(app, "saveTeamButton").tap()
+        XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout), "保存しました")
+    }
+
+    // MARK: 6 つの枠
+
+    /// [新しい構築]で名前の入力なしに構築ができ、すぐ編集画面が開く。6 つの枠が最初から並び、空の枠は
+    /// 「ポケモン」の欄と案内だけ(技・持ち物などは出ない)。
+    func testNewTeamOpensEditorWithSixEmptySlots() {
+        let app = launchTeamList()
+        XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "開いた直後は0件")
+        XCTAssertTrue(element(app, "teamListEmpty").label.contains("新しい構築"), "次にすることを書いた案内")
+        XCTAssertFalse(element(app, "teamNameField").exists, "構築名の入力欄は無い")
+        createTeam(app)
+
+        XCTAssertFalse(element(app, "teamNameField").exists, "編集画面にも構築名の入力欄は無い")
+        for number in 1...6 {
+            XCTAssertTrue(element(app, "teamSlot-\(number)").exists, "\(number)体目の枠")
+            XCTAssertTrue(element(app, "slotSpeciesPicker-\(number)").exists, "\(number)体目の「ポケモン」欄")
+            XCTAssertEqual(
+                element(app, "slotEmptyHint-\(number)").label, "ポケモンを選ぶと、技・持ち物・特性などを決められます")
+        }
+        XCTAssertFalse(elementBeginningWith(app, "memberCard-").exists, "空の枠に技・持ち物などは出ない")
+        XCTAssertFalse(elementBeginningWith(app, "memberMoveSlot-").exists)
+        XCTAssertFalse(element(app, "slotMoveUp-1").exists, "空の枠に入れ替え・外すは出ない")
+        XCTAssertFalse(element(app, "teamUnsavedNotice").exists, "開いた直後は未保存の印が出ない")
+        XCTAssertFalse(element(app, "addMemberButton").exists, "[メンバーを追加]は無い")
+    }
+
+    /// 種族を選ぶとその枠だけが展開し、技(4つ)・持ち物・特性・性格・SP の入力欄が出る。
+    func testChoosingSpeciesShowsTheInputsForThatSlotOnly() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+
+        XCTAssertTrue(elementBeginningWith(app, "memberCard-").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(elements(app, beginningWith: "memberMoveSlot-").count, 4, "技は4つ")
+        XCTAssertTrue(elementBeginningWith(app, "memberItemPicker-").exists)
+        XCTAssertTrue(elementBeginningWith(app, "memberAbilityPicker-").exists)
+        XCTAssertTrue(elementBeginningWith(app, "memberNaturePicker-").exists)
+        XCTAssertTrue(elementBeginningWith(app, "memberSP-").exists)
+        XCTAssertTrue(element(app, "slotMoveDown-1").exists)
+        XCTAssertTrue(element(app, "slotRemove-1").exists)
+        XCTAssertTrue(element(app, "slotSpeciesPicker-2").exists, "他の枠は空のまま")
+        XCTAssertTrue(element(app, "teamUnsavedNotice").exists, "変更したので未保存の印が出る")
+        XCTAssertEqual(element(app, "teamUnsavedNotice").label, "保存していない変更があります")
+    }
+
+    /// 3番目の種族を検索シートで打って選び、技スロットも検索シートで埋める(issue #68 の流れ)。
+    func testSpeciesAndMoveSlotSearchSheetsFilterAndSelect() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+
         let memberSpeciesPicker = elementBeginningWith(app, "memberSpeciesPicker-")
         XCTAssertTrue(memberSpeciesPicker.waitForExistence(timeout: Self.existenceTimeout))
         memberSpeciesPicker.tap()
@@ -142,7 +138,6 @@ final class TeamScreenUITests: XCTestCase {
         XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
         XCTAssertEqual(memberSpeciesPicker.label, Self.thirdMockSpeciesName, "選択がメンバーのヘッダーに反映される")
 
-        // 技スロット(先頭)を検索シートで埋める(打って絞り込んでから選ぶ)。
         let moveSlot = elementBeginningWith(app, "memberMoveSlot-")
         XCTAssertTrue(moveSlot.waitForExistence(timeout: Self.existenceTimeout))
         moveSlot.tap()
@@ -156,5 +151,202 @@ final class TeamScreenUITests: XCTestCase {
         moveResult.tap()
         XCTAssertFalse(element(app, "moveSearchSheet").exists, "選ぶとシートが閉じる")
         XCTAssertEqual(moveSlot.label, Self.searchableMoveName, "選択が技スロットに反映される")
+    }
+
+    // MARK: 上へ・下へ・外す
+
+    /// [1体目を下へ]で 2 体目と入れ替わる。1体目の上・6体目の下は無効。
+    func testMoveDownAndUpSwapsNeighbouringSlots() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        pickSpecies(app, slot: 2, name: Self.secondMockSpeciesName)
+
+        let pickers = elements(app, beginningWith: "memberSpeciesPicker-")
+        XCTAssertEqual(pickers.count, 2)
+        func order() -> [String] {
+            let sorted = (0..<pickers.count).map { pickers.element(boundBy: $0) }.sorted { $0.frame.minY < $1.frame.minY }
+            return sorted.map(\.label)
+        }
+        XCTAssertEqual(order(), [Self.firstMockSpeciesName, Self.secondMockSpeciesName])
+        XCTAssertFalse(element(app, "slotMoveUp-1").isEnabled, "1体目は上へ動かせない")
+
+        element(app, "slotMoveDown-1").tap()
+        XCTAssertEqual(order(), [Self.secondMockSpeciesName, Self.firstMockSpeciesName], "入れ替わる")
+
+        element(app, "slotMoveUp-2").tap()
+        XCTAssertEqual(order(), [Self.firstMockSpeciesName, Self.secondMockSpeciesName], "戻る")
+    }
+
+    /// [N体目を外す]でその枠だけが空に戻り、他の枠は動かない。
+    func testRemovingASlotEmptiesOnlyThatSlot() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        pickSpecies(app, slot: 2, name: Self.secondMockSpeciesName)
+
+        element(app, "slotRemove-1").tap()
+        XCTAssertTrue(element(app, "slotSpeciesPicker-1").waitForExistence(timeout: Self.existenceTimeout), "1体目が空に戻る")
+        XCTAssertEqual(elements(app, beginningWith: "memberCard-").count, 1)
+        XCTAssertEqual(elementBeginningWith(app, "memberSpeciesPicker-").label, Self.secondMockSpeciesName, "2体目は動かない")
+        XCTAssertFalse(element(app, "slotSpeciesPicker-2").exists, "2体目は埋まったまま")
+    }
+
+    // MARK: 保存・一覧に戻る
+
+    /// 保存は明示。保存すると未保存の印が「保存しました」に変わり、編集画面に残る。
+    func testExplicitSaveClearsTheUnsavedNotice() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        XCTAssertTrue(element(app, "teamUnsavedNotice").exists)
+        save(app)
+        XCTAssertFalse(element(app, "teamUnsavedNotice").exists)
+        XCTAssertTrue(element(app, "teamEditScreen").exists, "保存しても編集画面に残る")
+    }
+
+    /// 未保存で[一覧に戻る]を押すと 2 段階: 確認が出て、[編集を続ける]で閉じ、[保存せずに戻る]で戻る。
+    func testLeavingWithUnsavedChangesAsksFirst() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamLeaveConfirmNotice").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(element(app, "teamLeaveConfirmNotice").label, "保存していない変更があります。保存せずに一覧に戻りますか")
+        XCTAssertTrue(element(app, "teamEditScreen").exists, "まだ戻っていない")
+        XCTAssertEqual(element(app, "teamLeaveDiscardButton").label, "保存せずに戻る")
+
+        element(app, "teamLeaveCancelButton").tap()
+        XCTAssertFalse(element(app, "teamLeaveConfirmNotice").exists, "編集を続ける")
+        XCTAssertTrue(elementBeginningWith(app, "memberCard-").exists, "下書きは残っている")
+
+        element(app, "backToListButton").tap()
+        element(app, "teamLeaveDiscardButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+        let count = elementBeginningWith(app, "teamCount-")
+        XCTAssertTrue(count.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(count.label, "0/6体", "保存していない変更は捨てられた")
+    }
+
+    /// 左端から右へのスワイプ(システムの戻り)で未保存の編集が確認なしに消えない。
+    func testEdgeSwipeBackDoesNotDiscardUnsavedChanges() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        let window = app.windows.firstMatch
+        let start = window.coordinate(withNormalizedOffset: CGVector(dx: 0.0, dy: 0.5))
+        let end = window.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        XCTAssertTrue(element(app, "teamEditScreen").exists, "編集画面に残る")
+        XCTAssertFalse(element(app, "teamListScreen").exists)
+        XCTAssertTrue(element(app, "teamUnsavedNotice").exists, "未保存の印が残る")
+        XCTAssertTrue(elementBeginningWith(app, "memberCard-").exists)
+    }
+
+    /// 未保存の変更が無ければ、確認なしで一覧に戻る。
+    func testLeavingWithoutChangesGoesStraightBack() {
+        let app = launchEditor()
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(element(app, "teamLeaveConfirmNotice").exists)
+    }
+
+    // MARK: 一覧のカード
+
+    /// 保存した構築が一覧のカードに出る: 表示名「構築 N」・アイコン・n/6体・最終更新・[開く]。開き直すと枠が埋まっている。
+    func testSavedTeamAppearsAsACardAndReopens() {
+        let app = launchEditor()
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        pickSpecies(app, slot: 2, name: Self.secondMockSpeciesName)
+        save(app)
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        let name = elementBeginningWith(app, "teamName-")
+        XCTAssertTrue(name.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(name.label, "構築 1")
+        XCTAssertFalse(app.staticTexts["名称未設定"].exists, "既定名の文字は画面に出さない")
+        XCTAssertEqual(elementBeginningWith(app, "teamCount-").label, "2/6体")
+        XCTAssertTrue(elementBeginningWith(app, "teamUpdated-").label.hasPrefix("最終更新: "))
+        XCTAssertTrue(elementBeginningWith(app, "teamIcons-").exists, "6体までのアイコン列")
+        XCTAssertTrue(elementBeginningWith(app, "teamCard-").exists)
+
+        elementBeginningWith(app, "teamOpen-").tap()
+        XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(elements(app, beginningWith: "memberCard-").count, 2, "保存した2体が1・2体目に入っている")
+        XCTAssertTrue(element(app, "slotSpeciesPicker-3").exists, "残りは空の枠")
+        XCTAssertFalse(element(app, "teamUnsavedNotice").exists, "開いた直後は未保存の印が出ない")
+    }
+
+    /// 構築の表示名は作成の古い順に「構築 1」「構築 2」。
+    func testTeamsAreNumberedInCreationOrder() {
+        let app = launchEditor()
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+        createTeam(app)
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        let names = elements(app, beginningWith: "teamName-")
+        XCTAssertTrue(names.firstMatch.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(
+            Set((0..<names.count).map { names.element(boundBy: $0).label }), ["構築 1", "構築 2"])
+    }
+
+    /// 削除は 2 段階: 押すと確認が出て、[やめる]で残り、[削除する]で消えて空の案内に戻る。
+    func testDeleteAsksForConfirmationFirst() {
+        let app = launchEditor()
+        element(app, "backToListButton").tap()
+        let deleteButton = elementBeginningWith(app, "teamDelete-")
+        XCTAssertTrue(deleteButton.waitForExistence(timeout: Self.existenceTimeout))
+        deleteButton.tap()
+        XCTAssertTrue(elementBeginningWith(app, "teamDeleteConfirmNotice-").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(elementBeginningWith(app, "teamCard-").exists, "確認の間は消えない")
+
+        elementBeginningWith(app, "teamDeleteCancel-").tap()
+        XCTAssertFalse(elementBeginningWith(app, "teamDeleteConfirmNotice-").exists)
+        XCTAssertTrue(elementBeginningWith(app, "teamCard-").exists, "やめると残る")
+
+        elementBeginningWith(app, "teamDelete-").tap()
+        let confirm = elementBeginningWith(app, "teamDeleteConfirm-")
+        XCTAssertTrue(confirm.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertEqual(confirm.label, "削除する")
+        confirm.tap()
+        XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "削除すると0件に戻る")
+    }
+
+    // MARK: Showdown 形式は補助(閉じた折りたたみ)
+
+    /// 取り込みは一覧の下の閉じた折りたたみ。開くと説明と入力例が見える。
+    func testImportFoldIsClosedAndShowsHelpAndExampleWhenOpened() {
+        let app = launchTeamList()
+        let toggle = element(app, "teamImportFoldToggle")
+        XCTAssertTrue(toggle.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(toggle.label.contains("Showdown 形式で取り込む"))
+        XCTAssertFalse(element(app, "teamImportHelp").exists, "最初は閉じている")
+        XCTAssertFalse(element(app, "importTextEditor").exists)
+
+        toggle.tap()
+        let help = element(app, "teamImportHelp")
+        XCTAssertTrue(help.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(help.label.contains("新しい構築として取り込めます"))
+        XCTAssertTrue(help.label.contains("日本語の名前"))
+        let example = element(app, "teamImportExample")
+        XCTAssertTrue(example.exists)
+        XCTAssertTrue(example.label.contains("Ability:"), "入力の例(1体分)")
+        XCTAssertTrue(example.label.contains("- "), "技の行")
+        XCTAssertTrue(element(app, "importTextEditor").exists)
+
+        toggle.tap()
+        XCTAssertFalse(element(app, "teamImportHelp").exists, "もう一度押すと閉じる")
+    }
+
+    /// 書き出しは編集画面の下の閉じた折りたたみ。
+    func testExportFoldIsClosedAndOpensInTheEditor() {
+        let app = launchEditor()
+        let toggle = element(app, "teamExportFoldToggle")
+        XCTAssertTrue(toggle.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(toggle.label.contains("Showdown 形式で書き出す"))
+        XCTAssertFalse(element(app, "exportTeamTextButton").exists, "最初は閉じている")
+        toggle.tap()
+        XCTAssertTrue(element(app, "teamExportHelp").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(element(app, "exportTeamTextButton").exists)
+        XCTAssertFalse(element(app, "teamTextTransferButton").exists, "旧「テキストで書き出し・取り込み」の入口は無い")
     }
 }

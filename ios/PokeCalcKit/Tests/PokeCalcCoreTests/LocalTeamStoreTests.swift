@@ -95,6 +95,28 @@ final class LocalTeamStoreTests: XCTestCase {
         XCTAssertEqual(listed.map(\.id), ["team-1", "team-2"])
     }
 
+    /// 旧データ(`updatedAt` の無い名前入り JSON)を読め、編集して保存しても名前が残り `updatedAt` が入る(F-08 の互換)。
+    func testLegacyJSONWithoutUpdatedAtRoundTrips() async throws {
+        let json = #"[{"id":"legacy-1","name":"テストむかしのなまえ","members":[]}]"#
+        defaults.set(Data(json.utf8), forKey: LocalTeamStore.teamsDefaultsKey)
+        let store = LocalTeamStore(defaults: defaults)
+
+        let listed = try await store.list()
+        var team = try XCTUnwrap(listed.first)
+        XCTAssertEqual(team.name, "テストむかしのなまえ")
+        XCTAssertNil(team.updatedAt)
+
+        team.members = [TeamMember(id: "m1", speciesKey: "9001-000", natureId: "n")]
+        team.updatedAt = Date(timeIntervalSince1970: 1_800_000_000)
+        try await store.save(team)
+
+        let fetched = try await store.get(id: "legacy-1")
+        let reloaded = try XCTUnwrap(fetched)
+        XCTAssertEqual(reloaded.name, "テストむかしのなまえ")
+        XCTAssertEqual(reloaded.updatedAt, Date(timeIntervalSince1970: 1_800_000_000))
+        XCTAssertEqual(reloaded.members.count, 1)
+    }
+
     func testDeleteRemovesTeam() async throws {
         let store = LocalTeamStore(defaults: defaults)
         try await store.save(Team(id: "team-1", name: "テストチーム1"))

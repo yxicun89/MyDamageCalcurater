@@ -2,168 +2,160 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// TeamEditView: 構築編集画面(P6-2c・ADR-0501「P6-2c」5章)。
+// TeamEditView: 構築編集画面(P6-2c・ADR-0501「P6-2c」5章。F-08 で作り直し: ADR-0522)。
 //
-// ロジックは持たない。`TeamEditViewModel`(PokeCalcCore)の状態を描き、操作を async/同期メソッドへ
-// つなぐだけ(ADR-0500 §1)。メンバーカードは `TeamEditMemberCard.swift` に分ける。
+// 6 つの枠(1体目〜6体目)が最初から並ぶ。空の枠は「ポケモン」の欄と案内だけ、種族を選ぶと技・持ち物などの
+// カードになる。保存は明示([保存])。ロジックは持たない。`TeamEditViewModel`(PokeCalcCore)の状態を描き、
+// 操作を async/同期メソッドへつなぐだけ(ADR-0500 §1)。メンバーカードは `TeamEditMemberCard.swift`、
+// 枠の部品は `TeamSlotViews.swift` に分ける。
 
 /// 構築編集画面。
 struct TeamEditView: View {
-    /// `TeamListView.loadingIndicatorHeight` と同じ値(マスタ読み込み中にレイアウトが動かないよう
-    /// 高さを固定する。同じ定数を画面ごとに複製しているのは coding-rules §2 が認める独立した View
-    /// 定数の重複で、値の意味は「読み込み中の枠の高さ」で揃えている)。
+    /// `TeamListView.loadingIndicatorHeight` と同じ値(マスタ読み込み中にレイアウトが動かないよう高さを固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
     @State private var viewModel: TeamEditViewModel
     @Environment(\.dismiss) private var dismiss
-    /// チーム名の入力欄はローカルの `@State` を真とし、`viewModel.setName(_:)` へ同期的に反映する
-    /// (`ReverseScreenObservations.swift` の観測欄と同じ理由: `viewModel.team.name` は前後空白を
-    /// トリムした後の値になるため、入力中の文字列をそのまま `TextField` に戻すとカーソル位置が
-    /// 揺れうる)。
-    @State private var nameText: String
-    @State private var isSpeciesSearchPresented = false
-    /// 非 nil のとき、テキストの書き出し・取り込みシートが開いている(P6-20)。
-    @State private var textRequest: TeamTextRequest?
-    /// 取り込んだ体数の通知(追加後に画面へ出す。次にシートを開くまで残す)。
-    @State private var importedCount: Int?
+    /// 見出しに出す表示名(「構築 N」または旧データの名前)。
+    private let title: String
     private let service: any PokeCalcService
+    /// 「保存していない変更があります。保存せずに一覧に戻りますか」の確認を出している。
+    @State private var isConfirmingLeave = false
+    @State private var isExportFoldOpen = false
 
-    init(store: any TeamStore, service: any PokeCalcService, team: Team) {
+    init(store: any TeamStore, service: any PokeCalcService, team: Team, title: String) {
         self.service = service
+        self.title = title
         _viewModel = State(initialValue: TeamEditViewModel(store: store, service: service, team: team))
-        _nameText = State(initialValue: team.name)
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: SpacingToken.x4) {
-                if let error = viewModel.error {
-                    ErrorBannerView(message: error.message, identifier: "teamEditErrorMessage")
-                }
-                loadingSlot
-                nameField
-                membersSection
-                addMemberSection
-                textTransferSection
-                saveButton
-            }
-            .padding(SpacingToken.x4)
+        // 保存の帯はスクロールの外(下)に置く。`safeAreaInset` だとスクロールの中身が帯の下に潜り込み、
+        // 帯に隠れた操作に届かない(XCUITest のスクロールも帯の下を「見えている」と数える)ため。
+        VStack(spacing: 0) {
+            // 識別子は ScrollView だけに付ける(外側の VStack に付けると保存の帯の子の識別子を上書きする)。
+            ScrollView { content }
+                .accessibilityIdentifier("teamEditScreen")
+            saveBar
         }
         .popScreenBackground()
-        .accessibilityIdentifier("teamEditScreen")
+        // 戻る操作は[一覧に戻る]に一本化する(未保存の確認を必ず通すため、システムの戻るは隠す)。
+        .navigationBarBackButtonHidden(true)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                Text(title)
+                    .font(TextStyleToken.heading.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .accessibilityIdentifier("teamEditTitle")
+            }
+        }
         .task { await viewModel.load() }
     }
 
-    private var nameField: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            TextField(
-                "チーム名",
-                text: Binding(
-                    get: { nameText },
-                    set: { newValue in
-                        nameText = newValue
-                        viewModel.setName(newValue)
-                    }
-                )
-            )
-            .font(TextStyleToken.heading.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .padding(SpacingToken.x3)
-            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
-            .accessibilityIdentifier("teamNameField")
-
-            if viewModel.nameError != nil {
-                Text(TeamFieldError.emptyName.uiMessage)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
-                    .accessibilityIdentifier("teamNameError")
+    private var content: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x4) {
+            backRow
+            if isConfirmingLeave {
+                leaveConfirmation
             }
-        }
-    }
-
-    private var membersSection: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            ForEach(viewModel.team.members, id: \.id) { member in
-                MemberCardView(viewModel: viewModel, member: member) {
-                    importedCount = nil
-                    textRequest = TeamTextRequest(exportMembers: [member])
-                }
+            if let error = viewModel.error {
+                ErrorBannerView(message: error.message, identifier: "teamEditErrorMessage")
             }
-        }
-    }
-
-    /// issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenCards` と同じ理由)。
-    private var addMemberSection: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Button {
-                isSpeciesSearchPresented = true
-            } label: {
-                Label("メンバーを追加", systemImage: "plus.circle")
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-            }
-            .accessibilityIdentifier("addMemberButton")
-            .sheet(isPresented: $isSpeciesSearchPresented) {
-                SpeciesSearchSheet(viewModel: viewModel) { option in
-                    Task { await viewModel.addMember(speciesKey: option.key) }
-                }
-            }
-
+            loadingSlot
+            slotsSection
             if let teamError = viewModel.teamError {
-                Text(teamError.uiMessage)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
+                PopNoticeView(kind: .error, message: teamError.uiMessage, identifier: "teamLimitMessage")
+            }
+            TeamFold(
+                title: TeamLabels.exportFold, identifier: "teamExportFold", isOpen: $isExportFoldOpen
+            ) {
+                TeamExportSection(service: service, members: viewModel.team.members)
             }
         }
+        .padding(SpacingToken.x4)
     }
 
-    /// P6-20: テキストでの書き出し・取り込みの入口。`Menu` ではなく通常のボタンでシートを開く。
-    private var textTransferSection: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Button {
-                importedCount = nil
-                textRequest = TeamTextRequest(exportMembers: nil)
-            } label: {
-                Label(ShowdownTextLabels.transferButton, systemImage: "doc.on.clipboard")
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-            }
-            .accessibilityIdentifier("teamTextTransferButton")
-            .sheet(item: $textRequest) { request in
-                TeamTextSheet(
-                    service: service, members: viewModel.team.members, initialExportMembers: request.exportMembers
-                ) { imported in
-                    Task { importedCount = await viewModel.importMembers(imported) }
-                }
-            }
+    // MARK: - 一覧に戻る
 
-            if let importedCount {
-                Text(ShowdownTextLabels.importedNotice(count: importedCount))
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("importedNotice")
-            }
-        }
-    }
-
-    private var saveButton: some View {
+    private var backRow: some View {
         Button {
-            Task {
-                if await viewModel.save() {
-                    dismiss()
-                }
+            if viewModel.hasUnsavedChanges {
+                isConfirmingLeave = true
+            } else {
+                dismiss()
             }
         } label: {
-            PopLabel(title: "保存", systemImage: PopSymbol.save)
-                .frame(maxWidth: .infinity)
+            PopLabel(title: TeamLabels.backToList, systemImage: "chevron.left")
         }
-        .buttonStyle(PillButtonStyle(kind: .primary))
-        .accessibilityIdentifier("saveTeamButton")
+        .buttonStyle(PillButtonStyle(kind: .secondary))
+        .accessibilityIdentifier("backToListButton")
+    }
+
+    /// 未保存で[一覧に戻る]を押したときの 2 段階目(alert ではなくカードで描く。P6-7)。
+    private var leaveConfirmation: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            PopNoticeView(kind: .error, message: TeamLabels.leaveConfirmNotice, identifier: "teamLeaveConfirmNotice")
+            Button {
+                dismiss()
+            } label: {
+                TeamTextControls.buttonLabel(TeamLabels.leaveDiscard)
+            }
+            .buttonStyle(PillButtonStyle(kind: .danger))
+            .accessibilityIdentifier("teamLeaveDiscardButton")
+            Button {
+                isConfirmingLeave = false
+            } label: {
+                TeamTextControls.buttonLabel(TeamLabels.leaveCancel)
+            }
+            .buttonStyle(PillButtonStyle(kind: .secondary))
+            .accessibilityIdentifier("teamLeaveCancelButton")
+        }
+    }
+
+    // MARK: - 6 つの枠
+
+    private var slotsSection: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x4) {
+            ForEach(0..<TeamLimits.maxMembers, id: \.self) { index in
+                TeamSlotView(viewModel: viewModel, index: index)
+            }
+        }
+    }
+
+    // MARK: - 保存
+
+    /// 画面の下に常に出す保存の帯(枠が長くても[保存]に届く。スクロールの外)。未保存・保存済みは文字で伝える。
+    private var saveBar: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            if viewModel.hasUnsavedChanges {
+                Text(TeamLabels.unsavedNotice)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("teamUnsavedNotice")
+            } else if viewModel.didSave {
+                Text(TeamLabels.savedNotice)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("teamSavedNotice")
+            }
+            Button {
+                Task { await viewModel.save() }
+            } label: {
+                PopLabel(title: TeamLabels.save, systemImage: PopSymbol.save)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PillButtonStyle(kind: .primary))
+            .accessibilityIdentifier("saveTeamButton")
+        }
+        .padding(SpacingToken.x3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(ColorToken.surfaceCard.color)
     }
 
     /// マスタ読み込み中はピッカーが空のまま無反応に見えるため、`TeamListView.loadingSlot` と同じ
-    /// (高さ固定・読み込み中だけ表示の)インジケータを出す(critic 指摘。ADR-0501「P6-2c」5章の
-    /// identifier 契約に無い項目なので任意名)。
+    /// (高さ固定・読み込み中だけ表示の)インジケータを出す。
     private var loadingSlot: some View {
         Group {
             if viewModel.isLoading {
@@ -179,7 +171,7 @@ struct TeamEditView: View {
 #Preview {
     if let mock = try? MockPokeCalcService() {
         NavigationStack {
-            TeamEditView(store: LocalTeamStore(), service: mock, team: Team(name: "テストパーティ"))
+            TeamEditView(store: LocalTeamStore(), service: mock, team: Team(name: TeamNaming.defaultName), title: TeamNaming.untitled(1))
         }
     } else {
         Text("プレビュー用モックの読み込みに失敗")

@@ -570,18 +570,34 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertPresetPillsStackVertically(app, identifiers: Self.reverseKnownDefenderPresetPillIdentifiers)
     }
 
-    // MARK: - 構築(一覧・編集)画面
+    // MARK: - 構築(一覧・編集)画面(F-08 で作り直し: ADR-0522)
 
     private static let teamListIdentifiers = [
         "teamListScreen",
         "createTeamButton",
+        "teamImportFoldToggle",
     ]
 
     private static let teamEditIdentifiers = [
         "teamEditScreen",
-        "teamNameField",
-        "addMemberButton",
+        "backToListButton",
         "saveTeamButton",
+        "teamSlot-1",
+        "slotSpeciesPicker-1",
+        "slotEmptyHint-1",
+        "teamSlot-6",
+        "teamExportFoldToggle",
+    ]
+
+    /// 1体目の枠が埋まったあとの編集画面(1体目の「ポケモン」欄・案内は無くなり、2体目の欄が残る)。
+    private static let teamEditFilledIdentifiers = [
+        "teamEditScreen",
+        "backToListButton",
+        "saveTeamButton",
+        "teamSlot-1",
+        "slotSpeciesPicker-2",
+        "teamSlot-6",
+        "teamExportFoldToggle",
     ]
 
     /// `RootView.makeTeamStore()` が `POKECALC_USE_MOCK=1` のとき起動のたびに専用 UserDefaults suite
@@ -593,17 +609,11 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
-    /// 構築を1つ作って編集画面まで進む(`CalcScreenUITests.createTeamWithOneMember` の前半と同じ操作列。
-    /// メンバーは追加せず、編集画面そのものの要素だけを見る)。
+    /// 構築を1つ作って編集画面まで進む(名前の入力は無く、[新しい構築]ですぐ編集画面が開く)。
     private func createTeamAndOpenEditScreen(_ app: XCUIApplication) {
         let createButton = element(app, "createTeamButton")
         XCTAssertTrue(createButton.waitForExistence(timeout: Self.existenceTimeout))
         createButton.tap()
-        let nameField = app.alerts.textFields.firstMatch
-        XCTAssertTrue(nameField.waitForExistence(timeout: Self.existenceTimeout))
-        nameField.tap()
-        nameField.typeText("テストこうちくP6-14")
-        app.alerts.buttons["作成"].tap()
         XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -641,61 +651,45 @@ final class LargeTextLayoutUITests: XCTestCase {
     /// (`Resources/species.json` の2番目)。`speciesSearchSheet` 経由で選ぶ(issue #68)。
     private static let mockMemberSpeciesName = "テストモンに"
 
-    /// メンバーを1体追加した状態(`TeamEditMemberCard`)の AX5 検査(ADR-0501「P6-14」§5
-    /// 「未確認・要フォローアップ」)。`spStepper`(`TeamEditMemberCard.swift` 258〜284行)の
-    /// `.fixedSize()` のラベルなど、メンバーカードの中身を実際に描画した状態でだけ再現しうる
-    /// はみ出しを見る(メンバー未追加の `testTeamScreensNoHorizontalOverflowAtAX5` では検査できない)。
-    func testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openTeamListScreen(app)
-        createTeamAndOpenEditScreen(app)
-
-        let addMemberButton = element(app, "addMemberButton")
-        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
-        addMemberButton.tap()
+    /// 1体目の枠に種族を選んで、種族の決まった枠(`TeamEditMemberCard`)にする。
+    private func fillFirstSlot(_ app: XCUIApplication) {
+        let picker = element(app, "slotSpeciesPicker-1")
+        XCTAssertTrue(picker.waitForExistence(timeout: Self.existenceTimeout))
+        picker.tap()
         // issue #68: 種族は検索シート経由で選ぶ(`Menu` ではなくなった)。
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         let speciesOption = app.buttons[Self.mockMemberSpeciesName]
         XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
         speciesOption.tap()
-
-        let memberCard = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "memberCard-")).firstMatch
-        XCTAssertTrue(memberCard.waitForExistence(timeout: Self.existenceTimeout))
-
-        assertNoHorizontalOverflow(app, identifiers: Self.teamEditIdentifiers)
-        assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.teamEditMemberCardPrefixes)
+        XCTAssertTrue(
+            matchingElementsBeginningWith(app, prefix: "memberCard-").first?.waitForExistence(timeout: Self.existenceTimeout) ?? false)
     }
 
-    // MARK: - 構築のテキスト書き出し・取り込みシート(P6-20。ADR-0501「P6-20」)
-
-    /// P6-20: AX5(最大の文字サイズ)で、書き出し・取り込みシートが横にはみ出さない
-    /// (書き出したテキスト・コピー・共有・貼り付け欄・取り込めなかった行の一覧・追加/やめるのボタン)。
-    func testTeamTextSheetNoHorizontalOverflowAtAX5() {
+    /// 種族の決まった枠(`TeamEditMemberCard`)と枠の操作の AX5 検査(ADR-0501「P6-14」§5
+    /// 「未確認・要フォローアップ」)。`spStepper` の `.fixedSize()` のラベルなど、メンバーカードの中身と、
+    /// [上へ][下へ][外す]の並び(AX5 では縦積み)を実際に描画した状態でだけ再現しうるはみ出しを見る。
+    func testTeamEditScreenWithMemberNoHorizontalOverflowAtAX5() {
         let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
         openTeamListScreen(app)
         createTeamAndOpenEditScreen(app)
+        fillFirstSlot(app)
 
-        let addMemberButton = element(app, "addMemberButton")
-        XCTAssertTrue(addMemberButton.waitForExistence(timeout: Self.existenceTimeout))
-        addMemberButton.tap()
-        XCTAssertTrue(element(app, "speciesSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
-        let speciesOption = app.buttons[Self.mockMemberSpeciesName]
-        XCTAssertTrue(speciesOption.waitForExistence(timeout: Self.existenceTimeout))
-        speciesOption.tap()
-        XCTAssertTrue(
-            matchingElementsBeginningWith(app, prefix: "memberCard-").first?.waitForExistence(timeout: Self.existenceTimeout) ?? false
-        )
-        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["exportMemberTextButton-"])
-        assertNoHorizontalOverflow(app, identifiers: ["teamTextTransferButton"])
+        assertNoHorizontalOverflow(app, identifiers: Self.teamEditFilledIdentifiers + ["slotMoveUp-1", "slotMoveDown-1", "slotRemove-1", "teamUnsavedNotice"])
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.teamEditMemberCardPrefixes)
+    }
 
-        element(app, "teamTextTransferButton").tap()
-        XCTAssertTrue(element(app, "teamTextSheet").waitForExistence(timeout: Self.existenceTimeout))
-        element(app, "exportTeamTextButton").tap()
+    // MARK: - Showdown 形式の折りたたみ(取り込み = 一覧の下・書き出し = 編集画面の下。P6-20 / F-08)
+
+    /// AX5(最大の文字サイズ)で、取り込みの折りたたみの中身(説明・入力例・貼り付け欄・取り込めなかった行の一覧・
+    /// 追加/やめるのボタン)が横にはみ出さない。
+    func testShowdownImportFoldNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openTeamListScreen(app)
+        element(app, "teamImportFoldToggle").tap()
         assertNoHorizontalOverflow(app, identifiers: [
-            "teamTextSheet", "closeTeamTextSheetButton", "exportTeamTextButton", "exportedText",
-            "copyExportedTextButton", "shareExportedTextLink", "importTextEditor", "analyzeImportTextButton",
+            "teamImportFoldToggle", "teamImportFoldContent", "teamImportHelp", "teamImportExample",
+            "importTextEditor", "analyzeImportTextButton",
         ])
-
         let editor = element(app, "importTextEditor")
         editor.tap()
         editor.typeText("テストモンさん\nEVs: 252 SpA")
@@ -703,6 +697,38 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(app, identifiers: [
             "importRejectedList", "importRejectedLine-2", "confirmImportValidButton", "cancelImportButton",
         ])
+    }
+
+    /// AX5 で、書き出しの折りたたみの中身(書き出したテキスト・コピー・共有)が横にはみ出さない。
+    func testShowdownExportFoldNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openTeamListScreen(app)
+        createTeamAndOpenEditScreen(app)
+        fillFirstSlot(app)
+        element(app, "teamExportFoldToggle").tap()
+        element(app, "exportTeamTextButton").tap()
+        assertNoHorizontalOverflow(app, identifiers: [
+            "teamExportFoldContent", "teamExportHelp", "exportTeamTextButton", "exportedText",
+            "copyExportedTextButton", "shareExportedTextLink",
+        ])
+    }
+
+    /// AX5 で、一覧のカード(アイコン・n/6体・最終更新・[開く][削除]・削除の確認)が横にはみ出さない。
+    func testTeamListCardNoHorizontalOverflowAtAX5() {
+        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
+        openTeamListScreen(app)
+        createTeamAndOpenEditScreen(app)
+        fillFirstSlot(app)
+        element(app, "saveTeamButton").tap()
+        XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout))
+        element(app, "backToListButton").tap()
+        XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+
+        let prefixes = ["teamCard-", "teamName-", "teamIcons-", "teamCount-", "teamUpdated-", "teamOpen-", "teamDelete-"]
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: prefixes)
+        matchingElementsBeginningWith(app, prefix: "teamDelete-").first?.tap()
+        assertNoHorizontalOverflowForPrefixes(
+            app, prefixes: ["teamDeleteConfirmNotice-", "teamDeleteConfirm-", "teamDeleteCancel-"])
     }
 
     // MARK: - このアプリについて画面(P6-18。issue #328。ADR-0501「P6-18」4章の5)
