@@ -3,19 +3,29 @@
 // 最大 HP が分からない側(種族が未選択等)は欄を出さない。範囲外は欄の下に誤りを出す(送らない判定は CalcScreen)。
 
 import { useId, useState, type ReactElement } from "react";
-import { hitsOptions, parseHpInput, percentText } from "../domain/battleState";
+import { DEFENDER_PERCENT_MAX, hitsOptions, parseHpInput, percentText } from "../domain/battleState";
 import { battleStateText } from "../i18n/ja";
 
 interface HpFieldProps {
   readonly label: string;
   readonly hint: string;
   readonly max: number;
+  /** 防御側は割合(%)。実数値の欄と違い、割合の表示は出さず単位を「%」にする。 */
+  readonly percent?: boolean;
   readonly value: string;
   readonly clampedTo: number | null;
   readonly onChange: (next: string) => void;
 }
 
-function HpField({ label, hint, max, value, clampedTo, onChange }: HpFieldProps): ReactElement {
+function HpField({
+  label,
+  hint,
+  max,
+  percent = false,
+  value,
+  clampedTo,
+  onChange,
+}: HpFieldProps): ReactElement {
   const id = useId();
   const hintId = `${id}-hint`;
   const errorId = `${id}-error`;
@@ -40,7 +50,9 @@ function HpField({ label, hint, max, value, clampedTo, onChange }: HpFieldProps)
             onChange(event.target.value);
           }}
         />
-        <span className="battle-state__max">{battleStateText.maxSuffix(max)}</span>
+        <span className="battle-state__max">
+          {percent ? battleStateText.percentUnit : battleStateText.maxSuffix(max)}
+        </span>
         {parsed.kind === "ok" && (
           <span className="battle-state__percent">{percentText(parsed.value, max)}</span>
         )}
@@ -67,10 +79,10 @@ interface BattleStatePanelProps {
   readonly defenderHp: string;
   /** 最大 HP(実数値)。null は欄を出さない。 */
   readonly attackerMaxHp: number | null;
-  readonly defenderMaxHp: number | null;
+  /** 防御側の種族が決まっているか(割合の欄を出す)。 */
+  readonly defenderPresent: boolean;
   /** 最大 HP に合わせて丸めた旨を出す値(丸めていなければ null)。 */
   readonly attackerClampedTo: number | null;
-  readonly defenderClampedTo: number | null;
   /** 何か指定している(閉じていても分かる目印に使う)。 */
   readonly active: boolean;
   readonly onAttackerHpChange: (next: string) => void;
@@ -81,16 +93,15 @@ export function BattleStatePanel({
   attackerHp,
   defenderHp,
   attackerMaxHp,
-  defenderMaxHp,
+  defenderPresent,
   attackerClampedTo,
-  defenderClampedTo,
   active,
   onAttackerHpChange,
   onDefenderHpChange,
 }: BattleStatePanelProps): ReactElement | null {
   const [open, setOpen] = useState(false);
   const bodyId = useId();
-  if (attackerMaxHp === null && defenderMaxHp === null) {
+  if (attackerMaxHp === null && !defenderPresent) {
     return null;
   }
   return (
@@ -120,13 +131,14 @@ export function BattleStatePanel({
                 onChange={onAttackerHpChange}
               />
             )}
-            {defenderMaxHp !== null && (
+            {defenderPresent && (
               <HpField
                 label={battleStateText.defenderHpLabel}
                 hint={battleStateText.defenderHpHint}
-                max={defenderMaxHp}
+                max={DEFENDER_PERCENT_MAX}
+                percent
                 value={defenderHp}
-                clampedTo={defenderClampedTo}
+                clampedTo={null}
                 onChange={onDefenderHpChange}
               />
             )}

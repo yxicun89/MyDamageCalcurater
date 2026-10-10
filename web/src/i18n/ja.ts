@@ -201,7 +201,8 @@ export const battleStateText = {
   attackerHpLabel: "攻撃側の残りHP",
   attackerHpHint: "空なら満タンで計算します",
   defenderHpLabel: "防御側の残りHP",
-  defenderHpHint: "確定数は残りHPから数えます(%表示は最大HPに対する値のまま)",
+  defenderHpHint: "割合(%)で入力します。確定数は残りHPから数えます(%表示は最大HPに対する値のまま)",
+  percentUnit: "%",
   /** 横に出す「/ 最大」と割合。 */
   maxSuffix: (max: number): string => `/ ${max}`,
   hpError: (max: number): string => `1〜${max}で入力してください`,
@@ -212,7 +213,7 @@ export const battleStateText = {
   /** 結果の近くに出す、前提にした状態。 */
   summary: (parts: readonly string[]): string => `対戦の状態: ${parts.join("・")}`,
   summaryAttacker: (hp: number, max: number): string => `攻撃側 HP ${hp}/${max}`,
-  summaryDefender: (hp: number, max: number): string => `防御側 HP ${hp}/${max}`,
+  summaryDefender: (percent: number): string => `防御側 HP ${percent}%`,
   summaryHits: (count: number): string => `${count} 回`,
 } as const;
 

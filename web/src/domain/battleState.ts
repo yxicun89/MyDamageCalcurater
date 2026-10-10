@@ -64,21 +64,33 @@ export function percentText(hp: number, max: number): string {
   return `${(Math.floor((hp * 1000) / max) / 10).toFixed(1)}%`;
 }
 
+/** 防御側の残りHPの入力は割合(%)。整数の 1..100(小数は受け付けない。実数値への換算は行ごと: defenderCurrentHpOfRow)。 */
+export const DEFENDER_PERCENT_MAX = 100;
+
+/** 画面で決まった対戦の状態。防御側は割合(行の最大 HP が行ごとに違うため、実数値には行ごとに換算する)。 */
+export interface ScreenBattleState {
+  /** 攻撃側の残り HP(実数値)。 */
+  readonly attackerCurrentHp?: number;
+  /** 防御側の残り HP の割合(1..99。100 は満タンなので入れない)。 */
+  readonly defenderPercent?: number;
+  readonly hits?: number;
+}
+
 export interface BattleStateLimits {
   /** 攻撃側の最大 HP(実数値)。種族が決まっていない・入力が不正なときは null(欄を出さず、送らない)。 */
   readonly attackerMaxHp: number | null;
-  /** 防御側の最大 HP(実数値)。 */
-  readonly defenderMaxHp: number | null;
+  /** 防御側の種族が決まっているか(割合の欄を出すか)。 */
+  readonly defenderPresent: boolean;
 }
 
 export interface BattleStateResolved {
   /** 要求に入れる値。送るものが無ければ undefined(キーごと省く)。 */
-  readonly state: BattleState | undefined;
+  readonly state: ScreenBattleState | undefined;
   readonly attackerError: boolean;
   readonly defenderError: boolean;
 }
 
-/** 入力を要求の battleState にする。満タン(最大と同じ値)・空・既定の回数・範囲の多段でない技の回数は入れない。 */
+/** 入力を対戦の状態にする。満タン(最大と同じ値・100%)・空・既定の回数・範囲の多段でない技の回数は入れない。 */
 export function resolveBattleState(
   inputs: BattleStateInputs,
   limits: BattleStateLimits,
@@ -86,19 +98,18 @@ export function resolveBattleState(
 ): BattleStateResolved {
   const attacker =
     limits.attackerMaxHp === null ? null : parseHpInput(inputs.attackerHp, limits.attackerMaxHp);
-  const defender =
-    limits.defenderMaxHp === null ? null : parseHpInput(inputs.defenderHp, limits.defenderMaxHp);
+  const defender = limits.defenderPresent ? parseHpInput(inputs.defenderHp, DEFENDER_PERCENT_MAX) : null;
   const range = multiHitRangeOf(move);
   const hits =
     range !== null && inputs.hits !== null && inputs.hits >= range.min && inputs.hits <= range.max
       ? inputs.hits
       : null;
-  const state: BattleState = {
+  const state: ScreenBattleState = {
     ...(attacker?.kind === "ok" && attacker.value < (limits.attackerMaxHp ?? 0)
       ? { attackerCurrentHp: attacker.value }
       : {}),
-    ...(defender?.kind === "ok" && defender.value < (limits.defenderMaxHp ?? 0)
-      ? { defenderCurrentHp: defender.value }
+    ...(defender?.kind === "ok" && defender.value < DEFENDER_PERCENT_MAX
+      ? { defenderPercent: defender.value }
       : {}),
     ...(hits === null ? {} : { hits }),
   };
@@ -109,11 +120,69 @@ export function resolveBattleState(
   };
 }
 
+/**
+ * 割合(%)を、最大 HP の行の実数値にする: max(1, floor(最大 × % / 100))。結果が最大以上なら満タンなので null(その行には付けない)。
+ * 行の最大 HP は一括の結果の defenderHP。iOS も同じ規則に揃える。
+ */
+export function defenderCurrentHpOfRow(percent: number, rowMaxHp: number): number | null {
+  const hp = Math.max(1, Math.floor((rowMaxHp * percent) / 100));
+  return hp >= rowMaxHp ? null : hp;
+}
+
+/** 行に送る battleState(その行に付けるものが無ければ undefined)。 */
+export function battleStateOfRow(state: ScreenBattleState, rowMaxHp: number): BattleState | undefined {
+  const defenderCurrentHp =
+    state.defenderPercent === undefined ? null : defenderCurrentHpOfRow(state.defenderPercent, rowMaxHp);
+  const row: BattleState = {
+    ...(state.attackerCurrentHp === undefined ? {} : { attackerCurrentHp: state.attackerCurrentHp }),
+    ...(defenderCurrentHp === null ? {} : { defenderCurrentHp }),
+    ...(state.hits === undefined ? {} : { hits: state.hits }),
+  };
+  return Object.keys(row).length === 0 ? undefined : row;
+}
+
+/**
+ * お気に入りに保存する battleState(実数値)。行が特定できないので、無振り(SP 0)の最大 HP の行に換算する
+ * (復元は percentOfSavedHp が逆に戻す)。
+ */
+export function savedBattleState(
+  state: ScreenBattleState,
+  referenceMaxHp: number | null,
+): BattleState | undefined {
+  if (referenceMaxHp === null) {
+    return battleStateOfRow(
+      {
+        ...(state.attackerCurrentHp === undefined ? {} : { attackerCurrentHp: state.attackerCurrentHp }),
+        ...(state.hits === undefined ? {} : { hits: state.hits }),
+      },
+      1,
+    );
+  }
+  return battleStateOfRow(state, referenceMaxHp);
+}
+
+/**
+ * 保存された防御側の残り HP(実数値)を割合に戻す: その実数値に届く最小の整数 % = ceil(HP × 100 / 無振りの最大 HP)(1..99)。
+ * 最大 HP が分からない・最大以上は満タン(空)。行が特定できないので近似で、換算し直すと保存値以上になる。
+ */
+export function percentOfSavedHp(hp: number, referenceMaxHp: number | null): string {
+  if (referenceMaxHp === null || hp >= referenceMaxHp) {
+    return "";
+  }
+  return String(Math.min(DEFENDER_PERCENT_MAX - 1, Math.max(1, Math.ceil((hp * 100) / referenceMaxHp))));
+}
+
 /** 保存された battleState(お気に入り・履歴)を画面の入力に戻す。 */
-export function inputsOfBattleState(state: BattleState | undefined | null): BattleStateInputs {
+export function inputsOfBattleState(
+  state: BattleState | undefined | null,
+  defenderReferenceMaxHp: number | null,
+): BattleStateInputs {
   return {
     attackerHp: state?.attackerCurrentHp === undefined ? "" : String(state.attackerCurrentHp),
-    defenderHp: state?.defenderCurrentHp === undefined ? "" : String(state.defenderCurrentHp),
+    defenderHp:
+      state?.defenderCurrentHp === undefined
+        ? ""
+        : percentOfSavedHp(state.defenderCurrentHp, defenderReferenceMaxHp),
     hits: state?.hits ?? null,
   };
 }
