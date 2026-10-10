@@ -37,6 +37,7 @@ Status(追記): 2026-10-03 素早さの SP6(追い風・まひ・トリックル
 運用: PR #484(ADR-0801)で speed に共通の httpguard(同時実行上限で 503 overloaded+Retry-After・締め切り)、PR #487(ADR-0802)で未知ルート/405 の
 404 not_found JSON と panic の 500 internal_error JSON、PR #520(ADR-0804)で preStop と停止処理を追加。
 Status(追記): 2026-10-11 G-04 / I-speed-3(Web)完了。「自分の周り」パネル(ADR-0609。buildNeighborhood と SpeedNeighborhoodPanel。`.speed-self` の結果の下・表のスクロール領域の外)を実装。iOS は後続 PR。
+Status(追記): 2026-10-11 G-04 / I-speed-3-ios 完了。「自分の周り」パネル(ADR-0527。SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection)を実装し、自分のカード内の SpeedResultView の下に差し込んだ(表の LazyVStack の外)。
 Next: #263・#292・#284 は他レーンが main 統合済みで、素早さ側の追加対応は無い。#237・#235 は人間の判断待ち。#108 は balance・speed 本体の loader が
 dataVersion を保持・表示する変更が残る(ADR-0135。各レーンの持ち物。今は配備時の Deployment 注釈で代用)。#523(calc の shutdownTimeout)は API レーン向け。
 実地確認が未実施: #299(Docker 負荷試験・k3d の Traefik HelmChartConfig)と、k3d 上の版一致確認(make check-master-version)。
