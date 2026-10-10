@@ -53,3 +53,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 
 
 2026-10-09 追記(計算履歴の一覧): API レーンの ADR-0230(`GET /api/record/calc-history`)に対応し、お気に入り・履歴画面の「契約待ち」注記を外して「計算履歴」の節を接続(ブランチ feat/ios-history-list。ADR-0519)。`limit=20` の先頭ページ → 「もっと見る」(`nextCursor` をそのまま渡す。null で消える)。エラーは節の中だけ(絶対ルール5)・古い応答を捨てる・続きの 400 は先頭から読み直す。行タップで計算画面に入力を復元(`CalcViewModel.loadHistoryCalc`。防御側の性格/SP/持ち物は画面が表せないため復元しない=結果の%は行と一致しないことがある)。モックは `POKECALC_MOCK_CALC_HISTORY`(未設定/paged/paged-fail-more/empty/fail/unavailable)。「よく計算する相手」の節は残している。後続: 計算画面から戻ると先頭ページに戻る(許容)。
+
+2026-10-10: F-14(`make ios-run`・verify-m3 §0)と F-15(ios-test-ui の実測・2 並列・テスト単位の上限。ADR-0520)を feat/ios-f14-f15 で実装(PR 待ち)。
