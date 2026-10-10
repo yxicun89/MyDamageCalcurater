@@ -42,6 +42,7 @@
 | 内容 | 場所 | 起票 | 宛先レーン |
 |---|---|---|---|
 | pokedex-import の CronJob が Mac の夜間スリープで飛ばされる(startingDeadlineSeconds を長く) | `decisions/2026-10-09-wishlist-cronjob-sleep.md` | 2026-10-09 | データ |
+| k3d の 8080 番を 127.0.0.1 だけで待つ(同じ Wi-Fi の他端末から開けないように。wishlist のトークンを無くせる) | `decisions/2026-10-11-wishlist-ingress-bind.md` | 2026-10-11 | 共通基盤 |
 
 ## 直近で回答済み(行は消してよい。2026-10-03 ユーザー「既定案で OK」)
 
