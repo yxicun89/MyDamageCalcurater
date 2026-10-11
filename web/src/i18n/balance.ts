@@ -8,7 +8,8 @@ import { pokemonFieldLabel, speciesPlaceholderOption } from "./common";
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動でオフラインへは切り替えない)。
  */
 export const balanceClientText = {
-  unavailable: "タイプバランスのサーバーに接続できません",
+  unavailable:
+    "タイプバランスのサーバーに接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
 } as const;
 
 /**
@@ -26,7 +27,10 @@ export const balanceErrorText = {
   master_unavailable: "サーバーのデータを読み込めません。しばらくしてからもう一度お試しください",
   overloaded: "サーバーが混み合っています。しばらくしてからもう一度お試しください",
   internal_error: "サーバーでエラーが起きました。しばらくしてからもう一度お試しください",
-  balance_unavailable: "タイプバランスのサーバーに接続できません",
+  upstream_unavailable:
+    "タイプバランスのサーバーが起動中か、一時的に使えません。しばらくしてからもう一度お試しください",
+  balance_unavailable:
+    "タイプバランスのサーバーに接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
   fallback: "タイプバランスを計算できませんでした。しばらくしてからもう一度お試しください",
 } as const;
 

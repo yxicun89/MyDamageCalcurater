@@ -1200,8 +1200,10 @@ describe("recommendations(おすすめタイプ)", () => {
     });
 
     await waitFor(() => {
-      expect(screen.getAllByRole("alert").map((alert) => alert.textContent)).toContain(
-        "タイプバランスのサーバーに接続できません",
+      // 文言に原因の目安(起動中か通信切れ)を足したため、完全一致から先頭の言い回し + 目安の確認に付け替え。
+      const alerts = screen.getAllByRole("alert").map((alert) => alert.textContent);
+      expect(alerts.some((text) => /^タイプバランスのサーバーに接続できません。起動中か/.test(text))).toBe(
+        true,
       );
     });
     expect(threatRegion(1, enemy.nameJa)).toBeInTheDocument();
