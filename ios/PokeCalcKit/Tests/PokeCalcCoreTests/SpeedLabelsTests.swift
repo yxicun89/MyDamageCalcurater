@@ -30,6 +30,11 @@ final class SpeedLabelsTests: XCTestCase {
         XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.decode), "素早さのサーバーに接続できません")
     }
 
+    /// gateway が speed に届かないときの 503(契約外の code)は、「計算に失敗」ではなく接続できない旨にする。
+    func testGatewayUpstreamUnavailableMeansTheServiceIsUnavailable() {
+        XCTAssertEqual(SpeedLabels.errorMessage(forCode: "upstream_unavailable"), "素早さのサーバーに接続できません")
+    }
+
     func testUnknownAndUnexpectedCodesFallBackToGenericMessage() {
         XCTAssertEqual(SpeedLabels.errorMessage(forCode: PokeCalcError.Code.unexpectedStatus), "素早さの計算に失敗しました")
         XCTAssertEqual(SpeedLabels.errorMessage(forCode: "some_future_code"), "素早さの計算に失敗しました")

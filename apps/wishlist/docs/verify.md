@@ -65,7 +65,7 @@ DB `wishlist` と Secret `wishlist-api` を作る(2 回目以降は何もしな�
 cd "$(git rev-parse --show-toplevel)"
 apps/wishlist/scripts/bootstrap.sh
 ```
-→ 初回は `DB 'wishlist' と Secret 'wishlist/wishlist-api' を作りました。` の後に API トークンが 1 行出る(控えなくてよい。後で取り出せる)。
+→ 初回は `DB 'wishlist' と Secret 'wishlist/wishlist-api' を作りました。`。
 2 回目以降は `Secret 'wishlist/wishlist-api' は既に存在します。何もしません`。
 
 ## 4. 最新のコードを k3d に入れる(動作確認の前に毎回)

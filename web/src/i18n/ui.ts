@@ -4,6 +4,9 @@ export const uiText = {
   /** 増減ボタン: 「<欄の名前>を増やす」「<欄の名前>を減らす」。 */
   stepperIncrease: "を増やす",
   stepperDecrease: "を減らす",
+  /** ランクのメーター(ADR-0357): 「<欄の名前>を下げる」「<欄の名前>を上げる」。 */
+  rankDecreaseSuffix: "を下げる",
+  rankIncreaseSuffix: "を上げる",
   /** シートの閉じるボタン(アイコンだけ)の名前。 */
   close: "閉じる",
   /** 説明ボタンの名前(見えるラベルと同じ)。 */

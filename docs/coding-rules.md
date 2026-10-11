@@ -65,6 +65,31 @@ Claude Code と Codex は、コードを書く・直す・レビューすると�
 - エラーは `%w` で文脈を付けて包み、判別が要る失敗は sentinel(`errors.Is`)にする。可変のグローバル変数を避ける。
 - 新しく書く I/O 関数(サービス・importer など)は `context` とタイムアウトを受け取る。標準インターフェースの実装など、シグネチャを変えられない場合は除く(engine は I/O を持たない)。生成コードはリンタの対象外。
 
+### Go のサービスの形(ヘキサゴナル。ADR-0811)
+
+依存は外 → 内の一方向(adapters → app → domain)。内側は外側を import しない。
+
+```mermaid
+flowchart LR
+  cmd["cmd/名前<br/>起動・組み立て"] --> adapters
+  adapters["internal/adapters<br/>httpapi・store・client・events・master"] --> app
+  app["internal/app<br/>ユースケース(ポートを宣言)"] --> domain
+  domain["internal/domain<br/>純粋な核(engine・master・標準ライブラリ)"]
+```
+
+```
+services/<svc>/
+  cmd/<名前>/           起動・設定・組み立て(すべてを import してよい唯一の場所)
+  internal/domain/      純粋な核。HTTP・DB・NATS・時刻の取得を持たない
+  internal/app/         ユースケース。1 操作の手順(検証 → 解決 → 計算 → 保存・通知)。必要なポートをここで宣言する
+  internal/adapters/    httpapi(生成型 ⇄ app の変換・エラー整形)・store・client・events・master など。ポートを実装する
+  internal/api/         oapi-codegen の生成物(外側として扱う)
+```
+
+- `tools/archcheck`(`make lint`)が検査するのは向きだけ。domain は同じサービスの app・adapters・api、外側の共有パッケージ(`api`・`calcevents`・`dbmigrate`・`httpguard`・`httpmetrics`・`reqlog`・`version`)、echo・DB ドライバ・NATS を import しない。app は adapters・api と外側を import しない。
+- **新しいサービス・新しい機能は最初からこの形**で作る。中身の無い domain・app も、フォルダと `doc.go`(役割を 1 行)を置く。
+- 既存のサービスは、`tools/archcheck/archcheck.go` の `unmigrated`(未移行の一覧)にある間は検査されない。移行の PR で一覧から 1 行消す。計画は docs/plan/architecture-adoption.md。
+
 ### TypeScript(Web)
 - `strict`。`any`・非 null 断言は原則禁止(必要なら理由をコメント)。判別 union は網羅性を検査する。
 - API の型は OpenAPI からの生成型を正とし、手書きで複製しない。`tsc --noEmit` と formatter/lint を通す。

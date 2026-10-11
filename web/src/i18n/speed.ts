@@ -87,6 +87,8 @@ export const speedScreenText = {
     master_unavailable: "ポケモンのデータを読み込めません",
     internal_error: "素早さの計算に失敗しました",
     speed_unavailable: "素早さのサーバーに接続できません",
+    /** gateway が上流(speed)へ届かないときの 503(契約外。gateway の upstream_unavailable)。 */
+    upstream_unavailable: "素早さのサーバーに接続できません",
   } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",

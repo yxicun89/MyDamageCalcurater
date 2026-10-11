@@ -405,7 +405,7 @@ describe("A5 右のモード切り替えと position()", () => {
     expect(
       within(region).getByRole("radiogroup", { name: speedScreenText.natureGroupLabel }),
     ).toBeInTheDocument();
-    expect(within(region).getByRole("spinbutton", { name: speedScreenText.rankLabel })).toBeInTheDocument();
+    expect(within(region).getByRole("slider", { name: speedScreenText.rankLabel })).toBeInTheDocument();
     // preset だけの入力は出さない。
     expect(within(region).queryByRole("radiogroup", { name: speedScreenText.presetGroupLabel })).toBeNull();
 
@@ -701,6 +701,22 @@ describe("A7 自分の位置の表示(強調・境界線)", () => {
 // ---- A8: エラー ----
 
 describe("A8 エラーでも表示が壊れない", () => {
+  test("gateway の upstream_unavailable は「計算に失敗」ではなく接続できない旨にする", async () => {
+    const { client } = renderScreen();
+    await flush(() => {
+      lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
+    });
+    await flush(() => {
+      lastOf(client.tableCalls, "table").resolve({
+        ok: false,
+        error: { code: "upstream_unavailable", message: "upstream unavailable" },
+      });
+    });
+    const alert = within(tableRegion()).getByRole("alert");
+    expect(alert).toHaveTextContent("素早さのサーバーに接続できません");
+    expect(alert).not.toHaveTextContent("計算に失敗");
+  });
+
   test("table() が失敗したら左に role=alert を出し、右の入力は使えるままにする", async () => {
     const { client } = renderScreen();
     await flush(() => {
@@ -803,8 +819,6 @@ describe("issue 307 範囲外入力の検査", () => {
   test.each([
     ["SP 0", speedScreenText.spLabel, "0", { sp: 0 }],
     ["SP 上限", speedScreenText.spLabel, String(MAX_SP_PER_STAT), { sp: MAX_SP_PER_STAT }],
-    ["ランク 下限", speedScreenText.rankLabel, String(MIN_RANK), { rank: MIN_RANK }],
-    ["ランク 上限", speedScreenText.rankLabel, String(MAX_RANK), { rank: MAX_RANK }],
   ])("境界値 %s は通り、エラーを出さず API を呼ぶ", async (_name, label, text, expected) => {
     const { client } = await customScreen();
     const input = setValue(label, text);
@@ -818,8 +832,6 @@ describe("issue 307 範囲外入力の検査", () => {
   test.each([
     ["SP 33", speedScreenText.spLabel, "33", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
     ["SP -1", speedScreenText.spLabel, "-1", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
-    ["ランク 7", speedScreenText.rankLabel, "7", speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)],
-    ["ランク -7", speedScreenText.rankLabel, "-7", speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)],
   ])("%s は入力欄のそばに日本語で出し、API を呼ばない", async (_name, label, text, message) => {
     const { client } = await customScreen();
     const before = client.positionCalls.length;
@@ -828,10 +840,40 @@ describe("issue 307 範囲外入力の検査", () => {
     expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(message);
     expect(input).toHaveAccessibleDescription(message);
     // 範囲外の値は1度も送らない(途中の "3" などの範囲内の呼び出しは許す)。
-    const key = label === speedScreenText.spLabel ? "sp" : "rank";
     for (const call of client.positionCalls.slice(before)) {
-      expect(call.args[key]).not.toBe(Number(text));
+      expect(call.args.sp).not.toBe(Number(text));
     }
+  });
+
+  // ADR-0357: ランクは数値欄ではなくメーター(-6〜+6 の 13 段)。範囲外の値を作れないので、
+  // 旧「ランク 7 / -7 は日本語で止める」は、「両端で止まり、範囲外を送らない」に付け替えた(境界値の検査は同じ意図)。
+  test.each([
+    ["下限", "{Home}", MIN_RANK],
+    ["上限", "{End}", MAX_RANK],
+  ])("ランクのメーター 境界値 %s は通り、エラーを出さず API を呼ぶ", async (_name, key, expected) => {
+    const { user, client } = await customScreen();
+    within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel }).focus();
+    await user.keyboard(key);
+    await waitFor(() => {
+      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ rank: expected });
+    });
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+  });
+
+  test.each([
+    ["上", "{End}{ArrowRight}{PageUp}"],
+    ["下", "{Home}{ArrowLeft}{PageDown}"],
+  ])("ランクのメーターは範囲の%sへ越えられず、範囲外の値を API に送らない", async (_name, keys) => {
+    const { user, client } = await customScreen();
+    const before = client.positionCalls.length;
+    const meter = within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel });
+    meter.focus();
+    await user.keyboard(keys);
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+    for (const call of client.positionCalls.slice(before)) {
+      expect(Math.abs(Number(call.args.rank))).toBeLessThanOrEqual(MAX_RANK);
+    }
+    expect(Math.abs(Number(meter.getAttribute("aria-valuenow")))).toBe(MAX_RANK);
   });
 
   test("custom の SP を空にすると 0 とみなして計算する(エラーは出さない)", async () => {

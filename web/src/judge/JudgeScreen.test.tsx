@@ -251,6 +251,12 @@ function addCandidateButton(): HTMLElement {
 }
 
 /** 数値入力を入れ直す(既定値を消してから入れる)。 */
+/** ランクのメーターを矢印キーで目標値に合わせる(0 から +/- 数回)。 */
+async function setRank(user: UserEvent, meter: HTMLElement, target: number): Promise<void> {
+  meter.focus();
+  await user.keyboard(target >= 0 ? "{ArrowRight}".repeat(target) : "{ArrowLeft}".repeat(-target));
+}
+
 async function setNumber(user: UserEvent, input: HTMLElement, value: number): Promise<void> {
   await user.clear(input);
   await user.type(input, String(value));
@@ -468,8 +474,9 @@ describe("A3 request の組み立て", () => {
     await fillMinimalForm(user);
     await openDetails(user, attackerRegion());
     await openDetails(user, candidate(1));
-    await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe")), 1);
-    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def")), -2);
+    // ADR-0357: ランクはメーター(数値欄ではない)。矢印キーで動かす。
+    await setRank(user, within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe")), 1);
+    await setRank(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def")), -2);
 
     await user.click(submitButton());
 
@@ -941,16 +948,23 @@ describe("A7 送信前の検査(judge を呼ばずに理由を出す)", () => {
     expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.spTotalMessage(MAX_SP_TOTAL));
   });
 
-  test("ランクが -6..+6 の外なら呼ばない", async () => {
+  // ADR-0357: ランクは数値欄からメーターになり、範囲外の値を作れない。旧「-6..+6 の外なら呼ばない」は、
+  // 「両端で止まり、送るランクは範囲内」に付け替えた(範囲検査そのものは judgeValidation.test.ts に残る)。
+  test("ランクのメーターは -6..+6 を越えられず、送るのは範囲内", async () => {
     const { user, client } = renderScreen();
     await fillMinimalForm(user);
     await openDetails(user, attackerRegion());
-    await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe")), 7);
+    const meter = within(attackerRegion()).getByLabelText(judgeScreenText.rankLabel("spe"));
+    meter.focus();
+    await user.keyboard("{End}{ArrowRight}{PageUp}");
+    expect(meter).toHaveAttribute("aria-valuenow", "6");
+    await user.keyboard("{Home}{ArrowLeft}{PageDown}");
+    expect(meter).toHaveAttribute("aria-valuenow", "-6");
 
     await user.click(submitButton());
 
-    expect(client.calls).toHaveLength(0);
-    expect(screen.getByRole("alert")).toHaveTextContent(judgeScreenText.rankRangeMessage);
+    expect(client.calls).toHaveLength(1);
+    expect(lastCall(client).args.attacker.ranks).toEqual({ atk: 0, def: 0, spa: 0, spd: 0, spe: -6 });
   });
 });
 
@@ -1584,21 +1598,18 @@ describe("A14 検証エラーは該当欄に aria-invalid と文言で出す(ど
     expect(isInvalid(within(candidate(1)).getByLabelText(judgeScreenText.spLabel("hp")))).toBe(false);
   });
 
-  test("ランクが範囲外: 該当のランク欄だけが aria-invalid で、相手候補1と理由を示す", async () => {
+  // ADR-0357: ランクはメーターで範囲外にできないため、旧「ランクが範囲外の欄が aria-invalid」は
+  // 「メーターは常に aria-valuemin/max の範囲で、aria-invalid にならない」に付け替えた。
+  test("ランクのメーターは範囲を宣言し、誤りにならない", async () => {
     const { user } = renderScreen();
     await fillMinimalForm(user);
     await openDetails(user, candidate(1));
-    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def")), 7);
-
-    await user.click(submitButton());
-
     const field = within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("def"));
-    expect(isInvalid(field)).toBe(true);
-    expect(field).toHaveAccessibleDescription(expect.stringContaining(judgeScreenText.rankRangeMessage));
-    expect(field).toHaveAccessibleDescription(
-      expect.stringContaining(judgeScreenText.candidateGroupLabel(1)),
-    );
-    expect(isInvalid(within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("atk")))).toBe(false);
+    expect(field).toHaveAttribute("role", "slider");
+    expect(field).toHaveAttribute("aria-valuemin", "-6");
+    expect(field).toHaveAttribute("aria-valuemax", "6");
+    await user.click(submitButton());
+    expect(field).not.toHaveAttribute("aria-invalid", "true");
   });
 
   test("複数の体の誤りを同時に出す(最初の1件で止めない)。それぞれに誰の誤りかが付く", async () => {
@@ -1607,13 +1618,13 @@ describe("A14 検証エラーは該当欄に aria-invalid と文言で出す(ど
     await openDetails(user, attackerRegion());
     await openDetails(user, candidate(1));
     await setNumber(user, within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("hp")), 33);
-    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("spe")), -7);
+    await setNumber(user, within(candidate(1)).getByLabelText(judgeScreenText.spLabel("spe")), 33);
 
     await user.click(submitButton());
 
     expect(client.calls).toHaveLength(0);
     const attackerField = within(attackerRegion()).getByLabelText(judgeScreenText.spLabel("hp"));
-    const candidateField = within(candidate(1)).getByLabelText(judgeScreenText.rankLabel("spe"));
+    const candidateField = within(candidate(1)).getByLabelText(judgeScreenText.spLabel("spe"));
     expect(isInvalid(attackerField)).toBe(true);
     expect(isInvalid(candidateField)).toBe(true);
     expect(attackerField).toHaveAccessibleDescription(
