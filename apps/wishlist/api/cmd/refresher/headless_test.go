@@ -3,8 +3,8 @@ package main
 import (
 	"testing"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
-	"example.com/pokecalc/apps/wishlist/api/internal/item"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/fetcher"
+	"example.com/pokecalc/apps/wishlist/api/internal/domain/item"
 )
 
 const mercariTemplate = "https://jp.mercari.com/search?keyword={q}&status=on_sale&sort=price&order=asc"

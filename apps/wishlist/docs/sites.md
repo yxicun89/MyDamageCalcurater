@@ -99,7 +99,7 @@
 - 人が開く URL: `https://shopping.yahoo.co.jp/search?p={q}` は `/search/{q}/0/` にリダイレクトされ、クエリ(sort)は落ちた。ページ内の並び替えリンクは `https://shopping.yahoo.co.jp/search/{q}/0/?X=2`(価格が安い順)、`X=12`(価格+送料が安い順)。
 - 取得: `script#__NEXT_DATA__` の `props.initialState.bff.searchResults.items["1"]` のうち `type == "RESULT"` のブロック `content.items[]` を、サイトの並び(価格の安い順)のまま上位 20 件。名前 `name` / 価格 `price`(整数の円) / URL `url` / 画像 `image.imageUrl`。在庫の項目は無いので常に在庫あり。
 - 0 件の検索: `searchResults` が `null`、`searchError.errorCode` が `"zeroMatch"`(2026-10-11 に確認)。この形は 0 件(エラーにしない)。それ以外で RESULT が無い・壊れているものはエラー。
-- fixture: `api/internal/fetcher/testdata/yahoo_shopping.html`(18 件)・`yahoo_shopping_zero.html`(0 件)。
+- fixture: `api/internal/adapters/fetcher/testdata/yahoo_shopping.html`(18 件)・`yahoo_shopping_zero.html`(0 件)。
 
 ### プレバン(プレミアムバンダイ。link_only。初期データ 000006)
 - robots は機械取得の話。人がブラウザで開くリンクとして出すのは問題ない。**検索語の文字コード(UTF-8 でよいか)は未確認**(下記のとおりトップは Shift_JIS 系に見えた)。
