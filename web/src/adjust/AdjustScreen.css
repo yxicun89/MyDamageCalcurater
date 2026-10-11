@@ -58,7 +58,14 @@
 .adjust-screen__field select,
 .adjust-screen__field input[type="number"] {
   max-width: 100%;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
+}
+
+/* 能力ポイントの欄は − / + 付き(.ui-stepper。数値欄は .ui-stepper__input の幅と見た目を使う)。 */
+.adjust-screen__field input.ui-stepper__input {
+  max-width: none;
+  padding: var(--space-2);
 }
 
 .adjust-screen__fixed-sp {
@@ -165,4 +172,80 @@ p.adjust-screen__verdict {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* ---- G-05(ADR-0353): 目標のタイルとカード・結論の数字・振り方の横棒 ---- */
+.adjust-screen__add-goal {
+  display: flex;
+}
+
+.adjust-screen__add-goal .ui-tile {
+  flex: 1;
+  min-width: 0;
+}
+
+.adjust-screen__goal-kind {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: var(--space-2);
+  color: var(--brand-primary);
+}
+
+.adjust-screen__goal > .ui-pokemon-card {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.adjust-screen__verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.adjust-screen__verdict-icon {
+  flex-shrink: 0;
+}
+
+.adjust-sp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.adjust-sp-bars__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.adjust-sp-bars__label {
+  flex: 0 0 1.5em;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.adjust-sp-bars__track {
+  flex: 1;
+  min-width: 0;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.adjust-sp-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+}
+
+.adjust-sp-bars__value {
+  flex: 0 0 2ch;
+  min-width: 2ch;
+  text-align: right;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
 }

@@ -17,6 +17,8 @@ export interface TileProps {
   readonly className?: string;
   /** -1 にすると Tab の順から外す(同じ操作に Tab で行ける別の経路があるときの近道用)。 */
   readonly tabIndex?: number;
+  /** 理由・説明の要素の id(aria-describedby。上限で無効のときの理由など)。 */
+  readonly describedBy?: string;
   readonly children?: ReactNode;
 }
 
@@ -28,6 +30,7 @@ export function Tile({
   disabled = false,
   className,
   tabIndex,
+  describedBy,
   children,
 }: TileProps): ReactElement {
   const classes = ["ui-tile"];
@@ -47,6 +50,7 @@ export function Tile({
       aria-pressed={selected}
       disabled={disabled}
       tabIndex={tabIndex}
+      aria-describedby={describedBy}
       onClick={onClick}
     >
       {empty ? (
