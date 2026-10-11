@@ -97,21 +97,21 @@ make web-k3d-e2e
 
 ## 3. iOS の確認
 
-シミュレータは `iPhone 17e` を使う(`IOS_SIMULATOR` で指定。未指定の既定は `iPhone 18 Pro`)。
+シミュレータは `iPhone 17 Pro` を使う(`IOS_SIMULATOR` で指定。未指定の既定も `iPhone 17 Pro`。`iPhone 18 Pro` など別の機種は `IOS_SIMULATOR="iPhone 18 Pro"` で指定できる)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcrun simctl list devices | grep "iPhone 17e"
+xcrun simctl list devices | grep "iPhone 17 Pro"
 ```
-→ `iPhone 17e (...)` の行が出る(`Booted` でなくてよい)。無ければ Xcode の Settings → Components で iOS シミュレータを入れる。
+→ `iPhone 17 Pro (...)` の行が出る(`Booted` でなくてよい)。無ければ `xcrun simctl create "iPhone 17 Pro" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0` で作る(iOS のシミュレータ自体が無いときは Xcode の Settings → Components で入れる)。
 
 ### 3-1. コマンドで起動する(最短)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-make ios-run IOS_SIMULATOR="iPhone 17e" POKECALC_API_BASE_URL=http://localhost:8080
+make ios-run IOS_SIMULATOR="iPhone 17 Pro" POKECALC_API_BASE_URL=http://localhost:8080
 ```
 → 数分(初回は長め)でシミュレータが開き、アプリが起動する。計算画面に「APIに接続中(localhost)」のバッジと、実データのポケモンでの結果が出る(1-1 と 1-2 が済んでいることが前提。URL に `/api` は付けない)。
 防御側のカードをタップして別のポケモンを選ぶ → カードと技の行の相性・結果の%が変わる。
@@ -135,7 +135,7 @@ open ios/PokeCalc.xcodeproj
 
 Xcode で次の順に操作する。
 
-1. 画面上部のスキームが `PokeCalc`、実行先が `iPhone 17e`(シミュレータ)であることを確認する。
+1. 画面上部のスキームが `PokeCalc`、実行先が `iPhone 17 Pro`(シミュレータ)であることを確認する。
 2. 実 API につなぐ場合のみ、スキーム名 `PokeCalc` をクリック → Edit Scheme → Run → Arguments を開き、Environment Variables の `POKECALC_API_BASE_URL` に `http://localhost:8080` を入れる。入れなければモックで動く。
 3. Run(▶、または Cmd+R)を押す。
 
@@ -148,7 +148,7 @@ Xcode で次の順に操作する。
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-make ios-test IOS_SIMULATOR="iPhone 17e"
+make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 ```
 → lint・生成物の一致・XCTest・XCUITest・Info.plist 検査がすべて成功する。UI テストが約 190 件あり 20〜50 分かかる(他のレーンがテスト中なら順番待ちで延びる)。速く見るだけなら `make ios-swift-test`(macOS で XCTest のみ)。
 
