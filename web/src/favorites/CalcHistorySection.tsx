@@ -5,6 +5,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { PokemonIcon } from "../images/PokemonIcon";
+import { Icon } from "../ui/Icon";
 import { calcHistoryText } from "../i18n/favorites";
 import type { RecordClient, RecordError } from "../record/recordClient";
 import { historyEntryAsFavorite } from "./calcHistoryFavorite";
@@ -31,6 +32,8 @@ type HistoryState =
     };
 
 const INVALID_INPUT_CODE = "invalid_input";
+/** ダメージバーの満タン(計算画面の DAMAGE_BAR_MAX_PERCENT と同じ。100% を超えても枠で止める)。 */
+const BAR_MAX_PERCENT = 100;
 
 const dateFormat = new Intl.DateTimeFormat("ja-JP", { dateStyle: "medium", timeStyle: "short" });
 
@@ -137,18 +140,30 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
 
   return (
     <section className="calc-history" aria-label={calcHistoryText.regionLabel}>
-      <h3 className="calc-history__heading">{calcHistoryText.regionLabel}</h3>
+      <h3 className="calc-history__heading">
+        <Icon name="history" size={24} />
+        {calcHistoryText.regionLabel}
+      </h3>
       {state.status === "loading" && (
-        <p className="ui-notice ui-notice--loading calc-history__notice">{calcHistoryText.loadingNotice}</p>
+        <p className="ui-notice ui-notice--loading calc-history__notice">
+          <Icon name="history" size={24} />
+          {calcHistoryText.loadingNotice}
+        </p>
       )}
       {state.status === "error" && (
         <div role="alert" className="ui-notice ui-notice--error calc-history__error">
-          <p>{calcHistoryText.errorHeading}</p>
+          <p className="calc-history__error-heading">
+            <Icon name="alert" size={20} />
+            {calcHistoryText.errorHeading}
+          </p>
           <p>{state.error.message}</p>
         </div>
       )}
       {state.status === "loaded" && state.items.length === 0 && (
-        <p className="ui-notice ui-notice--empty calc-history__notice">{calcHistoryText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty calc-history__notice calc-history__empty">
+          <Icon name="history" size={48} />
+          {calcHistoryText.emptyNotice}
+        </p>
       )}
       {state.status === "loaded" && state.items.length > 0 && (
         <ul aria-label={calcHistoryText.listLabel} className="calc-history__list">
@@ -159,16 +174,27 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
             );
             return (
               // 同じ内容の行が並びうるので、キーは配列の位置(一覧は先頭から足すだけで並べ替えない)。
-              <li key={index} className="ui-card calc-history__item">
+              <li
+                key={index}
+                className={`ui-card calc-history__item${onUse !== undefined ? " calc-history__item--pressable" : ""}`}
+              >
                 <span className="calc-history__icons">
                   <PokemonIcon speciesKey={entry.calc.attacker.speciesKey} />
+                  <Icon name="down" size={16} className="calc-history__arrow" />
                   <PokemonIcon speciesKey={entry.calc.defender.speciesKey} />
                 </span>
                 <span className="calc-history__pair">{label}</span>
                 <span className="calc-history__move">{calcHistoryText.moveLabel(entry.calc.moveId)}</span>
-                <span className="ui-badge calc-history__range">
+                <span className="calc-history__percent">
                   {calcHistoryText.rangeLabel(entry.result.minPercent, entry.result.maxPercent)}
                 </span>
+                <div aria-hidden="true" data-testid="history-bar" className="calc-history__bar">
+                  <div
+                    data-testid="history-bar-fill"
+                    className="calc-history__bar-fill"
+                    style={{ width: `${String(Math.min(entry.result.maxPercent, BAR_MAX_PERCENT))}%` }}
+                  />
+                </div>
                 <time className="calc-history__time" dateTime={entry.occurredAt}>
                   {formatOccurredAt(entry.occurredAt)}
                 </time>
@@ -176,11 +202,13 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
                   <button
                     type="button"
                     className="ui-button ui-button--primary calc-history__use"
+                    aria-label={calcHistoryText.useLabel}
                     onClick={() => {
                       onUse(historyEntryAsFavorite(entry, label));
                     }}
                   >
-                    {calcHistoryText.useLabel}
+                    <Icon name="calc" size={20} />
+                    {calcHistoryText.useShort}
                   </button>
                 )}
               </li>
@@ -190,7 +218,10 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
       )}
       {state.status === "loaded" && state.moreError !== null && (
         <div role="alert" className="ui-notice ui-notice--error calc-history__error">
-          <p>{calcHistoryText.errorHeading}</p>
+          <p className="calc-history__error-heading">
+            <Icon name="alert" size={20} />
+            {calcHistoryText.errorHeading}
+          </p>
           <p>{state.moreError.message}</p>
         </div>
       )}
@@ -201,6 +232,7 @@ export function CalcHistorySection({ recordClient, reloadToken, onUse }: CalcHis
           disabled={loadingMore}
           onClick={handleMore}
         >
+          <Icon name="open" size={20} />
           {calcHistoryText.moreLabel}
         </button>
       )}
