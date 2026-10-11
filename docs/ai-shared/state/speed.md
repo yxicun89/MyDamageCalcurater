@@ -57,3 +57,7 @@ Status(追記): 2026-10-04 main の `make ios-test` が #628 以降赤だった�
 Status(追記): 2026-10-09 #108 の素早さ分を完了。speed 本体の loader・起動ログ・`/healthz` の dataVersion は ADR-0138 で実装済みだったため、残りだった `scripts/check-master-version.sh` の speed 判定を、Deployment 注釈から `/healthz`(サービスプロキシ経由。プロセスが読んだ版)に切り替えた(ADR-0809)。取れなければ注釈へ戻らず STALE。balance は注釈のまま(タイプバランスレーン)。
 Next: k3d 上の実地確認(`make check-master-version`)は未実施。balance の healthz 参照への切り替えはタイプバランスレーンで(ADR-0809 §影響)。
 Status(追記): 2026-10-12 I-speed-4a(バックエンド)完了。`internal/speed/matchup.go`(MovesFirstLines・Matchup・Reach。素早さは Speed〈engine 経由〉、行動順は engine.CompareSpeed)と `internal/httpapi/matchup.go`(POST /matchup・/reach。{guard, requireRequestContext})を実装。契約 0.7.0 は spec 側で追加済み。Web(I-speed-4b)・iOS(I-speed-4c)は別 PR。ADR-0610 の §6 Q1〜Q7 は推奨案のまま実装(ユーザー確認待ち)。
+Status(追記): 2026-10-12 I-speed-4c(iOS の画面)の仕様とテストを先に書いた(ブランチ feat/speed-ios-matchup。コミットのみ・push 前。ビルドは通り、新しいテストが失敗する状態)。
+設計は ADR-0610 追記「iOS の画面」。PokeCalcKit に matchup・reach のドメイン型・`SpeedService` の 2 操作・`SpeedMatchupViewModel`・`SpeedMatchupLabels`・`SpeedMatchupDisplayBuilder` のスタブ、UI テスト 4 本(`SpeedMatchupUITests` 3 本・`SpeedMatchupLargeTextUITests` 1 本)。
+旧 `SpeedViewModel` と表・周辺パネルの部品・テストは、画面の置き換えと一緒に implementer が整理する(ADR-0610 追記 §5・§6)。ランクのメーターは iOS に部品が無く、今回は `SpeedStepper` を使う。
+Next: implementer が docs/plan/improvements/speed.md の I-speed-4c の順(API クライアント → ラベル・整形 → ViewModel → モック → View → 旧 UI テストの整理)で実装する。Web(I-speed-4b)の語と食い違ったら ADR-0610 追記に差を書く。

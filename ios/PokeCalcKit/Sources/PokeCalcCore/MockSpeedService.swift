@@ -13,12 +13,15 @@ public enum MockSpeedScenario: Equatable, Sendable {
     case positionError
     /// ポケモン一覧だけ失敗(`master_unavailable`)。
     case pokemonError
-    /// 3つとも失敗(`master_unavailable`)。
+    /// 3つとも失敗(`master_unavailable`)。matchup・reach も失敗する。
     case allError
+    /// matchup と reach だけ失敗(gateway が上流に届かないときの `upstream_unavailable`。ポケモン一覧は成功。I-speed-4c)。
+    case matchupError
 
-    /// 環境変数の値: `table-error` / `position-error` / `pokemon-error` / `all-error`。nil・未知の値は `.normal`。
+    /// 環境変数の値: `table-error` / `position-error` / `pokemon-error` / `all-error` / `matchup-error`。nil・未知の値は `.normal`。
     public init(environmentValue: String?) {
         switch environmentValue {
+        case "matchup-error": self = .matchupError
         case "table-error": self = .tableError
         case "position-error": self = .positionError
         case "pokemon-error": self = .pokemonError
@@ -99,6 +102,15 @@ public struct MockSpeedService: SpeedService {
             faster: entries.filter { $0.speed > speed }.reduce(0) { $0 + $1.entries.count },
             slower: entries.filter { $0.speed < speed }.reduce(0) { $0 + $1.entries.count },
             tie: entries.first { $0.speed == speed }?.entries ?? [])
+    }
+
+    // TODO(implementer): 簡易な式で実装する。固定する事実は MockSpeedMatchupTests(ADR-0610 追記「モック」)。
+    public func matchup(_ request: SpeedMatchupRequest) async throws -> SpeedMatchup {
+        throw PokeCalcError(code: "not_implemented", message: "MockSpeedService.matchup は未実装(I-speed-4c)")
+    }
+
+    public func reach(_ request: SpeedPositionRequest) async throws -> SpeedReach {
+        throw PokeCalcError(code: "not_implemented", message: "MockSpeedService.reach は未実装(I-speed-4c)")
     }
 
     // MARK: - 簡易な式

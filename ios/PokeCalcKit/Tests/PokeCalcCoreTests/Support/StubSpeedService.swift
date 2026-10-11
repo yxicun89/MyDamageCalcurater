@@ -40,6 +40,50 @@ enum StubSpeed {
     }
 
     static let failure = PokeCalcError(code: "master_unavailable", message: "test")
+
+    // MARK: - matchup・reach(I-speed-4c)
+
+    /// 既定の想定(契約: 省略時は 無振り・準速・最速・最速スカーフ)。
+    static let defaultAssumptions: [SpeedAssumption] = [.preset(.uninvested), .preset(.neutralMax), .preset(.max), .preset(.maxScarf)]
+
+    /// 3 件(下降・補正なし・上昇)とも区間なしの性格の行。
+    static let emptyNatures: [SpeedNatureLine] = SpeedNature.allCases.map { SpeedNatureLine(nature: $0, movesFirst: nil, tie: nil) }
+
+    static func matchupLine(
+        _ assumption: SpeedAssumption, speed: Int, current: SpeedTurnOrder? = nil, natures: [SpeedNatureLine] = emptyNatures
+    ) -> SpeedMatchupLine {
+        SpeedMatchupLine(assumption: assumption, opponentSpeed: speed, current: current, natures: natures)
+    }
+
+    static func matchup(
+        lines: [SpeedMatchupLine], selfSpeed: Int? = nil, trickRoom: Bool = false,
+        selfPokemon: SpeedPokemon = pokemonA, opponent: SpeedPokemon = pokemonD
+    ) -> SpeedMatchup {
+        SpeedMatchup(selfPokemon: selfPokemon, opponent: opponent, trickRoom: trickRoom, selfSpeed: selfSpeed, lines: lines)
+    }
+
+    /// 要求に沿った既定の応答(想定の数だけ行を返す)。
+    static func matchup(for request: SpeedMatchupRequest, index: Int) -> SpeedMatchup {
+        let assumptions = request.opponent.assumptions ?? defaultAssumptions
+        let lines = assumptions.enumerated().map { offset, assumption in
+            matchupLine(assumption, speed: 100 * (index + 1) + offset)
+        }
+        return matchup(lines: lines, trickRoom: request.trickRoom)
+    }
+
+    static func reachLine(
+        _ preset: SpeedPresetID, slower: SpeedBaseSpeedRange? = nil, tie: SpeedBaseSpeedRange? = nil,
+        faster: SpeedBaseSpeedRange? = nil, counts: (slower: Int, tie: Int, faster: Int) = (0, 0, 0),
+        fastestSlower: SpeedPokemon? = nil, slowestFaster: SpeedPokemon? = nil
+    ) -> SpeedReachLine {
+        SpeedReachLine(
+            preset: preset, slower: slower, tie: tie, faster: faster, slowerCount: counts.slower, tieCount: counts.tie,
+            fasterCount: counts.faster, fastestSlower: fastestSlower, slowestFaster: slowestFaster)
+    }
+
+    static func reach(speed: Int, pokemon: SpeedPokemon? = nil, lines: [SpeedReachLine]? = nil) -> SpeedReach {
+        SpeedReach(speed: speed, pokemon: pokemon, lines: lines ?? SpeedPresetID.allCases.map { reachLine($0) })
+    }
 }
 
 /// `SpeedViewModel` のテスト用 `SpeedService`。呼び出しを記録し、応答はクロージャで決める。
@@ -50,6 +94,8 @@ actor StubSpeedService: SpeedService {
         case pokemon
         case table
         case position
+        case matchup
+        case reach
     }
 
     struct TableCall: Equatable, Sendable {
@@ -60,6 +106,8 @@ actor StubSpeedService: SpeedService {
     private(set) var pokemonCalls = 0
     private(set) var tableCalls: [TableCall] = []
     private(set) var positionCalls: [SpeedPositionRequest] = []
+    private(set) var matchupCalls: [SpeedMatchupRequest] = []
+    private(set) var reachCalls: [SpeedPositionRequest] = []
     /// cancel された呼び出しの番号(0 始まり。種類ごと)。
     private(set) var cancelled: [Kind: [Int]] = [:]
 
@@ -69,6 +117,15 @@ actor StubSpeedService: SpeedService {
     }
     private var positionResponder: @Sendable (SpeedPositionRequest, Int) -> Result<SpeedPosition, PokeCalcError> = { _, index in
         .success(StubSpeed.position(speed: 100 * (index + 1)))
+    }
+
+    /// 既定の matchup 応答: 要求の想定(省略時は既定の 4 つ)ごとに「呼び出しの順番 × 100 + 想定の番号」の相手の素早さ・区間なし。
+    private var matchupResponder: @Sendable (SpeedMatchupRequest, Int) -> Result<SpeedMatchup, PokeCalcError> = { request, index in
+        .success(StubSpeed.matchup(for: request, index: index))
+    }
+    /// 既定の reach 応答: 自分の素早さ = 呼び出しの順番 × 100、6 行とも区間なし・0 体。
+    private var reachResponder: @Sendable (SpeedPositionRequest, Int) -> Result<SpeedReach, PokeCalcError> = { _, index in
+        .success(StubSpeed.reach(speed: 100 * (index + 1)))
     }
 
     private var held: Set<Kind> = []
@@ -89,6 +146,14 @@ actor StubSpeedService: SpeedService {
 
     func setPositionResponder(_ responder: @escaping @Sendable (SpeedPositionRequest, Int) -> Result<SpeedPosition, PokeCalcError>) {
         positionResponder = responder
+    }
+
+    func setMatchupResponder(_ responder: @escaping @Sendable (SpeedMatchupRequest, Int) -> Result<SpeedMatchup, PokeCalcError>) {
+        matchupResponder = responder
+    }
+
+    func setReachResponder(_ responder: @escaping @Sendable (SpeedPositionRequest, Int) -> Result<SpeedReach, PokeCalcError>) {
+        reachResponder = responder
     }
 
     func hold(_ kinds: Set<Kind>, ignoringCancellation: Bool = false) {
@@ -125,6 +190,8 @@ actor StubSpeedService: SpeedService {
         case .pokemon: return pokemonCalls
         case .table: return tableCalls.count
         case .position: return positionCalls.count
+        case .matchup: return matchupCalls.count
+        case .reach: return reachCalls.count
         }
     }
 
@@ -148,6 +215,20 @@ actor StubSpeedService: SpeedService {
         positionCalls.append(request)
         try await holdIfNeeded(.position, index: index)
         return try positionResponder(request, index).get()
+    }
+
+    func matchup(_ request: SpeedMatchupRequest) async throws -> SpeedMatchup {
+        let index = matchupCalls.count
+        matchupCalls.append(request)
+        try await holdIfNeeded(.matchup, index: index)
+        return try matchupResponder(request, index).get()
+    }
+
+    func reach(_ request: SpeedPositionRequest) async throws -> SpeedReach {
+        let index = reachCalls.count
+        reachCalls.append(request)
+        try await holdIfNeeded(.reach, index: index)
+        return try reachResponder(request, index).get()
     }
 
     private func holdIfNeeded(_ kind: Kind, index: Int) async throws {

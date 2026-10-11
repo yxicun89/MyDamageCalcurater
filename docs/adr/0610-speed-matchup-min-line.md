@@ -167,3 +167,84 @@ C の『族』表記は出力 2(「これ以上」)で使う(要望の『準速�
 - **`/position` の応答に足す**: 既存の完全一致テストの期待値を書き換えることになり(ADR-0607 の却下理由と同じ)、入力の形(相手が要る)も違う。
 - **表を残して強調だけ変える**: 要望(表なしで分かる)に合わない。
 - **判定(judge)へのリンク**: 判定は廃止予定(combo-calc §7 Q2)。連続技へリンクする。
+
+## 追記(2026-10-12): iOS の画面(I-speed-4c)
+
+Web(I-speed-4b)と同じ体験・同じ語・同じ規則を iOS で作る。仕様とテストは先に書いた(失敗する状態)。
+
+### 1. 層の分け方(ADR-0500 §1 のまま。ロジックは PokeCalcKit、View は描くだけ)
+
+| 層 | 置き場 | 内容 |
+|---|---|---|
+| ドメインの型 | `SpeedMatchupTypes.swift` | `SpeedMatchupRequest`・`SpeedMatchup`・`SpeedReach` など(生成型に依存しない) |
+| 境界 | `SpeedService`(`SpeedDomainTypes.swift`) | `matchup(_:)`・`reach(_:)` を追加。`table`・`position`・`pokemon` は残す |
+| 通信 | `APISpeedService` | 生成クライアント(`getSpeedMatchup`・`getSpeedReach`)で実装。本文の省略規則は `APISpeedMatchupTests` |
+| モック | `MockSpeedService` | 簡易な式で matchup・reach。シナリオ `matchup-error`(`upstream_unavailable`)を追加 |
+| 状態 | `SpeedMatchupViewModel` | 入力 → 要求 → 状態(idle / loading / loaded / failed)。matchup・reach・ポケモン一覧は互いに独立 |
+| 表示の整形 | `SpeedMatchupDisplayBuilder`・`SpeedMatchupLabels` | 見出しの語・性格の行・「これ以上」の言い換え(純粋関数) |
+| View | `SpeedScreenView` ほか | 状態を描くだけ |
+
+`SpeedViewModel`(表の画面の状態)は `SpeedMatchupViewModel` に**置き換える**(新旧を同じ型名にすると、旧テストが
+新実装のコンパイルを壊すため、先に別名で作った)。置き換え後に旧型を削除する。名前は `SpeedMatchupViewModel` のまま使う。
+
+### 2. 入力と出力(Web と同じ並び)
+
+- 自分: ポケモン(ピッカー)・ランク・スカーフ・追い風・まひ・「今の振りを入れる」(トグル。入れると かんたん設定〈無振り / 準速 / 最速〉と SP のステッパー・性格の区切りが出る)。
+- 相手: ポケモン(ピッカー)・想定のチップ(6 つ。既定で 無振り・準速・最速・最速スカーフ が選択)・追い風・まひ。カスタム想定は ViewModel が持つ(`setCustomAssumption`)が、画面の入口は後続(Web の画面に合わせて決める)。
+- 場: トリックルーム。
+- **ランクの部品**: iOS には ADR-0357 のメーターに当たる部品がまだ無い(計算画面は − / 値 / + のボタン)。今回は既存の `SpeedStepper`(−/値/+)を使い、メーター化は別タスク(iOS 全体のランク入力をそろえるとき)。色だけに頼らず、値は符号付きの文字で出す。
+- 出力 1(想定ごとのカード): 見出し(B の要約語)・相手の素早さ・性格ごとの行(下降はトリックルーム中だけ)・同速の SP・今の振りがあるときの行動順のバッジ(文字つき)。
+- 出力 2(「これ以上」): 6 プリセットの行。「P a 族まで抜ける・b 族と同速・c 族以上に抜かれる」、各区間の数、境界の例。トリックルーム中は reach を取り直さず、言い換えだけ切り替える(`SpeedMatchupLabels.reachSlower` / `reachFaster` の `trickRoom`)。
+- 連続技へのリンク: `SpeedMatchupViewModel.comboAvailable`(既定 false)が true のときだけ出す。連続技(CB-8)が計算画面に入るまで出ない。値は `comboHandoff`(攻撃側 = 自分、防御側 = 相手、今の振りがあれば素早さの SP・性格・ランク・スカーフ)。
+- 画面は 1 本の縦スクロール。固定高にしない(長い文言は折り返す。AX5 でも横にはみ出さない)。常時アニメーションなし。色は補助(バッジ・行は文字でも区別する)。
+- reach の要求は「今の振り」から作る custom の位置(`tableTailwind` = 相手の追い風)。契約に相手のまひの欄は無いので、reach は相手のまひを反映しない(matchup だけ反映する)。
+
+### 3. 失敗
+
+- `upstream_unavailable`(gateway が speed に届かない 503。契約外の code)は「素早さのサーバーに接続できません」(`SpeedLabels.errorMessage`。対応済み)。契約の 503 は `ErrorCode` の列挙に無い code を読めず decode エラーになりうるが、画面の文言は同じ。
+- matchup・reach・ポケモン一覧は独立に失敗を出す。入力は壊さない。次の入力で復帰する。キャンセルは失敗にしない。計算・構築への波及なし(絶対ルール 5)。
+
+### 4. モックの固定事実(UI テストの期待値の元)
+
+既存の簡易な式のまま(`MockSpeedMatchupTests` が手計算で固定)。自分 A(種族値 100)・相手 D(130):
+無振り D = 150 に対し 補正なし S31 以上・上昇 S18 以上で抜ける(上昇 S17・補正なし S30 は同速)→ 見出し「準速で抜ける」。
+自分 167(SP 32・上昇)のとき「これ以上」は 無振り 146 族まで・147 族と同速・148 族以上 / 準速 114 族まで・115 族と同速・116 族以上。
+`reach` の自分 170 は §1 の手計算の例(無振り 149/150/151・準速 117/118/119・最速 102/103/104・最速スカーフ 51/なし/52・+2 25/26/27)と一致する。
+
+### 5. 画面から外すものと、整理するコード・テスト(implementer が画面の置き換えと一緒に行う)
+
+ルール 6(テストを消して通さない)に従い、**外す理由は「表と周辺パネルを画面から外す決定(本 ADR §4。ADR-0517・0527 を置き換え)で、その部品専用だから」**。PR とコミットメッセージに書く。API の `/table`・`/position` のクライアントとそのテストは残す。
+
+| 種類 | 外す | 残す・使い回す |
+|---|---|---|
+| Core のコード | `SpeedTableNavigation.swift`・`SpeedNeighborhood.swift`・`SpeedNeighborhoodLabels.swift`・`SpeedViewModel.swift`(`SpeedFailure`・`SpeedLoadState`・`SpeedInput` は `SpeedMatchupViewModel.swift` へ移す)・`SpeedLabels` の表・周辺パネル・「自分の位置」の文言 | `SpeedDomainTypes`(table・position の型を含む)・`APISpeedService` の pokemon・table・position・`MockSpeedService` の table・position・`SpeedLabels` のプリセット名・性格名・エラー文言 |
+| Core のテスト | `SpeedTableNavigationTests`・`SpeedNeighborhoodTests`・`SpeedViewModelTableTests`・`SpeedViewModelInputTests`・`SpeedViewModelAsyncTests`・`SpeedViewModelPickerTests`・`SpeedLabelsTests` の表・位置の文言の検査 | `APISpeedServiceTests`・`MockSpeedServiceTests`・`SpeedContractSyncTests`・`SpeedLabelsTests` のプリセット名・性格名・エラー文言。ピッカーの絞り込みは `SpeedMatchupViewModelInputTests` が引き継ぐ |
+| App | `SpeedTableSection.swift`・`SpeedNeighborhoodSection.swift`・`SpeedScreenView.swift` の自分のカード・結果(作り直す) | `SpeedScreenControls.swift`(`SpeedPill`・`SpeedFlowLayout`・`SpeedStepper`・`SpeedEmblem`)・`SpeedPokemonSheet.swift`(自分・相手で共用に一般化) |
+| UI テスト | `SpeedNeighborhoodUITests`・`SpeedScreenUITests` の表・境界線・遅延描画・実数値入力・モードのテスト | `SpeedScreenUITests` のうち下の「書き換え案」で残すもの |
+
+### 6. 既存 UI テストの書き換え案(表前提の箇所)
+
+新構成の受け入れ条件は `SpeedMatchupUITests`(3 本)と `SpeedMatchupLargeTextUITests`(1 本)に書いた。既存の素早さ関連は次のとおり。
+
+| 既存のテスト | 扱い | 理由・移し先 |
+|---|---|---|
+| `SpeedScreenUITests.testOpenSpeedScreenFromRootShowsTheTable` | 削除 | 表が無い。導線は `SpeedMatchupUITests` の起動処理が確かめる |
+| `testOpensAtLaunchWithTheEnvironmentVariable` | **残す**(変更なし) | `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH` は新画面でも使う |
+| `testTheLastFilterCannotBeTurnedOff` | 書き換え | 表の絞り込み → 想定のチップ(`speedAssumption-*`)。最後の 1 つは外せない(`speedAssumptionMinimumNotice`)。ViewModel は `SpeedMatchupViewModelInputTests` が見るので、UI は 1 本に絞ってよい |
+| `testTrickRoomReversesTheTableOrder` | 削除 | 表の並びは無い。トリックルームは `SpeedMatchupUITests` の 2 本目が見る |
+| `testRawValueBelowEveryRowDrawsTheBoundaryAtTheBottom`・`testInvalidRawValueShowsAMessageAndNoResult`・`testJumpToSelfBringsTheSelfRowIntoView`・`testTableRendersOnlyNearbyTiersAndReadsOutTheTotal` | 削除 | 実数値入力・境界線・遅延描画は画面に無い(ADR-0517 を置き換え) |
+| `testPresetMaxWithScarfShowsATieAndHighlightsTheSameSpeedTier`・`testCustomModeShowsItsControlsAndAResult` | 削除 | 入力モードが無い。今の振りは 2 本目が見る |
+| `testPokemonPickerFiltersByName` | **残す**(`speedPokemonButton` から開く。変更なし) | ピッカーは自分・相手で共用。識別子は同じ |
+| `testTableFailureDoesNotBlockThePosition`・`testPositionFailureKeepsTheTable` | 削除 | table・position は画面で呼ばない |
+| `testPokemonFailureStillAllowsRawInput` | 書き換え | 一覧が失敗しても画面は開き、失敗の表示(`speedPokemonError`)が出て他の入力が残る |
+| `testCalcScreenStillWorksWhenSpeedFailsEntirely` | **残す**(`speedTableError` の待ち合わせを `speedPokemonError` に変える) | 絶対ルール 5。3 本目も同じ確認を含む |
+| `LargeTextLayoutUITests.testSpeedScreenNoHorizontalOverflowAtAX5`・`testSpeedScreenResultAndTableNoHorizontalOverflowAtAX5`・`testSpeedPokemonSheetNoHorizontalOverflowAtAX5` | 削除し、`SpeedMatchupLargeTextUITests` に置き換え | 表の識別子(`speedTable`・`speedFilter-*`・`speedTier-*`・`speedBoundary`)が無くなる。入力・カード・「これ以上」・シートを見る |
+
+### 7. 受け入れ条件(iOS。上の 6 に対応)
+
+1. `APISpeedService.matchup` / `reach` が契約 0.7.0 の経路・本文(省略規則)・応答(欄ごと無い区間は nil)・エラー(契約の code、通信失敗、decode、未定義ステータス、cancel)で動く。
+2. `SpeedMatchupViewModel` が入力から matchup / reach の要求を作り、どの入力がどの要求を取り直すか(相手 → matchup のみ、自分の条件 → 両方、相手の追い風 → 両方、相手のまひ・想定・トリックルーム → matchup のみ)の規則で動く。idle / loading / loaded / failed が遷移し、古い応答・cancel は反映しない。
+3. 想定のチップは既定 4 つ、最後の 1 つは外せない(カスタムを含めて数える)。
+4. 見出し・性格の行・「これ以上」の言い換え(トリックルーム含む)が `SpeedMatchupLabels`・`SpeedMatchupDisplayBuilder` の規則どおり。届かない・同速のみ・同速なしを文字で出す。
+5. 画面に表・周辺パネル・旧入力が出ない。連続技が未実装の間はリンクが出ない。失敗は他の入力・計算画面に波及しない。AX5 で横にはみ出さず、固定高でない。
+6. `make ios-test` が通る(新しい UI テストは `SpeedMatchupUITests`・`SpeedMatchupLargeTextUITests`)。

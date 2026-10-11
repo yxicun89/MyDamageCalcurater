@@ -93,6 +93,18 @@ public struct APISpeedService: SpeedService {
         }
     }
 
+    // MARK: - matchup・reach(I-speed-4c。ADR-0610 §2)
+
+    // TODO(implementer): 生成クライアント(`client.getSpeedMatchup` / `client.getSpeedReach`)で実装する。
+    // spec-writer の足場: 失敗するテスト(APISpeedMatchupTests)を通すまで、この 2 つは未実装のエラーを投げる。
+    public func matchup(_ request: SpeedMatchupRequest) async throws -> SpeedMatchup {
+        throw PokeCalcError(code: "not_implemented", message: "APISpeedService.matchup は未実装(I-speed-4c)")
+    }
+
+    public func reach(_ request: SpeedPositionRequest) async throws -> SpeedReach {
+        throw PokeCalcError(code: "not_implemented", message: "APISpeedService.reach は未実装(I-speed-4c)")
+    }
+
     // MARK: - 通信の失敗(APIPokeCalcService と同じ分類)
 
     private func send<T>(_ operation: () async throws -> T) async throws -> T {
