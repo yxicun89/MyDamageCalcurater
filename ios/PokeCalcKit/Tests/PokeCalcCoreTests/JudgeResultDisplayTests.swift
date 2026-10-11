@@ -54,6 +54,7 @@ final class JudgeResultDisplayTests: XCTestCase {
         XCTAssertEqual(result.rows.map(\.candidateLabel), ["相手候補1", "相手候補2", "相手候補3"])
         XCTAssertEqual(result.rows.map(\.primaryType), ["fire", "water", "grass"], "エンブレム用の先頭タイプ")
         XCTAssertEqual(result.rows.map(\.id), [0, 1, 2])
+        XCTAssertEqual(result.rows.map(\.speciesKey), ["9101-000", "9102-000", "9103-000"].map(Optional.init), "G-06: 画像のキーは要求の候補の speciesKey")
     }
 
     func testRowValuesBelongToTheirOwnCandidate() {
