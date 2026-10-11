@@ -701,6 +701,22 @@ describe("A7 自分の位置の表示(強調・境界線)", () => {
 // ---- A8: エラー ----
 
 describe("A8 エラーでも表示が壊れない", () => {
+  test("gateway の upstream_unavailable は「計算に失敗」ではなく接続できない旨にする", async () => {
+    const { client } = renderScreen();
+    await flush(() => {
+      lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
+    });
+    await flush(() => {
+      lastOf(client.tableCalls, "table").resolve({
+        ok: false,
+        error: { code: "upstream_unavailable", message: "upstream unavailable" },
+      });
+    });
+    const alert = within(tableRegion()).getByRole("alert");
+    expect(alert).toHaveTextContent("素早さのサーバーに接続できません");
+    expect(alert).not.toHaveTextContent("計算に失敗");
+  });
+
   test("table() が失敗したら左に role=alert を出し、右の入力は使えるままにする", async () => {
     const { client } = renderScreen();
     await flush(() => {
