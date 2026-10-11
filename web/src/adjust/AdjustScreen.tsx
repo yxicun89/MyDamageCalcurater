@@ -59,6 +59,10 @@ import type {
 } from "../master/types";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
+import { MovePicker } from "../screens/MovePicker";
+import { PokemonIcon } from "../images/PokemonIcon";
+import { HelpButton } from "../ui/HelpButton";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { statLetterJa } from "../i18n/common";
 import { Icon, type IconName } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
@@ -232,6 +236,19 @@ function parseInteger(raw: string): number | null {
   return Number.isInteger(value) ? value : null;
 }
 
+/** null を除き、key が同じものは先に出たほうだけ残す。 */
+function uniqueByKey(choices: readonly (SpeciesChoice | null)[]): SpeciesChoice[] {
+  const seen = new Set<string>();
+  const result: SpeciesChoice[] = [];
+  for (const choice of choices) {
+    if (choice !== null && !seen.has(choice.key)) {
+      seen.add(choice.key);
+      result.push(choice);
+    }
+  }
+  return result;
+}
+
 /** 技の分類(変化技は攻撃の分類として使えないので null)。 */
 function attackCategoryOf(move: Move | undefined): Schemas["MoveCategory"] | null {
   return move === undefined || move.category === "status" ? null : move.category;
@@ -328,7 +345,10 @@ function stoneNameOf(species: MasterSpecies, items: MasterData["items"]): string
   return lock.kind === "locked" ? megaStoneLabel(species, lock.item.nameJa) : undefined;
 }
 
-/** 目標の種類のアイコン(装飾。名前は種類の select が持つ)。 */
+/** 振り方がこの数以下なら区切りボタン、多ければ select(SegmentedControl は 2〜4 択)。 */
+const MAX_SEGMENTED_PRESETS = 4;
+
+/** 目標の種類のアイコン(装飾。名前は種類の区切りボタンが持つ)。 */
 const GOAL_KIND_ICON: Record<AdjustGoalKind, IconName> = {
   outspeed: "speed",
   survive: "judge",
@@ -433,7 +453,11 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
       addGoalRef.current?.querySelector<HTMLElement>("button")?.focus();
       return;
     }
-    goalsRegionRef.current?.querySelector<HTMLElement>(`[data-goal-id="${String(target)}"] select`)?.focus();
+    goalsRegionRef.current
+      ?.querySelector<HTMLElement>(
+        `[data-goal-id="${String(target)}"] .adjust-screen__kind [role="radio"][tabindex="0"]`,
+      )
+      ?.focus();
   }, [goals]);
 
   // ---- 導出する値 ----
@@ -453,6 +477,8 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
   );
   const selfMove = findMove(self.choice, self.moveId);
   const opponentMove = findMove(opponent.choice, opponent.moveId);
+  // 目標の相手に選べる「これまでに選んだ相手」(相手の領域・各目標の相手。重複は先に出たほうだけ)。
+  const recentOpponents = uniqueByKey([opponent.choice, ...goals.map((goal) => goal.opponent)]);
   const offenseCategory: Schemas["MoveCategory"] =
     offenseCategoryOverride ?? attackCategoryOf(selfMove) ?? "physical";
   /** 相手が受けるときの防御側プリセットの絞り込みに使う分類(自分の技、無ければ攻撃の分類)。 */
@@ -1083,9 +1109,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
 
         <fieldset className="adjust-screen__fixed-sp">
           <legend>{T.fixedSpGroupLabel}</legend>
-          <p id={fixedSpHintId} className="adjust-screen__hint">
-            {T.fixedSpHint}
-          </p>
+          <HintHelp id={fixedSpHintId} text={T.fixedSpHint} />
           <div className="adjust-screen__fields">
             {STAT_ORDER.map((stat) => (
               <NumberField
@@ -1175,9 +1199,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
               describedBy={minSpeedHintId}
               onChange={setMinSpeed}
             />
-            <p id={minSpeedHintId} className="adjust-screen__hint">
-              {T.minSpeedHint}
-            </p>
+            <HintHelp id={minSpeedHintId} text={T.minSpeedHint} />
           </div>
         )}
 
@@ -1219,6 +1241,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
               master={master}
               masterSearch={masterSearch}
               speciesListAvailable={speciesListAvailable}
+              recentOpponents={recentOpponents}
               chooseFromList={chooseFromList}
               fromResolution={choiceFromResolution}
               onKindChange={(kind) => {
@@ -1444,6 +1467,21 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
 }
 
 // ---- 入力の部品 ----
+
+/**
+ * 補足の説明は「説明」ボタンの奥へ(画面に文を出し続けない。ADR-0354)。欄の aria-describedby が指す先は、
+ * 画面外に置いた同じ文(視覚的に隠すだけ。display:none にしない)として常に DOM に置く(支援技術からは今までどおり説明が読める)。
+ */
+function HintHelp({ id, text }: { readonly id: string; readonly text: string }) {
+  return (
+    <span className="adjust-screen__help">
+      <span id={id} className="adjust-screen__sr-only">
+        {text}
+      </span>
+      <HelpButton>{text}</HelpButton>
+    </span>
+  );
+}
 
 interface LabeledSelectProps {
   /** 見えるラベル(短い語)。accessible name はこれを含む(SC 2.5.3)。 */
@@ -1685,6 +1723,8 @@ interface GoalCardProps {
   readonly master: MasterData;
   readonly masterSearch?: MasterSpeciesSearch;
   readonly speciesListAvailable: boolean;
+  /** 目標の相手に選べる「これまでに選んだ相手」(相手の領域・ほかの目標の相手。重複なし)。 */
+  readonly recentOpponents: readonly SpeciesChoice[];
   readonly chooseFromList: (key: string) => SpeciesChoice | null;
   readonly fromResolution: (resolution: MasterSpeciesResolution) => SpeciesChoice;
   readonly onKindChange: (kind: AdjustGoalKind) => void;
@@ -1701,6 +1741,7 @@ function GoalCard({
   master,
   masterSearch,
   speciesListAvailable,
+  recentOpponents,
   chooseFromList,
   fromResolution,
   onKindChange,
@@ -1736,20 +1777,40 @@ function GoalCard({
         />
       )}
       <div className="adjust-screen__fields">
-        <LabeledSelect
-          visibleLabel={T.goalKindFieldLabel}
-          name={T.goalFieldName(n, T.goalKindFieldLabel)}
-          value={goal.kind}
-          onChange={(value) => {
-            onKindChange(value as AdjustGoalKind);
-          }}
-        >
-          {ADJUST_GOAL_KINDS.map((kind) => (
-            <option key={kind} value={kind}>
-              {T.goalKindOption[kind]}
-            </option>
-          ))}
-        </LabeledSelect>
+        <div className="adjust-screen__field adjust-screen__field--wide">
+          <span className="adjust-screen__field-label">{T.goalKindFieldLabel}</span>
+          <SegmentedControl
+            className="adjust-screen__kind"
+            label={T.goalFieldName(n, T.goalKindFieldLabel)}
+            value={goal.kind}
+            options={ADJUST_GOAL_KINDS.map((kind) => ({
+              value: kind,
+              label: T.goalKindOption[kind],
+              icon: GOAL_KIND_ICON[kind],
+            }))}
+            onChange={onKindChange}
+          />
+        </div>
+        {recentOpponents.length > 0 && (
+          <div className="adjust-screen__field adjust-screen__field--wide">
+            <span className="adjust-screen__field-label">{T.goalRecentOpponentsLabel}</span>
+            <div className="adjust-screen__recent">
+              {recentOpponents.map((candidate) => (
+                <Tile
+                  key={candidate.key}
+                  className="adjust-screen__recent-tile"
+                  selected={goal.opponent?.key === candidate.key}
+                  onClick={() => {
+                    onOpponentSelect(candidate);
+                  }}
+                >
+                  <PokemonIcon speciesKey={candidate.key} typeId={candidate.types[0]} />
+                  {candidate.name}
+                </Tile>
+              ))}
+            </div>
+          </div>
+        )}
         <SpeciesField
           visibleLabel={T.goalOpponentSpeciesFieldLabel}
           name={T.goalFieldName(n, T.goalOpponentSpeciesFieldLabel)}
@@ -1761,41 +1822,52 @@ function GoalCard({
           masterSearch={masterSearch}
           fromResolution={fromResolution}
         />
-        <LabeledSelect
-          visibleLabel={T.goalPresetFieldLabel}
-          name={T.goalFieldName(n, T.goalPresetFieldLabel)}
-          value={resolved.selectedKey}
-          onChange={(preset) => {
-            onUpdate({ preset });
-          }}
-        >
-          {resolved.options.map((option) => (
-            <option key={option.key} value={option.key}>
-              {option.label}
-            </option>
-          ))}
-        </LabeledSelect>
-        <LabeledSelect
-          visibleLabel={moveLabel}
-          name={T.goalFieldName(n, moveLabel)}
-          value={goal.moveId}
-          describedBy={goal.kind === "outspeed" ? boostHintId : undefined}
-          onChange={(moveId) => {
-            onUpdate({ moveId });
-          }}
-        >
-          <option value="">{goal.kind === "outspeed" ? T.goalBoostMoveNone : T.movePlaceholder}</option>
-          {(moveChoice?.moves ?? []).map((move) => (
-            <option key={move.id} value={move.id}>
-              {move.nameJa}
-            </option>
-          ))}
-        </LabeledSelect>
-        {goal.kind === "outspeed" && (
-          <p id={boostHintId} className="adjust-screen__hint">
-            {T.goalBoostMoveHint}
-          </p>
+        {resolved.options.length <= MAX_SEGMENTED_PRESETS ? (
+          <div className="adjust-screen__field adjust-screen__field--wide">
+            <span className="adjust-screen__field-label">{T.goalPresetFieldLabel}</span>
+            <SegmentedControl
+              label={T.goalFieldName(n, T.goalPresetFieldLabel)}
+              value={resolved.selectedKey}
+              options={resolved.options.map((option) => ({ value: option.key, label: option.label }))}
+              onChange={(preset) => {
+                onUpdate({ preset });
+              }}
+            />
+          </div>
+        ) : (
+          <LabeledSelect
+            visibleLabel={T.goalPresetFieldLabel}
+            name={T.goalFieldName(n, T.goalPresetFieldLabel)}
+            value={resolved.selectedKey}
+            onChange={(preset) => {
+              onUpdate({ preset });
+            }}
+          >
+            {resolved.options.map((option) => (
+              <option key={option.key} value={option.key}>
+                {option.label}
+              </option>
+            ))}
+          </LabeledSelect>
         )}
+        <div className="adjust-screen__field adjust-screen__field--wide">
+          <MovePicker
+            label={T.goalFieldName(n, moveLabel)}
+            visibleLabel={moveLabel}
+            labelClassName="adjust-screen__field-label"
+            triggerClassName="adjust-screen__picker"
+            moves={moveChoice?.moves ?? []}
+            types={master.typeChart.types}
+            value={goal.moveId}
+            describedBy={goal.kind === "outspeed" ? boostHintId : undefined}
+            noneLabel={goal.kind === "outspeed" ? T.goalBoostMoveNone : undefined}
+            showUnselected={goal.kind !== "outspeed"}
+            onChange={(moveId) => {
+              onUpdate({ moveId });
+            }}
+          />
+          {goal.kind === "outspeed" && <HintHelp id={boostHintId} text={T.goalBoostMoveHint} />}
+        </div>
         {damaging && (
           <>
             <LabeledSelect
@@ -2021,7 +2093,9 @@ function IndicesView({ indices }: { readonly indices: Schemas["AdjustIndicesResu
       </p>
       <p className="adjust-screen__detail">{T.indexLine(T.physicalBulkLabel, indices.physicalBulkIndex)}</p>
       <p className="adjust-screen__detail">{T.indexLine(T.specialBulkLabel, indices.specialBulkIndex)}</p>
-      <p className="adjust-screen__hint adjust-screen__detail">{T.indexNote}</p>
+      <div className="adjust-screen__detail">
+        <HelpButton>{T.indexNote}</HelpButton>
+      </div>
       <h4>{T.hpLineHeading}</h4>
       <p className="adjust-screen__detail">{T.hpCurrent(lines.hp, T.hpLineKindLabel[lines.current])}</p>
       <ul className="ui-rows adjust-screen__lines">
@@ -2058,7 +2132,11 @@ function AllocationView({ allocation, hadGoal, hasSpeedTarget }: AllocationViewP
           hasSpeedTarget={hasSpeedTarget}
         />
       ) : (
-        !hadGoal && <p className="ui-notice ui-notice--info adjust-screen__notice">{T.minSpNotRequested}</p>
+        !hadGoal && (
+          <div className="adjust-screen__detail">
+            <HelpButton>{T.minSpNotRequested}</HelpButton>
+          </div>
+        )
       )}
     </>
   );

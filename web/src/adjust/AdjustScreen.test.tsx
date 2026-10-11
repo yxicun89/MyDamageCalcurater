@@ -22,6 +22,7 @@ import { MAX_SP_TOTAL, MAX_SP_PER_STAT } from "../domain/requests";
 import { unsupportedMarkLabels } from "../domain/unsupportedLabels";
 import { REQUEST_ABORTED_CODE, type Ability, type Item, type Move, type StatKey } from "../engine/types";
 import { adjustErrorText, adjustScreenText, unsupportedText, type AdjustModeKey } from "../i18n/ja";
+import { uiText } from "../i18n/ui";
 import type { MasterData, MasterNature, MasterSpecies } from "../master/types";
 import { accessibleNameOf, describedByTextsOf, visibleLabelOf } from "../test/accessibleName";
 import { createFakeSpeciesSearch } from "../test/onlineMaster";
@@ -850,6 +851,8 @@ describe("S5 結果の表示", () => {
     expect(within(indices).getByText(T.indexLine(T.firepowerIndexLabel, 16200))).toBeInTheDocument();
     expect(within(indices).getByText(T.indexLine(T.physicalBulkLabel, 14310))).toBeInTheDocument();
     expect(within(indices).getByText(T.indexLine(T.specialBulkLabel, 14469))).toBeInTheDocument();
+    // 指数の注は「説明」ボタンの奥(I-web-18)。開くと同じ文が出る。
+    await user.click(within(indices).getByRole("button", { name: uiText.help }));
     expect(within(indices).getByText(T.indexNote)).toBeInTheDocument();
   });
 
@@ -995,6 +998,11 @@ describe("S5 結果の表示", () => {
     // 耐久側は素早さを見ないので、素早さの目標の文言を出さない。
     expect(within(maxIndex).queryByText(T.speedMet)).toBeNull();
     expect(screen.queryByRole("region", { name: T.minSpHeading })).toBeNull();
+    // 「目標を指定すると…」は「説明」ボタンの奥(I-web-18)。開くと同じ文が出る。
+    // 結果には指数の注の「説明」もあり、この文の「説明」は最後(DOM の順で minSp の位置)。
+    await user.click(
+      within(resultRegion()).getAllByRole("button", { name: uiText.help }).at(-1) as HTMLElement,
+    );
     expect(within(resultRegion()).getByText(T.minSpNotRequested)).toBeInTheDocument();
   });
 

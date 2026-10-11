@@ -63,6 +63,10 @@ export interface MovePickerProps {
   readonly noneLabel?: string;
   /** 選べない技 ID(行は aria-disabled で押せない。構築で他の枠が選んだ技。ADR-0350)。 */
   readonly disabledIds?: ReadonlySet<string>;
+  /** 見えるラベルの文字。省略時は label と同じ。label(読み上げ名)がこれを含む長い名前のとき(調整画面の「目標 n の…」)に渡す。 */
+  readonly visibleLabel?: string;
+  /** 説明の要素の id(トリガーの aria-describedby。調整画面の「先に使う技」の補足)。 */
+  readonly describedBy?: string;
   /** 見えるラベルのクラス(画面ごと)。 */
   readonly labelClassName?: string;
   /** トリガーに足すクラス(画面ごとの入力の形。例: calc-screen__move)。 */
@@ -79,6 +83,8 @@ export function MovePicker({
   showUnselected = false,
   noneLabel,
   disabledIds,
+  describedBy,
+  visibleLabel,
   labelClassName,
   triggerClassName,
 }: MovePickerProps): ReactElement {
@@ -218,7 +224,7 @@ export function MovePicker({
   return (
     <div className="move-picker" ref={rootRef}>
       <label className={labelClassName} htmlFor={triggerId}>
-        {label}
+        {visibleLabel ?? label}
       </label>
       <button
         type="button"
@@ -232,6 +238,7 @@ export function MovePicker({
         aria-expanded={isOpen}
         aria-controls={isOpen && navIds.length > 0 ? listId : undefined}
         aria-label={label}
+        aria-describedby={describedBy}
         data-value={value}
         disabled={disabled}
         onClick={() => {

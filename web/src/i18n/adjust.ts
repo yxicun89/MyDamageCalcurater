@@ -213,6 +213,8 @@ export const adjustScreenText = {
     ko: "この技で倒す",
   } satisfies Record<AdjustGoalKindKey, string>,
   goalOpponentSpeciesFieldLabel: "相手のポケモン",
+  /** 目標の相手を、これまでに選んだ相手の絵から選ぶ列の見出し。 */
+  goalRecentOpponentsLabel: "選んだ相手から",
   goalPresetFieldLabel: "相手の振り方",
   goalOpponentMoveFieldLabel: "相手の技",
   goalSelfMoveFieldLabel: "自分の技",
