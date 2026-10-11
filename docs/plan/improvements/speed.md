@@ -21,6 +21,6 @@
 
 - [ ] **I-speed-4(speed-svc・Web・iOS)**: 「相手を選んで上を取る最低ライン」と「これ以上(族の区切り)」の画面にし、表と周辺パネルを画面から外す。設計は ADR-0610(提案。§6 Q1〜Q7 はユーザー確認待ち)、決定は `docs/ai-shared/decisions/2026-10-12-speed-matchup-min-line.md`。
   - [x] 仕様と失敗するテスト(spec-writer): `services/speed/internal/speed/matchup_test.go`・`engine_parity_test.go`、`services/speed/internal/httpapi/matchup_test.go`、契約 0.7.0(`POST /api/speed/v1/matchup`・`/reach`)、スタブ(`matchup.go` 2 つ)
-  - [ ] I-speed-4a: speed のコア(MovesFirstLines・Matchup・Reach)と HTTP(matchup・reach。ミドルウェア登録)。上のテストを通す
+  - [x] I-speed-4a: speed のコア(MovesFirstLines・Matchup・Reach)と HTTP(matchup・reach。ミドルウェア登録)。上のテストを通す(2026-10-12。`Speed` は元から engine.EffectiveStat 経由で、engine_parity_test が engine.FinalSpeed との一致を守る)
   - [ ] I-speed-4b: Web の画面(入力 = 自分・相手・場、出力 1・2、連続技へのリンク。表・周辺パネルを外す)
   - [ ] I-speed-4c: iOS の画面(Web と同じ体験)
