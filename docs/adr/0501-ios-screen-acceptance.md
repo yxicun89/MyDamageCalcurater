@@ -4920,5 +4920,14 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `JudgeHiddenUITests` の「素早さの入口は出る」 | `app.buttons["openSpeedScreen"]` → 素早さのタブ(`tab-speed`) | 素早さはタブになった |
 | `SpeedScreenUITests.testPresetMaxWithScarfShowsATieAndHighlightsTheSameSpeedTier` | 「自分の段」を待つ前に、出るまでスクロールする(`scrollUntilExists`) | 下部タブの分だけ見える高さが減り、遅延して描く表の段が画面外になった。段が出ること・強調の検査は不変 |
 
+### 離れたときの取り消し(critic 指摘。ADR-0531 §2)
+
+| 対象 | 変更 | 理由 |
+|---|---|---|
+| 計算・逆算・調整・判定・素早さの `.onDisappear { cancelPendingWork() }` | `cancelsPendingWorkOnDisappear(lifetime)` に置換。タブ・区切りの画面(`.retained`)は取り消さず、記録から積む計算(`.pushed`)だけ取り消す | タブ切替で入力中・送信中の要求が消え、結果が古いまま/送信が黙って消えるため |
+| 既存の `cancelPendingWork` の XCTest(Calc・Reverse・Adjust・Judge・Speed) | 変更なし | 積んだ画面の取り消しとして引き続き使う |
+| 追加: `RetainedScreenWorkTests`(3 件)・`AdjustViewModelSubmitTests.testSubmitInFlightCompletesWhenLeavingRetainedScreen` | 取り消さないときも完了し、最新の入力の結果だけが残る | |
+| 追加: `AppNavigationUITests.testInputChangedJustBeforeTabSwitchShowsResultAfterReturning` | 入力直後にタブを移って戻ると、新しい入力で結果が出ている | |
+
 実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
 以前は画面を開き直すたびに `load()` で読み直していた挙動を保つため(`CalcScreenUITests` の構築の呼び出しの検査がこれに依存する)。
