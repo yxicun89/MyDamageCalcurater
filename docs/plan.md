@@ -22,6 +22,7 @@
 | SP: 素早さ比較 | [docs/plan/speed.md](plan/speed.md) |
 | JD: 判定 | [docs/plan/judge.md](plan/judge.md) |
 | AJ: 調整 | [docs/plan/adjust.md](plan/adjust.md) |
+| CB: 連続技の計算(仕様の提案。判定の作り直し) | [docs/plan/combo-calc.md](plan/combo-calc.md) |
 | DOC: 文書 | [docs/plan/doc.md](plan/doc.md) |
 | M4: 運用 | [docs/plan/m4.md](plan/m4.md) |
 | 後続: 要件との対応 | [docs/plan/followups.md](plan/followups.md) |
