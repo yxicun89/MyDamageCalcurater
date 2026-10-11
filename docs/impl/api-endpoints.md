@@ -109,6 +109,8 @@ ID ヘッダの検証: judge・speed とも gateway と同じ正準形 UUID 検�
 | speed | 3 | GET | `/api/speed/v1/pokemon` | `listPokemon` | 必須 | `server.go:65` → `:168` | 200・400・503・500 |
 | speed | 4 | GET | `/api/speed/v1/table`(クエリ `presets`) | `getSpeedTable` | 必須 | `server.go:72` → `:84` | 200・400・503・500 |
 | speed | 5 | POST | `/api/speed/v1/position` | `getSpeedPosition` | 必須 | `server.go:78` → `position.go:25` | 200・400・413・422・503・500 |
+| speed | 6 | POST | `/api/speed/v1/matchup` | `getSpeedMatchup` | 必須 | `matchup.go`(`GetSpeedMatchup`) | 200・400・413・422・503・500 |
+| speed | 7 | POST | `/api/speed/v1/reach` | `getSpeedReach` | 必須 | `matchup.go`(`GetSpeedReach`) | 200・400・413・422・503・500 |
 | judge | 1 | GET | `/healthz` | `health` | 不要 | `server.go:52` | 200 |
 | judge | 2 | GET | `/api/judge/healthz` | `publicHealth` | 不要 | `server.go:57` | 200 |
 | judge | 3 | POST | `/api/judge/v1/outspeed-and-ko` | `outspeedAndKo` | 必須 | `server.go:64` → `outspeed.go:120` | 200・400・413・422・503・500 |

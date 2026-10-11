@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"reflect"
@@ -242,5 +243,49 @@ func TestTurnOrderEnumMatchesEngine(t *testing.T) {
 	want := []string{string(engine.TurnOrderSelfFirst), string(engine.TurnOrderOpponentFirst), string(engine.TurnOrderSpeedTie)}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("TurnOrder enum = %v, want %v (engine.TurnOrder*)", got, want)
+	}
+}
+
+// matchup・reach も /position と同じ body 上限(4 KiB)で 413 request_too_large を返す。
+func TestMatchupAndReachRejectOversizedBody(t *testing.T) {
+	t.Parallel()
+	pad := strings.Repeat("9", maxPositionBodyBytes)
+	bodies := map[string]string{
+		matchupPath: fmt.Sprintf(`{"self":{"pokemonId":"9001-000"},"opponent":{"pokemonId":"%s"}}`, pad),
+		reachPath:   fmt.Sprintf(`{"mode":"raw","value":200,"pokemonId":"%s"}`, pad),
+	}
+	for path, body := range bodies {
+		for _, deps := range []Dependencies{{Pokemon: exampleProvider(t)}, {}} {
+			recorder := serve(deps, newPostRequest(path, validHeaders, body))
+			if recorder.Code != http.StatusRequestEntityTooLarge {
+				t.Fatalf("%s: status = %d, want 413; body=%s", path, recorder.Code, recorder.Body.String())
+			}
+			if got := decodeError(t, recorder).Code; got != api.RequestTooLarge {
+				t.Errorf("%s: code = %q, want %q", path, got, api.RequestTooLarge)
+			}
+		}
+	}
+}
+
+func TestReachNoReadModel(t *testing.T) {
+	t.Parallel()
+	none := serve(Dependencies{}, newPostRequest(reachPath, validHeaders, `{"mode":"raw","value":200}`))
+	if none.Code != http.StatusServiceUnavailable || decodeError(t, none).Code != api.MasterUnavailable {
+		t.Errorf("no read model: status = %d body=%s, want 503 master_unavailable", none.Code, none.Body.String())
+	}
+}
+
+// body が不正なら read model が無くても 400(503 ではない)。body の検証が read model の確認より先。
+func TestMatchupAndReachValidateBodyBeforeReadModel(t *testing.T) {
+	t.Parallel()
+	bodies := map[string]string{
+		matchupPath: `{"self":{"pokemonId":"9001"},"opponent":{"pokemonId":"9004-000"}}`,
+		reachPath:   `{"mode":"raw","value":1}`,
+	}
+	for path, body := range bodies {
+		recorder := serve(Dependencies{}, newPostRequest(path, validHeaders, body))
+		if recorder.Code != http.StatusBadRequest || decodeError(t, recorder).Code != api.InvalidRequest {
+			t.Errorf("%s: status = %d body=%s, want 400 invalid_request", path, recorder.Code, recorder.Body.String())
+		}
 	}
 }

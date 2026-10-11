@@ -43,7 +43,7 @@ func (h handler) GetSpeedMatchup(c *echo.Context, _ api.GetSpeedMatchupParams) e
 	if err != nil {
 		return coreError(c, err)
 	}
-	return c.JSON(http.StatusOK, toMatchupResponse(result, req.TrickRoom))
+	return c.JSON(http.StatusOK, toMatchupResponse(result, req))
 }
 
 // GetSpeedReach implements POST /api/speed/v1/reach (ADR-0610 §2). The body is a PositionRequest
@@ -222,7 +222,7 @@ func toBaseSpeedRange(r *speed.BaseRange) *api.BaseSpeedRange {
 	return &api.BaseSpeedRange{Min: r.Min, Max: r.Max}
 }
 
-func toMatchupResponse(result speed.MatchupResult, trickRoom bool) api.MatchupResponse {
+func toMatchupResponse(result speed.MatchupResult, req speed.MatchupRequest) api.MatchupResponse {
 	lines := make([]api.MatchupLine, len(result.Lines))
 	for i, l := range result.Lines {
 		natures := make([]api.NatureLine, len(l.Lines))
@@ -255,9 +255,10 @@ func toMatchupResponse(result speed.MatchupResult, trickRoom bool) api.MatchupRe
 		Self:      toSpeedPokemon(result.Self),
 		Opponent:  toSpeedPokemon(result.Opponent),
 		Lines:     lines,
-		TrickRoom: trickRoom,
+		TrickRoom: req.TrickRoom,
 	}
-	if result.SelfSpeed != 0 {
+	// selfSpeed は self.current を渡したときだけ付ける(値が 0 かどうかでは判定しない)。
+	if req.SelfCurrent != nil {
 		speedValue := result.SelfSpeed
 		response.SelfSpeed = &speedValue
 	}
