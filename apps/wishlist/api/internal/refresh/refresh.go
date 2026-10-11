@@ -90,7 +90,7 @@ type OfficialChecker interface {
 
 // Report は 1 商品の更新結果。
 type Report struct {
-	Targets int // 対象サイトの数(ModeStale で取らなかったものも含む)
+	Targets int // 対象サイトの数(ModeStale で取らなかったものも含む。このプロセスに Fetcher が無いサイトは数えない)
 	Fetched int // 取得に成功したサイトの数
 	Failed  int // 取得に失敗したサイトの数
 }
@@ -152,7 +152,8 @@ func New(d Deps) *Service {
 	return &Service{d: d, inflight: map[int64]*flight{}, lastTried: map[[2]int64]time.Time{}}
 }
 
-// target は更新の対象サイト(表示順)。
+// target は更新の対象サイト(表示順)。f が nil のサイトはこのプロセスでは取得できない(例: api に Renderer が無いメルカリ)。
+// 保存済みの目安は表示・まとめに使うが、取得はしない。
 type target struct {
 	site        item.Site
 	f           fetcher.Fetcher
@@ -201,10 +202,7 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 		if hasOverride && !o.Enabled {
 			continue
 		}
-		f, ok := s.d.Fetchers.ForSite(st)
-		if !ok {
-			continue
-		}
+		f, _ := s.d.Fetchers.ForSite(st)
 		var siteQuery *string
 		if hasOverride {
 			siteQuery = o.Query
@@ -221,6 +219,9 @@ func (s *Service) targets(ctx context.Context, itemID int64) (item.Item, []targe
 // needsFetch は t を今回取るべきか。ModeAll は常に取る。ModeStale は「目安が無い・failed・MaxAge より古い」うち、
 // 最後に試してから RetryInterval 以上たったものだけ。
 func (s *Service) needsFetch(itemID int64, t target, est *item.Estimate, mode Mode, now time.Time) bool {
+	if t.f == nil {
+		return false
+	}
 	if t.nightlyOnly && mode != ModeNightly {
 		return false
 	}
@@ -316,7 +317,12 @@ func (s *Service) run(ctx context.Context, itemID int64, mode Mode) (Report, err
 	if err != nil {
 		return Report{}, err
 	}
-	report := Report{Targets: len(targets)}
+	report := Report{}
+	for _, t := range targets {
+		if t.f != nil {
+			report.Targets++
+		}
+	}
 	ests, err := s.d.Prices.ListEstimates(ctx, itemID)
 	if err != nil {
 		return report, err
@@ -567,7 +573,7 @@ func (s *Service) Refresh(ctx context.Context, itemID int64) (View, error) {
 		return View{}, err
 	}
 	for _, t := range targets {
-		if !t.nightlyOnly { // 夜間専用のサイトだけなら、取るものが無いので起動しない
+		if t.f != nil && !t.nightlyOnly { // 夜間専用のサイトだけなら、取るものが無いので起動しない
 			v.Refreshing = s.startBackground(itemID, ModeAll)
 			break
 		}

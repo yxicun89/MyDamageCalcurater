@@ -37,7 +37,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。テストは `make wi
   - それ以外:末尾の ` | …`・` ｜ …`・` - …` を 1 つだけ除く(除いて空になるなら除かない)
 - **画像**:og:image。ただし
   - `bandai-hobby.net` は og:image がサイト共通の画像なので、本文の `.pg-products__sliderMain` の最初の `img` の `src` を使う(無ければ null)
-  - `www.suruga-ya.jp` の `/product/detail/<番号>` は**ページを取りに行かず**、画像を `https://www.suruga-ya.jp/database/photo.php?shinaban=<番号>&size=l`、
+  - `www.suruga-ya.jp`・`suruga-ya.jp` の `/product/detail/<番号>`(末尾の `/` 可。どちらも同じ商品ページに着く)は**ページを取りに行かず**、画像を `https://www.suruga-ya.jp/database/photo.php?shinaban=<番号>&size=l`、
     名前を空文字で返す(商品ページは Cloudflare の確認画面で読めない。回避しない)
 - **ジャンル**:リクエストに `genre_id` があればそれ。無ければ推定し、決まらなければ null
   - ジャンルごとに `match_hosts`(ホスト名の配列)と `match_keywords`(語の配列)を持つ(`Genre` に足す。設定で編集できる)
@@ -77,7 +77,7 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。テストは `make wi
 | AC-5-1b-4 | 「METAL BUILD・ROBOT魂」(`#5b6b7f`/`robot`)を足し、表示するサイトは S.H.Figuarts と同じ。同名があれば足さず紐づけも変えない | ★`TestGenreStyle000009_Fresh`・★`_ExistingDB`・★`_Down` |
 | AC-5-1c-1 | 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名を除く | ogp `TestCleanTitle`・`TestParseAndClean_Fixtures`(実サイトの fixture 4 つ)・httpapi `TestDraftFromURL_Guess` |
 | AC-5-1c-2 | bandai-hobby.net の画像は本文 `.pg-products__sliderMain` の最初の img(無ければ null)。他のホストは og:image | ogp `TestParse_BandaiHobbyImage`・`TestParseAndClean_Fixtures` |
-| AC-5-1c-3 | 駿河屋の `/product/detail/<番号>` は取りに行かず、名前は空・画像は photo.php で 200 | ogp `TestStaticDraft`・httpapi `TestDraftFromURL_Surugaya` |
+| AC-5-1c-3 | 駿河屋(`www.` の有無・末尾の `/` を問わない)の `/product/detail/<番号>` は取りに行かず、名前は空・画像は photo.php で 200 | ogp `TestStaticDraft`・httpapi `TestDraftFromURL_Surugaya` |
 | AC-5-1c-4 | リクエストの genre_id があればそれ(`genre_guessed: false`) | httpapi `TestDraftFromURL_Guess` |
 | AC-5-1c-5 | ジャンルの手がかりの初期値(migration 000009) | `TestGenreStyle000009Shape`・★`TestGenreStyle000009_Fresh` |
 | AC-5-1c-6 | 推定は 語(最長・同じ長さは sort_order・id)→ ホスト(sort_order)→ null。推定で決めたら `genre_guessed: true` | item `TestGuessGenre`・httpapi `TestDraftFromURL_Guess` |

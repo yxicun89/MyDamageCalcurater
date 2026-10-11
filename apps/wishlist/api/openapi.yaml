@@ -506,7 +506,6 @@ components:
           type: string
           enum:
             - bad_request
-            - unauthorized
             - not_found
             - unprocessable
             - bad_gateway

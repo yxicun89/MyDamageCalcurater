@@ -308,3 +308,38 @@ func canonicalAny(t *testing.T, v any) string {
 	}
 	return string(b)
 }
+
+// AC-5-1d-1: 一覧の summary は詳細(GET /api/items/{id}/estimates)のまとめと同じ値。
+// このプロセスに Fetcher が無いサイト(Renderer の無い api のメルカリ。夜間の CronJob が保存した目安)も両方に入る。
+func TestListItems_SummaryEqualsDetail(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	st, err := e.svc.CreateSite(ctx, item.NewSite{Name: "メルカリ", SearchURLTemplate: "https://jp.mercari.com/search?keyword={q}", FetchType: item.FetchHeadless})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err := e.svc.CreateGenre(ctx, item.NewGenre{Name: "取れないサイトだけ", SiteIDs: []int64{st.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := idOf(e.createItem(t, map[string]string{"name": "目安あり", "genre_id": fmt.Sprint(g.ID)}))
+	at := time.Date(2026, 10, 10, 3, 0, 0, 0, time.UTC)
+	low := 3000
+	if err := e.repo.SaveSiteResult(ctx, item.Estimate{ItemID: id, SiteID: st.ID, Low: &low, Status: item.EstimateOK, FetchedAt: at}, nil); err != nil {
+		t.Fatal(err)
+	}
+	detail := decode[map[string]any](t, e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/estimates", id)}))
+	list := decode[struct {
+		Items []map[string]any `json:"items"`
+	}](t, e.do(t, req{method: http.MethodGet, path: "/api/items?genre_id=" + fmt.Sprint(g.ID)}))
+	if len(list.Items) != 1 {
+		t.Fatalf("items = %v", list.Items)
+	}
+	sum, _ := list.Items[0]["summary"].(map[string]any)
+	if detail["summary_low"] != float64(low) {
+		t.Errorf("詳細の summary_low = %v, want %d", detail["summary_low"], low)
+	}
+	if sum["low"] != detail["summary_low"] || sum["fetched_at"] != detail["summary_fetched_at"] || sum["status"] != "ok" {
+		t.Errorf("一覧 %v と詳細 %v/%v が違う", sum, detail["summary_low"], detail["summary_fetched_at"])
+	}
+}

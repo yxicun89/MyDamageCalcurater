@@ -140,6 +140,25 @@ func TestYahooShopping_PageStructure(t *testing.T) {
 			}
 		})
 	}
+	// 実サイトの 0 件のページは searchResults が null で、searchError.errorCode が zeroMatch(2026-10-11 に確認)。出品なし(no_result)にするため 0 件・エラーなし。
+	t.Run("zero match fixture", func(t *testing.T) {
+		body, err := os.ReadFile("testdata/yahoo_shopping_zero.html")
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv := newHTMLServer(t, serveHTML(string(body)))
+		got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x")
+		if err != nil || got == nil || len(got) != 0 {
+			t.Errorf("Fetch = %#v, %v; want 空(nil でない)・エラーなし", got, err)
+		}
+	})
+	t.Run("other search error", func(t *testing.T) {
+		html := `<html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"initialState":{"bff":{"searchResults":null,"searchError":{"errorCode":"systemError"}}}}}</script></body></html>`
+		srv := newHTMLServer(t, serveHTML(html))
+		if got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x"); err == nil {
+			t.Errorf("Fetch = %v, nil; want エラー(0 件と区別する)", got)
+		}
+	})
 	t.Run("empty result", func(t *testing.T) {
 		srv := newHTMLServer(t, serveHTML(shoppingPage()))
 		got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x")

@@ -90,7 +90,7 @@ func TestPriceHistory_Errors(t *testing.T) {
 	}
 	expectError(t, e.do(t, req{method: http.MethodGet, path: "/api/items/99999999/price-history"}), http.StatusNotFound, "not_found")
 	// 5-1a: トークン無しで組み立てたサーバーに、Authorization 無しで 200(以前は 401 を確かめていた。要件の変更)。
-	ne := newEnvWith(t, "")
+	ne := newEnv(t)
 	nid := idOf(ne.createItem(t, nil))
 	if w := ne.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/price-history", nid), auth: "-"}); w.Code != http.StatusOK {
 		t.Errorf("トークン無し = %d %s, want 200", w.Code, w.Body.String())

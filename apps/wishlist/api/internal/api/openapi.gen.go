@@ -27,7 +27,6 @@ const (
 	ErrorCodeInternal       ErrorCode = "internal"
 	ErrorCodeNotFound       ErrorCode = "not_found"
 	ErrorCodeNotImplemented ErrorCode = "not_implemented"
-	ErrorCodeUnauthorized   ErrorCode = "unauthorized"
 	ErrorCodeUnprocessable  ErrorCode = "unprocessable"
 )
 
@@ -43,8 +42,6 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeNotFound:
 		return true
 	case ErrorCodeNotImplemented:
-		return true
-	case ErrorCodeUnauthorized:
 		return true
 	case ErrorCodeUnprocessable:
 		return true

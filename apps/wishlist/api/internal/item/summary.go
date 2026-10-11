@@ -28,9 +28,45 @@ type Summary struct {
 // 対象は ests のうち、genreSiteIDs(商品のジャンルの site_ids)にあり、it.SiteOverrides で外して(Enabled=false)いないサイトの行だけ。
 //   - Low は対象の Low の最小、FetchedAt は Low を持つ対象の FetchedAt のうち最も古いもの(どちらも無ければ nil)
 //   - Status は Low があれば ok、対象が無ければ none、対象がすべて no_result なら no_result、それ以外は failed
-//
-// TODO(5-1d 実装者): 未実装。spec-writer が置いた空の実装(summary_test.go が失敗する)。
 func SummarizeItem(it Item, genreSiteIDs []int64, ests []Estimate) Summary {
-	_, _, _ = it, genreSiteIDs, ests
-	return Summary{}
+	inGenre := make(map[int64]bool, len(genreSiteIDs))
+	for _, id := range genreSiteIDs {
+		inGenre[id] = true
+	}
+	for _, o := range it.SiteOverrides {
+		if !o.Enabled {
+			delete(inGenre, o.SiteID)
+		}
+	}
+	out := Summary{Status: SummaryNone}
+	failed := false
+	for _, e := range ests {
+		if !inGenre[e.SiteID] {
+			continue
+		}
+		if out.Status == SummaryNone {
+			out.Status = SummaryNoResult
+		}
+		if e.Status != EstimateNoResult {
+			failed = true
+		}
+		if e.Low == nil {
+			continue
+		}
+		if out.Low == nil || *e.Low < *out.Low {
+			low := *e.Low
+			out.Low = &low
+		}
+		if out.FetchedAt == nil || e.FetchedAt.Before(*out.FetchedAt) {
+			at := e.FetchedAt
+			out.FetchedAt = &at
+		}
+	}
+	switch {
+	case out.Low != nil:
+		out.Status = SummaryOK
+	case out.Status != SummaryNone && failed:
+		out.Status = SummaryFailed
+	}
+	return out
 }

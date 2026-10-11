@@ -8,12 +8,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/text/unicode/norm"
@@ -21,6 +23,8 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/deeplink"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 )
+
+var defaultClient = sync.OnceValue(func() *http.Client { return netguard.NewClient(netguard.Options{}) })
 
 var yenRe = regexp.MustCompile(`[0-9][0-9,]*`)
 
@@ -292,13 +296,79 @@ func NewSurugaya(client *http.Client) Fetcher { return scraper{surugaya, client}
 // yahooShopping は Yahoo!ショッピングの検索ページ(https://shopping.yahoo.co.jp/search/{q}/0/?X=2。robots.txt で許可)の
 // 埋め込み JSON(script#__NEXT_DATA__ の props.initialState.bff.searchResults.items の RESULT ブロック)を読む
 // (フェーズ5 5-1e。appid の API をやめた。ユーザー決定 2026-10-11)。
-//
-// TODO(5-1e 実装者): 未実装。spec-writer が置いた空の実装(yahoo_shopping_test.go が失敗する)。
+// 並びはサイトの価格の安い順(X=2)のまま、上位 MaxListings 件を取る。検索結果に在庫の項目は無いので InStock は常に true。
 var yahooShopping = scrapeSite{
 	name:       "yahooshopping",
 	requestURL: buildURL,
-	parse: func([]byte, *url.URL) ([]Listing, error) {
-		return nil, errors.New("fetcher: yahooshopping: not implemented")
+	parse: func(body []byte, base *url.URL) ([]Listing, error) {
+		d, err := doc(body)
+		if err != nil {
+			return nil, errors.New("fetcher: yahooshopping: invalid html")
+		}
+		script := d.Find("script#__NEXT_DATA__").First()
+		if script.Length() == 0 {
+			return nil, errors.New("fetcher: yahooshopping: __NEXT_DATA__ not found")
+		}
+		type block struct {
+			Type    string `json:"type"`
+			Content struct {
+				Items []struct {
+					Name  string   `json:"name"`
+					Price *float64 `json:"price"`
+					URL   string   `json:"url"`
+					Image struct {
+						ImageURL string `json:"imageUrl"`
+					} `json:"image"`
+				} `json:"items"`
+			} `json:"content"`
+		}
+		var data struct {
+			Props struct {
+				InitialState struct {
+					Bff struct {
+						SearchResults struct {
+							Items map[string][]block `json:"items"`
+						} `json:"searchResults"`
+						SearchError struct {
+							ErrorCode string `json:"errorCode"`
+						} `json:"searchError"`
+					} `json:"bff"`
+				} `json:"initialState"`
+			} `json:"props"`
+		}
+		if err := json.Unmarshal([]byte(script.Text()), &data); err != nil {
+			return nil, errors.New("fetcher: yahooshopping: invalid json")
+		}
+		bff := data.Props.InitialState.Bff
+		// 0 件のページは searchResults が null で、searchError.errorCode が zeroMatch(2026-10-11 に実サイトで確認)。出品なしとして空を返す
+		if bff.SearchResults.Items == nil && bff.SearchError.ErrorCode == "zeroMatch" {
+			return []Listing{}, nil
+		}
+		blocks, ok := bff.SearchResults.Items["1"]
+		if !ok {
+			return nil, errors.New("fetcher: yahooshopping: items not found")
+		}
+		for _, b := range blocks {
+			if b.Type != "RESULT" {
+				continue
+			}
+			out := []Listing{}
+			for _, it := range b.Content.Items {
+				if it.Price == nil || *it.Price != math.Trunc(*it.Price) || !(*it.Price >= 1 && *it.Price <= MaxPrice) {
+					continue
+				}
+				u := abs(base, it.URL)
+				if it.Name == "" || u == "" {
+					continue
+				}
+				out = append(out, Listing{Title: it.Name, Price: int(*it.Price), URL: u, ImageURL: abs(base, it.Image.ImageURL), InStock: true})
+				if len(out) == MaxListings {
+					break
+				}
+			}
+			return out, nil
+		}
+		return nil, errors.New("fetcher: yahooshopping: RESULT block not found")
 	},
 }
 

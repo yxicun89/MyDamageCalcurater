@@ -74,15 +74,8 @@ type env struct {
 	repo *item.MemoryRepository
 }
 
+// newEnv は API を組み立てる(認証は無い。フェーズ5 5-1a)。
 func newEnv(t *testing.T) *env {
-	t.Helper()
-	// TODO(5-1a 実装者): httpapi.Deps から Token を消したら、ここは newEnvWith(t, "") だけにする(テストの意味は変わらない)。
-	return newEnvWith(t, token)
-}
-
-// newEnvWith は Token に tok を渡して組み立てる(tok が空なら Token を渡さない。フェーズ5 5-1a でトークンは不要になった)。
-// NewServer が panic したら(トークン必須のままなど)テストを失敗にする(パッケージ全体を止めない)。
-func newEnvWith(t *testing.T, tok string) *env {
 	t.Helper()
 	dir := t.TempDir()
 	images, err := storage.NewFileStorage(dir)
@@ -119,7 +112,7 @@ func newEnvWith(t *testing.T, tok string) *env {
 				t.Fatalf("NewServer が panic した(5-1a: トークン無しで組み立てられること): %v", r)
 			}
 		}()
-		e = httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: tok})
+		e = httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est})
 	}()
 	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2, est: est, fetch: fetch, now: now, repo: repo}
 }
@@ -260,7 +253,7 @@ func idOf(m map[string]any) int64 { return int64(m["id"].(float64)) }
 // 同じ組み合わせ(パス × Authorization の有無・形)で、トークン無しで組み立てたサーバーが 401 を返さず、
 // WWW-Authenticate を付けないことを確かめる(本文 {} は形式の検査で 400/422 になってよい。404 は存在しない id)。
 func TestAuth(t *testing.T) {
-	e := newEnvWith(t, "")
+	e := newEnv(t)
 	paths := []struct{ method, path string }{
 		{http.MethodGet, "/api/items"},
 		{http.MethodPost, "/api/items"},
@@ -295,7 +288,7 @@ func TestAuth(t *testing.T) {
 
 // 5-1a: トークン無し(Authorization ヘッダー無し)で、全エンドポイントが 2xx を返す。
 func TestNoTokenSucceeds(t *testing.T) {
-	e := newEnvWith(t, "")
+	e := newEnv(t)
 	noAuth := func(method, path string, body any) *httptest.ResponseRecorder {
 		t.Helper()
 		var rd io.Reader

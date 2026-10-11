@@ -13,17 +13,29 @@ import (
 )
 
 const createGenre = `-- name: CreateGenre :execlastid
-INSERT INTO genres (name, query_template, sort_order) VALUES (?, ?, ?)
+INSERT INTO genres (name, query_template, sort_order, color, icon, match_hosts, match_keywords) VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateGenreParams struct {
 	Name          string
 	QueryTemplate string
 	SortOrder     int32
+	Color         string
+	Icon          GenresIcon
+	MatchHosts    json.RawMessage
+	MatchKeywords json.RawMessage
 }
 
 func (q *Queries) CreateGenre(ctx context.Context, arg CreateGenreParams) (int64, error) {
-	result, err := q.db.ExecContext(ctx, createGenre, arg.Name, arg.QueryTemplate, arg.SortOrder)
+	result, err := q.db.ExecContext(ctx, createGenre,
+		arg.Name,
+		arg.QueryTemplate,
+		arg.SortOrder,
+		arg.Color,
+		arg.Icon,
+		arg.MatchHosts,
+		arg.MatchKeywords,
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -370,32 +382,20 @@ func (q *Queries) InsertListing(ctx context.Context, arg InsertListingParams) er
 	return err
 }
 
-const listEstimatesByItem = `-- name: ListEstimatesByItem :many
-SELECT item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, in_stock_count, status, fetched_at
-FROM estimates WHERE item_id = ? ORDER BY site_id
+const listEstimates = `-- name: ListEstimates :many
+SELECT item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, status, fetched_at, in_stock_count
+FROM estimates ORDER BY item_id, site_id
 `
 
-type ListEstimatesByItemRow struct {
-	ItemID          int64
-	SiteID          int64
-	Low             sql.NullInt32
-	Mid             sql.NullInt32
-	Count           int32
-	SuspiciousCount int32
-	InStockCount    int32
-	Status          EstimatesStatus
-	FetchedAt       time.Time
-}
-
-func (q *Queries) ListEstimatesByItem(ctx context.Context, itemID int64) ([]ListEstimatesByItemRow, error) {
-	rows, err := q.db.QueryContext(ctx, listEstimatesByItem, itemID)
+func (q *Queries) ListEstimates(ctx context.Context) ([]Estimate, error) {
+	rows, err := q.db.QueryContext(ctx, listEstimates)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []ListEstimatesByItemRow
+	var items []Estimate
 	for rows.Next() {
-		var i ListEstimatesByItemRow
+		var i Estimate
 		if err := rows.Scan(
 			&i.ItemID,
 			&i.SiteID,
@@ -403,9 +403,47 @@ func (q *Queries) ListEstimatesByItem(ctx context.Context, itemID int64) ([]List
 			&i.Mid,
 			&i.Count,
 			&i.SuspiciousCount,
-			&i.InStockCount,
 			&i.Status,
 			&i.FetchedAt,
+			&i.InStockCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listEstimatesByItem = `-- name: ListEstimatesByItem :many
+SELECT item_id, site_id, low, mid, ` + "`" + `count` + "`" + `, suspicious_count, status, fetched_at, in_stock_count
+FROM estimates WHERE item_id = ? ORDER BY site_id
+`
+
+func (q *Queries) ListEstimatesByItem(ctx context.Context, itemID int64) ([]Estimate, error) {
+	rows, err := q.db.QueryContext(ctx, listEstimatesByItem, itemID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Estimate
+	for rows.Next() {
+		var i Estimate
+		if err := rows.Scan(
+			&i.ItemID,
+			&i.SiteID,
+			&i.Low,
+			&i.Mid,
+			&i.Count,
+			&i.SuspiciousCount,
+			&i.Status,
+			&i.FetchedAt,
+			&i.InStockCount,
 		); err != nil {
 			return nil, err
 		}
@@ -960,13 +998,17 @@ func (q *Queries) TouchItem(ctx context.Context, id int64) error {
 }
 
 const updateGenre = `-- name: UpdateGenre :execrows
-UPDATE genres SET name = ?, query_template = ?, sort_order = ? WHERE id = ?
+UPDATE genres SET name = ?, query_template = ?, sort_order = ?, color = ?, icon = ?, match_hosts = ?, match_keywords = ? WHERE id = ?
 `
 
 type UpdateGenreParams struct {
 	Name          string
 	QueryTemplate string
 	SortOrder     int32
+	Color         string
+	Icon          GenresIcon
+	MatchHosts    json.RawMessage
+	MatchKeywords json.RawMessage
 	ID            int64
 }
 
@@ -975,6 +1017,10 @@ func (q *Queries) UpdateGenre(ctx context.Context, arg UpdateGenreParams) (int64
 		arg.Name,
 		arg.QueryTemplate,
 		arg.SortOrder,
+		arg.Color,
+		arg.Icon,
+		arg.MatchHosts,
+		arg.MatchKeywords,
 		arg.ID,
 	)
 	if err != nil {

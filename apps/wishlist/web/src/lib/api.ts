@@ -16,7 +16,8 @@ import type {
 } from "../api/types";
 
 /** API の code に、通信できなかったときの "network" を足したもの */
-export type ApiErrorCode = ApiErrorBody["code"] | "network";
+// "unauthorized" は契約から外れた(5-1a)。プロキシ等の 401 を受けたときの値として残す(5-2 でトークンの設定ごと整理する)。
+export type ApiErrorCode = ApiErrorBody["code"] | "network" | "unauthorized";
 
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
@@ -63,7 +64,7 @@ export interface ApiClient {
   updateSite(id: number, patch: SiteUpdate): Promise<Site>;
 }
 
-const CODE_BY_STATUS: Record<number, ApiErrorBody["code"]> = {
+const CODE_BY_STATUS: Record<number, ApiErrorCode> = {
   400: "bad_request",
   401: "unauthorized",
   404: "not_found",

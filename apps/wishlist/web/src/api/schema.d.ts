@@ -280,7 +280,7 @@ export interface components {
         };
         Error: {
             /** @enum {string} */
-            code: "bad_request" | "unauthorized" | "not_found" | "unprocessable" | "bad_gateway" | "not_implemented" | "internal";
+            code: "bad_request" | "not_found" | "unprocessable" | "bad_gateway" | "not_implemented" | "internal";
             message: string;
         };
         /** @enum {string} */

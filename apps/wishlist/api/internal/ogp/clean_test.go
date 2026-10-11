@@ -127,10 +127,12 @@ func TestStaticDraft(t *testing.T) {
 		{"https://www.suruga-ya.jp/product/detail/602290829", true, "https://www.suruga-ya.jp/database/photo.php?shinaban=602290829&size=l"},
 		{"https://www.suruga-ya.jp/product/detail/602290829?tenpo_cd=400427", true, "https://www.suruga-ya.jp/database/photo.php?shinaban=602290829&size=l"},
 		{"https://WWW.SURUGA-YA.JP/product/detail/1", true, "https://www.suruga-ya.jp/database/photo.php?shinaban=1&size=l"},
+		{"https://www.suruga-ya.jp/product/detail/602290829/", true, "https://www.suruga-ya.jp/database/photo.php?shinaban=602290829&size=l"},
+		{"https://suruga-ya.jp/product/detail/602290829", true, "https://www.suruga-ya.jp/database/photo.php?shinaban=602290829&size=l"},
+		{"https://www.suruga-ya.jp/product/detail/12//", false, ""},
 		{"https://www.suruga-ya.jp/product/detail/12a", false, ""},
 		{"https://www.suruga-ya.jp/product/detail/", false, ""},
 		{"https://www.suruga-ya.jp/search?search_word=x", false, ""},
-		{"https://suruga-ya.jp/product/detail/1", false, ""},
 		{"https://shop.example.com/product/detail/1", false, ""},
 	}
 	for _, c := range cases {
