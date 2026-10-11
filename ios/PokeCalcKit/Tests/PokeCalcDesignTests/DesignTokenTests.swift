@@ -147,7 +147,7 @@ final class DesignTokenTests: XCTestCase {
     }
 
     /// 最小は かくとう の 4.71:1、次が どく の 4.74:1(design.md。空色と白で彩度を 0.95 倍にした後の値)。
-    func testMinimumTypeInkContrastIsAbout4_59() throws {
+    func testMinimumTypeInkContrastIsAbout4_71() throws {
         var ratios: [(id: String, ratio: Double)] = []
         for typeID in TypeColorToken.allTypeIDs {
             let background = try XCTUnwrap(TypeColorToken.rgba(forTypeID: typeID))

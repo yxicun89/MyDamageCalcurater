@@ -4214,7 +4214,7 @@ XCUITest の実行は未実施(identifier 未実装のため失敗する)。
 - `testOnlyFourTypesUseWhiteInk`(白は poison・ghost・dragon・dark の4つだけ)
 - `testTypeInkContrastIsAtLeast4_5ForAll18Types`(独立実装 `ColorContrast.swift` で 4.5 以上)
 - `testTypeInkIsTheHigherContrastOfBlackAndWhite`(黒・白のうち高い方)
-- `testMinimumTypeInkContrastIsAbout4_59`(最小 fighting 4.59±0.01、次 poison 4.79±0.01)
+- `testMinimumTypeInkContrastIsAbout4_71`(最小 fighting 4.59±0.01、次 poison 4.79±0.01)
 - `testPreferredInkSelectsByContrast`(黒→白、白→黒、#777777→黒、#757575→白(境界)、#707070→白)
 - `testUnknownTypeIDHasNoInk`(未知・大文字は nil、`inkColor` の有無)
 
