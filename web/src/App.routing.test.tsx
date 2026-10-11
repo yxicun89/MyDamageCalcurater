@@ -206,8 +206,102 @@ describe("P4-10 文書のタイトル", () => {
   });
 });
 
-// P4-12a: タイプバランスの画面(ADR-0303 §2)。ルート表に1件足し、タブ「タイプバランス」と /balance で開く。
-// 画面はメンバーを選ぶまで balance API を呼ばない(ここでは fetch が呼ばれないことも確かめる)。
+describe("ADR-0356 区分のタブ", () => {
+  test("区分のタブを押すと、その区分で最後に見ていた画面へ戻る(ダメージ: 調整 → 素早さ → ダメージ で調整)", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    await user.click(screen.getByRole("tab", { name: "調整" }));
+    expect(window.location.pathname).toBe("/adjust");
+    await user.click(screen.getByRole("tab", { name: "素早さ" }));
+    expect(window.location.pathname).toBe("/speed");
+    expect(screen.queryByRole("tab", { name: "調整" })).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: "ダメージ" }));
+    expect(window.location.pathname).toBe("/adjust");
+    expect(screen.getByRole("tab", { name: "調整" })).toHaveAttribute("aria-selected", "true");
+  });
+
+  test("初期 URL が /reverse でも、逆算 → 構築 → ダメージ で逆算に戻る。popstate で動いたあとも記憶する", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    setPath("/reverse");
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "自分のポケモン" });
+
+    await user.click(screen.getByRole("tab", { name: "構築" }));
+    await user.click(screen.getByRole("tab", { name: "ダメージ" }));
+    expect(window.location.pathname).toBe("/reverse");
+    expect(screen.getByRole("tab", { name: "逆算" })).toHaveAttribute("aria-selected", "true");
+
+    // 戻る・進む(popstate)で調整へ → 素早さへ行っても、ダメージの最後は調整。
+    simulatePopState("/adjust");
+    await screen.findByRole("tab", { name: "調整", selected: true });
+    simulatePopState("/speed");
+    await screen.findByRole("tab", { name: "素早さ", selected: true });
+    await user.click(screen.getByRole("tab", { name: "ダメージ" }));
+    expect(window.location.pathname).toBe("/adjust");
+  });
+
+  test("上位のタブでも Home / End で最初と最後の区分へ移る", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    screen.getByRole("tab", { name: "ダメージ" }).focus();
+
+    await user.keyboard("{End}");
+    expect(screen.getByRole("tab", { name: "記録" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "記録" })).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(screen.getByRole("tab", { name: "ダメージ" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("tab", { name: "ダメージ" })).toHaveFocus();
+  });
+
+  test("下位のタブがあるのはダメージの区分だけ(構築・素早さ・記録では出ない)", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    const user = userEvent.setup();
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+    expect(screen.getAllByRole("tablist")).toHaveLength(2);
+
+    await user.click(screen.getByRole("tab", { name: "構築" }));
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+    await user.click(screen.getByRole("tab", { name: "記録" }));
+    expect(screen.getAllByRole("tablist")).toHaveLength(1);
+  });
+});
+
+describe("ADR-0421 旧タイプバランスの URL", () => {
+  test("/balance を直接開くと構築が選ばれ、URL は /team に置き換わる(履歴は増えない。タイプバランスの別画面は無い)", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    setPath("/balance");
+    const replaceSpy = vi.spyOn(window.history, "replaceState");
+    const pushSpy = vi.spyOn(window.history, "pushState");
+    render(<App engine={createFakeEngine()} />);
+    expect(await screen.findByRole("tab", { name: "構築" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tab", { name: "タイプバランス" })).toBeNull();
+    await waitFor(() => {
+      expect(window.location.pathname).toBe("/team");
+    });
+    expect(replaceSpy).toHaveBeenCalled();
+    expect(pushSpy).not.toHaveBeenCalled();
+    expect(document.title).toBe("構築 | pokecalc");
+  });
+
+  test("戻る・進むで /balance に着いても、構築を出して /team に置き換える", async () => {
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
+    render(<App engine={createFakeEngine()} />);
+    await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
+
+    simulatePopState("/balance");
+    expect(await screen.findByRole("tab", { name: "構築" })).toHaveAttribute("aria-selected", "true");
+    expect(window.location.pathname).toBe("/team");
+  });
+});
+
 /** fetch の第 1 引数の URL 文字列。 */
 function requestUrlOf(input: RequestInfo | URL): string {
   return typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

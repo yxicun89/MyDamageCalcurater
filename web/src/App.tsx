@@ -288,11 +288,15 @@ export function App({
 
   // 区分ごとに最後に開いていた画面(上位のタブを押したとき、その区分で最後に見ていた画面へ戻る。ADR-0356)。
   const lastScreenOfGroup = useRef<Record<string, ScreenId>>({});
+  // 今の画面(popstate のハンドラは一度だけ登録されるので、閉じ込めた `tab` ではなく ref で持つ)。
+  const currentTabRef = useRef<ScreenId>(tab);
 
   /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。 */
   function selectTab(nextTab: ScreenId): void {
-    lastScreenOfGroup.current[groupIdOf(tab)] ??= tab;
+    const previous = currentTabRef.current;
+    lastScreenOfGroup.current[groupIdOf(previous)] ??= previous;
     lastScreenOfGroup.current[groupIdOf(nextTab)] = nextTab;
+    currentTabRef.current = nextTab;
     setTab(nextTab);
   }
 

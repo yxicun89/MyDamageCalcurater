@@ -216,7 +216,8 @@
 .about__scrim {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  /* 下部固定の上位のタブ(z-index 20。ADR-0356)より前に出す。 */
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: center;
