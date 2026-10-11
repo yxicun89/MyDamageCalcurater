@@ -294,3 +294,19 @@ boosts を持たない副次効果(状態異常・ひるみ等)は本 ADR の対
 (「ランク変化エントリが2件以上なら blocker」)は変えていない。
 
 いずれも `docs/plan.md` P5-6 の実装(未マージ)への修正であり、別タスクは起票しない。
+
+## CB-1: 変化技のランク変化(トップレベルの boosts。2026-10-11 追記)
+
+連続技の計算(docs/plan/combo-calc.md)は、りゅうのまい・つるぎのまい・からをやぶる・なきごえ等の変化技が起こすランク変化を手の間に反映する。
+Showdown は変化技のランク変化をトップレベルの `boosts` と `target` に持つが、決定6 の取り込みは `self`・`secondary` しか読んでいなかった。
+
+- **取り込み**: `ShowdownMove.Boosts`(取得物の `boosts`。ランク変化の無い技は `{}`)を読む。表現の4つ目:
+  トップレベルの `boosts` → **確率 100**(常に発動。ユーザー決定: 確率 100% の効果だけを扱う)。上げ下げ混在(からをやぶる)はそのまま 1 エントリ。
+- **対象の写し**(`target` → `RankTarget`): `self`・`allies`(使用者を含む味方全体。ほえる) → `self`。
+  `normal`・`adjacentFoe`・`allAdjacentFoes`・`allAdjacent`・`any`・`randomNormal` → `target`(相手)。
+  それ以外(`adjacentAlly` のあまいかおり・コーチング等。シングルでは効果が無い) → 行を作らず警告 `move-effect-unsupported-target`。
+- **決定3 は維持**: 1 技 1 エントリ。トップレベル `boosts` と `self`/`secondary` が重なる技は、既存どおり blocker `move-effect-ambiguous`(実データには無い)。
+- **取得物**: `tools/importer/fetch-showdown.mjs` が技ごとに `boosts`(無ければ `{}`)を必ず出す。キーの無い古い取得物は `DecodeShowdownSnapshot` が拒否し、`make import-fetch` を案内する(ADR-0136・0140 の作法)。
+- **スキーマ**: 変更なし(migration 不要)。`move_effects` は JSON 列で、変化技の行を禁じる制約は master にも CHECK にも無かった。内部 API の `MasterMove.effect` は自由形式で値が増えるだけ(契約不変)。
+- **engine は不変**: ダメージ計算・ゴールデンに影響しない(`MoveEffect` の形は同じ)。公開 `Move.effect` への露出は CB-4(API レーン)。
+- **実データ(dry-run)**: `move_effects` は 59 → 100 行(変化技 41 行)。blocker なし。警告 `move-effect-unsupported-target` は 2 技(aromaticmist・coaching)。

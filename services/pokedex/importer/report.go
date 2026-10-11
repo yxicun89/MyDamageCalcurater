@@ -71,6 +71,9 @@ const (
 	// KindMoveEffectUnsupportedStat は技の追加効果(命中時のランク変化)が accuracy/evasion しか
 	// 動かさないとき(engine の Ranks に持ち場が無い。ADR-0107 決定6 規則4)。落として警告にする。
 	KindMoveEffectUnsupportedStat FindingKind = "move-effect-unsupported-stat"
+	// KindMoveEffectUnsupportedTarget は変化技のランク変化の対象が自分でも相手でもない
+	// (味方だけ・場全体 等。シングルでは効果が無い)ので取り込まなかった(CB-1)。
+	KindMoveEffectUnsupportedTarget FindingKind = "move-effect-unsupported-target"
 	// KindMoveEffectAmbiguous は1つの技が2つ以上のランク変化エントリを持つとき(ADR-0107 決定3
 	// の前提「取得元に2エントリ以上の技は無い」が崩れたことを人に知らせる。決定6 規則6)。
 	KindMoveEffectAmbiguous FindingKind = "move-effect-ambiguous"

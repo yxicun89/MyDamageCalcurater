@@ -320,3 +320,75 @@ func TestImportedMoveEffectDoesNotChangeDamage(t *testing.T) {
 		t.Fatalf("追加効果でダメージが変わった\n got = %+v\nwant = %+v", got, want)
 	}
 }
+
+// TestConvertStatusMoveBoosts は変化技のトップレベル boosts の取り込み(CB-1・ADR-0107 追記)。
+// 確率は常に 100。target が自分なら自分、相手なら相手。上げ下げ混在もそのまま。
+func TestConvertStatusMoveBoosts(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		boosts map[string]int
+		want   string // 空 = 行を作らない
+	}{
+		{"自分の上昇(りゅうのまい)", "self", map[string]int{"atk": 1, "spe": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1,"spe":1}}`},
+		{"上げ下げ混在(からをやぶる)", "self", map[string]int{"atk": 2, "def": -1, "spa": 2, "spd": -1, "spe": 2}, `{"Chance":100,"Target":"self","Stages":{"atk":2,"def":-1,"spa":2,"spd":-1,"spe":2}}`},
+		{"相手の下降(なきごえ)", "allAdjacentFoes", map[string]int{"atk": -1}, `{"Chance":100,"Target":"target","Stages":{"atk":-1}}`},
+		{"相手の下降(normal)", "normal", map[string]int{"spe": -2}, `{"Chance":100,"Target":"target","Stages":{"spe":-2}}`},
+		{"allies は自分(ほえる)", "allies", map[string]int{"atk": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1}}`},
+		{"味方だけは取り込まない", "adjacentAlly", map[string]int{"spd": 1}, ""},
+		{"ランク変化なしは行を作らない", "self", map[string]int{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			m := showdownMove(t, &in, "testglare") // 自分の効果が無い変化技
+			m.Target = &tt.target
+			m.Boosts = &tt.boosts
+			out, rep, err := importer.Convert(in)
+			if err != nil {
+				t.Fatalf("Convert: %v", err)
+			}
+			got, ok := moveEffectsByID(out)["testglare"]
+			if tt.want == "" {
+				if ok {
+					t.Fatalf("行を作ってはいけない: %s", got)
+				}
+			} else if got != tt.want {
+				t.Fatalf("move_effects = %q, want %q", got, tt.want)
+			}
+			if tt.target == "adjacentAlly" && !hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedTarget, "testglare") {
+				t.Errorf("味方だけの対象が Warnings に無い")
+			}
+		})
+	}
+}
+
+// TestConvertStatusMoveBoostsDoNotChangeAttackEffects は変化技の取り込みが攻撃技の既存の効果を変えないこと。
+func TestConvertStatusMoveBoostsDoNotChangeAttackEffects(t *testing.T) {
+	in := loadFixture(t)
+	boosts := map[string]int{"atk": 1}
+	showdownMove(t, &in, "testglare").Boosts = &boosts
+	out, _ := convertOK(t, in)
+	got := moveEffectsByID(out)
+	for id, want := range map[string]string{
+		"testflame":   `{"Chance":10,"Target":"self","Stages":{"spa":1}}`,
+		"teststrike":  `{"Chance":100,"Target":"self","Stages":{"def":-1,"spe":1}}`,
+		"testrevived": `{"Chance":20,"Target":"target","Stages":{"def":-1}}`,
+	} {
+		if got[id] != want {
+			t.Errorf("%s = %q, want %q", id, got[id], want)
+		}
+	}
+}
+
+// TestConvertBlocksOnStatusBoostsWithSelf は、トップレベル boosts と self.boosts が重なる技を blocker にすること。
+func TestConvertBlocksOnStatusBoostsWithSelf(t *testing.T) {
+	in := loadFixture(t)
+	m := showdownMove(t, &in, "teststrike") // self.boosts を持つ
+	boosts := map[string]int{"atk": 1}
+	m.Boosts = &boosts
+	_, rep, err := importer.Convert(in)
+	if err == nil && !hasFinding(rep.Blockers, importer.KindMoveEffectAmbiguous, "teststrike") {
+		t.Fatalf("重なりを素通りさせた: %+v", rep.Blockers)
+	}
+}

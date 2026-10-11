@@ -101,17 +101,21 @@ type ShowdownSpecies struct {
 // Self/Secondary/Secondaries は追加効果(命中時のランク変化。ADR-0107 決定6)。
 // 取得元の表現のまま持つ(ID化・正準化は convert で行う)。
 type ShowdownMove struct {
-	ID            string             `json:"id"`
-	Name          string             `json:"name"`
-	Type          string             `json:"type"`
-	Category      string             `json:"category"`
-	BasePower     int                `json:"basePower"`
-	Accuracy      int                `json:"accuracy"`
-	PP            int                `json:"pp"`
-	Priority      int                `json:"priority"`
-	IsNonstandard *string            `json:"isNonstandard"`
-	Self          *ShowdownBoosts    `json:"self"`
-	Secondary     *ShowdownSecondary `json:"secondary"`
+	ID            string          `json:"id"`
+	Name          string          `json:"name"`
+	Type          string          `json:"type"`
+	Category      string          `json:"category"`
+	BasePower     int             `json:"basePower"`
+	Accuracy      int             `json:"accuracy"`
+	PP            int             `json:"pp"`
+	Priority      int             `json:"priority"`
+	IsNonstandard *string         `json:"isNonstandard"`
+	Self          *ShowdownBoosts `json:"self"`
+	// Boosts は変化技のトップレベルの boosts(ランク変化。target が自分なら自分・相手なら相手。常に発動)。
+	// 必須(CB-1・ADR-0107 追記): ポインタが nil(キーが無い古い取得物)はデコードで拒否する。
+	// 変化技でない技・ランク変化の無い技は空のマップ。
+	Boosts    *map[string]int    `json:"boosts"`
+	Secondary *ShowdownSecondary `json:"secondary"`
 	// Secondaries は取得元の配列そのまま(要素数は2以上のこともある)。boosts を伴う要素の件数を
 	// 数えるのは convert 側(ID化・正準化は Go 側という方針。ADR-0101 §3)。
 	// boosts を持たない要素(状態異常・ひるみ等)は決定3・6 の対象外(ADR-0107 2026-09-23 追記)。
