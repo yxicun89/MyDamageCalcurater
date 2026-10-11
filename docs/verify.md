@@ -1,8 +1,9 @@
-# 動作確認の手順(Web・iOS)
+# 動作確認の手順(ダメージ計算・欲しいものリスト)
 
 上から順に実行する。各コマンドの下の「→」が成功の見え方。
 入口は 1 つ: **ブラウザ・iOS とも `http://localhost:8080`**(k3d → Traefik → gateway)。
-別アプリ「欲しいものリスト」の手順は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)。
+8080 は Mac の中(127.0.0.1)だけで待つ。iPhone の実機からは Tailscale を通す(ADR-0810)。
+§0〜3 はダメージ計算。別アプリ「欲しいものリスト」は同じクラスタに同居し、§4 で動かす(`http://localhost:8080/wishlist/`)。
 1-1(クラスタ作成とマスタ投入)は破壊的な操作を含むので、人間が自分のターミナルで実行する(Claude Code では先頭に `!` を付ける)。
 
 ## 0. 前提(初回だけ)
@@ -168,7 +169,54 @@ make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 
 署名チームの設定と実機インストールは人間の作業。手順は [runbooks/ios-device-install.md](runbooks/ios-device-install.md)。
 
-## 4. うまくいかないとき
+## 4. 欲しいものリストの確認
+
+§1-1 でクラスタを作ったあとに行う(マスタ投入は要らない)。自動テスト・iPhone の PWA・iOS アプリの詳しい手順は
+[../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)。
+
+### 4-1. 初回: DB と Secret
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make wishlist-web-deps
+apps/wishlist/scripts/bootstrap.sh
+```
+→ 初回は `DB 'wishlist' と Secret 'wishlist/wishlist-api' を作りました。`。2 回目以降は `既に存在します。何もしません`。
+
+### 4-2. 毎回: 最新のコードを入れる
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+git switch main && git pull --ff-only
+make wishlist-k3d-deploy
+kubectl -n wishlist rollout status deploy/wishlist-api --timeout=180s
+kubectl -n wishlist rollout status deploy/wishlist-web --timeout=120s
+curl -s -o /dev/null -w "web %{http_code}\n" http://localhost:8080/wishlist/
+curl -s -o /dev/null -w "genres %{http_code}\n" http://localhost:8080/wishlist/api/genres
+```
+→ 2 つとも `successfully rolled out`、`web 200`、`genres 200`。
+
+### 4-3. ブラウザで触る
+
+`http://localhost:8080/wishlist/` を開く。
+
+1. 設定やトークンの画面を挟まずホームが出る。
+2. 商品ページの URL(例: デュエマ公式のカード詳細)をコピー → 右下の「+」→「コピーした URL を追加」→ 画像・名前・ジャンルの絵柄が入った確認の画面が出る →「追加」でグリッドに画像が増える(枠はジャンルの色)。
+3. 画像をタップ → 詳細シート。数秒で価格の帯か「出品ないかも」が出る。「メルカリ」のタイルで、メルカリの検索結果が新しいタブで開く。
+4. 画像を長押し → 「削除」→「削除する」で確認用の商品を消す。
+
+夜間の価格取得(CronJob)を手で 1 回動かす(実サイトへ取得に行く):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n wishlist create job --from=cronjob/wishlist-refresher wishlist-refresher-manual
+kubectl -n wishlist wait --for=condition=complete job/wishlist-refresher-manual --timeout=600s
+kubectl -n wishlist logs job/wishlist-refresher-manual | tail -1
+kubectl -n wishlist delete job wishlist-refresher-manual
+```
+→ `refresher: items=<商品数> failed=0 ...`。
+
+## 5. うまくいかないとき
 
 | 症状 | 原因 | 対処 |
 |---|---|---|
@@ -183,5 +231,8 @@ make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 | iOS が「設定エラー: … 不正な URL」 | URL にスキームが無い、または xcconfig の `//` 以降が消えた | `http://localhost:8080` と書く(xcconfig では `http:/$()/localhost:8080`) |
 | iOS が赤字「通信に失敗しました」・カードが「-」 | 接続先に届かない | `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/healthz` が 200 か確認。止まっていれば `make up` |
 | iOS の結果が 404 | URL の末尾に `/api` を付けた | `http://localhost:8080` までにする |
+| 欲しいものリストで `/wishlist/` が 404 | wishlist を入れていない | 4-1 → 4-2 |
+| 欲しいものリストの api が `ImagePullBackOff` | `kubectl apply -k` を直接実行した(イメージの版が合わない) | 4-2 `make wishlist-k3d-deploy` |
+| 価格がずっと出ない・refresher が `failed` を出す | 古い refresher のイメージ / 実サイト側の変更 | 4-2 のあと手動 Job のログを見る。詳しくは [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) §5 |
 
 詳しい切り分けは [impl/verify-mapping.md](impl/verify-mapping.md)。他の手順書は [runbooks/](runbooks/)(balance・speed・observability・ios-device-install)。
