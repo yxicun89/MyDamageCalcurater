@@ -122,7 +122,8 @@ public enum SpeedLabels {
         case "unknown_pokemon": return "このポケモンはデータにありません"
         case "request_too_large": return "入力が大きすぎます"
         case "master_unavailable": return "ポケモンのデータを読み込めません"
-        case PokeCalcError.Code.transport, PokeCalcError.Code.decode: return unavailable
+        // gateway が上流(speed)へ届かないときの 503(契約外の gateway の code)も、通信失敗と同じ文言にする。
+        case PokeCalcError.Code.transport, PokeCalcError.Code.decode, "upstream_unavailable": return unavailable
         default: return errorFallback  // internal_error・not_found・未知の code
         }
     }
