@@ -44,6 +44,8 @@ var (
 		"SpeedMods":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 		"Grounds": true, // 持ち物で接地する(ADR-0144)
+		// 連続技の印にだけ使う(ダメージ計算は読まない。ADR-0179 追記 CB-3)
+		"LocksMove": true, "FullHPOnly": true,
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
@@ -59,6 +61,7 @@ var (
 		// 特性の段階2(技のフラグ。ADR-0178)
 		"PostAuraPowerMods": true, "FlagTypeConvert": true, "DefImmuneFlags": true,
 		"DefFinalModsByFlag": true, "DefFinalModsByType": true, "NoContact": true,
+		"FullHPOnly": true, // 連続技の印にだけ使う(ADR-0179 追記 CB-3)
 		// 重さの補正(ADR-0143)
 		"WeightMod":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
@@ -518,6 +521,16 @@ func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, e
 			return nil, err
 		}
 	}
+	if v, ok := fields["LocksMove"]; ok {
+		if e.LocksMove, err = decodeTrueLiteral(v); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := fields["FullHPOnly"]; ok {
+		if e.FullHPOnly, err = decodeTrueLiteral(v); err != nil {
+			return nil, err
+		}
+	}
 	return &e, nil
 }
 
@@ -968,6 +981,11 @@ func decodeAbilityStage2(fields map[string]json.RawMessage, chart engine.TypeCha
 			return err
 		}
 	}
+	if v, ok := fields["FullHPOnly"]; ok {
+		if e.FullHPOnly, err = decodeTrueLiteral(v); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1071,6 +1089,9 @@ func (w *effectWriter) encodeAbilityStage2(e engine.AbilityEffect) {
 	}
 	if e.NoContact {
 		w.field("NoContact", []byte("true"))
+	}
+	if e.FullHPOnly {
+		w.field("FullHPOnly", []byte("true"))
 	}
 	if e.WeightMod != 0 {
 		w.field("WeightMod", []byte(strconv.Itoa(e.WeightMod)))
@@ -1246,6 +1267,12 @@ func EncodeItemEffect(e engine.ItemEffect) ([]byte, error) {
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	if e.Grounds {
 		w.field("Grounds", []byte("true"))
+	}
+	if e.LocksMove {
+		w.field("LocksMove", []byte("true"))
+	}
+	if e.FullHPOnly {
+		w.field("FullHPOnly", []byte("true"))
 	}
 	return w.bytes()
 }

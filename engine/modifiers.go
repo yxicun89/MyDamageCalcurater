@@ -35,6 +35,10 @@ type ItemEffect struct {
 	UnsupportedDefender bool
 	// Grounds は持ち物で接地する(くろいてっきゅう型。ADR-0144)。isGrounded でタイプ・特性より先に見る。
 	Grounds bool
+	// LocksMove はこだわり系(最初に選んだ技しか出せない)。連続技の choice_locked の印に使う。CalcDamage は読まない(ADR-0179 追記 CB-3)。
+	LocksMove bool
+	// FullHPOnly は満タンのときだけ効く(きあいのタスキ型)。連続技の defender_full_hp_assumed の印に使う。CalcDamage は読まない。
+	FullHPOnly bool
 }
 
 // AbsorbEffect は吸収したときの副次効果(マスタの記述)。ゼロ値は「吸収するが副次効果は持たない」
@@ -60,6 +64,7 @@ type AbilityEffect struct {
 	Airborne                  bool                  // ふゆう等: 浮いていて接地しない(フィールドの補正が掛からない。ADR-0116)。地面技の無効は DefImmuneTypes で別に持つ
 	SpeedMods                 []SpeedMod            // 素早さの補正(ADR-0139)。ダメージ計算は読まない
 	IgnoresParalysisSpeedDrop bool                  // まひの素早さ半減を受けない(ADR-0139)。ダメージ計算は読まない
+	FullHPOnly                bool                  // 満タンのときだけ効く(ばけのかわ・マルチスケイル型)。連続技の印に使う。ダメージ計算は読まない
 
 	// --- 特性の段階1(ADR-0176)。どれもゼロ値は「その効果なし」 ---
 

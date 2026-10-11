@@ -677,6 +677,9 @@ func TestCalcComboStepDamageMatchesCalcDamage(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			res := mustCombo(t, in)
 			for i, s := range res.Steps {
+				if in.Steps[i].Move.Category == CategoryStatus {
+					continue // 変化技の手は Damage nil(TestCalcComboDragonDanceOutrage)。CalcDamage と比べない
+				}
 				att, def := in.Attacker, in.Defender
 				att.Ranks, def.Ranks = s.SelfStartRanks, s.OpponentStartRanks
 				want, err := calcDamage(DamageInput{Format: in.Format, Attacker: att, Defender: def, Move: in.Steps[i].Move,
