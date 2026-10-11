@@ -111,6 +111,8 @@ func run(vectorsPath, outPath string) error {
 			out[v.Name] = wasmapi.CalcBulk(req)
 		case "calcReverse":
 			out[v.Name] = wasmapi.CalcReverse(req)
+		case "calcCombo":
+			out[v.Name] = wasmapi.CalcCombo(req)
 		case "adjustIndices":
 			out[v.Name] = wasmapi.AdjustIndices(req)
 		case "adjustMinSpToKo":

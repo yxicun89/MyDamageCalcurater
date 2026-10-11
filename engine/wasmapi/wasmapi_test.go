@@ -25,6 +25,8 @@ func invoke(t *testing.T, fn, requestJSON string) string {
 		return wasmapi.CalcBulk(requestJSON)
 	case "calcReverse":
 		return wasmapi.CalcReverse(requestJSON)
+	case "calcCombo":
+		return wasmapi.CalcCombo(requestJSON)
 	// 調整(ADR-0250)。
 	case "adjustIndices":
 		return wasmapi.AdjustIndices(requestJSON)

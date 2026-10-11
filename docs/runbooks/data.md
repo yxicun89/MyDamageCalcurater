@@ -102,6 +102,8 @@ kubectl -n pokecalc exec mysql-0 -- sh -c 'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" mysq
 投入(§4)は DB を書き換えるだけで、calc・balance・speed は起動時に読んだマスタのまま動く(自動の再取得はしない。ADR-0204 §3)。
 投入のたびに、次の1コマンドで反映して版を揃える。`dataVersion` は `source=version@checksum先頭8桁` の連結で、中身が変わると変わる(ADR-0128)。
 
+事前の確認: 今回の投入で効果定義(abilities / items の effect JSON)に新しいフィールドが増えるなら、balance・speed の gitops overlay の pokedex イメージ digest がその追加を含むか確かめる(古いままでも export は落ちず警告を出して動くが、防御側の項目なら効果が出ない。ADR-0145 のチェックリスト)。
+
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 make master-release

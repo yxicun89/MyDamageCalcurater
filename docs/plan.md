@@ -30,6 +30,7 @@
 | ARCH: アーキテクチャの採用(ヘキサゴナル。段階計画) | [docs/plan/architecture-adoption.md](plan/architecture-adoption.md) |
 | 後続: 要件との対応 | [docs/plan/followups.md](plan/followups.md) |
 | ブロッカー | [docs/plan/blockers.md](plan/blockers.md)(既存分)・[docs/plan/blockers/](plan/blockers/)(新規分。レーン別) |
+| クラウド公開の設計案(調査・選択肢。未決定。issue #149・#148) | [docs/plan/cloud-design.md](plan/cloud-design.md) |
 | 改善要望 | [docs/plan/improvements.md](plan/improvements.md)(既存分)・[docs/plan/improvements/](plan/improvements/)(新規分。レーン別) |
 
 ## マイルストーン
