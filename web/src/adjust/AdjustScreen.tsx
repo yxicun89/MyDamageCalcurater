@@ -49,6 +49,7 @@ import {
   type StatKey,
 } from "../engine/types";
 import { adjustScreenText, unsupportedText, type AdjustModeKey } from "../i18n/ja";
+import { uiText } from "../i18n/ui";
 import { masterCapabilities } from "../master/capabilities";
 import type {
   MasterData,
@@ -58,6 +59,10 @@ import type {
 } from "../master/types";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
+import { statLetterJa } from "../i18n/common";
+import { Icon, type IconName } from "../ui/Icon";
+import { PokemonCard } from "../ui/PokemonCard";
+import { Tile } from "../ui/Tile";
 import { typeAccentStyle } from "../ui/typeAccent";
 import "./AdjustScreen.css";
 import type { AdjustClient, AdjustResult } from "./adjustClient";
@@ -317,6 +322,19 @@ function withMegaStone(
   return lock.kind === "locked" ? { ...individual, itemId: lock.item.id } : individual;
 }
 
+/** メガ種族のストーンの表示名(メガでない・引けないときは undefined。カードの持ち物の印用)。 */
+function stoneNameOf(species: MasterSpecies, items: MasterData["items"]): string | undefined {
+  const lock = megaItemLock(species, items);
+  return lock.kind === "locked" ? megaStoneLabel(species, lock.item.nameJa) : undefined;
+}
+
+/** 目標の種類のアイコン(装飾。名前は種類の select が持つ)。 */
+const GOAL_KIND_ICON: Record<AdjustGoalKind, IconName> = {
+  outspeed: "speed",
+  survive: "judge",
+  ko: "calc",
+};
+
 /** 異なる由来の印を、対象・理由・ID の組で1件にまとめる。 */
 function uniqueMarks(marks: readonly Schemas["UnsupportedMark"][]): Schemas["UnsupportedMark"][] {
   const seen = new Set<string>();
@@ -376,7 +394,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
   const [goals, setGoals] = useState<readonly GoalState[]>([]);
   const nextGoalIdRef = useRef(1);
   const goalsRegionRef = useRef<HTMLElement | null>(null);
-  const addGoalButtonRef = useRef<HTMLButtonElement | null>(null);
+  const addGoalRef = useRef<HTMLDivElement | null>(null);
   /** 追加・削除のあとにフォーカスを移す先(目標のカードの id = そのカードの種類、"add" = 「目標を追加」)。 */
   const pendingFocusRef = useRef<number | "add" | null>(null);
 
@@ -412,7 +430,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
     }
     pendingFocusRef.current = null;
     if (target === "add") {
-      addGoalButtonRef.current?.focus();
+      addGoalRef.current?.querySelector<HTMLElement>("button")?.focus();
       return;
     }
     goalsRegionRef.current?.querySelector<HTMLElement>(`[data-goal-id="${String(target)}"] select`)?.focus();
@@ -955,6 +973,13 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
   const megaReasonId = useId();
   const goalLimitHintId = useId();
 
+  // カードの持ち物の印(メガ種族はストーンに固定。ADR-0331 §1)。
+  const selfItemName =
+    selfLock.kind === "locked" && self.choice !== null
+      ? megaStoneLabel(self.choice.species, selfLock.item.nameJa)
+      : selfLock.kind === "none"
+        ? master.items.find((item) => item.id === self.itemId)?.nameJa
+        : undefined;
   const abilityOptions = self.choice?.abilities ?? (speciesListAvailable ? master.abilities : []);
 
   return (
@@ -964,7 +989,19 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
         className="ui-card ui-card--typed adjust-screen__region"
         style={typeAccentStyle(self.choice?.types[0])}
       >
-        <h2 id={selfHeadingId}>{T.selfRegionLabel}</h2>
+        <h2 id={selfHeadingId} className="ui-heading">
+          <Icon name="team" />
+          {T.selfRegionLabel}
+        </h2>
+        {self.choice !== null && (
+          <PokemonCard
+            speciesKey={self.choice.key}
+            name={self.choice.name}
+            types={self.choice.types}
+            itemName={selfItemName}
+            nameAsHeading
+          />
+        )}
         <div className="adjust-screen__fields">
           <SpeciesField
             visibleLabel={T.speciesFieldLabel}
@@ -1054,6 +1091,7 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
               <NumberField
                 key={stat}
                 label={T.fixedSpLabel(stat)}
+                stepper
                 value={fixedSp[stat]}
                 describedBy={fixedSpHintId}
                 onChange={(value) => {
@@ -1067,7 +1105,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
       </section>
 
       <section aria-labelledby={modeHeadingId} className="adjust-screen__region">
-        <h2 id={modeHeadingId}>{T.modeRegionLabel}</h2>
+        <h2 id={modeHeadingId} className="ui-heading">
+          <Icon name="adjust" />
+          {T.modeRegionLabel}
+        </h2>
         <div role="radiogroup" aria-label={T.modeGroupLabel} className="adjust-screen__modes">
           {(goalsOn ? MODES_WITH_GOALS : MODES).map((candidate) => (
             <label
@@ -1162,7 +1203,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
             goalsRegionRef.current = element;
           }}
         >
-          <h2 id={goalHeadingId}>{T.goalRegionLabel}</h2>
+          <h2 id={goalHeadingId} className="ui-heading">
+            <Icon name="judge" />
+            {T.goalRegionLabel}
+          </h2>
           {goals.length === 0 && (
             <p className="ui-notice ui-notice--empty adjust-screen__notice">{T.noGoalsNotice}</p>
           )}
@@ -1191,16 +1235,15 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
               }}
             />
           ))}
-          <button
-            type="button"
-            className="ui-button ui-button--secondary"
-            ref={addGoalButtonRef}
-            disabled={goals.length >= MAX_ADJUST_GOALS}
-            aria-describedby={goals.length >= MAX_ADJUST_GOALS ? goalLimitHintId : undefined}
-            onClick={addGoal}
-          >
-            {T.addGoalLabel}
-          </button>
+          <div className="adjust-screen__add-goal" ref={addGoalRef}>
+            <Tile
+              empty
+              label={T.addGoalLabel}
+              disabled={goals.length >= MAX_ADJUST_GOALS}
+              describedBy={goals.length >= MAX_ADJUST_GOALS ? goalLimitHintId : undefined}
+              onClick={addGoal}
+            />
+          </div>
           {goals.length >= MAX_ADJUST_GOALS && (
             <p id={goalLimitHintId} className="adjust-screen__hint">
               {T.goalLimitHint(MAX_ADJUST_GOALS)}
@@ -1215,7 +1258,19 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
           className="ui-card ui-card--typed adjust-screen__region"
           style={typeAccentStyle(opponent.choice?.types[0])}
         >
-          <h2 id={opponentHeadingId}>{T.opponentRegionLabel}</h2>
+          <h2 id={opponentHeadingId} className="ui-heading">
+            <Icon name="swap" />
+            {T.opponentRegionLabel}
+          </h2>
+          {opponent.choice !== null && (
+            <PokemonCard
+              speciesKey={opponent.choice.key}
+              name={opponent.choice.name}
+              types={opponent.choice.types}
+              itemName={stoneNameOf(opponent.choice.species, master.items)}
+              nameAsHeading
+            />
+          )}
           <div className="adjust-screen__fields">
             <SpeciesField
               visibleLabel={T.speciesFieldLabel}
@@ -1280,7 +1335,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
 
       {needsOpponent && (
         <section aria-labelledby={goalHeadingId} className="adjust-screen__region">
-          <h2 id={goalHeadingId}>{T.goalRegionLabel}</h2>
+          <h2 id={goalHeadingId} className="ui-heading">
+            <Icon name="judge" />
+            {T.goalRegionLabel}
+          </h2>
           <div className="adjust-screen__fields">
             <LabeledSelect
               visibleLabel={T.hitsLabel}
@@ -1331,7 +1389,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
       </button>
 
       <section aria-labelledby={resultHeadingId} aria-busy={loading} className="adjust-screen__region">
-        <h2 id={resultHeadingId}>{T.resultRegionLabel}</h2>
+        <h2 id={resultHeadingId} className="ui-heading">
+          <Icon name="calc" />
+          {T.resultRegionLabel}
+        </h2>
         {result.status === "success" ? (
           <ResultBody view={result.view} />
         ) : loading ? (
@@ -1343,7 +1404,10 @@ export function AdjustScreen({ adjustClient, master, masterSearch, goalsEnabled 
 
       {learners !== null && (
         <section aria-label={T.learnersRegionLabel} className="adjust-screen__region">
-          <h2>{T.learnersHeading(learners.moveName)}</h2>
+          <h2 className="ui-heading">
+            <Icon name="search" />
+            {T.learnersHeading(learners.moveName)}
+          </h2>
           {learners.errorMessage !== null && (
             <p role="alert" className="ui-notice ui-notice--error adjust-screen__error">
               {learners.errorMessage}
@@ -1427,25 +1491,73 @@ interface NumberFieldProps {
   readonly label: string;
   readonly value: string;
   readonly describedBy?: string;
+  /** 能力ポイント(0〜MAX_SP_PER_STAT)の欄に − / + を付ける(G-05)。数値欄は残し、範囲外の入力は従来どおり送信時に誤りとして出す。 */
+  readonly stepper?: boolean;
   readonly onChange: (value: string) => void;
 }
 
-/** 数値欄(type=number。見えるラベルと accessible name は同じ語)。 */
-function NumberField({ label, value, describedBy, onChange }: NumberFieldProps) {
+/** 数値欄(type=number。見えるラベルと accessible name は同じ語)。stepper なら − / + 付き(ボタンは範囲に収めた値へ直す)。 */
+function NumberField({ label, value, describedBy, stepper = false, onChange }: NumberFieldProps) {
   const id = useId();
+  const input = (
+    <input
+      id={id}
+      type="number"
+      inputMode="numeric"
+      className={stepper ? "ui-stepper__input" : undefined}
+      value={value}
+      aria-describedby={describedBy}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    />
+  );
+  if (!stepper) {
+    return (
+      <div className="ui-field adjust-screen__field">
+        <label htmlFor={id}>{label}</label>
+        {input}
+      </div>
+    );
+  }
+  const current = parseInteger(value) ?? 0;
+  const atMin = current <= 0;
+  const atMax = current >= MAX_SP_PER_STAT;
+  const stepTo = (next: number): void => {
+    onChange(String(Math.min(MAX_SP_PER_STAT, Math.max(0, next))));
+  };
   return (
     <div className="ui-field adjust-screen__field">
       <label htmlFor={id}>{label}</label>
-      <input
-        id={id}
-        type="number"
-        inputMode="numeric"
-        value={value}
-        aria-describedby={describedBy}
-        onChange={(event) => {
-          onChange(event.target.value);
-        }}
-      />
+      <div className="ui-stepper">
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperDecrease}`}
+          aria-disabled={atMin ? true : undefined}
+          onClick={() => {
+            if (!atMin) {
+              stepTo(current - 1);
+            }
+          }}
+        >
+          <Icon name="minus" size={16} />
+        </button>
+        {input}
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperIncrease}`}
+          aria-disabled={atMax ? true : undefined}
+          onClick={() => {
+            if (!atMax) {
+              stepTo(current + 1);
+            }
+          }}
+        >
+          <Icon name="plus" size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -1460,6 +1572,7 @@ function CeilingField({ stat, ceilings, onChange }: CeilingFieldProps) {
   return (
     <NumberField
       label={T.ceilingLabel(stat)}
+      stepper
       value={ceilings[stat]}
       onChange={(value) => {
         onChange({ ...ceilings, [stat]: value });
@@ -1607,7 +1720,21 @@ function GoalCard({
         : T.goalBoostMoveFieldLabel;
   return (
     <fieldset className="ui-card adjust-screen__goal" data-goal-id={goal.id}>
-      <legend>{T.goalCardLegend(n)}</legend>
+      <legend>
+        <span className="adjust-screen__goal-kind">
+          <Icon name={GOAL_KIND_ICON[goal.kind]} />
+        </span>
+        {T.goalCardLegend(n)}
+      </legend>
+      {goal.opponent !== null && (
+        <PokemonCard
+          small
+          speciesKey={goal.opponent.key}
+          name={goal.opponent.name}
+          types={goal.opponent.types}
+          itemName={stoneNameOf(goal.opponent.species, master.items)}
+        />
+      )}
       <div className="adjust-screen__fields">
         <LabeledSelect
           visibleLabel={T.goalKindFieldLabel}
@@ -1731,6 +1858,7 @@ function ResultBody({ view }: { readonly view: ResultView }) {
       )}
       {modeResult.kind === "ko" && (
         <p className="adjust-screen__verdict" data-met={String(modeResult.value.feasible)}>
+          <VerdictIcon met={modeResult.value.feasible} />
           {modeResult.value.feasible
             ? T.koFeasible(
                 modeResult.value.stat,
@@ -1748,6 +1876,7 @@ function ResultBody({ view }: { readonly view: ResultView }) {
       )}
       {modeResult.kind === "survive" && (
         <p className="adjust-screen__verdict" data-met={String(modeResult.value.feasible)}>
+          <VerdictIcon met={modeResult.value.feasible} />
           {modeResult.value.feasible
             ? T.surviveFeasible(
                 modeResult.value.stat,
@@ -1773,6 +1902,31 @@ function ResultBody({ view }: { readonly view: ResultView }) {
         />
       )}
     </>
+  );
+}
+
+/** 結論の印(満たす = チェック、満たさない = ×。色だけに頼らない。装飾で、意味は文が持つ)。 */
+function VerdictIcon({ met }: { readonly met: boolean }) {
+  return <Icon name={met ? "check" : "close"} size={20} className="adjust-screen__verdict-icon" />;
+}
+
+/** 振り方の能力ごとの横棒(装飾。同じ数値は直前の文が持つ。幅は SP / 上限 32)。 */
+function SpBars({ sp }: { readonly sp: Readonly<Record<StatKey, number>> }) {
+  return (
+    <div className="adjust-sp-bars" aria-hidden="true">
+      {STAT_ORDER.map((stat) => (
+        <div key={stat} className="adjust-sp-bars__row">
+          <span className="adjust-sp-bars__label">{statLetterJa[stat]}</span>
+          <span className="adjust-sp-bars__track">
+            <span
+              className="adjust-sp-bars__fill"
+              style={{ width: `${String((sp[stat] / MAX_SP_PER_STAT) * 100)}%` }}
+            />
+          </span>
+          <span className="adjust-sp-bars__value">{sp[stat]}</span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -1822,6 +1976,7 @@ function GoalsView({
         <p className="ui-notice ui-notice--info adjust-screen__notice">{T.goalsInfeasibleNotice}</p>
       )}
       <p className="adjust-screen__plan">{T.planSpLine(result.plan.sp)}</p>
+      <SpBars sp={result.plan.sp} />
       <p className="adjust-screen__detail">{T.planTotal(result.plan.totalSp)}</p>
       <p className="adjust-screen__detail">{T.statsLine(result.plan.stats)}</p>
       <p className="adjust-screen__detail">{T.remainingLabel(result.remaining)}</p>
@@ -1830,6 +1985,7 @@ function GoalsView({
           const outcome = result.goals[index];
           return outcome === undefined ? null : (
             <li key={index} className="adjust-screen__verdict" data-met={String(outcome.met)}>
+              <VerdictIcon met={outcome.met} />
               {goalOutcomeText(index + 1, description, outcome)}
             </li>
           );
@@ -1921,12 +2077,14 @@ function PlanView({ heading, plan, hadGoal, hasSpeedTarget }: PlanViewProps) {
     <section aria-labelledby={headingId} className="ui-card adjust-screen__subregion">
       <h3 id={headingId}>{heading}</h3>
       <p className="adjust-screen__plan">{T.planSpLine(plan.sp)}</p>
+      <SpBars sp={plan.sp} />
       <p className="adjust-screen__detail">{T.planTotal(plan.totalSp)}</p>
       <p className="adjust-screen__detail">{T.statsLine(plan.stats)}</p>
       <p className="adjust-screen__detail">{T.indexLine(T.physicalBulkLabel, plan.physicalBulk)}</p>
       <p className="adjust-screen__detail">{T.indexLine(T.specialBulkLabel, plan.specialBulk)}</p>
       {hadGoal && (
         <p className="adjust-screen__verdict" data-met={String(plan.goalMet)}>
+          <VerdictIcon met={plan.goalMet} />
           {plan.goalMet
             ? T.goalMet(formatChancePercent(plan.chancePercent))
             : T.goalNotMet(formatChancePercent(plan.chancePercent))}
@@ -1934,6 +2092,7 @@ function PlanView({ heading, plan, hadGoal, hasSpeedTarget }: PlanViewProps) {
       )}
       {hasSpeedTarget && (
         <p className="adjust-screen__verdict" data-met={String(plan.speedMet)}>
+          <VerdictIcon met={plan.speedMet} />
           {plan.speedMet ? T.speedMet : T.speedNotMet}
         </p>
       )}

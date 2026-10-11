@@ -248,3 +248,5 @@ Status(追記 2026-10-11): I-web-13d2(構築の技を `MovePicker` に、ADR-035
 Status(追記 2026-10-11): I-web-13e(G-05 素早さの画面、ADR-0351)= `SpeedScreen.tsx`・`.css`・`SpeedNeighborhoodPanel.tsx` を作り直した(`ToggleChip` に任意 prop `ariaDisabled`、`NeighborTierInput` に任意の pokemonId/types)。既存テストの付け替えは `SpeedScreen.visual.test.tsx` の 1 件(入力の方法が ui-chip から区切りボタンへ)のみ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-speed.md`。残りは 13f・13h。
 
 Status(追記 2026-10-11): I-web-13f(G-05 タイプバランスの画面、ADR-0352)= `BalanceScreen.tsx`・`.css`・新規 `balanceCells.tsx` を作り直した(メンバー/仮想敵のポケモンカード・追加の空きタイル・升目の記号 + 文字 + 淡い色・タイプバッジ見出し・大きい人数)。API・状態の流れは不変。既存テストの付け替えは 4 件(追加ボタンの class、段落の textContent での引き方 3)。技の `MovePicker` 化は見送り。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-balance.md`。残りは 13h。
+
+Status(追記 2026-10-11): I-web-13h(G-05 調整の画面、ADR-0353)= `AdjustScreen.tsx`・`.css` を見た目だけ作り直した(ec レーンと合意。ロジック・API・`adjust*.ts` 不変)。自分・相手の `PokemonCard`、固定 SP・上限の − / +、「目標を追加」の空きタイル(`Tile` に `describedBy`)、目標カードの種類アイコン + 相手の小さなカード、振り方の横棒 + 大きい数字、結論の成功/失敗アイコン。既存テストの付け替えは `AdjustScreen.visual.test.tsx` の 1 件(「目標を追加」が ui-button--secondary から空きタイルへ)のみ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-adjust.md`。G-05 の画面適用(13b〜13i)はこれで全部。

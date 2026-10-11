@@ -152,13 +152,11 @@ describe("チップ・ボタン", () => {
     expect(submitButton()).toHaveClass("ui-button", "ui-button--primary", "adjust-screen__submit");
   });
 
-  test("「目標を追加」「目標を外す」は ui-button--secondary", async () => {
+  test("「目標を追加」は空きタイル、「目標を外す」は ui-button--secondary", async () => {
     const { user } = renderScreen();
     await chooseMode(user, "goals");
-    expect(screen.getByRole("button", { name: T.addGoalLabel })).toHaveClass(
-      "ui-button",
-      "ui-button--secondary",
-    );
+    // G-05(I-web-13h): 「目標を追加」は「+」の空きタイル(ui-button--secondary から変更)。「外す」は従来どおり。
+    expect(screen.getByRole("button", { name: T.addGoalLabel })).toHaveClass("ui-tile", "ui-tile--empty");
     await user.click(screen.getByRole("button", { name: T.addGoalLabel }));
     expect(screen.getByRole("button", { name: T.removeGoalName(1) })).toHaveClass(
       "ui-button",

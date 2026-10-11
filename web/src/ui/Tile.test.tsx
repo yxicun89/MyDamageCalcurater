@@ -49,4 +49,14 @@ describe("Tile", () => {
     );
     expect(screen.getByRole("button")).toBeDisabled();
   });
+
+  test("describedBy は aria-describedby になる(上限で無効のときの理由)", () => {
+    render(
+      <>
+        <p id="why">上限です</p>
+        <Tile onClick={vi.fn()} empty label="追加" disabled describedBy="why" />
+      </>,
+    );
+    expect(screen.getByRole("button", { name: "追加" })).toHaveAttribute("aria-describedby", "why");
+  });
 });
