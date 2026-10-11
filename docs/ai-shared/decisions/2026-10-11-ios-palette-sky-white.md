@@ -20,8 +20,10 @@ Decision: ユーザー決定(ec レーン経由・2026-10-11)の配色「K. 空�
 | tableHover | E3ECFB | 1D2535 | DDEBFD | 1B2C45 |
 | focusRing | 1F5FD6 | 7FA8FF | 1D66D0 | 7DB4FF |
 | shadowColor | 黒10% | 黒40% | #143C78 12% | 黒45% |
-| resist(新規・耐性の文字/枠/アイコン。水色〜シアン系) | - | - | 0A7080 | 5CD3E3 |
-| resistSoft(新規・耐性の背景) | - | - | DDF4F8 | 0C2E36 |
+| matchupResist(新規・耐性の文字/枠/アイコン。水色系。ADR-0422 §3 の案のまま) | - | - | 0A5E8E | 6CCBF5 |
+| matchupResistSoft(新規・耐性の背景) | - | - | D7F0FB | 0E2F40 |
+| matchupImmune(新規・無効の文字/枠/アイコン。灰) | - | - | 4A5568 | AEB8C6 |
+| matchupImmuneSoft(新規・無効の背景) | - | - | E6E9EE | 222B38 |
 
 | タイプ | 旧 | 新(ライト・ダーク共通) |
 |---|---|---|

@@ -4905,6 +4905,6 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 |---|---|---|
 | `PopPaletteTests` の期待値表・影 | 新しい値へ | 配色の差し替え(ユーザー決定) |
 | `DesignTokenTests` のベース色(bgBase・bgGlass ダーク・textSecondary ライト) | 新しい値へ | 同上。textSecondary は淡い空色の上で 4.5:1 を保つため少し濃く |
-| `PopPaletteTests` の期待値表・コントラスト組(新規 `resist`/`resistSoft`。文字 4.5:1・枠 3:1 をライト/ダーク全組。件数は表から導出) | 行と組を追加 | 耐性を緑でなく水色系にする要望(追記) |
+| `PopPaletteTests` の期待値表・コントラスト組(新規 `matchupResist`/`matchupResistSoft`/`matchupImmune`/`matchupImmuneSoft`。文字 4.5:1・枠 3:1 をライト/ダーク全組。件数は表から導出) | 行と組を追加 | 耐性を緑でなく水色系にする要望と ADR-0422 §3 の相性色(追記) |
 | `DesignTokenTests` のタイプ色 16 色 | 新しい値へ(彩度×0.95) | 同上 |
 | `DesignTokenTests` の最小コントラスト(かくとう 4.59→4.71、どく 4.79→4.74) | 期待値を更新 | 色が変わったため。文字色の黒/白の選び(白は4タイプだけ)は不変 |

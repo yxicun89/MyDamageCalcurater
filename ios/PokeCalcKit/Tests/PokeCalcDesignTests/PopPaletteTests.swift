@@ -16,8 +16,10 @@ final class PopPaletteTests: XCTestCase {
         ("onAccent", "14161A", "14161A"),
         ("success", "17743A", "5FD38A"),
         ("successSoft", "E2F5E8", "12301F"),
-        ("resist", "0A7080", "5CD3E3"),
-        ("resistSoft", "DDF4F8", "0C2E36"),
+        ("matchupResist", "0A5E8E", "6CCBF5"),
+        ("matchupResistSoft", "D7F0FB", "0E2F40"),
+        ("matchupImmune", "4A5568", "AEB8C6"),
+        ("matchupImmuneSoft", "E6E9EE", "222B38"),
         ("warning", "9A5B00", "FFB547"),
         ("warningSoft", "FFF1D6", "33240B"),
         ("info", "0B6BA8", "5EC2F2"),
@@ -89,11 +91,12 @@ final class PopPaletteTests: XCTestCase {
             ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"), ("brandPrimary", "tableZebra"),
             ("danger", "bgGradientStart"), ("danger", "bgGradientEnd"), ("danger", "tableZebra"),
             ("success", "bgBase"), ("success", "surfaceCard"), ("success", "successSoft"),
-            ("resist", "bgBase"), ("resist", "surfaceCard"), ("resist", "resistSoft"),
+            ("matchupResist", "bgBase"), ("matchupResist", "surfaceCard"), ("matchupResist", "matchupResistSoft"),
+            ("matchupImmune", "bgBase"), ("matchupImmune", "surfaceCard"), ("matchupImmune", "matchupImmuneSoft"),
             ("warning", "bgBase"), ("warning", "surfaceCard"), ("warning", "warningSoft"),
             ("info", "bgBase"), ("info", "surfaceCard"), ("info", "infoSoft"),
             ("danger", "surfaceCard"), ("danger", "dangerSoft"), ("onDanger", "danger"),
-            ("textPrimary", "successSoft"), ("textPrimary", "resistSoft"), ("textPrimary", "warningSoft"),
+            ("textPrimary", "successSoft"), ("textPrimary", "matchupResistSoft"), ("textPrimary", "matchupImmuneSoft"), ("textPrimary", "warningSoft"),
             ("textPrimary", "infoSoft"), ("textPrimary", "dangerSoft"),
         ]
         for background in ["bgGradientStart", "bgGradientEnd", "surfaceCard", "tableHeader", "tableZebra", "tableHover"] {
@@ -104,7 +107,8 @@ final class PopPaletteTests: XCTestCase {
     }()
 
     private static let nonTextPairs: [(String, String)] = [
-        ("resist", "surfaceCard"), ("resist", "resistSoft"), ("resist", "bgBase"),
+        ("matchupResist", "surfaceCard"), ("matchupResist", "matchupResistSoft"), ("matchupResist", "bgBase"),
+        ("matchupImmune", "surfaceCard"), ("matchupImmune", "matchupImmuneSoft"), ("matchupImmune", "bgBase"),
         ("focusRing", "bgBase"), ("focusRing", "surfaceCard"),
         ("focusRing", "bgGradientStart"), ("focusRing", "bgGradientEnd"),
         ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"),

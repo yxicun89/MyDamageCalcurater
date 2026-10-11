@@ -116,9 +116,13 @@ extension ColorToken {
     /// 成功の案内の塗り。
     public static let successSoft = solid(0xE2F5E8, 0x12301F)
     /// 耐性(×1/2 以下)の文字・枠・アイコン。緑でなく水色〜シアン系(弱点の `danger` の赤・主色の青と区別。色だけで示さず文字/アイコンも併用する)。
-    public static let resist = solid(0x0A7080, 0x5CD3E3)
+    public static let matchupResist = solid(0x0A5E8E, 0x6CCBF5)
     /// 耐性の案内・背景の塗り。
-    public static let resistSoft = solid(0xDDF4F8, 0x0C2E36)
+    public static let matchupResistSoft = solid(0xD7F0FB, 0x0E2F40)
+    /// 無効(×0)の文字・枠・アイコン(灰。ADR-0422 §3)。
+    public static let matchupImmune = solid(0x4A5568, 0xAEB8C6)
+    /// 無効の案内・背景の塗り。
+    public static let matchupImmuneSoft = solid(0xE6E9EE, 0x222B38)
     /// 注意の文字・アイコン。
     public static let warning = solid(0x9A5B00, 0xFFB547)
     /// 注意の案内の塗り。
@@ -155,7 +159,8 @@ extension ColorToken {
     public static let popPalette: [(name: String, pair: ColorPair)] = [
         ("brandPrimary", brandPrimary), ("onPrimary", onPrimary), ("brandAccent", brandAccent),
         ("onAccent", onAccent), ("success", success), ("successSoft", successSoft),
-        ("resist", resist), ("resistSoft", resistSoft),
+        ("matchupResist", matchupResist), ("matchupResistSoft", matchupResistSoft),
+        ("matchupImmune", matchupImmune), ("matchupImmuneSoft", matchupImmuneSoft),
         ("warning", warning), ("warningSoft", warningSoft), ("info", info), ("infoSoft", infoSoft),
         ("dangerSoft", dangerSoft), ("onDanger", onDanger), ("surfaceCard", surfaceCard),
         ("bgGradientStart", bgGradientStart), ("bgGradientEnd", bgGradientEnd),
