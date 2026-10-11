@@ -182,6 +182,14 @@
 
 ファイルの移動は `git mv` を使い、履歴を追えるようにする。
 
+## 実装で足したもの(表からの小さな差)
+
+- `item.CloneP`: `MergeOfficial`(domain)と memory が同じ `cloneP` を使うため、domain に置いて公開した。
+- `page.Collapse`: `ogp` と `page.CleanTitle` が同じ関数を使うため、`collapse` を公開した(重複させないため)。
+- `fromurl.IsInvalidURL`: 入力の URL の違反と、`PageReader` の失敗(`*fromurl.FetchError`)を区別する小さな関数。
+- `domain/item/helpers_test.go`: `official_test.go` が使う `strp`。元は `service_test.go`(app へ移った)にあったため、同じ 1 行を domain のテスト側にも置いた。
+- `Invalid` は domain/item に置いたが、使うのは app/items だけ(domain の `item.go`・`official.go` は `ErrInvalid` を直接包んでいる)。
+
 ## やらないこと
 
 - `official` の判定(語の表・`Judge`)と `fetcher` の HTML の読み取りを domain に分けること(HTML を読む処理と分けにくい。必要になったら別に行う)

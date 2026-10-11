@@ -12,7 +12,7 @@ import (
 
 	"github.com/golang-migrate/migrate/v4"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/query"
+	"example.com/pokecalc/apps/wishlist/api/internal/domain/query"
 	"example.com/pokecalc/apps/wishlist/api/migrations"
 )
 

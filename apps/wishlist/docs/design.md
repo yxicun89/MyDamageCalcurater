@@ -22,7 +22,11 @@ iPhone(PWA / 将来 iOS アプリ)
 | `api/openapi.yaml` | API 契約の唯一の正。Go のサーバー型(oapi-codegen)と Web の型(openapi-typescript)を生成する |
 | `api/go.mod` | Go モジュール `example.com/pokecalc/apps/wishlist/api`。ルートの `go.work` には入れず `GOWORK=off` で扱う(W-01) |
 | `api/migrations/` | golang-migrate 形式(`NNNNNN_name.up.sql` / `.down.sql`) |
-| `api/internal/{item,query,deeplink,fetcher,estimate,ogp,storage}` | 仕様 §2 のとおり。フェーズ1では `item`・`query`・`ogp`・`storage` と HTTP 層 |
+| `api/internal/domain/{item,query,deeplink,estimate,crawl,page}` | 純粋な核。商品・ジャンル・サイトの型と規則、検索ワード・ディープリンク・目安価格の算出、アクセスの節度(`crawl`)、商品ページの URL と題名の規則(`page`)。外側を import しない |
+| `api/internal/app/{items,refresh,fromurl}` | ユースケース。`items`(登録・更新の検査と画像の保存・削除。永続化と画像のポートを宣言)、`refresh`(目安価格の更新。`Fetcher`・`FetcherRegistry` のポート)、`fromurl`(URL から下書きを作る手順)。domain と app だけを import する |
+| `api/internal/adapters/{httpapi,store,memory,fetcher,official,ogp,chromium,storage,netguard,dbwait}` | 外側。HTTP・MySQL(`store` と sqlc 生成の `store/sqlcgen`)・メモリ(テスト用)・外部サイトの取得・ファイル・SSRF ガード。app のポートを実装する |
+| `api/internal/api` | oapi-codegen の生成物(外側として扱う)。`internal/testimg` はテスト用の画像(`_test.go` からだけ使う) |
+| `api/internal/archtest` | import の向き(adapters → app → domain)の検査。受け入れ条件は [arch-spec.md](arch-spec.md) |
 | `testdata/query-cases.json` | 検索ワード生成・ディープリンクの**共通テストベクタ**。Go と TS の両方のテストが読む(実装のずれを防ぐ) |
 | `web/` | Vite + React + TS の PWA |
 | `deploy/k8s/` | Kustomize(`base` / `overlays/local`) |

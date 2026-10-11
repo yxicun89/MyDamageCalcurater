@@ -13,9 +13,9 @@
 |---|---|---|
 | iOS | 合っている | 生成 API(`WishlistAPI`)を import するのは `WishlistCore/APIWishlistService.swift` だけ。View → ViewModel → `WishlistService`(プロトコル)← `APIWishlistService`・`FakeWishlistService` |
 | Web | おおむね合っている | `App.tsx`(app)→ `ui/`(screens)→ `lib/`(shared)の一方向。`lib/` から `ui/`・`App` への逆向きの import は無い。フォルダ名は計画の 4 段と違い、向きの lint も無い |
-| API(Go) | **形が違い、向きの崩れが 4 か所ある** | 考え方(リポジトリのインターフェースと Memory/MySQL の 2 実装、純粋な `query`・`deeplink`・`estimate`)はポートとアダプタに近いが、domain / app / adapters のフォルダが無く、1 パッケージに層が混ざっている |
+| API(Go) | **合っている**(2026-10-12 に直した) | `internal/domain`・`internal/app`・`internal/adapters` の 3 層にそろえ、向き(adapters → app → domain)を `api/internal/archtest` が確かめる。下の「API の現状の割り当て」「向きの崩れ」は直す前の記録(経緯は [arch-spec.md](arch-spec.md)) |
 
-## API の現状の割り当て
+## API の現状の割り当て(直す前。2026-10-11 時点)
 
 | 今のパッケージ | 中身 | 本来の置き場所 |
 |---|---|---|
@@ -28,7 +28,7 @@
 | `fetcher`・`chromium`・`official`・`ogp`・`storage`・`netguard` | 外部サイト・ファイル・SSRF ガード | adapters |
 | `httpapi`・`api`(oapi-codegen 生成) | HTTP | adapters/httpapi |
 
-## 向きの崩れ
+## 向きの崩れ(直す前。いずれも 2026-10-12 に解消)
 
 1. **domain が adapter を import している**: `item` パッケージに MySQL 実装(`mysql*.go`)が同居し、`item` が `store`(sqlc 生成)を import する。domain の型を使うだけのコードからも MySQL の部品が見える
 2. **app が adapter のパッケージのポートに依存している**: `item.Service` は `storage.Storage` を受け取る。ポート(インターフェース)が adapter のパッケージ(`storage`)に置かれている

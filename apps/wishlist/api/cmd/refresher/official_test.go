@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"testing"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
+	"example.com/pokecalc/apps/wishlist/api/internal/app/refresh"
 )
 
 // フェーズ4-3(docs/phase4-spec.md AC-O31):refresher は公式ページの監視の件数も 1 行に出す。監視の失敗は終了コードに影響しない。
