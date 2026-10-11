@@ -37,7 +37,10 @@
 
 adapter 同士の import(`official` → `fetcher.HostGate`、`fetcher` → `item` の型)は規則の違反ではないが、サイトごとのアクセス間隔は「節度」の規則なので domain か app に置く方が読みやすい。
 
-## 直し方の案(未着手)
+## 直し方の案
+
+ユーザーが進めると決めた(2026-10-12)。受け入れ条件・置き場所の表・ポート・直す相対パスは [arch-spec.md](arch-spec.md) を正とする。
+向きの検査は `api/internal/archtest/arch_test.go`(import 文だけを読む Go テスト)。下は当初の案で、細部は arch-spec.md で決めた。
 
 計画 §6 の「1 サービス = 1 PR」に合わせ、このレーンの PR 1〜2 本で行う。動作は変えず、テストはそのまま通す。
 
@@ -46,4 +49,4 @@ adapter 同士の import(`official` → `fetcher.HostGate`、`fetcher` → `item
 3. `internal/adapters`: `httpapi`・`store`(MySQL。今の `item/mysql*.go` と sqlc)・`memory`・`fetcher`・`chromium`・`official`・`ogp`・`storage`・`netguard`
 4. 向きの検査は、ダメ計の `tools/archcheck`(S0 で作る予定)ができたら対象に入れる。それまではこのモジュールの Go テストで import の向きを確かめる
 
-ダメ計側の S0(ADR-0811・archcheck)の決定より先に進めるかはユーザーの判断待ち。
+ダメ計側の S0(ADR-0811・archcheck)より先に進める(ユーザー決定 2026-10-12)。archcheck ができたら、このモジュールの archtest と置き換えるかを決める。
