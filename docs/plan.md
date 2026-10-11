@@ -24,7 +24,7 @@
 | AJ: 調整 | [docs/plan/adjust.md](plan/adjust.md) |
 | DOC: 文書 | [docs/plan/doc.md](plan/doc.md) |
 | M4: 運用 | [docs/plan/m4.md](plan/m4.md) |
-| ARCH: アーキテクチャの採用(調査と計画。未決) | [docs/plan/architecture-adoption.md](plan/architecture-adoption.md) |
+| ARCH: アーキテクチャの採用(ヘキサゴナル。段階計画) | [docs/plan/architecture-adoption.md](plan/architecture-adoption.md) |
 | 後続: 要件との対応 | [docs/plan/followups.md](plan/followups.md) |
 | ブロッカー | [docs/plan/blockers.md](plan/blockers.md)(既存分)・[docs/plan/blockers/](plan/blockers/)(新規分。レーン別) |
 | 改善要望 | [docs/plan/improvements.md](plan/improvements.md)(既存分)・[docs/plan/improvements/](plan/improvements/)(新規分。レーン別) |

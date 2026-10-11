@@ -1,24 +1,25 @@
 # ARCH: ソフトウェアアーキテクチャの正式採用(調査と計画)
 
-- 状態: **調査・計画のみ(未決)**。コードは変えていない。ADR は採用が決まってから書く(下の「ADR の番号」)。
-- 日付: 2026-10-11(基準: `origin/main` 4b97544c)
+- 状態: **方式はユーザーが決定(2026-10-11): ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用する。A(このリポジトリを段階的に改造)も決定**。
+  コードはまだ変えていない。採用の ADR(ADR-0811 の予定)は S0 で書く。残りの未決は §8。
+- 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
-  (A) このリポジトリを改造する / (B) 新しいリポジトリへ移す、のどちらかを含めて、すぐ作業せず調査して計画を立てる。
+- 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
 - 守る前提: ADR-0012 のサービス境界、CLAUDE.md の絶対ルール(API は `api/openapi.yaml` 先行・`engine/` は純粋・サービスは自分の DB だけ)、
   レーン制(COORDINATION.md)、1 タスク = 1 PR。
 
 ## 0. 結論(先に)
 
-| 問い | 推奨 |
+| 問い | 決定・推奨 |
 |---|---|
-| A か B か | **A(このリポジトリで段階的に)**。B は Git 履歴・PR 番号・ADR・ガード・GitOps・進行中の PR をすべて切り離す費用が大きく、得られるもの(きれいな初期状態)は A でも段階的に得られる(§4) |
-| Go サービスの方式 | **案 0「現状維持 + 明文化」**(今の形 = 純粋な核〈engine・各サービスの内側〉+ ポートとアダプタ、に名前を付けて規約と検査にする)。コードを動かすのは、規約にはっきり反する 2 か所(G1・G5)だけ。ユースケース層(`internal/app`)は**最初から計画に入れず**、「1 つのハンドラが他のポートを 2 つ以上順に呼ぶ」などの機械で測れる条件を満たしたサービスだけ、そのレーンが次に触るときに足す(案 1 は案 0 の拡張として残す)。7 案を同じ 5 つの基準で比べた結果と、変えなくてよい根拠は §3.1 |
-| Web | **Feature-Sliced Design を簡略化した 4 段**(`app` → `screens`(画面) → `features`(機能) → `shared`(domain・master・engine・api・ui・i18n))。下から上・横の import を lint で禁止(§3.1) |
-| iOS | **今の MVVM + Service プロトコル(=ポート)を明文化**。生成 API を import してよいのは `API*.swift` だけ、をテストで固定。ターゲット分割は後回し(§3.2) |
-| 機械検査 | **既存の「import を go/parser で読むテスト」(ADR-0105・失効ジョブ)の流儀を共通化した小さな検査ツール**を `tools/` に置き、`make lint` で回す。**今ある違反は「許可リスト(期限つき)」で凍結**し、段階ごとに 1 行ずつ消す(§5) |
-| 進め方 | **1 段階 = 1 サービス(または Web/iOS の 1 区切り)= 1 PR = そのレーン**。最初の PR は規約と検査だけ(コードは動かさない)(§6) |
+| A か B か | **決定: A(このリポジトリを段階的に改造)**(ユーザー回答 2026-10-11)。理由は §4 |
+| Go サービスの方式 | **決定: ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用**。全サービスで `internal/domain`(純粋な核)/ `internal/app`(ユースケース層)/ `internal/adapters`(httpapi・store・client・events ほか)の**フォルダの形をそろえる**。小さなサービスの app は薄くてよい。**新しい機能(コンボ計算〈ブランチ `docs/combo-calc-spec` の `docs/plan/combo-calc.md`〉など)は最初からこの形で作る**(§3.1・§5.1) |
+| 機械検査 | `tools/archcheck` は **adapters → app → domain の向きだけ**を検査する(内側は外側を import しない)。形をそろえたサービスから順に検査の対象に入る(§5.1) |
+| 進め方 | **1 サービス = 1 PR = そのサービスのレーン**。大きいサービス(judge・calc・record・pokedex)から。最初の PR(S0)は規約・ADR・検査の骨組みだけで、コードは動かさない(§6) |
+| Web | Feature-Sliced Design を簡略化した 4 段(`app` → `screens` → `features` → `shared`)。ディレクトリ名は変えず、向きを ESLint で検査(§3.2・§5.2) |
+| iOS | 今の MVVM + Service プロトコルを明文化(Service プロトコル = ポート、`API*`・`Mock*` = アダプタ。ヘキサゴナルと同じ考え)。生成 API を import してよいのは `API*.swift` だけ、をテストで固定(§3.2・§5.3) |
 
-ユーザーが決めること は §8「未決の質問」。
+残りの未決は §8「未決の質問」。
 
 ## 1. 用語(この文書での言い方)
 
@@ -95,77 +96,46 @@
 - **形はすでに MVVM + ポート(Service プロトコル)+ アダプタ(API*/Mock*)**。生成 API を import しているのは `API*.swift` の 8 ファイルだけで、規約どおり。
   ただし **同じターゲットの中なので、ViewModel が生成型を import しても止まらない**(慣習で守っているだけ)。
 
-## 3. 選択肢と根拠
+## 3. 方式の決定と根拠
 
-### 3.1 Go サービス
+### 3.1 Go サービス: ヘキサゴナル(ポートとアダプタ)を採用
 
-#### 候補(7 案)
+候補(現状維持 + 明文化・ヘキサゴナル・クリーンアーキテクチャ・オニオン・レイヤード・縦割り・モジュラーモノリス)の利点・欠点の比較は
+[../architecture-comparison.md](../architecture-comparison.md)(PR #711)にある。ここには、ヘキサゴナルに決めた理由と、この文書の調査との対応だけを書く。
 
-| 案 | 中身 |
-|---|---|
-| **0 現状維持 + 明文化** | 今の形に名前を付けて規約と検査にするだけ。名前は「純粋な核 + ポートとアダプタ」(engine・各サービスの内側が核。HTTP・DB・NATS・他サービスはアダプタ)。これは Gary Bernhardt の「Functional Core, Imperative Shell」(核は副作用なし、殻が I/O を受け持つ)と、Cockburn のヘキサゴナルを合わせた形で、**engine と balance・speed は既にこの形**。コードは規約に反する 2 か所(G1・G5)だけ直す |
-| 1 案 0 + 必要な所だけユースケース層 | 案 0 に加え、条件(下の「推奨」に書く)を満たすサービス(いま該当するのは judge・record。calc・pokedex は境界線上)に `internal/app` を足し、手順をハンドラから移す |
-| 2 クリーンアーキテクチャ(一律) | 全サービスを entities / use cases / interface adapters / frameworks の 4 層に分ける |
-| 3 レイヤード(表示・ドメイン・データ) | 上の層が下の層に依存する 3 層 |
-| 4 バーティカルスライス | 層ではなく「API 操作 1 つ = フォルダ 1 つ」(ハンドラ・処理・DB の呼び出しを 1 か所に)。操作の間で共有を減らす |
-| 5 モジュラーモノリス | サービスを 1 プロセスに寄せ、モジュール境界をコードで守る |
-| 6 DDD の戦術パターン | 集約・リポジトリ・ドメインイベント・値オブジェクトでドメインを組む |
+**ヘキサゴナルを選ぶ理由**
 
-#### 同じ 5 つの基準での比較
+1. **核を守る目的に合う**。`engine/` の本番コードは `example.com/pokecalc/...` を 1 つも import しない(約 8,800 行)。WASM でも同じコードを使う。
+   ヘキサゴナルは「核を中心に置き、HTTP・DB・他サービスは外側の付け替えられる部品」という形で、この性質をそのまま名前にできる。
+2. **今のコードに近い**。`services/balance`・`services/speed` は、純粋な内側(`internal/balance`・`internal/speed`)と、内側の `Provider` を実装するアダプタ(`internal/master`)に既に分かれている(§2.2)。
+   移行は「フォルダの名前をそろえ、手順を app に寄せる」作業が中心になる。
+3. **向きの検査が単純**。規則は「外 → 内の一方向」だけ(adapters → app → domain)。`tools/archcheck` の規則も 1 種類で済み、AI が守りやすく、人間も結果を読みやすい。
+4. **「現状維持 + 明文化」では足りない所がある**。名前と形がそろっていないと、人間が確認するときの基準が弱い。また手順の置き場所が決まっていないため、
+   `services/judge/internal/httpapi/outspeed.go`(944 行)のように手順がハンドラに溜まる(G3)。HTTP 層(`internal/httpapi`)は全サービスで 44 ファイル・約 9,700 行あり、engine(約 8,800 行)より大きい。
 
-◎ 良い / ○ 普通 / △ 弱い / ✕ 合わない。「費用」は ◎ ほど安い。
+**クリーンアーキテクチャ・オニオンを選ばない理由**: どちらも層の数と決まりが多い。層ごとに型の変換コードと規則が増えるため、**AI が実装で手間取りやすい**と判断した
+(層が増えるほど変換と規則が増える、という理由からの判断で、計測した値ではない)。ヘキサゴナルでもユースケース層(app)は置くので、
+「1 つの操作の手順が 1 か所で読める」という利点は得られる。
 
-| 案 | 開発のしやすさ | AI 実装との相性(規則が機械で検査でき、置き場所に迷わない) | 多レーンの競合 | 人間が確認しやすいか | 費用 |
-|---|---|---|---|---|---|
-| **0 現状維持 + 明文化** | ◎ 書き方が今と同じ | ○ 依存の向きは検査できる。ただし「手順をどこに書くか」は決まらないので、AI はハンドラに足し続けやすい | ◎ ファイルを動かさない(S0 は新規ファイルだけ) | ○ 規約・図・検査で全体は追える。judge の 944 行のハンドラなど読みにくい所は残る | ◎ |
-| 1 案 0 + 必要な所だけユースケース層 | ○ 該当サービスだけ型の詰め替えが増える | ◎ 「手順は app、変換は httpapi」が規則にでき、検査もできる | ○ 1 サービス = 1 PR に閉じる | ◎ 1 操作の手順が 1 関数で読める | ○ |
-| 2 クリーンアーキテクチャ(一律) | △ 薄いサービス(gateway・team・record)でも層と型が増える | ◎ 規則ははっきり | ✕ 全サービスのファイルが動く | ○ 層は揃うが、追う間接参照が増える | ✕ |
-| 3 レイヤード | ○ 分かりやすい | ○ 上下の規則は検査しやすい | △ ポートを外して作り直す所が出る | ○ | △ |
-| 4 バーティカルスライス | ○ 1 操作が 1 フォルダで閉じる | ○ 規則は単純だが、操作の間の共有部品(変換・エラー整形)の置き場所で迷う | ✕ 全ハンドラのファイルを分け直す | ○ | ✕ |
-| 5 モジュラーモノリス | △ 運用は軽いが、いまの k8s・GitOps の構成を作り直す | △ | ✕ | △ | ✕ 学習目的のマイクロサービス構成(CLAUDE.md)・ADR-0012 と逆 |
-| 6 DDD の戦術パターン | △ 計算が中心で状態の変化が少ないドメインには道具が重い | △ 用語と型が多く、AI の出力が揺れやすい | △ | △ | ✕ |
+**DDD について**: DDD(ドメインの言葉でモデルを作る考え方)は**アーキテクチャの方式とは独立で、どの方式の上でも再現できる**。
+このプロジェクトのドメインの言葉(種族・技・特性・実数値・確定数)は既に `engine/` と `docs/glossary.md` にそろっている。
+戦術パターン(集約・リポジトリなど)まで入れるのは、複雑さが engine の計算ルールにあり永続化の業務ルールが薄いため、過剰と判断する。
 
-案 2〜6 は、少なくとも 1 つの基準で ✕ が付き、案 0・1 を上回る基準が無い。**実際の選択は案 0 と案 1 のどちらを「計画として」採るか**。
-
-#### 推奨: 案 0(現状維持 + 明文化)。案 1 は条件つきの拡張として残す
-
-変えなくてよい根拠(コード上の事実):
-
-1. **核はすでに純粋で、正しさは別の仕組みで守られている**。`engine/` の本番コードは `example.com/pokecalc/...` を 1 つも import しない(約 8,800 行)。
-   計算の正しさはゴールデンテスト(@smogon/calc と全件一致。CLAUDE.md 絶対ルール 3)が守る。ここを層で包み直しても、確認のしやすさはほとんど増えない。
-2. **balance・speed は、すでに推奨の形**。`services/balance/internal/balance`・`services/speed/internal/speed` は HTTP・DB を import せず、`internal/master` が内側の `Provider` を実装する(§2.2)。案 0 はこれを「正解の例」として文書にするだけで済む。
-3. **サービスの多くは「変換 + engine 呼び出し」の薄い殻**。gateway は転送、team は保存と読み出し、record も大半は同じ(`store.Store` はインターフェース済み。検証が溜まった `favorites.go` だけは C4)。ここにユースケース層を足すと、同じ値を型から型へ詰め替えるコードが増えるだけになる(案 2 の弱点)。
-4. **競合の原因は構造ではなく共有ファイルだった**。これまでの PR の競合は `CURRENT_STATE.md`・`DECISIONS.md`・`docs/plan.md` に集中していた(ADR-0805・ADR-0172 の記録)。コードの層を変えても競合は減らず、むしろ全サービスを動かす間は増える。
-5. **Go 公式の構成ガイドは層を定めていない**。`internal/`・`cmd/` の使い方だけを示し、規模に合わせて育てる方針(https://go.dev/doc/modules/layout )。今の構成はこれに沿っている。
-6. **検査の前例がある**。import の向きのテストは既に 3 本ある(§2.1)ので、それを共通化すれば「明文化」が飾りでなく機械で守られる。
-
-一方で、案 0 のままでは残る弱点(案 1 を捨てない理由):
-
-- `services/judge/internal/httpapi/outspeed.go`(944 行)の `outspeedAndKo` は、デコード・2 サービスの順次呼び出し・判定・エラー整形が 1 関数にある(G3)。
-- HTTP 層(`internal/httpapi`)は全サービスで 44 ファイル・約 9,700 行あり、engine(約 8,800 行)より大きい。500 行を超えるファイルが 5 つある。
-- AI は「手順の置き場所」が決まっていないと、既存のハンドラに足し続ける。
-
-そこで **案 1 のユースケース層は「計画の段階」にはせず、規約に機械で測れる条件**(例: 「1 つのハンドラ関数が他サービスのクライアント・store・publisher のうち 2 つ以上を呼ぶ」、または「`internal/httpapi` の 1 ファイルが 600 行を超える」)を書き、
-**条件を満たしたサービスを、そのレーンが次にそのサービスを触るときに直す**。いまの調査では judge(pokedex と calc を順に呼ぶ・944 行)と record(`favorites.go` 624 行)が条件を満たし、calc(`server.go` 482 行・`adjust.go` 468 行。publisher と store を呼ぶ)と pokedex(`search.go` 595 行)は境界線上(§6 の C1〜C4)。
-こうすると、案 0 の安さ・競合の少なさを保ったまま、案 1 の読みやすさが要る所にだけ費用を払える。
-
-> 案 1 を最初から計画に入れる(C1〜C4 を日程に入れる)のが良いのは、「人間が 1 操作の手順を追いやすい」ことを費用より優先する場合。§8 Q2 で選べるようにしてある。
-
-根拠:
+根拠(出典):
 - Alistair Cockburn「Hexagonal Architecture」(2005): https://alistair.cockburn.us/hexagonal-architecture/
-- Gary Bernhardt「Boundaries」(Functional Core, Imperative Shell。2012): https://www.destroyallsoftware.com/talks/boundaries
+- Gary Bernhardt「Boundaries」(Functional Core, Imperative Shell。純粋な核と I/O の殻): https://www.destroyallsoftware.com/talks/boundaries
 - Robert C. Martin「The Clean Architecture」(2012): https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
 - Martin Fowler「PresentationDomainDataLayering」: https://martinfowler.com/bliki/PresentationDomainDataLayering.html
 - Jimmy Bogard「Vertical Slice Architecture」(2018): https://www.jimmybogard.com/vertical-slice-architecture/
-- Go 公式「Organizing a Go module」: https://go.dev/doc/modules/layout
-- Three Dots Labs「How to implement Clean Architecture in Go」(段階的にアプリ層を抜き出す実例): https://threedots.tech/post/introducing-clean-architecture/ ・ https://github.com/ThreeDotsLabs/wild-workouts-go-ddd-example
+- Go 公式「Organizing a Go module」(`internal/`・`cmd/` の使い方。層は定めていない): https://go.dev/doc/modules/layout
+- Three Dots Labs「How to implement Clean Architecture in Go」(Go で段階的にアプリ層を抜き出す実例): https://threedots.tech/post/introducing-clean-architecture/ ・ https://github.com/ThreeDotsLabs/wild-workouts-go-ddd-example
 - Martin Fowler「MonolithFirst」: https://martinfowler.com/bliki/MonolithFirst.html
 
-#### Go の機械検査の候補
+#### Go の機械検査の道具
 
 | 候補 | 中身 | 利点 | 費用 |
 |---|---|---|---|
-| **自前の小さな検査(推奨)** `tools/archcheck` | `go/parser` で import だけ読み、規則(どのディレクトリが何を import してはいけないか)と許可リストに照らす。`make lint` から全モジュールを 1 回で検査 | **前例がある**(ADR-0105 の storetest・失効ジョブのテスト)。依存の追加が無い(版の固定・更新の手間が増えない)。生成物が無くても動く(`go list` と違いビルド不要)。エラー文を日本語で「何を・どこへ移すか」まで書ける(AI が直しやすい)。5 つのモジュールを同じ規則で見られる | 自前の保守(100〜200 行程度)。表現力は下の 2 つより弱い |
+| **自前の小さな検査(推奨)** `tools/archcheck` | `go/parser` で import だけ読み、adapters → app → domain の向きに反する import を見つける。`make lint` から全モジュールを 1 回で検査 | **前例がある**(ADR-0105 の storetest・失効ジョブのテスト)。依存の追加が無い(版の固定・更新の手間が増えない)。生成物が無くても動く(ビルド不要)。エラー文を日本語で「何を・どこへ移すか」まで書ける(AI が直しやすい)。5 つのモジュールを同じ規則で見られる | 自前の保守(100〜200 行程度) |
 | go-arch-lint | YAML で「部品(component)と、依存してよい相手(mayDependOn)」を宣言 | ヘキサゴナル・オニオン向けに作られている。規則が表として読める | 新しいツールの導入と版の固定。go.work の複数モジュールでの動かし方を確かめる必要 |
 | golangci-lint の depguard | ファイルの glob ごとに allow / deny の一覧 | 広く使われている | 今は golangci-lint を使っていない(staticcheck を直接)。導入すると lint 全体の仕組みが変わる |
 
@@ -204,39 +174,48 @@ Web の推奨(Feature-Sliced の簡略版)も、**中身は「現状維持 + 明
 | ADR・plan・ai-shared | 番号帯(ADR-0805・COORDINATION の表)・`docs/plan/`(ADR-0172)・`state/` をそのまま使う | 移すか作り直す。番号の続きをどうするかを決め直す |
 | データ | 生成物・実マスタは Git に無い(ADR-0002・ADR-0807)ので影響なし | 同じく影響なし(数少ない B の利点が無い点) |
 | 移行の手間 | 規約と検査の追加 + サービスごとの小さなリファクタリング(§6) | 上の全部の移し替え + 同じリファクタリング |
-| リスク | 長く続くと「途中の形」が混ざる → **許可リストに期限を付け、残りを `make lint` が数える**ことで見える化する | 移行中に 2 つのリポジトリが並ぶ(どちらが正か迷う)。権限・CI・GitOps の設定漏れ |
+| リスク | 長く続くと「途中の形」が混ざる → **未移行のサービスの一覧を archcheck が持ち、残りの数を `make lint` が表示する**ことで見える化する | 移行中に 2 つのリポジトリが並ぶ(どちらが正か迷う)。権限・CI・GitOps の設定漏れ |
 
-**推奨: A**。B で得られる「最初から規約どおりの状態」は、A でも「規約と検査を先に入れ、違反を許可リストで凍結し、段階ごとに減らす」ことで得られる。
+**決定: A**(ユーザー回答 2026-10-11)。B で得られる「最初から規約どおりの状態」は、A でも「規約と検査を先に入れ、未移行のサービスを一覧で管理し、1 サービスずつ減らす」ことで得られる。
 これは古い仕組みを少しずつ置き換える Strangler Fig の考えを、リポジトリの中で小さく行うもの(https://martinfowler.com/bliki/StranglerFigApplication.html )。
 
-## 5. 規約の案(採用が決まったら ADR と `docs/coding-rules.md` に移す)
+## 5. 規約(S0 で ADR-0811 と `docs/coding-rules.md` に移す)
 
-### 5.1 Go(全サービス共通)
+### 5.1 Go(全サービス共通の形)
 
 ```
 services/<svc>/
-  cmd/<名前>/        起動・設定・組み立て(すべてを import してよい唯一の場所)
-  internal/<ドメイン>/  内側(例 balance・speed・judge)。engine と標準ライブラリだけ
-  internal/app/       ユースケース(§3.1 の条件を満たしたサービスだけ。案 1)。内側とポート(自分で宣言)だけ
-  internal/httpapi/   入口のアダプタ。生成型 ⇄ app/内側の型の変換・HTTP のエラー整形だけ
-  internal/store/ client/ master/ events/   出口のアダプタ。ポートを実装する
+  cmd/<名前>/              起動・設定・組み立て(すべてを import してよい唯一の場所)
+  internal/domain/         純粋な核。engine・services/internal/master・標準ライブラリだけ。HTTP・DB・NATS・時刻の取得を持たない
+  internal/app/            ユースケース層。1 つの操作の手順(検証 → 解決 → 計算 → 保存・通知)。
+                           必要なポート(インターフェース)をここで宣言する。小さなサービスでは薄くてよい
+  internal/adapters/
+    httpapi/               入口。生成型 ⇄ app の型の変換・HTTP のエラー整形だけ
+    store/                 DB(sqlc・TiDB・MySQL)。app のポートを実装
+    client/                他サービスの API の呼び出し。app のポートを実装
+    events/                NATS の発行・購読
+    master/ など            read model の読み込みほか、外部とのやりとり
+  internal/api/            oapi-codegen の生成物(場所は今のまま。§8 Q8)。外側として扱う
 ```
 
-検査する規則(`tools/archcheck` の初版):
+- **3 つのフォルダ(`domain`・`app`・`adapters`)は全サービスでそろえる**。核が engine そのものでサービス側に domain の中身が無い場合(gateway・calc の一部)や、
+  app がほとんど無い場合(gateway)も、フォルダを置き `doc.go` に「このサービスの核は engine」「転送だけなので app は薄い」のように役割を書く(§8 Q7)。
+- ポートは**使う側**で宣言する(app が使うものは app、domain が使うもの〈例 balance の `Provider`〉は domain)。
+- **新しい機能・新しいサービスは最初からこの形**で作る(例: コンボ計算。ブランチ `docs/combo-calc-spec` の `docs/plan/combo-calc.md`)。
+- 共有パッケージ(`services/internal/`)の扱い: `master` は内側(domain・app から使ってよい)。`api`・`calcevents`・`httpguard`・`httpmetrics`・`reqlog`・`version`・`dbmigrate` は外側(adapters・cmd だけが使う)。
 
-| ID | 規則 |
+**`tools/archcheck` が検査するのは向きだけ**(adapters → app → domain。内側は外側を import しない):
+
+| 置き場所 | import してはいけないもの |
 |---|---|
-| R1 | `engine/`(`engine/cmd` を除く)は `example.com/pokecalc/...` と I/O の標準パッケージ(`net/*`・`os`・`database/*`・`time` の現在時刻・`math/rand` 等)を import しない。※ `time`・`os` は関数単位の検査が要るので、初版は import の一覧で止め、例外は許可リストに理由を書く |
-| R2 | `services/<A>/...` は `services/<B>/...`(B ≠ A)を import しない(本番コード)。共有は `services/internal/` に置く |
-| R3 | `services/internal/...` は `services/<svc>/...` を import しない |
-| R4 | 内側(`internal/balance`・`internal/speed`・`internal/judge` など、サービスごとに 1 行で宣言)は、同じサービスの `httpapi`・`store`・`client`・`events`・`master`・`api`(生成型)を import しない |
-| R5 | `internal/app` は `httpapi`・`echo` を import しない |
-| R6 | 出口のアダプタ(`store`・`client`・`events`)は `httpapi` を import しない |
-| R7 | テスト専用の部品(`storetest`・`calctest`・`deploytest`)は本番コードから import しない(ADR-0105 の検査を一般化) |
+| `internal/domain` | 同じサービスの `internal/app`・`internal/adapters`・`internal/api`、外側の共有パッケージ、echo・DB ドライバ・NATS |
+| `internal/app` | 同じサービスの `internal/adapters`・`internal/api`、外側の共有パッケージ、echo・DB ドライバ・NATS |
+| `internal/adapters` | (制限なし。app・domain を使う) |
 
-許可リスト(初版で凍結する既知の違反): G1(record・team の migrate → `pokedex/db`)、G5(judge `speedeffects` → `client`)。
-G2・G3・G6・G7 は案 0 の規則(R1〜R7)には当たらない(httpapi に手順や検証があること自体は禁止しない)。ユースケース層を足すかどうかは、§3.1 の条件を `tools/archcheck` が**警告として表示**し(失敗にはしない)、そのレーンが判断する。
-許可リストの各行には **理由・担当レーン・解消する段階**を書き、`make lint` は行数を表示する(0 になったら許可リストの仕組みごと消す)。
+- **検査の対象は「形をそろえたサービス」から**。`tools/archcheck` は `internal/domain`・`internal/app`・`internal/adapters` がそろったサービスだけを検査し、
+  まだそろっていないサービスは「未移行の一覧」(初版は全サービス)に載せる。一覧は段階の PR ごとに 1 行ずつ減り、**一覧に無いサービス(= 新しいサービス)で形がそろっていなければ失敗**する。
+  `make lint` は一覧の残りの数を表示する。一覧が空になったら一覧の仕組みごと消す。
+- engine の純粋さ・サービス間の import の禁止(G1)は、この検査には入れない(CLAUDE.md の既存の規則とレビューで守る。G1 は S1 で直す)。検査を足すかは後で判断する(§9)。
 
 ### 5.2 Web
 
@@ -255,84 +234,86 @@ G2・G3・G6・G7 は案 0 の規則(R1〜R7)には当たらない(httpapi に�
 - 検査: `PokeCalcCoreTests` に「ソースを読んで import 行を確かめる」テストを 1 本(`swift test` で macOS でも走る。Xcode 不要)。
 - View は `ios/PokeCalc/` に置き、Service を直接呼ばず ViewModel を通す(今の形)。
 
-## 6. 段階の計画(推奨案)
+## 6. 段階の計画
 
-**原則**: 1 段階 = 1 サービス(または Web/iOS の 1 区切り)= 1 PR = そのサービスのレーン。振る舞いは変えない(既存のテスト・契約テスト・ゴールデン・e2e がそのまま通ることが受け入れ条件)。
-機能追加とリファクタリングを同じ PR に混ぜない。着手前に `gh pr list` でそのサービスを触っている PR が無いことを確かめ、あれば先にそれを入れてから始める。
+**原則**
+- **1 サービス = 1 PR = そのサービスのレーン**。大きいサービス(judge・calc・record・pokedex)から。
+- 振る舞いは変えない。既存のテスト・契約テスト・ゴールデン・e2e がそのまま通ることが受け入れ条件。機能追加と同じ PR に混ぜない。
+- **競合を避ける工夫**:
+  - 着手前に `gh pr list` でそのサービスを触っている PR が無いことを確かめる。あれば先にそれを入れてから始める。
+  - 着手する前日までに `docs/ai-shared/decisions/` に「<サービス> の形をそろえる PR を出す」と 1 件足し、他レーンが同じサービスを触る PR を控えられるようにする。
+  - ファイルの移動は `git mv` で行い、移動と中身の変更を同じコミットに混ぜない(同じ PR の中で「移動のコミット」→「app への寄せのコミット」)。git が名前の変更として追えるので、他のブランチは `git merge origin/main` で取り込める。
+  - PR は短く保ち、CI が緑になったらその日のうちにマージする(長く開いたままにしない)。
+  - Web の共有部品の移動(W1)は一時的な再エクスポートを残し、他レーンは自分の次の PR で import を差し替える。
+- 担当レーンが移すのは自分のサービスだけ。他レーンのファイルは触らない。
 
-**必ず行う段階(案 0)**
+| 段階 | 担当レーン | 内容 | 受け入れ条件(機械で確かめる) |
+|---|---|---|---|
+| **S0 規約・ADR・検査の骨組み** | データ(§8 Q2 の推奨。未回答) | ADR-0811(ヘキサゴナル採用)・`docs/coding-rules.md` に §5.1 の形と図・`tools/archcheck`(向きの検査と未移行の一覧。初版は全サービスが一覧に載る)・`make lint` に 1 行。**コードは動かさない** | `make lint` が通る。archcheck のテストで「domain → adapters の import」「app → adapters の import」「一覧に無いのに形がそろっていないサービス」がそれぞれ失敗する |
+| S1 越境の解消(G1) | データ → API | `RoleGrant`・プロビジョニングを `services/pokedex/db` から `services/internal/dbmigrate` へ。record・team の migrate の import を差し替える | record・team の `cmd/migrate` が `services/pokedex/...` を import しない。`make test`(`-tags mysql`・`tidb` を含む)が通る |
+| S2 judge | 判定 | `internal/judge`・`speedeffects` の純粋な部分 → `domain`。`outspeedAndKo` の手順 → `app`(`Pokedex`・`Calc` のポートを app で宣言)。`httpapi`・`client`・`httpguard`・`httpmetrics` → `adapters`。G3〜G5 を解消 | judge が未移行の一覧から消え、archcheck が通る。app のテストが HTTP なしで fake のポートで走る。既存の judge のテストが全件通る |
+| S3 calc | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
+| S4 record | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
+| S5 pokedex | データ | 検索の組み立て → `app`(正規化など純粋な部分は `domain`)。`httpapi`・`store`・`readtx`・`readmodel` の I/O → `adapters`。G7 を解消。importer は §8 Q6 | `-tags mysql` のテストが通る。storetest の import 検査(ADR-0105)を新しいパスに合わせる |
+| S6 team | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
+| S7 gateway | API | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
+| S8 balance | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
+| S9 speed | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
+| W0〜W2 Web | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js` に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
+| I0 iOS | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る |
 
-| 段階 | 担当レーン | 内容 | 受け入れ条件(機械で確かめる) | 競合を避ける工夫 |
-|---|---|---|---|---|
-| **S0 規約と検査の骨組み** | 横断(§8 Q4。既定はデータレーン〈運用の持ち主〉) | 横断 ADR(08xx)・`docs/coding-rules.md` に規約の節と構成図・`tools/archcheck`(R1〜R7 と、案 1 の条件の警告)・許可リスト・`make lint` に追加。**コードは動かさない** | `make lint` が通り、許可リストを 1 行消すと失敗する(検査が効いていることのテスト)。R1〜R7 それぞれに「違反の例で失敗する」テスト | 新しいファイルの追加と Makefile の lint に 1 行だけ。どのレーンのコードにも触らない |
-| S1 越境の解消(G1) | データ(`services/internal/dbmigrate`)→ API(record・team の migrate) | `RoleGrant`・プロビジョニングを `services/internal/dbmigrate` へ移す。`pokedex/db` からは同じ名前で参照を残す | 許可リストの G1 の 2 行が消える。`make test`(`-tags mysql`・`tidb` を含む)が通る | データレーンの PR で移動と互換の参照を入れ、API レーンが record・team の import を差し替える(2 PR。順番が逆でも壊れない) |
-| S2 向きの逆転の解消(G5) | 判定 | `speedeffects` が `client.MasterEffects` ではなく自分の型を受け取り、変換は `client` 側へ | 許可リストの G5 が消える。judge のテストが全件通る | 判定レーンだけのディレクトリ。数ファイルの変更 |
-| S3 balance・speed | タイプバランス・素早さ | 内側の宣言を archcheck に 1 行(既に合格の形) | 変更なしで R4 が通る | 設定 1 行だけ |
-| W0 Web の規則 | Web | `eslint.config.js` に §5.2 の規則と例外一覧(W1〜W5) | `npm run lint`(eslint + prettier)が通る。例外一覧を消すと失敗する | 設定ファイルだけ |
-| W1 Web の共有部品 | Web(移動)→ 判定・素早さ・調整・構築(import の差し替え) | `screens/` の共有部品(`SpeciesSearchField`・`MovePicker` ほか)を `ui/`(または `shared/`)へ移し、`screens/` 側に**一時的な再エクスポート**を残す | 例外一覧の W1 が消える。Playwright・vitest が通る | 再エクスポートがあるので、他レーンは自分の次の PR で import を差し替えればよい(一斉に直さない)。全部差し替わったら再エクスポートを消す |
-| W2 Web の残り | Web | W2〜W5(`api → app`・`i18n → favorites`・`domain → api.gen`・`favorites → record`) | 例外一覧が空 | 1 PR |
-| I0 iOS の規則 | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る | テストの追加だけ |
+**順番の理由**: S0 で「新しいサービス・新しい機能は最初から形がそろう」状態を先に作る(コンボ計算などはここから)。S1 は小さく、S4・S6 の前提。
+大きいサービスは、手順がハンドラに一番溜まっていて担当が 1 レーンで閉じる judge で型を決め、calc・record・pokedex がそれをなぞる。
+小さいサービス(team・gateway・balance・speed)は形をそろえるだけで、ほぼ移動だけになる。Web・iOS は Go と独立に進められる(担当レーンが違うので同時でよい)。
 
-**条件を満たしたら行う段階(案 1 の拡張。計画の日程には入れない)**
+**レーンへの影響のまとめ**: S0 以後、全レーンの PR は `make lint` の archcheck を通る必要がある(移行済みのサービスでは向きの違反が失敗、未移行のサービスは一覧で通る、新しいサービスは最初から形が必要)。
+各レーンが自分のサービスの段階を 1 PR ずつ行う。
 
-条件(§3.1): 1 つのハンドラ関数が他サービスのクライアント・store・publisher のうち 2 つ以上を呼ぶ、または `internal/httpapi` の 1 ファイルが 600 行を超える。`tools/archcheck` が警告で知らせ、**そのレーンが次にそのサービスを触る PR の前に、別の PR で**行う。
+## 7. ADR の番号
 
-| 段階 | 担当レーン | いまの状態 | 内容 | 受け入れ条件 |
-|---|---|---|---|---|
-| C1 judge | 判定 | **条件を満たす**(`outspeed.go` 944 行・pokedex と calc を順に呼ぶ) | `internal/app`(`OutspeedAndKo`)を作り手順を移す。`Pokedex`・`Calc` のポートを app に宣言し `client` が実装(G3・G4) | 警告が消える。app のテストが HTTP なしで fake のポートで走る。既存の `httpapi` のテストが全件通る |
-| C2 calc | API | 境界線上(`server.go` 482 行・`adjust.go` 468 行。store と publisher を呼ぶ) | `internal/app`(計算・一括・逆算・調整)。イベント発行は app のポート経由(G2・G10) | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。adjust と calc を 2 PR に分けてよい |
-| C3 pokedex | データ | 境界線上(`search.go` 595 行で 600 行の手前。外部呼び出しは store だけ。ただし検索の組み立てが HTTP 層にある) | 検索の組み立てを `readmodel` 側か `internal/app` へ。httpapi は sqlc を直接呼ばない(G7) | `-tags mysql` のテストが通る。importer は対象外 |
-| C4 record | API | 条件を満たす(`favorites.go` 624 行)。SP 上限などの検証が HTTP 層にある(G6) | 検証の規則をドメイン側の関数へ。薄い CRUD は今のまま | favorites の検証のテストが HTTP なしで走る。**M2 の必須(ADR-0137)が終わってから** |
-
-**順番の理由**: S0 で「今より悪くならない」状態を先に作る(以後の全レーンの PR が自動で検査される)。S1・S2 は規約にはっきり反する所で、小さい。
-Web・iOS は Go と独立に進められる(担当レーンが違うので同時でよい)。条件つきの段階はレーンの都合で行い、どの段階もほかの段階を待たない。
-
-**レーンへの影響のまとめ**: S0 以後、全レーンの PR は `make lint` の archcheck を通る必要がある(新しい違反だけが失敗し、既存の違反は許可リストで通る。案 1 の条件は警告だけ)。
-各レーンが直すのは自分のサービスの段階だけで、他レーンのファイルは触らない(W1 の import 差し替えは各レーンが自分の次の PR で行う)。
-
-## 7. ADR の番号(採用が決まってから書く)
-
-- **横断の ADR(方式の採用・規約・archcheck)**: 運用・横断の帯 `08xx`。2026-10-11 の時点で main の最新は ADR-0810、リモートのブランチに `08xx` の新規 ADR は無い → **ADR-0811 の予定**。
+- **ADR-0811: ヘキサゴナル(ポートとアダプタ)の採用**(横断の帯 `08xx`。S0 で書く)。2026-10-11 の時点で main の最新は ADR-0810、リモートのブランチに `08xx` の新規 ADR は無い。
   書く直前に `ls docs/adr | grep '^08'` と、`git branch -r` の各ブランチで `git diff --name-only --diff-filter=A origin/main...<ブランチ> -- docs/adr` を見て重複を確かめる(`0804` が 2 つある前例があるため)。
-- **段階ごとの ADR**: 各レーンの帯から、そのレーンの最新の次(COORDINATION.md の表)。2026-10-11 時点の目安:
-  データ 0179〜(main 最新 0178)/ API 0252〜(0251)/ Web 0356〜(0355)/ タイプバランス 0423〜(0421 + 進行中 0422)/ iOS 0531〜(進行中 0529・0530)/ 素早さ 0610〜(0609)/ 判定 0715〜(0714)。
-  小さな段階(S2・S3・W2・I0 など)は ADR を作らず、横断 ADR の「段階の記録」に 1 行足すだけでもよい(§8 Q5)。
+- 各サービスの移行で設計の判断が要るとき(例: calc の検証をどこまで domain に寄せるか)は、そのレーンの帯から番号を取る(COORDINATION.md の表)。2026-10-11 時点の目安:
+  データ 0179〜 / API 0252〜 / Web 0356〜 / タイプバランス 0423〜(進行中 0422)/ iOS 0531〜(進行中 0529・0530)/ 素早さ 0610〜 / 判定 0715〜。
+  判断が要らない移行は ADR を作らず、ADR-0811 の「段階の記録」に 1 行足す(§8 Q9)。
 
-## 8. 未決の質問(ユーザーが決めること。推奨を先頭に)
+## 8. 未決の質問(推奨を先頭に)
 
-1. **A か B か**
-   - (推奨)A: このリポジトリで段階的に。
-   - B: 新リポジトリへ移行(§4 の費用。進行中の PR を全部止める)。
-2. **Go の方式**
-   - (推奨)案 0「現状維持 + 明文化」。直すのは G1・G5 だけ。ユースケース層は条件を満たしたサービスだけ、そのレーンの都合で(C1〜C4)。
-   - 案 1 を計画として: judge・calc・pokedex・record のユースケース層を日程に入れて進める(1 操作の手順を追いやすくすることを費用より優先する場合)。
-   - 案 0 から条件つきの拡張も外す(明文化と検査だけ。judge の 944 行のハンドラなどは残る)。
-   - 案 2〜6(クリーンアーキテクチャ一律・レイヤード・バーティカルスライス・モジュラーモノリス・DDD)。§3.1 の比較でどれも ✕ がある。
-3. **Go の機械検査の道具**
-   - (推奨)自前の `tools/archcheck`(go/parser。依存追加なし。前例あり)。
-   - go-arch-lint(YAML で宣言。新しい道具を固定版で導入)。
-   - golangci-lint + depguard(lint の仕組みごと置き換え)。
-4. **S0(規約と検査の骨組み)をどのレーンが持つか**
+1. **A か B か** — **決定済み: A(このリポジトリを段階的に改造)**(ユーザー回答 2026-10-11)。
+2. **S0(規約・ADR・検査の骨組み)をどのレーンが持つか**(未回答)
    - (推奨)データレーン(M4・運用・横断の持ち主。COORDINATION.md)。
    - 新しく「アーキテクチャ」レーンを作る(`state/` と作業ディレクトリが 1 つ増える)。
    - API レーン(Go サービスの大半を持つ)。
-5. **段階ごとの ADR**
-   - (推奨)横断 ADR(0811)1 本 + 構造が変わる段階(S1・W1・C1〜C4)だけレーンの帯で ADR。
-   - すべての段階で ADR。
-   - 横断 ADR 1 本だけ(段階は PR と plan で追う)。
-6. **iOS のターゲット分割(I1)**
-   - (推奨)今はしない。検査のテスト(I0)で足り、分割は iOS の大きな作業の切れ目で改めて判断する。
-   - S0 と同じ時期に分ける。
-7. **M2 との優先順位**
-   - (推奨)必ず行う段階(S0〜S3・W0〜W2・I0)は M2 と並行(他レーンを止めない小さな PR)。条件つきの C2・C4 は M2 の必須が終わってから。
-   - M2 の必須が終わるまで全段階を始めない。
-   - M2 より先に全段階を進める。
-8. **許可リストの期限**
-   - (推奨)期限は日付ではなく「解消する段階」で書き、段階の PR で必ず消す。行数を `make lint` が表示する。
-   - 日付の期限を付け、過ぎたら `make lint` を失敗させる(放置は防げるが、関係ないレーンの PR が突然赤くなる)。
+3. **Go の機械検査の道具**(未回答)
+   - (推奨)自前の `tools/archcheck`(go/parser。依存追加なし。前例あり)。
+   - go-arch-lint(YAML で宣言。新しい道具を固定版で導入)。
+   - golangci-lint + depguard(lint の仕組みごと置き換え)。
+4. **大きいサービスの中の順番**(未回答)
+   - (推奨)judge → calc → record → pokedex(手順が一番溜まっていて 1 レーンで閉じる judge で型を決める)。
+   - calc → judge → record → pokedex(利用者に一番近い計算から)。
+   - pokedex → calc → judge → record(マスタの提供元から)。
+5. **record・team の移行と M2(必須。ADR-0137)の関係**(未回答)
+   - (推奨)M2 の PR が record・team に無い時に行う(M2 を止めず、移行も後回しにしない)。
+   - M2 の必須が終わるまで record・team の移行を後ろに回す(「大きいサービスから」の順は崩れる)。
+   - M2 より先に移行する。
+6. **バッチの置き場所(pokedex の importer・record/team の失効ジョブ)**(未回答)
+   - (推奨)失効ジョブは各サービスの `app`(手順)+ `adapters/store`。importer(`services/pokedex/importer`)は今回の対象外にし、S5 の後で同じ形にするかを判断する。
+   - importer も S5 で同時に移す(PR が大きくなる)。
+7. **domain・app の中身が無いサービスのフォルダ**(未回答)
+   - (推奨)フォルダを置き、`doc.go` に役割を書く(形が全サービスでそろい、archcheck の判定も単純)。
+   - 中身が無ければフォルダを置かない(archcheck に例外を持たせる)。
+8. **oapi-codegen の生成物(`internal/api`)の場所**(未回答)
+   - (推奨)今のまま(`scripts/ensure-gen.sh`・`.gitignore`・Makefile の生成先を動かさない。外側として扱う)。
+   - `internal/adapters/httpapi/api` へ移す(生成の設定と共有ファイルを全レーンで変える)。
+9. **サービスごとの ADR**(未回答)
+   - (推奨)ADR-0811 の 1 本 + 判断が要る移行だけレーンの帯で ADR。判断の要らない移行は 0811 の「段階の記録」に 1 行。
+   - サービスごとに必ず ADR。
+10. **iOS のターゲット分割**(未回答)
+    - (推奨)今はしない。テスト(I0)で足り、分割は iOS の大きな作業の切れ目で改めて判断する。
+    - S0 と同じ時期に分ける。
 
 ## 9. この調査で見ていないこと
 
 - `apps/wishlist`(別アプリ)・`tools/`(importer・golden)・k8s の構成は対象外。
-- `time.Now()`・乱数などの関数単位の純粋さ(R1 の注記)は import だけでは検査できない。必要なら S0 で `go/ast` の呼び出し検査を足すかを決める。
-- 案 1 の条件(呼ぶポートの数・600 行)の値は現状からの見積もり。S0 の ADR で決め直す。
+- engine の純粋さ(`time.Now()`・乱数などの関数単位)とサービス間の import の禁止は、archcheck に入れていない(§5.1)。入れるかは全サービスの移行の後に判断する。
+- 移行によるパスの変更で `docs/impl/`(実装の対応表)の記述が古くなる。各サービスの移行 PR で該当行を直す。
