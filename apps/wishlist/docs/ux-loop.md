@@ -29,6 +29,7 @@
 | 魂ウェブ `tamashiiweb.com/item/<番号>/` | og:image(商品画像) | og:title から ` | 商品一覧 | 魂ウェブ` を除く | 名前の頭(S.H.Figuarts / METAL BUILD / ROBOT魂 など) |
 | ポケモンセンターオンライン `/<JAN>.html` | og:image(商品画像) | og:title から ` ｜【公式】ポケモンセンターオンライン` を除く | ホスト |
 | バンダイ ホビーサイト `bandai-hobby.net/item/<番号>/` | og:image はサイト共通の画像。商品画像は本文の `.pg-products__sliderMain` の最初の `img` | og:title から `｜バンダイ ホビーサイト` を除く | ホスト(ガンプラ) |
+| (バンダイ ホビーサイトの注意) | 本文の画像は期限付きの署名 URL。ページ自体がキャッシュされていて、取得した時点で期限切れのことがある(2026-10-11 に 403 を確認)。取れなければ写真で登録してもらう | | |
 | 駿河屋 `suruga-ya.jp/product/detail/<番号>` | 商品ページは Cloudflare の確認画面で読めない(回避しない)。画像は `database/photo.php?shinaban=<番号>&size=l` で取れる | サーバーからは取れない。iOS の共有シートからはページから読む | 名前 |
 | プレミアムバンダイ `p-bandai.jp/item/…` | ページに OGP が無い | 取れない | — |
 
