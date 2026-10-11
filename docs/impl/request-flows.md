@@ -27,7 +27,7 @@ sequenceDiagram
 
 | # | 場所 | 内容 | 失敗時 |
 |---|---|---|---|
-| 1 | `deploy/k3d.yaml`(`8080:80` loadbalancer)→ `deploy/k8s/base/gateway/ingress.yaml`(path `/` → svc `gateway`) | ホスト 8080 → Traefik :80 → gateway Service :80 → Pod :8080 | 接続不可 = クラスタ/ポート問題 |
+| 1 | `deploy/k3d.yaml`(`127.0.0.1:8080:80` loadbalancer)→ `deploy/k8s/base/gateway/ingress.yaml`(path `/` → svc `gateway`) | ホスト 8080 → Traefik :80 → gateway Service :80 → Pod :8080 | 接続不可 = クラスタ/ポート問題 |
 | 2 | `gw/server.go:106` `serve` | Origin 判定・プリフライトは 204 で終了(`:112`) | — |
 | 3 | `gw/server.go:125`、`routing.go:81,95` | `.`/`..`・連続スラッシュを 404 `not_found`(上流へ送らない) | 404 |
 | 4 | `gw/routing.go:59` `matchRoute` | `/api/calc` と `/api/calc/*` → `routeCalc`。未知パスは 404(ヘッダ無しでも) | 404 `not_found` |

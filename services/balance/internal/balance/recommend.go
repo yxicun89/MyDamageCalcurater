@@ -78,10 +78,13 @@ type AbilityOption struct {
 
 // Recommendation is the TB5 result (ADR-0401 §6).
 type Recommendation struct {
-	DefenseHoles   []TypeID
-	OffenseHoles   []TypeID
-	Candidates     []TypeCandidate
-	AbilityOptions []AbilityOption
+	// SkewedAttackTypes are the attack types the party is already lopsided against (ADR-0422 §1):
+	// weak members minus resisting/immune members is 2 or more. Candidates weak to any of them are left out.
+	SkewedAttackTypes []TypeID
+	DefenseHoles      []TypeID
+	OffenseHoles      []TypeID
+	Candidates        []TypeCandidate
+	AbilityOptions    []AbilityOption
 }
 
 // RecommendTypes finds the party's holes and the type sets that fill them (ADR-0401 §2〜4).
@@ -117,7 +120,7 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 
 	allTypes := AllTypes()
 
-	defenseHoles, err := recommendDefenseHoles(chart, members)
+	defenseHoles, skewed, err := recommendDefenseHoles(chart, members)
 	if err != nil {
 		return Recommendation{}, err
 	}
@@ -126,7 +129,7 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 		return Recommendation{}, err
 	}
 
-	candidates, err := recommendCandidates(chart, defenseHoles, offenseHoles, allTypes)
+	candidates, err := recommendCandidates(chart, defenseHoles, offenseHoles, skewed, allTypes)
 	if err != nil {
 		return Recommendation{}, err
 	}
@@ -158,10 +161,11 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 	}
 
 	return Recommendation{
-		DefenseHoles:   defenseHoles,
-		OffenseHoles:   offenseHoles,
-		Candidates:     candidates,
-		AbilityOptions: abilityOptions,
+		SkewedAttackTypes: skewed,
+		DefenseHoles:      defenseHoles,
+		OffenseHoles:      offenseHoles,
+		Candidates:        candidates,
+		AbilityOptions:    abilityOptions,
 	}, nil
 }
 
@@ -172,24 +176,32 @@ func RecommendTypes(chart TypeChartProvider, members []Combatant, catalog []Cata
 // Resist already includes quad_resist and never immunities, so entry.Resist == 0 &&
 // entry.Immune == 0 is "no member resists or is immune to it"). Every member × attack type is
 // evaluated, so a broken type chart is always an error (the previous per-type loop could stop early).
-func recommendDefenseHoles(chart TypeChartProvider, members []Combatant) ([]TypeID, error) {
+//
+// It also returns the skewed attack types (ADR-0422 §1): weak - (resist + immune) >= 2, from the same
+// aggregation (Weak includes quad weak; Resist never includes immunities, so Immune is added).
+func recommendDefenseHoles(chart TypeChartProvider, members []Combatant) (holes, skewed []TypeID, err error) {
 	defenseMembers := make([]Member, len(members))
 	for i, member := range members {
 		defenseMembers[i] = Member{PokemonID: member.PokemonID, Types: member.Types, Ability: member.Ability}
 	}
 	analysis, err := AnalyzeDefense(chart, defenseMembers)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	var holes []TypeID
 	for _, entry := range analysis.TeamSummary {
 		if entry.Resist == 0 && entry.Immune == 0 {
 			holes = append(holes, entry.AttackType)
 		}
+		if entry.Weak-(entry.Resist+entry.Immune) >= skewThreshold {
+			skewed = append(skewed, entry.AttackType)
+		}
 	}
-	return holes, nil
+	return holes, skewed, nil
 }
+
+// skewThreshold is how many more members must be weak than resistant for an attack type to count as skewed (ADR-0422 §1).
+const skewThreshold = 2
 
 // recommendOffenseHoles finds every single defense type the party's own moves cannot hit at
 // x1 or more (ADR-0401 §2), by reusing TB2's team aggregation (AnalyzeCoverage) instead of
@@ -249,9 +261,25 @@ func allRecommendationCombos(allTypes []TypeID) [][]TypeID {
 // recommendCandidates scores every type-set combination against the holes (ADR-0401 §3) and
 // returns the ones that fill at least one hole, in the final order (candidates without any
 // hole are left out before the limit is applied by the caller).
-func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, allTypes []TypeID) ([]TypeCandidate, error) {
+func recommendCandidates(chart TypeChartProvider, defenseHoles, offenseHoles, skewed, allTypes []TypeID) ([]TypeCandidate, error) {
 	var candidates []TypeCandidate
 	for _, combo := range allRecommendationCombos(allTypes) {
+		// ADR-0422 §1: never recommend a type set that is weak to an attack type the party is already skewed against.
+		weakToSkewed := false
+		for _, attack := range skewed {
+			result, err := CalculateDefense(chart, attack, combo)
+			if err != nil {
+				return nil, err
+			}
+			if result.Multiplier >= MultiplierDouble {
+				weakToSkewed = true
+				break
+			}
+		}
+		if weakToSkewed {
+			continue
+		}
+
 		var defenseCovered []TypeID
 		for _, attack := range defenseHoles {
 			result, err := CalculateDefense(chart, attack, combo)

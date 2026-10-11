@@ -15,12 +15,19 @@ import type { MemberDraft } from "./teamMember";
 /** 入力の変更から送るまでの待ち(ADR-0421 §2)。 */
 export const TEAM_BALANCE_DEBOUNCE_MS = 300;
 
+/** おすすめタイプの上位の数(ADR-0422 §1)。 */
+export const TEAM_BALANCE_RECOMMENDATIONS_LIMIT = 5;
+
 export interface TeamBalanceSectionProps {
   readonly drafts: readonly MemberDraft[];
   readonly client: BalanceClient;
   readonly master: MasterData;
   readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly resolutions: SpeciesResolutions;
+  /** おすすめのポケモンのタイルを押したとき(構築の最初の空き枠に入れる。TeamMemberEditor が持つ)。 */
+  readonly onPickPokemon: (speciesKey: string) => void;
+  /** 空き枠があるか(無ければタイルは押せない)。 */
+  readonly canPick: boolean;
   /** テストで待ちを短くするための口(既定は 300ms)。 */
   readonly debounceMs?: number;
 }
@@ -31,6 +38,8 @@ export function TeamBalanceSection({
   master,
   masterSearch,
   resolutions,
+  onPickPokemon,
+  canPick,
   debounceMs = TEAM_BALANCE_DEBOUNCE_MS,
 }: TeamBalanceSectionProps): ReactNode {
   const members = drafts.map(balanceInputFromDraft);
@@ -42,6 +51,7 @@ export function TeamBalanceSection({
     masterSearch,
     movesFor: resolutions.movesFor,
     debounceMs,
+    recommendationsLimit: TEAM_BALANCE_RECOMMENDATIONS_LIMIT,
   });
   const available = isBalanceAvailable(master, masterSearch);
   const hasMember = members.some((member) => member.speciesKey !== "");
@@ -59,6 +69,8 @@ export function TeamBalanceSection({
           master={master}
           speciesFor={resolutions.speciesFor}
           abilitiesFor={resolutions.abilitiesFor}
+          onPickPokemon={onPickPokemon}
+          canPick={canPick}
         />
       )}
     </section>

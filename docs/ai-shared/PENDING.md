@@ -23,6 +23,7 @@
 | iOS のシミュレータ・実機での見た目確認と `make ios-test`。Xcode の署名チーム・実機インストール | state/ios.md・state/type-balance.md Next ④ | 2026-09-26 | iOS(ユーザー) |
 | main のブランチ保護の有効化(PR 必須・CI 必須・force push と削除の禁止。AI の自動モードが CI 設定の変更として止めたため人間が実行。他の #243 の設定〈Dependabot・マージ後のブランチ削除・squash/rebase の無効化〉は 2026-10-03 に適用済み) | issue #243・decisions/2026-10-03-data-github-settings-243.md | 2026-10-03 | データ(ユーザー) |
 | リポジトリを非公開に戻すか(戻すなら先に Argo CD へ GitHub の認証〈PAT〉を登録しないと Argo CD が取得できなくなる。非公開の無料プランではブランチ保護が使えない) | issue #328・#243 | 2026-10-03 | データ(ユーザー) |
+| ソフトウェアアーキテクチャの採用の残りの判断(ヘキサゴナル採用・A は決定済み。S0 の担当レーン・検査の道具・移行の順番ほか 9 問) | docs/plan/architecture-adoption.md §8 | 2026-10-11 | 全レーン(ユーザー) |
 
 ## 既定案で進行中(ユーザー未確認)
 

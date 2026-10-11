@@ -216,6 +216,23 @@
   color: var(--info);
 }
 
+/* ADR-0422 §3: 耐性・いまひとつは水色系、無効は灰(緑は相性に使わない)。 */
+.balance-cell--resist {
+  background-color: var(--matchup-resist-soft);
+}
+
+.balance-cell--resist .ui-icon {
+  color: var(--matchup-resist);
+}
+
+.balance-cell--immune {
+  background-color: var(--matchup-immune-soft);
+}
+
+.balance-cell--immune .ui-icon {
+  color: var(--matchup-immune);
+}
+
 .balance-cell--plain .ui-icon {
   color: var(--text-secondary);
 }
@@ -271,4 +288,29 @@
 .balance-screen__threat th,
 .balance-screen__threat td {
   white-space: nowrap;
+}
+
+/* おすすめのポケモンのタイル(タップで構築の空き枠に入れる)。 */
+.balance-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.balance-pick__tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.balance-pick__tile {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.balance-pick__reason {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }

@@ -28,6 +28,7 @@
 |---|---|
 | [overview.md](overview.md) | プロジェクト概要 |
 | [architecture.md](architecture.md) | アーキテクチャ全体図 |
+| [architecture-comparison.md](architecture-comparison.md) | ソフトウェアアーキテクチャの比較(ヘキサゴナル・クリーン・レイヤード等のこのプロジェクトでの利点と欠点) |
 | [requirements.md](requirements.md) | 要件の正 |
 | [plan.md](plan.md) | 進行状況とタスクの索引(作業の起点)。タスクの行は区画ごとのファイル [plan/](plan/)(ADR-0172) |
 | [plan-archive.md](plan-archive.md) | 完了したタスクの経過・解決済みのブロッカー(plan.md から移した記録) |
@@ -52,6 +53,16 @@
 | [runbooks/speed.md](runbooks/speed.md) | speed(ローカル k3d) |
 | [runbooks/ios.md](runbooks/ios.md) | iOS(シミュレータ・モック) |
 | [runbooks/ios-device-install.md](runbooks/ios-device-install.md) | iOS 実機インストール(Tailscale serve。人間の作業) |
+
+## 別アプリ「欲しいものリスト」(apps/wishlist/)
+
+ダメージ計算とは別のアプリ。文書はアプリの中に置いている。
+
+| 文書 | 内容 |
+|---|---|
+| [../apps/wishlist/README.md](../apps/wishlist/README.md) | 何をするアプリか・構成・文書の入口 |
+| [../apps/wishlist/CLAUDE.md](../apps/wishlist/CLAUDE.md) | 仕様の正(画面・目安価格・データモデル・API・フェーズ) |
+| [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) | 動作確認の手順 |
 
 ## Claude Code / Codex 共有(ai-shared/)
 
