@@ -6,9 +6,13 @@
 //   - 先に動く側/後に動く側は ul(aria-label = 通常は速い側/遅い側、トリックルームは先に動く側/後に動く側)
 //   - 近傍の段: data-testid="neighbor-before" / "neighbor-after"(data-speed を持つ)、
 //     自分: data-testid="neighbor-self"(「自分」バッジの文字を含む)
+//   - G-05(I-web-13e): 近傍の段・自分は小さなカード(.speed-neighbor__card。画像かエンブレム + 実数値の大きい数字 + 名前)。
+//     自分のカードは「自分」のバッジ(アイコン付き)
 //   - 端の合計行: data-testid="neighbor-total-before" / "neighbor-total-after"
 
 import { speedScreenText } from "../i18n/ja";
+import { PokemonIcon } from "../images/PokemonIcon";
+import { Icon } from "../ui/Icon";
 import { buildNeighborhood, type NeighborTier, type NeighborTierInput } from "./speedNeighborhood";
 
 export interface SpeedNeighborhoodProps {
@@ -19,9 +23,30 @@ export interface SpeedNeighborhoodProps {
   readonly trickRoom: boolean;
 }
 
-function TierItem({ tier, testId }: { readonly tier: NeighborTier; readonly testId: string }) {
+/** 段の先頭のポケモン(画像かエンブレム用)。 */
+function leadOf(tiers: readonly NeighborTierInput[], speed: number) {
+  return tiers.find((t) => t.speed === speed)?.entries[0];
+}
+
+function CardIcon({ lead }: { readonly lead: ReturnType<typeof leadOf> }) {
+  if (lead?.pokemonId === undefined) {
+    return null;
+  }
+  return <PokemonIcon speciesKey={lead.pokemonId} typeId={lead.types?.[0]} />;
+}
+
+function TierItem({
+  tier,
+  testId,
+  lead,
+}: {
+  readonly tier: NeighborTier;
+  readonly testId: string;
+  readonly lead: ReturnType<typeof leadOf>;
+}) {
   return (
-    <li className="speed-neighbor__tier" data-testid={testId} data-speed={tier.speed}>
+    <li className="speed-neighbor__tier speed-neighbor__card" data-testid={testId} data-speed={tier.speed}>
+      <CardIcon lead={lead} />
       <span className="speed-neighbor__speed">{tier.speed}</span>
       <span className="speed-neighbor__names">
         {tier.names.join(speedScreenText.entrySeparator)}
@@ -53,12 +78,23 @@ export function SpeedNeighborhood({ tiers, ownSpeed, trickRoom }: SpeedNeighborh
               aria-label={trickRoom ? t.neighborhoodBeforeListLabel : t.neighborhoodFasterListLabel}
             >
               {n.before.map((tier) => (
-                <TierItem key={tier.speed} tier={tier} testId="neighbor-before" />
+                <TierItem
+                  key={tier.speed}
+                  tier={tier}
+                  testId="neighbor-before"
+                  lead={leadOf(tiers, tier.speed)}
+                />
               ))}
             </ul>
           )}
-          <div className="speed-neighbor__self" data-testid="neighbor-self">
-            <span className="speed-neighbor__badge">{t.neighborhoodSelfBadge}</span>
+          <div
+            className="speed-neighbor__self speed-neighbor__card speed-neighbor__card--self"
+            data-testid="neighbor-self"
+          >
+            <span className="speed-neighbor__badge speed-badge speed-badge--self ui-badge">
+              <Icon name="speed" size={12} />
+              {t.neighborhoodSelfBadge}
+            </span>
             <span className="speed-neighbor__speed">{n.ownSpeed}</span>
             {n.tie === null ? (
               <span className="speed-neighbor__names">{t.neighborhoodBoundaryLabel}</span>
@@ -77,7 +113,12 @@ export function SpeedNeighborhood({ tiers, ownSpeed, trickRoom }: SpeedNeighborh
               aria-label={trickRoom ? t.neighborhoodAfterListLabel : t.neighborhoodSlowerListLabel}
             >
               {n.after.map((tier) => (
-                <TierItem key={tier.speed} tier={tier} testId="neighbor-after" />
+                <TierItem
+                  key={tier.speed}
+                  tier={tier}
+                  testId="neighbor-after"
+                  lead={leadOf(tiers, tier.speed)}
+                />
               ))}
             </ul>
           )}

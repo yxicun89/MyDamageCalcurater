@@ -14,7 +14,12 @@ export const DEFAULT_TIE_NAMES = 4;
 /** tiers の最小限の形(speed.gen の SpeedTier が満たす)。 */
 export interface NeighborTierInput {
   readonly speed: number;
-  readonly entries: readonly { readonly nameJa: string }[];
+  readonly entries: readonly {
+    readonly nameJa: string;
+    /** 小さなカードの画像・エンブレム用(パネルの描画だけが使う。並びの切り出しは見ない)。 */
+    readonly pokemonId?: string;
+    readonly types?: readonly string[];
+  }[];
 }
 
 export interface NeighborhoodOptions {

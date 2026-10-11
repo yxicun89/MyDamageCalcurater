@@ -17,7 +17,12 @@ import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from 
 import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
+import { uiText } from "../i18n/ui";
 import { PokemonImage } from "../images/PokemonImage";
+import { ToggleChip } from "../screens/ToggleChip";
+import { Icon } from "../ui/Icon";
+import { PokemonCard } from "../ui/PokemonCard";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import "./SpeedScreen.css";
 import { SpeedNeighborhood } from "./SpeedNeighborhoodPanel";
 import type { components } from "./speed.gen";
@@ -62,13 +67,6 @@ interface Completed<T> {
 }
 
 /** key が今の入力(currentKey)と一致する応答が届いていれば成功/失敗、まだなら loading にする。 */
-/** チップの見た目(ADR-0334)。選択・チェック中は ui-chip--selected を足す。 */
-function chipClass(selected: boolean, extra?: string): string {
-  return ["ui-chip", selected ? "ui-chip--selected" : "", extra ?? ""]
-    .filter((part) => part !== "")
-    .join(" ");
-}
-
 function deriveRequestState<T>(currentKey: string, completed: Completed<T> | null): RequestState<T> {
   if (completed === null || completed.key !== currentKey) {
     return { status: "loading" };
@@ -353,17 +351,23 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
   const positionState: RequestState<Schemas["PositionResponse"]> =
     request === null ? { status: "idle" } : deriveRequestState(requestKey, completedPosition);
 
-  const modeGroupName = useId();
-  const presetGroupName = useId();
-  const natureGroupName = useId();
   const filterMinimumNoticeId = useId();
   const spErrorId = useId();
   const rankErrorId = useId();
   const rawErrorId = useId();
 
+  const selectedPokemon =
+    pokemonState.status === "success"
+      ? pokemonState.value.pokemon.find((pokemon) => pokemon.pokemonId === self.pokemonId)
+      : undefined;
+
   return (
     <div className="speed-screen">
       <section className="ui-card speed-table" aria-label={speedScreenText.tableRegionLabel}>
+        <h2 className="speed-heading">
+          <Icon name="speed" />
+          {speedScreenText.tableRegionLabel}
+        </h2>
         <div
           role="group"
           aria-label={speedScreenText.filterGroupLabel}
@@ -374,20 +378,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             const checked = selectedPresets.has(id);
             const lastOne = checked && selectedPresets.size === 1;
             return (
-              <label key={id} className={chipClass(checked, "speed-table__filter-option")}>
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  aria-disabled={lastOne}
-                  aria-describedby={lastOne ? filterMinimumNoticeId : undefined}
-                  onChange={() => {
-                    // aria-disabled はキーボード操作を止めないため、切り替え側(toggleFilterPreset)にも
-                    // 「最後の1つは外せない」ガードを持たせている(二重のガード)。
-                    toggleFilterPreset(id);
-                  }}
-                />
-                {speedPresetText[id]}
-              </label>
+              <ToggleChip
+                key={id}
+                type="checkbox"
+                label={speedPresetText[id]}
+                checked={checked}
+                ariaDisabled={lastOne}
+                describedBy={lastOne ? filterMinimumNoticeId : undefined}
+                className="speed-table__filter-option"
+                onChange={() => {
+                  // aria-disabled はキーボード操作を止めないため、切り替え側(toggleFilterPreset)にも
+                  // 「最後の1つは外せない」ガードを持たせている(二重のガード)。
+                  toggleFilterPreset(id);
+                }}
+              />
             );
           })}
           {selectedPresets.size === 1 && (
@@ -398,26 +402,20 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         </div>
 
         <div role="group" aria-label={speedScreenText.fieldGroupLabel} className="speed-table__filter">
-          <label className={chipClass(tableTailwind, "speed-table__filter-option")}>
-            <input
-              type="checkbox"
-              checked={tableTailwind}
-              onChange={(event) => {
-                setTableTailwind(event.target.checked);
-              }}
-            />
-            {speedScreenText.tableTailwindLabel}
-          </label>
-          <label className={chipClass(trickRoom, "speed-table__filter-option")}>
-            <input
-              type="checkbox"
-              checked={trickRoom}
-              onChange={(event) => {
-                setTrickRoom(event.target.checked);
-              }}
-            />
-            {speedScreenText.trickRoomLabel}
-          </label>
+          <ToggleChip
+            type="checkbox"
+            label={speedScreenText.tableTailwindLabel}
+            checked={tableTailwind}
+            className="speed-table__filter-option"
+            onChange={setTableTailwind}
+          />
+          <ToggleChip
+            type="checkbox"
+            label={speedScreenText.trickRoomLabel}
+            checked={trickRoom}
+            className="speed-table__filter-option"
+            onChange={setTrickRoom}
+          />
         </div>
 
         {tableState.status === "loading" && (
@@ -434,36 +432,35 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
       </section>
 
       <section className="ui-card speed-self" aria-label={speedScreenText.selfRegionLabel}>
+        <h2 className="speed-heading">
+          <Icon name="speed" />
+          {speedScreenText.selfRegionLabel}
+        </h2>
         {pokemonState.status === "error" && (
           <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
             {errorMessage(pokemonState.error)}
           </p>
         )}
 
-        <div role="radiogroup" aria-label={speedScreenText.modeGroupLabel} className="speed-self__modes">
-          {MODE_IDS.map((mode) => {
-            const selected = self.mode === mode;
-            return (
-              <label
-                key={mode}
-                className={chipClass(
-                  selected,
-                  selected ? "speed-self__mode speed-self__mode--selected" : "speed-self__mode",
-                )}
-              >
-                <input
-                  type="radio"
-                  name={modeGroupName}
-                  checked={selected}
-                  onChange={() => {
-                    updateSelf({ mode });
-                  }}
-                />
-                {speedScreenText.modeLabel[mode]}
-              </label>
-            );
-          })}
-        </div>
+        <SegmentedControl
+          label={speedScreenText.modeGroupLabel}
+          className="speed-self__modes"
+          options={MODE_IDS.map((mode) => ({ value: mode, label: speedScreenText.modeLabel[mode] }))}
+          value={self.mode}
+          onChange={(mode) => {
+            updateSelf({ mode });
+          }}
+        />
+
+        {selectedPokemon !== undefined && (
+          <PokemonCard
+            nameAsHeading
+            speciesKey={selectedPokemon.pokemonId}
+            name={selectedPokemon.nameJa}
+            types={selectedPokemon.types}
+            className="speed-self__card"
+          />
+        )}
 
         <div className="speed-self__field">
           <span>{speedScreenText.pokemonLabel}</span>
@@ -486,116 +483,58 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
 
         {self.mode === "preset" && (
           <>
-            <div
-              role="radiogroup"
-              aria-label={speedScreenText.presetGroupLabel}
-              className="speed-self__field"
-            >
-              {MINIMAL_PRESET_IDS.map((preset) => {
-                const selected = self.preset === preset;
-                return (
-                  <label key={preset} className={chipClass(selected)}>
-                    <input
-                      type="radio"
-                      name={presetGroupName}
-                      checked={selected}
-                      onChange={() => {
-                        updateSelf({ preset });
-                      }}
-                    />
-                    {speedPresetText[preset]}
-                  </label>
-                );
-              })}
-            </div>
-            <label className="speed-self__field">
-              <input
-                type="checkbox"
-                checked={self.scarf}
-                onChange={(event) => {
-                  updateSelf({ scarf: event.target.checked });
-                }}
-              />
-              {speedScreenText.scarfLabel}
-            </label>
+            <SegmentedControl
+              label={speedScreenText.presetGroupLabel}
+              options={MINIMAL_PRESET_IDS.map((preset) => ({
+                value: preset,
+                label: speedPresetText[preset],
+              }))}
+              value={self.preset}
+              onChange={(preset) => {
+                updateSelf({ preset });
+              }}
+            />
+            <ScarfChip self={self} onChange={updateSelf} />
             <SelfFieldChecks self={self} onChange={updateSelf} />
           </>
         )}
 
         {self.mode === "custom" && (
           <>
-            <div className="speed-self__field">
-              <span>{speedScreenText.spLabel}</span>
-              <input
-                type="number"
-                aria-label={speedScreenText.spLabel}
-                min={0}
-                max={MAX_SP_PER_STAT}
-                aria-invalid={fieldErrors.sp !== undefined}
-                aria-describedby={fieldErrors.sp === undefined ? undefined : spErrorId}
-                value={self.sp}
-                onChange={(event) => {
-                  updateSelf({ sp: parseIntOr(event.target.value, 0) });
-                }}
-              />
-              {fieldErrors.sp !== undefined && (
-                <p id={spErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
-                  {fieldErrors.sp}
-                </p>
-              )}
-            </div>
-            <div
-              role="radiogroup"
-              aria-label={speedScreenText.natureGroupLabel}
-              className="speed-self__field"
-            >
-              {NATURE_IDS.map((nature) => {
-                const selected = self.nature === nature;
-                return (
-                  <label key={nature} className={chipClass(selected)}>
-                    <input
-                      type="radio"
-                      name={natureGroupName}
-                      checked={selected}
-                      onChange={() => {
-                        updateSelf({ nature });
-                      }}
-                    />
-                    {speedScreenText.natureLabel[nature]}
-                  </label>
-                );
-              })}
-            </div>
-            <div className="speed-self__field">
-              <span>{speedScreenText.rankLabel}</span>
-              <input
-                type="number"
-                aria-label={speedScreenText.rankLabel}
-                min={MIN_RANK}
-                max={MAX_RANK}
-                aria-invalid={fieldErrors.rank !== undefined}
-                aria-describedby={fieldErrors.rank === undefined ? undefined : rankErrorId}
-                value={self.rank}
-                onChange={(event) => {
-                  updateSelf({ rank: parseIntOr(event.target.value, 0) });
-                }}
-              />
-              {fieldErrors.rank !== undefined && (
-                <p id={rankErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
-                  {fieldErrors.rank}
-                </p>
-              )}
-            </div>
-            <label className="speed-self__field">
-              <input
-                type="checkbox"
-                checked={self.scarf}
-                onChange={(event) => {
-                  updateSelf({ scarf: event.target.checked });
-                }}
-              />
-              {speedScreenText.scarfLabel}
-            </label>
+            <NumberStepper
+              label={speedScreenText.spLabel}
+              value={self.sp}
+              min={0}
+              max={MAX_SP_PER_STAT}
+              error={fieldErrors.sp}
+              errorId={spErrorId}
+              onChange={(sp) => {
+                updateSelf({ sp });
+              }}
+            />
+            <SegmentedControl
+              label={speedScreenText.natureGroupLabel}
+              options={NATURE_IDS.map((nature) => ({
+                value: nature,
+                label: speedScreenText.natureLabel[nature],
+              }))}
+              value={self.nature}
+              onChange={(nature) => {
+                updateSelf({ nature });
+              }}
+            />
+            <NumberStepper
+              label={speedScreenText.rankLabel}
+              value={self.rank}
+              min={MIN_RANK}
+              max={MAX_RANK}
+              error={fieldErrors.rank}
+              errorId={rankErrorId}
+              onChange={(rank) => {
+                updateSelf({ rank });
+              }}
+            />
+            <ScarfChip self={self} onChange={updateSelf} />
             <SelfFieldChecks self={self} onChange={updateSelf} />
           </>
         )}
@@ -606,6 +545,7 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
             <input
               type="number"
               aria-label={speedScreenText.rawValueLabel}
+              className="speed-self__raw"
               min={1}
               aria-invalid={fieldErrors.raw !== undefined}
               aria-describedby={fieldErrors.raw === undefined ? undefined : rawErrorId}
@@ -644,6 +584,98 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
         )}
       </section>
     </div>
+  );
+}
+
+interface NumberStepperProps {
+  readonly label: string;
+  readonly value: number;
+  readonly min: number;
+  readonly max: number;
+  /** 範囲外のときのメッセージ(あれば aria-invalid と alert を出す)。 */
+  readonly error: string | undefined;
+  readonly errorId: string;
+  readonly onChange: (value: number) => void;
+}
+
+/**
+ * 増減ボタン(G-05。見た目は ui-stepper)+ 数値欄。数値欄は ui/Stepper と違い、範囲外の入力も受けて誤りとして出し、
+ * 送らない(issue 307。計算画面の SP 欄と同じ考え方)。空欄は 0 とみなす。ボタンは範囲に収めた値へ直す。
+ */
+function NumberStepper({ label, value, min, max, error, errorId, onChange }: NumberStepperProps) {
+  // 範囲外の値(誤りとして出している間)からは、どちらのボタンも範囲に収めた値へ直す。
+  const atMin = value === min;
+  const atMax = value === max;
+  const clamp = (next: number): number => Math.min(max, Math.max(min, next));
+  return (
+    <div className="speed-self__field">
+      <span>{label}</span>
+      <div className="ui-stepper">
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperDecrease}`}
+          aria-disabled={atMin ? true : undefined}
+          onClick={() => {
+            if (!atMin) {
+              onChange(clamp(value - 1));
+            }
+          }}
+        >
+          <Icon name="minus" size={16} />
+        </button>
+        <input
+          type="number"
+          className="ui-stepper__input"
+          aria-label={label}
+          min={min}
+          max={max}
+          aria-invalid={error !== undefined}
+          aria-describedby={error === undefined ? undefined : errorId}
+          value={value}
+          onChange={(event) => {
+            onChange(parseIntOr(event.target.value, 0));
+          }}
+        />
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperIncrease}`}
+          aria-disabled={atMax ? true : undefined}
+          onClick={() => {
+            if (!atMax) {
+              onChange(clamp(value + 1));
+            }
+          }}
+        >
+          <Icon name="plus" size={16} />
+        </button>
+      </div>
+      {error !== undefined && (
+        <p id={errorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+interface ScarfChipProps {
+  readonly self: SelfState;
+  readonly onChange: (patch: Partial<SelfState>) => void;
+}
+
+function ScarfChip({ self, onChange }: ScarfChipProps) {
+  return (
+    <ToggleChip
+      type="checkbox"
+      label={speedScreenText.scarfLabel}
+      checked={self.scarf}
+      className="speed-self__chip"
+      onChange={(scarf) => {
+        onChange({ scarf });
+      }}
+    />
   );
 }
 
@@ -774,6 +806,7 @@ function BoundaryRow({ item }: BoundaryRowProps) {
   }
   return (
     <li className="speed-boundary" data-testid="speed-boundary" style={rowStyle(item)} {...extraProps}>
+      <Icon name="speed" size={16} />
       {speedScreenText.selfBoundaryLabel}
     </li>
   );
@@ -804,8 +837,16 @@ function TierRow({ item, setSize }: TierRowProps) {
     >
       <span className="speed-tier__head">
         {selfTie && <span className="speed-tier__self-label">{speedScreenText.selfTierLabel}</span>}
+        {selfTie && (
+          <span className="speed-badge speed-badge--self ui-badge" aria-hidden="true">
+            <Icon name="speed" size={12} />
+            <span className="speed-badge__text">{speedScreenText.neighborhoodSelfBadge}</span>
+          </span>
+        )}
         <span className="speed-tier__speed">{speedScreenText.tierSpeedLabel(tier.speed)}</span>
-        {tier.entries.length > 1 && <span className="speed-tier__tie">{speedScreenText.tieLabel}</span>}
+        {tier.entries.length > 1 && (
+          <span className="speed-tier__tie ui-badge">{speedScreenText.tieLabel}</span>
+        )}
       </span>
       <ul className="speed-tier__entries">
         {tier.entries.map((entry, index) => (
@@ -849,26 +890,24 @@ interface SelfFieldChecksProps {
 function SelfFieldChecks({ self, onChange }: SelfFieldChecksProps) {
   return (
     <>
-      <label className="speed-self__field">
-        <input
-          type="checkbox"
-          checked={self.tailwind}
-          onChange={(event) => {
-            onChange({ tailwind: event.target.checked });
-          }}
-        />
-        {speedScreenText.selfTailwindLabel}
-      </label>
-      <label className="speed-self__field">
-        <input
-          type="checkbox"
-          checked={self.paralysis}
-          onChange={(event) => {
-            onChange({ paralysis: event.target.checked });
-          }}
-        />
-        {speedScreenText.paralysisLabel}
-      </label>
+      <ToggleChip
+        type="checkbox"
+        label={speedScreenText.selfTailwindLabel}
+        checked={self.tailwind}
+        className="speed-self__chip"
+        onChange={(tailwind) => {
+          onChange({ tailwind });
+        }}
+      />
+      <ToggleChip
+        type="checkbox"
+        label={speedScreenText.paralysisLabel}
+        checked={self.paralysis}
+        className="speed-self__chip"
+        onChange={(paralysis) => {
+          onChange({ paralysis });
+        }}
+      />
     </>
   );
 }
@@ -884,8 +923,14 @@ function PositionResult({ value, trickRoom }: PositionResultProps) {
   return (
     <div className="speed-self__result">
       <p className="speed-self__speed">{speedScreenText.selfSpeedLabel(value.speed)}</p>
-      <p>{speedScreenText.fasterLabel(value.faster)}</p>
-      <p>{speedScreenText.slowerLabel(value.slower)}</p>
+      <p className="speed-self__count">
+        <Icon name="up" size={16} />
+        {speedScreenText.fasterLabel(value.faster)}
+      </p>
+      <p className="speed-self__count">
+        <Icon name="down" size={16} />
+        {speedScreenText.slowerLabel(value.slower)}
+      </p>
       {trickRoom && (
         <>
           <p>{speedScreenText.movesBeforeLabel(value.slower)}</p>
