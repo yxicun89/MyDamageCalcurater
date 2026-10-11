@@ -3,6 +3,7 @@
 // (楽観更新しない。失敗時は下書きを残す)。画面は TeamScreen が開いている間だけ mount される(閉じると下書きは捨てる)。
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { BalanceClient } from "../api/balanceClient";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
@@ -20,6 +21,7 @@ import { useSpeciesResolutions } from "../screens/speciesResolution";
 import { Icon } from "../ui/Icon";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
+import { TeamBalanceSection } from "./TeamBalanceSection";
 import { TeamSlotGrid } from "./TeamSlotGrid";
 import type { TeamClient, TeamError } from "./teamClient";
 import { changeSpecies, correctMegaItem, type MegaItemCorrection, type MemberDraft } from "./teamMember";
@@ -44,6 +46,8 @@ export interface TeamMemberEditorProps {
   readonly master: MasterData;
   readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly teamClient: TeamClient;
+  /** タイプバランスの口(ADR-0421)。無いときは「タイプバランス」の節を出さない(構築の編集・保存には関係しない)。 */
+  readonly balanceClient?: BalanceClient;
   /** update が成功したときに、応答の Team で親の一覧を書き換える。 */
   readonly onSaved: (team: Schemas["Team"]) => void;
   /** 一覧に戻る(未保存の変更があるときは、確認の後に呼ばれる)。 */
@@ -101,6 +105,7 @@ export function TeamMemberEditor({
   master,
   masterSearch,
   teamClient,
+  balanceClient,
   onSaved,
   onClose,
 }: TeamMemberEditorProps): ReactNode {
@@ -365,6 +370,16 @@ export function TeamMemberEditor({
           />
         );
       })}
+
+      {balanceClient !== undefined && (
+        <TeamBalanceSection
+          drafts={drafts}
+          client={balanceClient}
+          master={master}
+          masterSearch={masterSearch}
+          resolutions={resolutions}
+        />
+      )}
 
       <div className="team-member-editor__actions">
         <button

@@ -95,6 +95,10 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 | info.soft | #DCEFFB | #0C2A3A | 情報・読み込み中の案内の塗り |
 | danger.soft | #FDE3E4 | #3A1416 | エラーの案内の塗り(文字は既存の danger) |
 | on.danger | #FFFFFF | #0B1320 | danger の塗り(危険ボタン)の上の文字 |
+| matchup.resist | #0A5E8E | #6CCBF5 | 耐性・いまひとつ(×1/2 以下。無効を除く)の文字・アイコン(水色系。弱点の赤 danger と対。緑は相性に使わない) |
+| matchup.resist.soft | #D7F0FB | #0E2F40 | 耐性の案内・セルの塗り |
+| matchup.immune | #4A5568 | #AEB8C6 | 無効(×0)の文字・アイコン(灰) |
+| matchup.immune.soft | #E6E9EE | #222B38 | 無効の案内・セルの塗り |
 | surface.card | #FFFFFF | #16202F | カード・ボタン(副)の不透明な面 |
 | bg.gradient-start | #F2F8FF | #0F1A2B | 背景のやさしいグラデーション(上) |
 | bg.gradient-end | #E6F1FD | #0B1320 | 背景のやさしいグラデーション(下) |

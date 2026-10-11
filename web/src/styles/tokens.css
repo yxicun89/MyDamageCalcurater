@@ -121,6 +121,10 @@
   --info-soft: #dceffb;
   --danger-soft: #fde3e4;
   --on-danger: #ffffff;
+  --matchup-resist: #0a5e8e;
+  --matchup-resist-soft: #d7f0fb;
+  --matchup-immune: #4a5568;
+  --matchup-immune-soft: #e6e9ee;
   --surface-card: #ffffff;
   --bg-gradient-start: #f2f8ff;
   --bg-gradient-end: #e6f1fd;
@@ -154,6 +158,10 @@
     --info-soft: #0c2a3a;
     --danger-soft: #3a1416;
     --on-danger: #0b1320;
+    --matchup-resist: #6ccbf5;
+    --matchup-resist-soft: #0e2f40;
+    --matchup-immune: #aeb8c6;
+    --matchup-immune-soft: #222b38;
     --surface-card: #16202f;
     --bg-gradient-start: #0f1a2b;
     --bg-gradient-end: #0b1320;
@@ -186,6 +194,10 @@
   --info-soft: #0c2a3a;
   --danger-soft: #3a1416;
   --on-danger: #0b1320;
+  --matchup-resist: #6ccbf5;
+  --matchup-resist-soft: #0e2f40;
+  --matchup-immune: #aeb8c6;
+  --matchup-immune-soft: #222b38;
   --surface-card: #16202f;
   --bg-gradient-start: #0f1a2b;
   --bg-gradient-end: #0b1320;
