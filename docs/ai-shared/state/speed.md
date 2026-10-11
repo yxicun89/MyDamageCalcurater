@@ -56,3 +56,4 @@ Status(追記): 2026-10-04 main の `make ios-test` が #628 以降赤だった�
 
 Status(追記): 2026-10-09 #108 の素早さ分を完了。speed 本体の loader・起動ログ・`/healthz` の dataVersion は ADR-0138 で実装済みだったため、残りだった `scripts/check-master-version.sh` の speed 判定を、Deployment 注釈から `/healthz`(サービスプロキシ経由。プロセスが読んだ版)に切り替えた(ADR-0809)。取れなければ注釈へ戻らず STALE。balance は注釈のまま(タイプバランスレーン)。
 Next: k3d 上の実地確認(`make check-master-version`)は未実施。balance の healthz 参照への切り替えはタイプバランスレーンで(ADR-0809 §影響)。
+Status(追記): 2026-10-12 I-speed-4a(バックエンド)完了。`internal/speed/matchup.go`(MovesFirstLines・Matchup・Reach。素早さは Speed〈engine 経由〉、行動順は engine.CompareSpeed)と `internal/httpapi/matchup.go`(POST /matchup・/reach。{guard, requireRequestContext})を実装。契約 0.7.0 は spec 側で追加済み。Web(I-speed-4b)・iOS(I-speed-4c)は別 PR。ADR-0610 の §6 Q1〜Q7 は推奨案のまま実装(ユーザー確認待ち)。

@@ -155,4 +155,29 @@ if [ "$unknown_position_status" != "422" ] || ! grep -qF '"code":"unknown_pokemo
   exit 1
 fi
 
-echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400 position=200 (146, 29/2/17) invalid_position=400 unknown_pokemon=422"
+# I-speed-4 (ADR-0610 §2): matchup and reach answer 200 on the example read model.
+matchup_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/matchup" \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
+  -H 'Content-Type: application/json' \
+  -d '{"self":{"pokemonId":"9001-000"},"opponent":{"pokemonId":"9004-000"}}' || printf '000')
+if [ "$matchup_status" != "200" ] || ! grep -qF '"opponentSpeed":150' "$body_file"; then
+  echo "speed matchup failed: HTTP $matchup_status" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+reach_status=$(curl -sS -o "$body_file" -w '%{http_code}' \
+  "$base_url/api/speed/v1/reach" \
+  -H 'X-Device-Id: 11111111-1111-4111-8111-111111111111' \
+  -H 'X-Session-Id: 22222222-2222-4222-a222-222222222222' \
+  -H 'Content-Type: application/json' \
+  -d '{"mode":"preset","pokemonId":"9001-000","preset":"max","scarf":false}' || printf '000')
+if [ "$reach_status" != "200" ] || ! grep -qF '"speed":167' "$body_file"; then
+  echo "speed reach failed: HTTP $reach_status" >&2
+  cat "$body_file" >&2
+  exit 1
+fi
+
+echo "speed smoke: health=200 pokemon=200 (count=8) missing_headers=400 table=200 (tiers=7, tie 219) invalid_presets=400 position=200 (146, 29/2/17) invalid_position=400 unknown_pokemon=422 matchup=200 reach=200"

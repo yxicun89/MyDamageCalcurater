@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc speed API
-  version: 0.6.0
+  version: 0.7.0
   description: |
     素早さ比較の独立サービスの契約。
     SP0 はヘルスチェックと、既定のレギュレーションで使用可能なポケモンの一覧(素早さ種族値つき)を返す。
@@ -13,6 +13,8 @@ info:
     missing_header / invalid_header に分けた(破壊的変更。ADR-0606)。
     0.5.0: 追い風・まひ・トリックルームを足した(ADR-0607)。表は tailwind / trickRoom のクエリ、自分の位置は
     tailwind / paralysis / tableTailwind の欄(すべて省略可で、省略は false = 従来と同じ応答)。後方互換。
+    0.7.0: 「相手を選んで上を取る最低ライン」の POST /api/speed/v1/matchup と、自分の素早さの「族」の区切りの
+    POST /api/speed/v1/reach を足した(ADR-0610。I-speed-4)。既存の API・応答は変えない。後方互換。
 servers:
   - url: /
 paths:
@@ -229,6 +231,134 @@ paths:
                 $ref: '#/components/schemas/Error'
         '500':
           description: An unexpected internal error (internal_error). The message is a fixed string; no internal detail is returned.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/speed/v1/matchup:
+    post:
+      operationId: getSpeedMatchup
+      summary: The minimum speed investment for one's own pokemon to move before a chosen opponent
+      description: |
+        For one's own pokemon and a chosen opponent, returns per opponent assumption (how the opponent
+        invested in speed) and per nature effect of one's own pokemon, the range of speed SP (0 to 32)
+        with which one's own pokemon moves first by speed alone, and the range that gives a speed tie
+        (ADR-0610 §1・§2). Speeds are engine.FinalSpeed (ADR-0179 §2) and the order is engine.CompareSpeed
+        (ADR-0179 §3): without Trick Room the faster moves first; under Trick Room the slower moves
+        first; equal speeds are a tie and never count as moving first. Move priority is not considered
+        (the combo calculation of the calc screen covers moves).
+
+        `self.rank` / `scarf` / `tailwind` / `paralysis` are the fixed conditions of one's own pokemon
+        (omitted = 0 / false). `self.current` (optional) is the current SP and nature; with it, every
+        line also carries the current turn order. `opponent.assumptions` omitted means the four
+        assumptions uninvested, neutral-max, max and max-scarf, in that order; each assumption has
+        exactly one of `preset` or `custom`. `opponent.tailwind` / `paralysis` apply to every assumption.
+
+        Check order: headers (400) → body (400, or 413 over 4 KiB) → read model absent (503) → unknown
+        pokemonId (422) → 200. Added in 0.7.0 (additive).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchupRequest'
+      responses:
+        '200':
+          description: The SP ranges per opponent assumption and nature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MatchupResponse'
+        '400':
+          description: |
+            Header errors as for /position (missing_header / invalid_header, ADR-0606 §2), or the body is
+            not one JSON object, has unknown fields, an assumption with both or neither of preset and
+            custom, a duplicate preset, or a value out of range (invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 4 KiB limit (request_too_large)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: self.pokemonId or opponent.pokemonId is not in the read model (unknown_pokemon)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable), or the service is overloaded (overloaded, with Retry-After; ADR-0801)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/speed/v1/reach:
+    post:
+      operationId: getSpeedReach
+      summary: Which base speeds one's own speed is above, tied with and below, per table preset
+      description: |
+        Takes the same body as POST /api/speed/v1/position and, for the speed it gives, returns per row
+        preset of the table (ADR-0601 §2, in that order) the base speeds (1 to 255) whose speed with that
+        preset is slower than, equal to and faster than one's own speed (ADR-0610 §1, "族"), with the
+        number of available pokemon in each group and the boundary pokemon. `tableTailwind` applies to
+        the preset side. The comparison is of speeds and does not depend on Trick Room (as for
+        /position; ADR-0607 §4). Validation and check order are the same as /position. Added in 0.7.0
+        (additive).
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PositionRequest'
+      responses:
+        '200':
+          description: The base speed ranges per preset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReachResponse'
+        '400':
+          description: As for POST /api/speed/v1/position (missing_header / invalid_header / invalid_request)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '413':
+          description: Request body exceeds the 4 KiB limit (request_too_large)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '422':
+          description: pokemonId is not in the read model (unknown_pokemon)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '503':
+          description: The pokemon read model is not configured (master_unavailable), or the service is overloaded (overloaded, with Retry-After; ADR-0801)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '500':
+          description: An unexpected internal error (internal_error). The message is a fixed string.
           content:
             application/json:
               schema:
@@ -560,6 +690,301 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/SpeedTableEntry'
+    MatchupRequest:
+      description: One's own pokemon and a chosen opponent (ADR-0610 §2).
+      type: object
+      additionalProperties: false
+      required:
+        - self
+        - opponent
+      properties:
+        self:
+          $ref: '#/components/schemas/MatchupSelf'
+        opponent:
+          $ref: '#/components/schemas/MatchupOpponent'
+        trickRoom:
+          description: Whether Trick Room is up (the slower moves first). Omitted means false.
+          type: boolean
+          example: false
+    MatchupSelf:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9001-000
+        rank:
+          description: The speed rank, -6 to +6. Omitted means 0.
+          type: integer
+          minimum: -6
+          maximum: 6
+          example: 0
+        scarf:
+          description: Whether one's own pokemon holds a Choice Scarf. Omitted means false.
+          type: boolean
+          example: false
+        tailwind:
+          description: Whether a tailwind is on one's own side. Omitted means false.
+          type: boolean
+          example: false
+        paralysis:
+          description: Whether one's own pokemon is paralyzed. Omitted means false.
+          type: boolean
+          example: false
+        current:
+          $ref: '#/components/schemas/SpeedInvestment'
+    SpeedInvestment:
+      description: A speed SP and a nature effect.
+      type: object
+      additionalProperties: false
+      required:
+        - sp
+        - nature
+      properties:
+        sp:
+          type: integer
+          minimum: 0
+          maximum: 32
+          example: 32
+        nature:
+          $ref: '#/components/schemas/NatureId'
+    MatchupOpponent:
+      type: object
+      additionalProperties: false
+      required:
+        - pokemonId
+      properties:
+        pokemonId:
+          type: string
+          maxLength: 8
+          pattern: '^\d{4}-\d{3}$'
+          example: 9004-000
+        assumptions:
+          description: |
+            How the opponent may have invested in speed. Omitted means uninvested, neutral-max, max and
+            max-scarf. The response keeps this order.
+          type: array
+          minItems: 1
+          maxItems: 8
+          items:
+            $ref: '#/components/schemas/OpponentAssumption'
+        tailwind:
+          description: Whether a tailwind is on the opponent's side (every assumption). Omitted means false.
+          type: boolean
+          example: false
+        paralysis:
+          description: Whether the opponent is paralyzed (every assumption). Omitted means false.
+          type: boolean
+          example: false
+    OpponentAssumption:
+      description: Exactly one of `preset` (a row preset of the table) or `custom`.
+      type: object
+      additionalProperties: false
+      properties:
+        preset:
+          $ref: '#/components/schemas/PresetId'
+        custom:
+          $ref: '#/components/schemas/OpponentCustom'
+    OpponentCustom:
+      type: object
+      additionalProperties: false
+      required:
+        - sp
+        - nature
+      properties:
+        sp:
+          type: integer
+          minimum: 0
+          maximum: 32
+          example: 0
+        nature:
+          $ref: '#/components/schemas/NatureId'
+        rank:
+          description: Omitted means 0.
+          type: integer
+          minimum: -6
+          maximum: 6
+          example: 0
+        scarf:
+          description: Omitted means false.
+          type: boolean
+          example: false
+    MatchupResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - self
+        - opponent
+        - trickRoom
+        - lines
+      properties:
+        self:
+          $ref: '#/components/schemas/SpeedPokemon'
+        opponent:
+          $ref: '#/components/schemas/SpeedPokemon'
+        trickRoom:
+          type: boolean
+          example: false
+        selfSpeed:
+          description: The current speed of one's own pokemon. Present only when self.current was given.
+          type: integer
+          minimum: 1
+          example: 167
+        lines:
+          type: array
+          items:
+            $ref: '#/components/schemas/MatchupLine'
+    MatchupLine:
+      type: object
+      additionalProperties: false
+      required:
+        - assumption
+        - opponentSpeed
+        - natures
+      properties:
+        assumption:
+          $ref: '#/components/schemas/OpponentAssumption'
+        opponentSpeed:
+          description: The opponent's in-battle speed under this assumption.
+          type: integer
+          minimum: 1
+          example: 150
+        current:
+          $ref: '#/components/schemas/TurnOrder'
+        natures:
+          description: Always three entries, in the order minus, neutral, plus.
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            $ref: '#/components/schemas/NatureLine'
+    TurnOrder:
+      description: |
+        The turn order by speed alone (engine.CompareSpeed; the same vocabulary as the combo calculation).
+        Present only when self.current was given.
+      type: string
+      enum:
+        - self_first
+        - opponent_first
+        - speed_tie
+      example: self_first
+    NatureLine:
+      description: |
+        For one nature effect of one's own pokemon: `movesFirst` is the SP range with which one's own
+        pokemon moves first (without Trick Room [min, 32], where min is the minimum line; under Trick
+        Room [0, max]); `tie` is the SP range of a speed tie. An absent field means no SP qualifies.
+      type: object
+      additionalProperties: false
+      required:
+        - nature
+      properties:
+        nature:
+          $ref: '#/components/schemas/NatureId'
+        movesFirst:
+          $ref: '#/components/schemas/SpRange'
+        tie:
+          $ref: '#/components/schemas/SpRange'
+    SpRange:
+      description: An inclusive SP range.
+      type: object
+      additionalProperties: false
+      required:
+        - min
+        - max
+      properties:
+        min:
+          type: integer
+          minimum: 0
+          maximum: 32
+          example: 18
+        max:
+          type: integer
+          minimum: 0
+          maximum: 32
+          example: 32
+    ReachResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - speed
+        - lines
+      properties:
+        speed:
+          description: One's own in-battle speed (the same value as /position).
+          type: integer
+          minimum: 1
+          example: 167
+        pokemon:
+          description: Present only when the request had a pokemonId (as for /position).
+          $ref: '#/components/schemas/SpeedPokemon'
+        lines:
+          description: Six entries, one per row preset in the table order (ADR-0601 §2).
+          type: array
+          minItems: 6
+          maxItems: 6
+          items:
+            $ref: '#/components/schemas/ReachLine'
+    ReachLine:
+      description: |
+        For one row preset: the base speeds whose speed with this preset is slower than (`slower`),
+        equal to (`tie`) and faster than (`faster`) one's own speed. An absent range means no base speed
+        (1 to 255) is in that group. The counts and the boundary pokemon are over the available pokemon.
+      type: object
+      additionalProperties: false
+      required:
+        - preset
+        - slowerCount
+        - tieCount
+        - fasterCount
+      properties:
+        preset:
+          $ref: '#/components/schemas/PresetId'
+        slower:
+          $ref: '#/components/schemas/BaseSpeedRange'
+        tie:
+          $ref: '#/components/schemas/BaseSpeedRange'
+        faster:
+          $ref: '#/components/schemas/BaseSpeedRange'
+        slowerCount:
+          type: integer
+          minimum: 0
+          example: 5
+        tieCount:
+          type: integer
+          minimum: 0
+          example: 1
+        fasterCount:
+          type: integer
+          minimum: 0
+          example: 2
+        fastestSlower:
+          description: The fastest available pokemon in `slower` (lowest pokemonId on equal base speed).
+          $ref: '#/components/schemas/SpeedPokemon'
+        slowestFaster:
+          description: The slowest available pokemon in `faster` (lowest pokemonId on equal base speed).
+          $ref: '#/components/schemas/SpeedPokemon'
+    BaseSpeedRange:
+      description: An inclusive base speed range ("族").
+      type: object
+      additionalProperties: false
+      required:
+        - min
+        - max
+      properties:
+        min:
+          type: integer
+          minimum: 1
+          maximum: 255
+          example: 1
+        max:
+          type: integer
+          minimum: 1
+          maximum: 255
+          example: 99
     Error:
       type: object
       required:
