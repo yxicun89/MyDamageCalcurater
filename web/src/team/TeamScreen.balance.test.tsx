@@ -4,6 +4,7 @@
 //   B-2 ポケモンが 0 体なら balance を呼ばず、案内の一言を出す
 //   B-3 balance が失敗しても(エラーは節の中の alert)構築の編集・保存は止まらない
 //   B-4 balanceClient を渡さない画面では節を出さない(既存の構築画面は変わらない)
+//   B-7 仮想敵は節の中の任意の入力(最初は 0 体)。追加して種族を選ぶと threats を呼ぶ(構築の枠は使わない)
 //   B-5 おすすめは limit 5 で呼び、該当ポケモンのタイルを出す(1 候補 8 個まで、残りは「もっと見る」)
 //   B-6 タイルを押すと最初の空き枠に入り(保存に載る)、6 枠が埋まっているとタイルは押せない
 
@@ -190,5 +191,22 @@ describe("構築編集の中のタイプバランス(ADR-0421)", () => {
     const tile = await screen.findByRole("button", { name: "候補1" });
     expect(tile).toBeDisabled();
     expect(screen.getByText(balanceScreenText.pickNoEmptySlot)).toBeInTheDocument();
+  });
+
+  test("B-7: 仮想敵を追加して種族を選ぶと threats を呼ぶ(最初は入力欄が無い)", async () => {
+    const balance = createRecordingBalanceClient("balance_unavailable");
+    const { user } = await openEditor([FIRE], balance);
+    expect(
+      screen.queryByRole("group", { name: balanceScreenText.threatGroupLabel(1) }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: balanceScreenText.addThreatLabel }));
+    const group = screen.getByRole("group", { name: balanceScreenText.threatGroupLabel(1) });
+    await user.selectOptions(
+      within(group).getByRole("combobox", { name: balanceScreenText.speciesLabel }),
+      "9004-000",
+    );
+    await waitFor(() => {
+      expect(balance.allCalls).toContain("threats");
+    });
   });
 });

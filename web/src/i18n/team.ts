@@ -105,6 +105,8 @@ export const teamMemberText = {
 /** 構築編集の中の「タイプバランス」の節(ADR-0421 §1)。結果の文言は balance/ 側(balanceScreenText)を使う。 */
 export const teamBalanceText = {
   heading: "タイプバランス",
+  /** 仮想敵(任意。保存しない。ADR-0421 §1)。 */
+  threatsHeading: "仮想敵(あいてのポケモンを入れると、相性を見られます)",
   /** ポケモンを 1 体も選んでいないとき(1 体からでも結果が出る)。 */
   empty: "ポケモンを選ぶと、タイプの強み・弱みがここに出ます",
 } as const;
