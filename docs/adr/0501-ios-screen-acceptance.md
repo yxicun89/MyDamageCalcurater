@@ -4965,3 +4965,24 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 受け入れ条件: (1) 素早さ表・相手選択シート・選択中ポケモン・判定結果の行・お気に入り・計算履歴・よく計算する相手の行に、manifest にあるキーだけ画像の枠(`speciesImage-<key>`)が出る。(2) 画像が無い・既定(`POKECALC_MOCK_IMAGES` なし)では枠が 1 つも出ず、従来のエンブレムのまま。(3) manifest の相対パスは `.webp` で終わるものだけ URL になる。
 
 追加テスト: `ImageURLWebpOnlyTests`、`SpeedEntryDisplay.speciesKey`(`SpeedViewModelTableTests`)、`JudgeMatchupDisplay.speciesKey`(`JudgeResultDisplayTests`)、`SpeciesImageUITests` に素早さ表の画像あり/なし 2 件。既存テストの変更なし。
+
+## 構築編集の中のタイプバランス・別画面の廃止(ADR-0532。2026-10-12)
+
+受け入れ条件は ADR-0532「受け入れ条件」1〜6。構築編集の 6 枠の下に「タイプバランス」の節(`teamBalanceSection`)。
+識別子: 節 `teamBalanceSection`・0 体の案内 `teamBalanceEmpty`・再計算 `teamBalanceRetry`・タイル `balancePickTile-<候補番号>-<pokemonId>`・
+タイルのまとまり `balancePickTiles-<候補番号>`・もっと見る `balancePickMore-<候補番号>`・満杯の理由 `balancePickNoEmptySlot-<候補番号>`。
+結果の識別子(`balanceTeamSummary`・`balanceMemberDefense-N`・`balanceAnalysisError` など)は旧画面のまま。
+
+### 削除・書き換えたテスト(検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `AppNavigationUITests.testBalanceIsReachableFromTeamTab` | `testBalanceLivesInsideTheTeamEditorWithoutASeparateEntry` に書き換え(一覧・全タブに `openBalanceScreen` が無い/構築編集に節がある/`balanceScreen` が無い) | 別画面を廃止し、機能が構築編集の中へ移ったため。「機能に届く」検査は節の存在で保つ |
+| `UITestNavigation` の `openBalanceScreen` の行き先 | 削除 | 入口が無くなったため |
+| `BalanceViewModelTests.testLoadTeamReplacesMembersWithTeamMembers` | `testSetPartyReplacesMembersWithTeamMembers`(`loadTeam` → `setParty`。期待値は同じ) | `loadTeam` を `setParty` に一本化して削除したため |
+| `TeamSparseSaveTests.testBalanceLoadsSparseTeamAndSendsEmptyMoveIds` | `loadTeam` → `setParty`(期待値は同じ) | 同上 |
+| `GlossaryTests` の `BalanceScreenText.emptyNotice` | 削除し、`teamEmptyNotice`・タイルの文言・接続できないときの文言を追加 | 旧画面の文言を削除したため。検査する文言は増えた |
+
+追加テスト: `TeamBalanceIntegrationTests`(10 件。下書き→setParty・空き枠無視・技 0 個・枠を外すと追随・失敗しても編集と保存が止まらない・再計算・limit 5・最初の空き枠・満杯)、
+`BalancePickTilesTests`(5 件。8 件+残り・相性の色の意味)、`MockBalanceServiceTests`(7 件)、`APIBalanceServiceStage3Tests` の `skewedAttackTypes` 3 件、
+`TeamBalanceUITests`(5 件。1 体で結果・タイルで空き枠へ・満杯で押せない・もっと見る・接続できなくても保存できる)。
