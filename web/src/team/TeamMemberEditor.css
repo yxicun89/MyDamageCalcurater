@@ -37,10 +37,35 @@
   margin: 0;
 }
 
+.team-member-editor__unsaved,
+.team-member-editor__notice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
 .team-member-editor__unsaved {
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
-  font-weight: 600;
+  font-weight: var(--font-weight-strong);
+}
+
+/* 6 枠のタイルの格子(G-05)。埋まった枠はポケモンカード、空きは「+」のタイル。 */
+.team-slots {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--space-2);
+}
+
+.team-slots__card,
+.team-slots__tile {
+  min-width: 0;
+  min-height: 72px;
+  text-align: start;
+}
+
+.team-slots__card {
+  align-self: stretch;
 }
 
 .team-member-editor__actions {
@@ -89,8 +114,18 @@
   color: var(--text-secondary);
 }
 
-.team-member__field select,
-.team-member__sp-cell input {
+/* 技 4 つ、持ち物・特性・性格・テラスタイプは 2 列(狭い幅は 1 列)。 */
+.team-member__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-2);
+}
+
+.team-member__grid > .team-member__reason {
+  grid-column: 1 / -1;
+}
+
+.team-member__field select {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
@@ -108,25 +143,58 @@
 
 .team-member__sp-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
   gap: var(--space-2);
 }
 
 .team-member__sp-cell {
   display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
 
-.team-member__sp-cell input[aria-invalid="true"] {
+.team-member__sp-name {
+  flex: 0 0 1.5em;
+  text-align: center;
+  font-weight: var(--font-weight-strong);
+}
+
+.team-member__sp-cell .ui-stepper__input[aria-invalid="true"] {
   border-color: var(--danger);
 }
 
 .team-member__sp-summary {
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.team-member__sp-summary--over {
+  color: var(--danger);
+}
+
+/* 合計のバー(装飾。数値は上の文字)。 */
+.team-member__sp-bar {
+  display: block;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.team-member__sp-bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+}
+
+.team-member__sp-summary--over + .team-member__sp-bar .team-member__sp-bar-fill {
+  background: var(--danger);
 }
 
 .team-member__error {
@@ -138,6 +206,16 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+/* アイコンだけのボタン(上へ・下へ・外す)。名前は aria-label。押せる範囲は 44px。 */
+.team-member__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding-inline: var(--space-2);
 }
 
 /* メガ種族の持ち物固定の理由・補正の通知(issue 515、ADR-0320)。 */

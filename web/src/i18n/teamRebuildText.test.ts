@@ -9,9 +9,8 @@ import { teamMemberText, teamScreenText } from "./team";
 describe("構築の一覧・新規作成の文言", () => {
   test("ボタン・案内・表示名", () => {
     expect(teamScreenText.createLabel).toBe("新しい構築");
-    expect(teamScreenText.emptyNotice).toBe(
-      "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます",
-    );
+    // G-05(I-web-13d): 長い案内の文をやめ、大きいアイコン + 短い一言にした(ADR-0347)。
+    expect(teamScreenText.emptyNotice).toBe("まだ構築がありません");
     expect(teamScreenText.untitledTeamName(3)).toBe("構築 3");
     expect(teamScreenText.memberIconsLabel("構築 1")).toBe("「構築 1」のポケモン");
     expect(teamScreenText.unknownMemberIcon(2)).toBe("2体目");

@@ -16,7 +16,9 @@ import type {
   MasterSpeciesResolution,
   MasterSpeciesSearch,
 } from "../master/types";
+import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
+import { uiText } from "../i18n/ui";
 import { AbilitySelect } from "../screens/AbilitySelect";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { PokemonIcon } from "../images/PokemonIcon";
@@ -82,6 +84,75 @@ function LabeledSelect({ label, value, onChange, children, disabled, describedBy
       >
         {children}
       </select>
+    </div>
+  );
+}
+
+interface SpCellProps {
+  readonly stat: StatKey;
+  readonly text: string;
+  readonly invalid: boolean;
+  readonly onChange: (text: string) => void;
+}
+
+/**
+ * SP 1 欄: 数値欄(文字のまま持つ。不正な入力は誤りとして出すため数値欄にはしない)と、1 ずつ増減する − / + ボタン(G-05)。
+ * 空欄は 0、整数でない文字から押したときは 0〜MAX_SP_PER_STAT に収めた値に直す(計算画面の SpField と同じ)。
+ */
+function SpCell({ stat, text, invalid, onChange }: SpCellProps) {
+  const label = teamMemberText.spLabel(statLetterJa[stat]);
+  const parsed = text.trim() === "" ? 0 : Number(text);
+  const isInteger = Number.isInteger(parsed);
+  const current = isInteger ? parsed : 0;
+  const clampedStep = (delta: number): void => {
+    onChange(String(Math.min(MAX_SP_PER_STAT, Math.max(0, current + delta))));
+  };
+  const atMin = isInteger && current <= 0;
+  const atMax = isInteger && current >= MAX_SP_PER_STAT;
+  return (
+    <div className="team-member__sp-cell">
+      <span aria-hidden="true" className="team-member__sp-name">
+        {statLetterJa[stat]}
+      </span>
+      <div className="ui-stepper">
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperDecrease}`}
+          aria-disabled={atMin ? true : undefined}
+          onClick={() => {
+            if (!atMin) {
+              clampedStep(-1);
+            }
+          }}
+        >
+          <Icon name="minus" size={16} />
+        </button>
+        <input
+          type="text"
+          inputMode="numeric"
+          className="ui-stepper__input"
+          aria-label={label}
+          aria-invalid={invalid}
+          value={text}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperIncrease}`}
+          aria-disabled={atMax ? true : undefined}
+          onClick={() => {
+            if (!atMax) {
+              clampedStep(1);
+            }
+          }}
+        >
+          <Icon name="plus" size={16} />
+        </button>
+      </div>
     </div>
   );
 }
@@ -235,117 +306,129 @@ export function TeamMemberFields({
 
       {speciesField}
 
-      {Array.from({ length: MAX_MEMBER_MOVES }, (_, slot) => {
-        const current = draft.moves[slot] ?? null;
-        return (
-          <LabeledSelect
-            key={slot}
-            label={teamMemberText.moveLabel(slot + 1)}
-            value={current ?? ""}
-            onChange={(value) => {
-              pickMove(slot, value);
-            }}
-          >
-            <option value="">{teamMemberText.moveNone}</option>
-            {moveOptions(species, movePool, current).map((move) => (
-              <option
-                key={move.id}
-                value={move.id}
-                disabled={draft.moves.some((other, index) => index !== slot && other === move.id)}
-              >
-                {move.nameJa}
-              </option>
-            ))}
-          </LabeledSelect>
-        );
-      })}
-
-      <LabeledSelect
-        label={teamMemberText.itemLabel}
-        value={
-          itemLock.kind === "locked"
-            ? itemLock.item.id
-            : itemLock.kind === "missing"
-              ? ""
-              : (draft.itemId ?? "")
-        }
-        disabled={itemLock.kind !== "none"}
-        describedBy={itemLock.kind === "none" ? undefined : itemReasonId}
-        onChange={(value) => {
-          onChange({ ...draft, itemId: value === "" ? null : value });
-        }}
-      >
-        <option value="">{teamMemberText.itemNone}</option>
-        {itemLock.kind === "locked" && species !== null ? (
-          <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
-        ) : (
-          itemChoices.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.nameJa}
-            </option>
-          ))
-        )}
-      </LabeledSelect>
-      <MegaItemReason id={itemReasonId} lock={itemLock} className="team-member__reason" />
-
-      <div className="team-member__field">
-        <AbilitySelect
-          ariaLabel={teamMemberText.abilityLabel}
-          labelClassName="team-member__ability-label"
-          options={abilityOptions(abilities, draft.abilityId)}
-          value={draft.abilityId ?? ""}
-          autoOptionLabel={draft.abilityId === null ? teamMemberText.abilityUnset : undefined}
-          onChange={(id) => {
-            onChange({ ...draft, abilityId: id === "" ? null : id });
-          }}
-        />
+      <div className="team-member__grid">
+        {Array.from({ length: MAX_MEMBER_MOVES }, (_, slot) => {
+          const current = draft.moves[slot] ?? null;
+          return (
+            <LabeledSelect
+              key={slot}
+              label={teamMemberText.moveLabel(slot + 1)}
+              value={current ?? ""}
+              onChange={(value) => {
+                pickMove(slot, value);
+              }}
+            >
+              <option value="">{teamMemberText.moveNone}</option>
+              {moveOptions(species, movePool, current).map((move) => (
+                <option
+                  key={move.id}
+                  value={move.id}
+                  disabled={draft.moves.some((other, index) => index !== slot && other === move.id)}
+                >
+                  {move.nameJa}
+                </option>
+              ))}
+            </LabeledSelect>
+          );
+        })}
       </div>
 
-      <LabeledSelect
-        label={teamMemberText.natureLabel}
-        value={draft.natureId}
-        onChange={(value) => {
-          onChange({ ...draft, natureId: value });
-        }}
-      >
-        {natureOptions(master.natures, draft.natureId).map((nature) => (
-          <option key={nature.id} value={nature.id}>
-            {nature.nameJa}
-          </option>
-        ))}
-      </LabeledSelect>
+      <div className="team-member__grid">
+        <LabeledSelect
+          label={teamMemberText.itemLabel}
+          value={
+            itemLock.kind === "locked"
+              ? itemLock.item.id
+              : itemLock.kind === "missing"
+                ? ""
+                : (draft.itemId ?? "")
+          }
+          disabled={itemLock.kind !== "none"}
+          describedBy={itemLock.kind === "none" ? undefined : itemReasonId}
+          onChange={(value) => {
+            onChange({ ...draft, itemId: value === "" ? null : value });
+          }}
+        >
+          <option value="">{teamMemberText.itemNone}</option>
+          {itemLock.kind === "locked" && species !== null ? (
+            <option value={itemLock.item.id}>{megaStoneLabel(species, itemLock.item.nameJa)}</option>
+          ) : (
+            itemChoices.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nameJa}
+              </option>
+            ))
+          )}
+        </LabeledSelect>
+        <MegaItemReason id={itemReasonId} lock={itemLock} className="team-member__reason" />
 
-      <LabeledSelect label={teamMemberText.teraLabel} value={draft.teraType ?? ""} onChange={pickTera}>
-        <option value="">{teamMemberText.teraNone}</option>
-        {teraOptions.map((type) => (
-          <option key={type} value={type}>
-            {typeNameJa[type]}
-          </option>
-        ))}
-      </LabeledSelect>
+        <div className="team-member__field">
+          <AbilitySelect
+            ariaLabel={teamMemberText.abilityLabel}
+            labelClassName="team-member__ability-label"
+            options={abilityOptions(abilities, draft.abilityId)}
+            value={draft.abilityId ?? ""}
+            autoOptionLabel={draft.abilityId === null ? teamMemberText.abilityUnset : undefined}
+            onChange={(id) => {
+              onChange({ ...draft, abilityId: id === "" ? null : id });
+            }}
+          />
+        </div>
+
+        <LabeledSelect
+          label={teamMemberText.natureLabel}
+          value={draft.natureId}
+          onChange={(value) => {
+            onChange({ ...draft, natureId: value });
+          }}
+        >
+          {natureOptions(master.natures, draft.natureId).map((nature) => (
+            <option key={nature.id} value={nature.id}>
+              {nature.nameJa}
+            </option>
+          ))}
+        </LabeledSelect>
+
+        <LabeledSelect label={teamMemberText.teraLabel} value={draft.teraType ?? ""} onChange={pickTera}>
+          <option value="">{teamMemberText.teraNone}</option>
+          {teraOptions.map((type) => (
+            <option key={type} value={type}>
+              {typeNameJa[type]}
+            </option>
+          ))}
+        </LabeledSelect>
+      </div>
 
       <fieldset className="team-member__sp">
         <legend>{teamMemberText.spLegend}</legend>
         <div className="team-member__sp-grid">
           {SP_STATS.map((stat) => (
-            <label key={stat} className="team-member__sp-cell">
-              <span aria-hidden="true">{statLetterJa[stat]}</span>
-              <input
-                type="text"
-                inputMode="numeric"
-                aria-label={teamMemberText.spLabel(statLetterJa[stat])}
-                aria-invalid={spCheck.issues.some((issue) => issue.kind === "stat" && issue.stat === stat)}
-                value={draft.sp[stat]}
-                onChange={(event) => {
-                  setSp(stat, event.target.value);
-                }}
-              />
-            </label>
+            <SpCell
+              key={stat}
+              stat={stat}
+              text={draft.sp[stat]}
+              invalid={spCheck.issues.some((issue) => issue.kind === "stat" && issue.stat === stat)}
+              onChange={(text) => {
+                setSp(stat, text);
+              }}
+            />
           ))}
         </div>
-        <p className="team-member__sp-summary">
+        <p
+          className={
+            spCheck.remaining < 0
+              ? "team-member__sp-summary team-member__sp-summary--over"
+              : "team-member__sp-summary"
+          }
+        >
           {teamMemberText.spSummary(spCheck.total, MAX_SP_TOTAL, spCheck.remaining)}
         </p>
+        <span aria-hidden="true" className="team-member__sp-bar">
+          <span
+            className="team-member__sp-bar-fill"
+            style={{ width: `${String(Math.min(100, (spCheck.total / MAX_SP_TOTAL) * 100))}%` }}
+          />
+        </span>
       </fieldset>
 
       {correctionNotice !== null && (
@@ -365,26 +448,33 @@ export function TeamMemberFields({
       <div className="team-member__actions">
         <button
           type="button"
-          className="ui-button ui-button--secondary"
+          className="ui-button ui-button--secondary team-member__icon-button"
+          aria-label={teamMemberText.moveUpLabel(position)}
           disabled={position === 1}
           onClick={() => {
             onMove(-1);
           }}
         >
-          {teamMemberText.moveUpLabel(position)}
+          <Icon name="up" size={20} />
         </button>
         <button
           type="button"
-          className="ui-button ui-button--secondary"
+          className="ui-button ui-button--secondary team-member__icon-button"
+          aria-label={teamMemberText.moveDownLabel(position)}
           disabled={position === count}
           onClick={() => {
             onMove(1);
           }}
         >
-          {teamMemberText.moveDownLabel(position)}
+          <Icon name="down" size={20} />
         </button>
-        <button type="button" className="ui-button ui-button--danger" onClick={onRemove}>
-          {teamMemberText.removeLabel(position)}
+        <button
+          type="button"
+          className="ui-button ui-button--danger team-member__icon-button"
+          aria-label={teamMemberText.removeLabel(position)}
+          onClick={onRemove}
+        >
+          <Icon name="trash" size={20} />
         </button>
       </div>
     </fieldset>

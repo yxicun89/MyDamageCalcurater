@@ -15,6 +15,8 @@ export interface TileProps {
   readonly label?: string;
   readonly disabled?: boolean;
   readonly className?: string;
+  /** -1 にすると Tab の順から外す(同じ操作に Tab で行ける別の経路があるときの近道用)。 */
+  readonly tabIndex?: number;
   readonly children?: ReactNode;
 }
 
@@ -25,6 +27,7 @@ export function Tile({
   label = uiText.add,
   disabled = false,
   className,
+  tabIndex,
   children,
 }: TileProps): ReactElement {
   const classes = ["ui-tile"];
@@ -43,6 +46,7 @@ export function Tile({
       className={classes.join(" ")}
       aria-pressed={selected}
       disabled={disabled}
+      tabIndex={tabIndex}
       onClick={onClick}
     >
       {empty ? (

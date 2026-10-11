@@ -161,11 +161,7 @@ describe("削除の実行", () => {
     await waitFor(() => {
       expect(screen.queryByText("削除前の構築")).toBeNull();
     });
-    expect(
-      await screen.findByText(
-        "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます",
-      ),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("まだ構築がありません")).toBeInTheDocument();
     expect(server.calls.filter((call) => call.method === "GET").length).toBeGreaterThan(listCallsBefore);
   });
 });
