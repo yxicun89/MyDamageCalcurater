@@ -75,10 +75,11 @@ describe("詳細シート", () => {
     );
   });
 
-  it("AC-SHEET-05 サマリ: フェーズ1は estimates が空なので「まだ価格情報はありません」", async () => {
+  // 旧: status に「まだ価格情報はありません」。文字の多い状態は不評(ユーザー指摘 2026-10-11)なので、帯の空の枠(band-empty)で検出する。
+  it("AC-SHEET-05 サマリ: フェーズ1は estimates が空なので空の枠", async () => {
     const { dialog, api } = await openSheet("グリス");
     await waitFor(() => {
-      expect(within(dialog).getByRole("status")).toHaveTextContent("まだ価格情報はありません");
+      expect(within(dialog).getByTestId("band-empty")).toBeInTheDocument();
     });
     expect(api.callsTo("GET", "/api/items/12/estimates")).toHaveLength(1);
   });

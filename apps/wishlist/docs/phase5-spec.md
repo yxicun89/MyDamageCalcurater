@@ -172,8 +172,8 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。テストは `make wi
   価格の帯(`data-testid="price-band"`・カード・角丸 20): 左に大きく `¥low`(30px/800・`data-testid="band-low"`)と小さく `〜 ¥mid`(16px/800・muted・`data-testid="band-high"`。mid が無ければ「〜」だけ)。
   その下に帯(高さ 34px): 4px の線(`--line`)と、左端から全体の幅いっぱいまでの範囲を `--accent-soft` の 8px の太線で示す。各サイトの点(`data-testid="price-dot"`・28px の丸・サイトの色・頭文字・2px の白縁・`aria-label`=サイト名・`data-site-id`・`data-position`)を `left` で置く。
   `data-position` は整数 0〜100: 点にするサイト(このジャンルのサイトで `low` が非 null)の最安を 0、最高を 100 として `round((low - min) / (max - min) * 100)`。全部同額(点が 1 つ)は 0。CSS では `left: calc(6% + position * 0.88%)` のように両端に余白を取る。
-  価格の帯の代わり: どのサイトにも `low` が無く、`sites` が 1 つ以上あり全部 `no_result` のとき、`data-testid="no-listing"` のカード(虫めがねのアイコン+「出品ないかも」17px/800)。`sites` が空なら何も出さず、`role="status"` に「まだ価格情報はありません」。
-  `role="status"`(常に置く。短い文だけ): 「読み込み中…」「オフライン」「価格情報を取得できませんでした」「更新中…」「オフライン(前回の値)」「更新できませんでした」「まだ価格情報はありません」。成功して更新中でもないときは空。
+  価格の帯の代わり: どのサイトにも `low` が無く、`sites` が 1 つ以上あり全部 `no_result` のとき、`data-testid="no-listing"` のカード(虫めがねのアイコン+「出品ないかも」17px/800)。`sites` が空(など価格も「なし」も無い)なら、帯と同じ大きさの薄い灰色の空の枠(`data-testid="band-empty"`・動かない・小さな時計のアイコンだけ)を出す。文は出さない(文字の多い状態は不評。2026-10-11)。
+  `role="status"`(常に置く。短い文だけ): 「読み込み中…」「オフライン」「価格情報を取得できませんでした」「更新中…」「オフライン(前回の値)」「更新できませんでした」。成功して更新中でもないときは空。
   サイトのタイル(`<ul aria-label="サイト" data-columns="3">`・3 列・gap 10px): 各 `<li><a>` は `aria-label`=サイト名・`href`=検索 URL・`target="_blank"`・`rel="noopener"`・高さ 76 以上・角丸 16・白・1px の `--line`。中に マーク(30px の角丸 10・サイトの色・サイト名の先頭 1 文字・`data-testid="site-mark"`)と価格(13px/800・`data-testid="site-price"`)。
   価格: `status != no_result` で `low` があれば `¥low`(`failed` で前回値でもそのまま出し、`title="最終取得: N日前"`(今日なら「今日」)を付ける)、`no_result` は「なし」+タイルを薄く(`data-dim="true"`・マークの不透明度 0.45)、`failed` で `low` が無ければ価格なしで `data-failed="true"`、目安が無いサイト(link_only など)は価格なし。
   最安(`low` の最小。同額は全部)のタイルは 2px の `--accent` の縁・価格を `--accent`・`aria-current="true"`・`data-best="true"`。サイトの色(マークの地)はサイト名から決めてよい(`sites` に色の項目はまだ無い。固定の表で、無い名前は `--muted`)。

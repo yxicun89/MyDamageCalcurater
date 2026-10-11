@@ -13,6 +13,8 @@ RUN CGO_ENABLED=0 GOWORK=off go build -trimpath -ldflags="-s -w" -o /out/wishlis
 
 FROM chromedp/headless-shell:151.0.7922.109@sha256:2d349b544a1ea6b5b5fd7c0fe99215ff662339c57407ee2e8c0a11af93516b04
 COPY --from=build /out/wishlist-refresher /wishlist-refresher
+# headless-shell には Go が読む CA 証明書の束が無い(無いと実サイトへの HTTPS が x509 で全部失敗する)
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER 65532:65532
 # 既定の ENTRYPOINT(run.sh。ブラウザを起動する)は使わず、refresher を起動する(CronJob は command でも指定する)。
 ENTRYPOINT ["/wishlist-refresher"]

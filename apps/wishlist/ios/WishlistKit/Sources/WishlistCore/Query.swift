@@ -23,6 +23,36 @@ public enum SearchQuery {
         s.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
     }
 
+    /// 照合用の正規化(Go の query.Normalize と同じ: NFKC → 小文字 → 空白・記号を除く)。
+    public static func normalize(_ s: String) -> String {
+        let folded = s.precomposedStringWithCompatibilityMapping.lowercased()
+        var out = String.UnicodeScalarView()
+        for u in folded.unicodeScalars {
+            switch u.properties.generalCategory {
+            case .connectorPunctuation, .dashPunctuation, .openPunctuation, .closePunctuation,
+                 .initialPunctuation, .finalPunctuation, .otherPunctuation,
+                 .mathSymbol, .currencySymbol, .modifierSymbol, .otherSymbol,
+                 .spaceSeparator, .lineSeparator, .paragraphSeparator:
+                continue
+            default:
+                if u.properties.isWhitespace { continue }
+                out.append(u)
+            }
+        }
+        return String(out)
+    }
+
+    /// テンプレートの固定の語(空白で区切った語のうち {name}・{option} を含まないもの)のうち、
+    /// 正規化した name にもう含まれるものを除く(公式ページの名前はテンプレートの語を含むため。フェーズ5 5-1c)。
+    static func dropFixedWords(in template: String, name: String) -> String {
+        let n = normalize(name)
+        return template.split(whereSeparator: { $0.isWhitespace }).filter { w in
+            if w.contains("{name}") || w.contains("{option}") { return true }
+            let nw = normalize(String(w))
+            return nw.isEmpty || !n.contains(nw)
+        }.joined(separator: " ")
+    }
+
     /// 優先順位 siteQuery > queryOverride > テンプレート。空白(全角・タブ含む)のみの override は「無い」。
     /// 結果は連続空白を半角 1 つに詰めて前後を除く。置換は 1 回の走査(値の中の `{option}` を再置換しない)。
     public static func build(_ input: QueryInput) -> String {
@@ -32,7 +62,7 @@ public enum SearchQuery {
         if !override.isEmpty { return override }
         // 1 回の走査で置換する(値の中の {option} などを再置換しない)。
         var filled = ""
-        var rest = Substring(input.template)
+        var rest = Substring(dropFixedWords(in: input.template, name: input.name))
         while let open = rest.firstIndex(of: "{") {
             filled += rest[rest.startIndex..<open]
             let tail = rest[open...]

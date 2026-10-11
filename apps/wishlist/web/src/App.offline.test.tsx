@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { userEvent } from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
-import { installFakeApi, seedSettings } from "./test/fakeApi";
+import { installFakeApi } from "./test/fakeApi";
 import { makeItem } from "./test/factories";
 import { grid, gridItem, openHome } from "./test/render";
 import { scenario } from "./test/scenario";
@@ -48,7 +48,6 @@ describe("オフライン", () => {
 
   it("AC-OFF-04 保存済みも無く取得もできないときは alert を出す(白画面にしない)。「+」と「設定」は出る", async () => {
     const api = installFakeApi();
-    seedSettings(); // 移行用(fakeApi.ts 参照)
     api.offline = true;
     render(<App />);
     expect(await screen.findByRole("alert")).toBeInTheDocument();

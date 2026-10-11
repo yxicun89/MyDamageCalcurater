@@ -76,7 +76,7 @@ describe("目安価格: 取得", () => {
       a.estimates = () => est({ sites: [] });
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("まだ価格情報はありません");
+      expect(within(dialog).getByTestId("band-empty")).toBeInTheDocument(); // 旧: status の文。ユーザー指摘 2026-10-11 で枠に置換
     });
     expect(gets(api)).toHaveLength(1);
     expect(gets(api)[0]?.headers.has("Authorization")).toBe(false);
@@ -107,12 +107,12 @@ describe("目安価格: サマリ", () => {
     expect(within(dialog).getByTestId("band-high")).not.toHaveTextContent("¥");
   });
 
-  it("AC-EST-02 目安が無く estimates が空なら「まだ価格情報はありません」", async () => {
+  it("AC-EST-02 目安が無く estimates が空なら空の枠(band-empty)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () => est({ sites: [], summary_low: null, summary_mid: null, summary_fetched_at: null });
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("まだ価格情報はありません");
+      expect(within(dialog).getByTestId("band-empty")).toBeInTheDocument(); // 旧: status の文。ユーザー指摘 2026-10-11 で枠に置換
     });
   });
 

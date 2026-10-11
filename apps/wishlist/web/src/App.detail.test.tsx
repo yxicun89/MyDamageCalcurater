@@ -241,12 +241,12 @@ describe("詳細: 出品が無いとき", () => {
     expect(within(dialog).queryByTestId("no-listing")).not.toBeInTheDocument();
   });
 
-  it("AC-5-2j-2 目安がまだ無い(sites が空)ときは帯も「出品ないかも」も出さず、「まだ価格情報はありません」", async () => {
+  it("AC-5-2j-2 目安がまだ無い(sites が空)ときは帯も「出品ないかも」も出さず、空の枠(band-empty)", async () => {
     const { dialog } = await openDetail(() =>
       est({ sites: [], summary_low: null, summary_mid: null, summary_fetched_at: null }),
     );
     await waitFor(() => {
-      expect(within(dialog).getByRole("status")).toHaveTextContent("まだ価格情報はありません");
+      expect(within(dialog).getByTestId("band-empty")).toBeInTheDocument(); // 旧: status の文。文字の多い状態は不評(ユーザー指摘 2026-10-11)
     });
     expect(within(dialog).queryByTestId("price-band")).not.toBeInTheDocument();
     expect(within(dialog).queryByTestId("no-listing")).not.toBeInTheDocument();

@@ -45,6 +45,15 @@ func TestDockerfileBuildsRefresher(t *testing.T) {
 	}
 }
 
+// refresher のイメージ(chromedp/headless-shell)には Go が読む CA 証明書の束が無い。ビルド段から持ってこないと、
+// 実サイトへの HTTPS が全部 x509: certificate signed by unknown authority で失敗する(2026-10-11 に実クラスタで確認)。
+func TestDockerfileRefresherHasCACerts(t *testing.T) {
+	d := readFile(t, "../../Dockerfile.refresher")
+	if !regexp.MustCompile(`(?m)^COPY --from=build /etc/ssl/certs/ca-certificates\.crt /etc/ssl/certs/ca-certificates\.crt$`).MatchString(d) {
+		t.Error("Dockerfile.refresher がビルド段の CA 証明書の束(/etc/ssl/certs/ca-certificates.crt)をコピーしていない")
+	}
+}
+
 // AC-K2: CronJob wishlist-refresher。毎日 03:00 JST、多重起動しない、refresher 専用イメージ(wishlist/refresher。AC-K4)の /wishlist-refresher を起動、
 // securityContext は Deployment と同じ、DSN を Secret から渡す。base の kustomization に載る。
 // (以前は appid〈optional〉も渡すことを確かめていた。5-1e で appid を読まなくなったので、渡さないことを確かめる。ユーザー決定 2026-10-11)
@@ -72,7 +81,7 @@ func TestRefresherCronJob(t *testing.T) {
 		"runAsUser":          `runAsUser: 65532`,
 		"runAsGroup":         `runAsGroup: 65532`,
 		"seccomp":            `(?s)seccompProfile:\s*\n\s*type: RuntimeDefault`,
-		"resources.limits":   `(?s)limits:\s*\n\s*cpu:`,
+		"resources.limits":   `(?s)limits:\s*\n(\s*#[^\n]*\n)*\s*cpu: "1"`, // Chromium の描画に 1 コア(200m では間に合わなかった。2026-10-11)
 		"resources.requests": `(?s)requests:\s*\n\s*cpu:`,
 	}
 	for name, p := range patterns {

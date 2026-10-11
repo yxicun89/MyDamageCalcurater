@@ -233,13 +233,3 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
   vi.stubGlobal("fetch", vi.fn(handler));
   return api;
 }
-
-/**
- * 移行用(フェーズ5 5-2)。旧 App は保存済みのトークンが無いと設定画面から始まる。実装前でも変更のないテストが緑のままになるよう、
- * openHome が従来どおり保存しておく。サーバーは見ない(認証なし)。
- * TODO(5-2 実装者): lib/settings.ts を消すときにこの関数と呼び出し(test/render.tsx・App.offline・App.home)も消す。
- * 「何も保存しなくてもホームが出る」ことは App.noauth.test.tsx が確かめている。
- */
-export function seedSettings(token = "test-token"): void {
-  localStorage.setItem("wishlist.settings", JSON.stringify({ apiBaseUrl: null, token }));
-}

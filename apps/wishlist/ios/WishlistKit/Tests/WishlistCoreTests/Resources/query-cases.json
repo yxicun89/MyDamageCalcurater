@@ -135,6 +135,51 @@
       "query_override": null,
       "site_query": null,
       "want": ""
+    },
+    {
+      "note": "名前にテンプレートの固定の語がもう入っていれば足さない(公式ページの名前。フェーズ5 5-1c で名前を URL から取るようになったため)",
+      "template": "S.H.Figuarts {name}",
+      "name": "S.H.Figuarts ウルトラマンノア",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "S.H.Figuarts ウルトラマンノア"
+    },
+    {
+      "note": "固定の語の照合は正規化して行う(表記の揺れ・全角)",
+      "template": "S.H.Figuarts {name}",
+      "name": "Ｓ．Ｈ．Ｆｉｇｕａｒｔｓ グリス",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "Ｓ．Ｈ．Ｆｉｇｕａｒｔｓ グリス"
+    },
+    {
+      "note": "固定の語が名前に入っていれば、テンプレートの後ろの語でも足さない",
+      "template": "{option} {name} 未開封",
+      "name": "ピカチュウ 未開封",
+      "option": "ぬいぐるみ",
+      "query_override": null,
+      "site_query": null,
+      "want": "ぬいぐるみ ピカチュウ 未開封"
+    },
+    {
+      "note": "名前に入っていない固定の語は残す(一部だけ一致は残す)",
+      "template": "S.H.Figuarts {name}",
+      "name": "Figuarts グリス",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "S.H.Figuarts Figuarts グリス"
+    },
+    {
+      "note": "プレースホルダーと同じ語に付いた文字は固定の語として扱わない",
+      "template": "{name}版",
+      "name": "グリス版",
+      "option": "",
+      "query_override": null,
+      "site_query": null,
+      "want": "グリス版版"
     }
   ],
   "deeplink": [

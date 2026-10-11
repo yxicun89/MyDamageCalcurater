@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 import { App } from "./App";
-import { installFakeApi, seedSettings } from "./test/fakeApi";
+import { installFakeApi } from "./test/fakeApi";
 import { makeItem } from "./test/factories";
 import { grid, gridItem, openHome, queryGridItem } from "./test/render";
 import { scenario } from "./test/scenario";
@@ -53,7 +53,6 @@ describe("ホーム", () => {
 
   it("AC-HOME-05 商品が 0 件でも落ちず、「+」は出る", async () => {
     installFakeApi({ genres: [], sites: [], items: [] });
-    seedSettings(); // 移行用(fakeApi.ts 参照)
     render(<App />);
     expect(await screen.findByRole("button", { name: "追加" })).toBeInTheDocument();
     expect(screen.queryAllByRole("img")).toHaveLength(0);
