@@ -13,7 +13,7 @@ import XCTest
 ///   ルート: openSpeedScreen / 画面: speedScreen
 ///   自分: speedMode-<preset|custom|raw> / speedPokemonButton(ポケモンのシートを開く)/ speedPreset-<uninvested|neutral-max|max> /
 ///         speedScarf / speedSelfTailwind / speedParalysis / speedNature-<minus|neutral|plus> /
-///         speedSPValue・speedSPIncrement・speedSPDecrement / speedRankValue・speedRankIncrement・speedRankDecrement /
+///         speedSPValue・speedSPIncrement・speedSPDecrement / rankMeter-speed・rankMeterPlus-speed・rankMeterMinus-speed(ADR-0533) /
 ///         speedRawValueField / speedRawValueError
 ///   ピッカー(シート): speedPokemonSheet / speedPokemonSearchField / speedPokemonRow-<pokemonId> / speedPokemonNoMatch
 ///   結果: speedResult / speedResultSpeed / speedResultFaster / speedResultSlower / speedResultTieEntry-<index> / speedResultNoTie /
@@ -265,7 +265,7 @@ final class SpeedScreenUITests: XCTestCase {
     func testCustomModeShowsItsControlsAndAResult() {
         let app = launchSpeedScreen()
         tap(app, "speedMode-custom")
-        for id in ["speedSPValue", "speedSPIncrement", "speedSPDecrement", "speedRankValue", "speedRankIncrement", "speedRankDecrement"] {
+        for id in ["speedSPValue", "speedSPIncrement", "speedSPDecrement", "rankMeter-speed", "rankMeterPlus-speed", "rankMeterMinus-speed"] {
             wait(element(app, id), "\(id) が無い")
         }
         for nature in ["minus", "neutral", "plus"] {
@@ -277,6 +277,25 @@ final class SpeedScreenUITests: XCTestCase {
         tap(app, "speedNature-plus")
         expectSelected(element(app, "speedNature-plus"), true, "性格補正が選ばれる")
         wait(element(app, "speedResultSpeed"), "カスタムでも結果が出る")
+    }
+
+    /// ランクはメーター(ADR-0533): + で読み上げ値が「+1」になり、結果の実数値が変わる。
+    func testRankMeterPlusChangesValueAndResult() {
+        let app = launchSpeedScreen()
+        tap(app, "speedMode-custom")
+        pickPokemon(app, Self.mockPokemonB)
+        let result = element(app, "speedResultSpeed")
+        wait(result, "結果が出る")
+        let meter = element(app, "rankMeter-speed")
+        wait(meter, "メーターが無い")
+        XCTAssertEqual(meter.value as? String, "±0")
+        XCTAssertEqual(meter.label, "素早さ")
+        let before = result.label
+        tap(app, "rankMeterPlus-speed")
+        expectation(for: NSPredicate(format: "value == %@", "+1"), evaluatedWith: meter, handler: nil)
+        waitForExpectations(timeout: 5)
+        expectation(for: NSPredicate(format: "label != %@", before), evaluatedWith: result, handler: nil)
+        waitForExpectations(timeout: 5)
     }
 
     // MARK: - ポケモンのピッカー

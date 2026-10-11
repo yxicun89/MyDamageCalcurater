@@ -5,7 +5,7 @@ import XCTest
 /// ここでは「詳細を開くと防御側のランクが B ±0 で出る」「上げ下げで表示が変わる」「上下限でボタンが無効になる」
 /// 「操作しても結果の行が出続ける」「ボタンが 36pt 以上」「攻撃側のランクと混ざらない」だけを見る。
 /// 要求の中身は `CalcViewModelDefenderRanksTests` / `APIPokeCalcServiceDefenderRanksTests` で固定している。
-/// identifier は追加のみ: calcDefenderRankDecrement / calcDefenderRankValue / calcDefenderRankIncrement
+/// identifier は追加のみ: rankMeterMinus-calcDefender / rankMeter-calcDefender / rankMeterPlus-calcDefender
 /// (攻撃側の calcAttackerRank* と同じ流儀。既存の identifier は変えない)。
 @MainActor
 final class CalcDefenderRanksUITests: XCTestCase {
@@ -59,8 +59,9 @@ final class CalcDefenderRanksUITests: XCTestCase {
         XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
     }
 
-    private func waitForLabel(_ target: XCUIElement, _ label: String) {
-        expectation(for: NSPredicate(format: "label == %@", label), evaluatedWith: target, handler: nil)
+    /// メーターの読み上げ値(「+2」「-3」「±0」。ADR-0533)を待つ。
+    private func waitForValue(_ target: XCUIElement, _ value: String) {
+        expectation(for: NSPredicate(format: "value == %@", value), evaluatedWith: target, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
     }
 
@@ -75,16 +76,17 @@ final class CalcDefenderRanksUITests: XCTestCase {
     /// 詳細を開くと、防御側のランクが「B ±0」で出る(物理技が既定)。閉じている間は出ない。
     func testDefenderRankIsHiddenWhenCollapsedAndShowsDefaultWhenOpened() {
         let app = launchCalcScreen()
-        XCTAssertFalse(element(app, "calcDefenderRankValue").exists, "閉じている間は出さない")
+        XCTAssertFalse(element(app, "rankMeter-calcDefender").exists, "閉じている間は出さない")
 
         openConditions(app)
-        let value = element(app, "calcDefenderRankValue")
+        let value = element(app, "rankMeter-calcDefender")
         scrollUntilHittable(app, value)
-        XCTAssertEqual(value.label, "B ±0")
-        XCTAssertTrue(element(app, "calcDefenderRankIncrement").exists)
-        XCTAssertTrue(element(app, "calcDefenderRankDecrement").exists)
-        XCTAssertEqual(element(app, "calcDefenderRankIncrement").label, "防御側のランクを上げる")
-        XCTAssertEqual(element(app, "calcDefenderRankDecrement").label, "防御側のランクを下げる")
+        XCTAssertEqual(value.value as? String, "±0")
+        XCTAssertEqual(value.label, "防御", "既定の技は物理なので防御")
+        XCTAssertTrue(element(app, "rankMeterPlus-calcDefender").exists)
+        XCTAssertTrue(element(app, "rankMeterMinus-calcDefender").exists)
+        XCTAssertEqual(element(app, "rankMeterPlus-calcDefender").label, "防御側のランクを上げる")
+        XCTAssertEqual(element(app, "rankMeterMinus-calcDefender").label, "防御側のランクを下げる")
     }
 
     /// 上げ下げで表示が変わり、結果の行は出続ける。攻撃側のランクは変わらない。
@@ -92,31 +94,31 @@ final class CalcDefenderRanksUITests: XCTestCase {
         let app = launchCalcScreen()
         openConditions(app)
 
-        let increment = element(app, "calcDefenderRankIncrement")
-        let decrement = element(app, "calcDefenderRankDecrement")
-        let value = element(app, "calcDefenderRankValue")
-        let attackerValue = element(app, "calcAttackerRankValue")
+        let increment = element(app, "rankMeterPlus-calcDefender")
+        let decrement = element(app, "rankMeterMinus-calcDefender")
+        let value = element(app, "rankMeter-calcDefender")
+        let attackerValue = element(app, "rankMeter-calcAttacker")
         scrollUntilHittable(app, increment)
 
         increment.tap()
-        waitForLabel(value, "B +1")
+        waitForValue(value, "+1")
         increment.tap()
-        waitForLabel(value, "B +2")
+        waitForValue(value, "+2")
         decrement.tap()
-        waitForLabel(value, "B +1")
+        waitForValue(value, "+1")
         decrement.tap()
         decrement.tap()
-        waitForLabel(value, "B -1")
+        waitForValue(value, "-1")
 
-        XCTAssertEqual(attackerValue.label, "A ±0", "防御側のランクを変えても攻撃側のランクは変わらない")
+        XCTAssertEqual(attackerValue.value as? String, "±0", "防御側のランクを変えても攻撃側のランクは変わらない")
         assertRowsStillShown(app, "防御側のランク")
 
         // 攻撃側を上げても防御側は変わらない。
-        let attackerIncrement = element(app, "calcAttackerRankIncrement")
+        let attackerIncrement = element(app, "rankMeterPlus-calcAttacker")
         scrollUntilHittable(app, attackerIncrement)
         attackerIncrement.tap()
-        waitForLabel(attackerValue, "A +1")
-        XCTAssertEqual(value.label, "B -1")
+        waitForValue(attackerValue, "+1")
+        XCTAssertEqual(value.value as? String, "-1")
     }
 
     /// +6 で「上げる」、-6 で「下げる」が無効になる。
@@ -124,16 +126,16 @@ final class CalcDefenderRanksUITests: XCTestCase {
         let app = launchCalcScreen()
         openConditions(app)
 
-        let increment = element(app, "calcDefenderRankIncrement")
-        let decrement = element(app, "calcDefenderRankDecrement")
-        let value = element(app, "calcDefenderRankValue")
+        let increment = element(app, "rankMeterPlus-calcDefender")
+        let decrement = element(app, "rankMeterMinus-calcDefender")
+        let value = element(app, "rankMeter-calcDefender")
         scrollUntilHittable(app, increment)
 
         XCTAssertTrue(increment.isEnabled)
         XCTAssertTrue(decrement.isEnabled)
         for step in 1...Self.rankLimit {
             increment.tap()
-            waitForLabel(value, "B +\(step)")
+            waitForValue(value, "+\(step)")
         }
         XCTAssertFalse(increment.isEnabled, "+6 では上げられない")
         XCTAssertTrue(decrement.isEnabled)
@@ -141,7 +143,7 @@ final class CalcDefenderRanksUITests: XCTestCase {
         for _ in 1...(Self.rankLimit * 2) {
             decrement.tap()
         }
-        waitForLabel(value, "B -6")
+        waitForValue(value, "-6")
         XCTAssertFalse(decrement.isEnabled, "-6 では下げられない")
         XCTAssertTrue(increment.isEnabled)
         assertRowsStillShown(app, "上下限")
@@ -152,12 +154,40 @@ final class CalcDefenderRanksUITests: XCTestCase {
         let app = launchCalcScreen()
         openConditions(app)
 
-        let increment = element(app, "calcDefenderRankIncrement")
-        let decrement = element(app, "calcDefenderRankDecrement")
+        let increment = element(app, "rankMeterPlus-calcDefender")
+        let decrement = element(app, "rankMeterMinus-calcDefender")
         scrollUntilHittable(app, increment)
         for button in [increment, decrement] {
             XCTAssertGreaterThanOrEqual(button.frame.width, Self.minTapSize, button.identifier)
             XCTAssertGreaterThanOrEqual(button.frame.height, Self.minTapSize, button.identifier)
         }
+    }
+
+    /// メーター本体も 36pt 以上の高さで、右端のタップで +6、左端のタップで -6 になる(ドラッグ・タップで最寄りの段。ADR-0533)。
+    func testDefenderRankMeterTrackIsTappableAndPicksNearestStep() {
+        let app = launchCalcScreen()
+        openConditions(app)
+
+        let meter = element(app, "rankMeter-calcDefender")
+        scrollUntilHittable(app, meter)
+        XCTAssertGreaterThanOrEqual(meter.frame.height, Self.minTapSize, "メーターの高さ")
+        meter.coordinate(withNormalizedOffset: CGVector(dx: 0.99, dy: 0.5)).tap()
+        waitForValue(meter, "+6")
+        meter.coordinate(withNormalizedOffset: CGVector(dx: 0.01, dy: 0.5)).tap()
+        waitForValue(meter, "-6")
+        meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        waitForValue(meter, "±0")
+        assertRowsStillShown(app, "メーターのタップ")
+    }
+
+    /// VoiceOver の上下スワイプ相当(adjustable の increment / decrement)で増減する。
+    func testDefenderRankMeterIsAdjustable() {
+        let app = launchCalcScreen()
+        openConditions(app)
+
+        let meter = element(app, "rankMeter-calcDefender")
+        scrollUntilHittable(app, meter)
+        meter.adjust(toNormalizedSliderPosition: 1.0)
+        waitForValue(meter, "+6")
     }
 }
