@@ -184,7 +184,7 @@ func migrateUp(cfg migrateConfig) error {
 		return err
 	}
 	defer db.Close()
-	// Pod の起動直後は DB に繋がらないことがあるので再試行する(internal/dbwait)。
+	// Pod の起動直後は DB に繋がらないことがあるので再試行する(internal/adapters/dbwait)。
 	if err := dbwait.Ping(context.Background(), db); err != nil {
 		return fmt.Errorf("cannot reach the database: %w", err)
 	}

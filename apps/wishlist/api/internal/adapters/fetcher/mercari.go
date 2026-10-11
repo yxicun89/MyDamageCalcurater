@@ -1,7 +1,7 @@
 package fetcher
 
 // メルカリの headless 取得(docs/phase3-api-spec.md の AC-H*、構造の根拠は docs/sites-headless.md)。
-// 描画(Renderer・Page)とパース(ParseMercari)を分ける。chromedp の実装は internal/chromium。
+// 描画(Renderer・Page)とパース(ParseMercari)を分ける。chromedp の実装は internal/adapters/chromium。
 
 import (
 	"bytes"
@@ -37,7 +37,7 @@ const (
 // ErrNotRendered は、待っても出品が描画されなかったこと(0 件とは区別する。前回値を残す)。
 var ErrNotRendered = errors.New("fetcher: mercari: listings were not rendered")
 
-// Renderer は URL を開いて描画できるブラウザ(本番は internal/chromium。テストは偽物)。
+// Renderer は URL を開いて描画できるブラウザ(本番は internal/adapters/chromium。テストは偽物)。
 type Renderer interface {
 	// OpenPage は新しいページ(タブ)を開く。呼び出し側が必ず Close する。
 	OpenPage(ctx context.Context) (Page, error)

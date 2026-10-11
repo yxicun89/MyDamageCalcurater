@@ -137,7 +137,7 @@ func TestExtractText(t *testing.T) {
 	}
 }
 
-// AC-O12: fixture(架空の公式ページ。internal/official/testdata/)の判定。サイト固有の構造は使わず語だけで決まること。
+// AC-O12: fixture(架空の公式ページ。internal/adapters/official/testdata/)の判定。サイト固有の構造は使わず語だけで決まること。
 func TestJudge_Fixtures(t *testing.T) {
 	cases := []struct {
 		file     string

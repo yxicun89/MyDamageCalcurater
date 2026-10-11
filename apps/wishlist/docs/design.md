@@ -83,7 +83,7 @@ iPhone(PWA / 将来 iOS アプリ)
 - **MySQL の NetworkPolicy**(`deploy/k8s/base/networkpolicy/allow-mysql-ingress.yaml`)に、wishlist 名前空間の
   `app.kubernetes.io/name: wishlist-api` / `wishlist-migrate` / `wishlist-refresher` から 3306 への許可を足した
   (ユーザー決定 2026-10-03 により wishlist レーンが PR #587 で入れた。`docs/ai-shared/decisions/2026-10-03-wishlist-phase2-3-user-decisions.md`)
-- Pod の起動直後は許可の反映が数秒遅れ、接続が拒否されることがある。api・migrate・refresher は起動時に DB への接続を再試行する(`internal/dbwait`)
+- Pod の起動直後は許可の反映が数秒遅れ、接続が拒否されることがある。api・migrate・refresher は起動時に DB への接続を再試行する(`internal/adapters/dbwait`)
 - DB `wishlist` と専用ユーザーの作成は root 権限が要る。`scripts/bootstrap.sh`(1 回だけ実行する。2026-10-03 に実行済み。共有の mysql Pod に `kubectl exec`。秘密は stdin・ファイル経由で渡し argv に載せない)
 
 ## 6. Web(PWA)

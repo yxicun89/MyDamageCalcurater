@@ -8,7 +8,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/domain/crawl"
 )
 
-// フェーズ4-3: ホスト単位の間隔を、価格の Fetcher と公式ページの取得(internal/official)で共有する(docs/phase4-spec.md AC-O20・O21)。
+// フェーズ4-3: ホスト単位の間隔を、価格の Fetcher と公式ページの取得(internal/adapters/official)で共有する(docs/phase4-spec.md AC-O20・O21)。
 
 // HostGate はホストごとの直列化と最小間隔(Throttle の中身を共有できるようにしたもの)。
 // 同じホストへの取得は直列にし、前回の取得が終わってから interval(hostIntervals にあればその長いほう)以上あけてから次を始める。

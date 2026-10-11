@@ -22,7 +22,7 @@ const (
 	mysqlForeignKeyNoRef = 1452 // 外部キー違反(参照先が無い)
 )
 
-// MySQLRepository は MySQL(DB `wishlist`)の Repository。クエリは internal/store(sqlc 生成)を使う。
+// MySQLRepository は MySQL(DB `wishlist`)の Repository。クエリは internal/adapters/store/sqlcgen(sqlc 生成)を使う。
 // 複数の文にまたがる更新(site_ids・site_overrides の置き換え)はトランザクションで不可分にする。
 // 外部キー違反(1452)は ErrGenreNotFound / ErrSiteNotFound、UNIQUE 違反(1062)は ErrDuplicateName に変換する。
 type MySQLRepository struct {
