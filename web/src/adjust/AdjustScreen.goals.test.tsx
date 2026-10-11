@@ -256,6 +256,45 @@ const card = (n: number) => within(goalsRegion()).getByRole("group", { name: T.g
 const field = (n: number, visibleLabel: string) =>
   screen.getByRole("combobox", { name: T.goalFieldName(n, visibleLabel) });
 
+// I-web-18(ADR-0354): 種類・振り方(3 択まで)は区切りボタン(radio)、技は技ピッカー(combobox のトリガー + listbox)。
+type GoalKind = "outspeed" | "survive" | "ko";
+const kindRadio = (n: number, kind: GoalKind) =>
+  within(card(n)).getByRole("radio", { name: T.goalKindOption[kind] });
+/** 技ピッカーのトリガーが持つ選択中の技 ID(未選択は空文字)。 */
+const moveValue = (n: number, label: string) => field(n, label).getAttribute("data-value");
+/** 選択中の振り方の表示名(区切りボタンのとき)。 */
+const checkedPresetLabel = (n: number) =>
+  within(within(card(n)).getByRole("radiogroup", { name: T.goalFieldName(n, T.goalPresetFieldLabel) }))
+    .getAllByRole("radio")
+    .find((radio) => radio.getAttribute("aria-checked") === "true")?.textContent;
+const presetRadioLabels = (n: number) =>
+  within(within(card(n)).getByRole("radiogroup", { name: T.goalFieldName(n, T.goalPresetFieldLabel) }))
+    .getAllByRole("radio")
+    .map((radio) => radio.textContent);
+
+/** 技ピッカーを開いて行の技 ID(空の行を除く)を読み、閉じる。 */
+async function moveRowIds(user: UserEvent, n: number, label: string): Promise<string[]> {
+  await user.click(field(n, label));
+  const rows = within(screen.getByRole("listbox", { name: T.goalFieldName(n, label) })).getAllByRole(
+    "option",
+  );
+  const ids = rows.map((row) => row.getAttribute("data-move-id") ?? "");
+  await user.keyboard("{Escape}");
+  return ids.filter((id) => id !== "");
+}
+
+async function chooseMove(user: UserEvent, n: number, label: string, moveId: string): Promise<void> {
+  await user.click(field(n, label));
+  const rows = within(screen.getByRole("listbox", { name: T.goalFieldName(n, label) })).getAllByRole(
+    "option",
+  );
+  const row = rows.find((candidate) => candidate.getAttribute("data-move-id") === moveId);
+  if (row === undefined) {
+    throw new Error(`技 ${moveId} の行が無い`);
+  }
+  await user.click(row);
+}
+
 async function chooseMode(user: UserEvent, mode: AdjustModeKey): Promise<void> {
   await user.click(screen.getByRole("radio", { name: T.modeLabel[mode] }));
 }
@@ -277,7 +316,7 @@ interface GoalInput {
 /** 目標を1つ足して入力する(n はその目標の番号)。 */
 async function addGoal(user: UserEvent, n: number, input: GoalInput): Promise<void> {
   await user.click(addButton());
-  await user.selectOptions(field(n, T.goalKindFieldLabel), input.kind);
+  await user.click(kindRadio(n, input.kind));
   if (input.species !== undefined) {
     await user.selectOptions(field(n, T.goalOpponentSpeciesFieldLabel), input.species.key);
   }
@@ -288,10 +327,21 @@ async function addGoal(user: UserEvent, n: number, input: GoalInput): Promise<vo
         : input.kind === "ko"
           ? T.goalSelfMoveFieldLabel
           : T.goalBoostMoveFieldLabel;
-    await user.selectOptions(field(n, moveLabel), input.move.id);
+    await chooseMove(user, n, moveLabel, input.move.id);
   }
   if (input.preset !== undefined) {
-    await user.selectOptions(field(n, T.goalPresetFieldLabel), input.preset);
+    if (input.kind === "ko") {
+      await user.selectOptions(field(n, T.goalPresetFieldLabel), input.preset);
+    } else {
+      const label =
+        input.kind === "outspeed"
+          ? T.speedPresetOption[input.preset as keyof typeof T.speedPresetOption]
+          : attackerPresetLabel(
+              input.preset as Parameters<typeof attackerPresetLabel>[0],
+              input.move?.category === "special" ? "special" : "physical",
+            );
+      await user.click(within(card(n)).getByRole("radio", { name: label }));
+    }
   }
   if (input.hits !== undefined) {
     await user.selectOptions(field(n, T.hitsLabel), String(input.hits));
@@ -299,12 +349,6 @@ async function addGoal(user: UserEvent, n: number, input: GoalInput): Promise<vo
   if (input.thresholdPercent !== undefined) {
     await user.selectOptions(field(n, T.thresholdLabel), String(input.thresholdPercent));
   }
-}
-
-function optionTexts(select: HTMLElement): string[] {
-  return within(select)
-    .getAllByRole("option")
-    .map((option) => option.textContent);
 }
 
 function optionValues(select: HTMLElement): string[] {
@@ -378,14 +422,14 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await user.click(addButton());
 
     expect(card(1)).toBeInTheDocument();
-    const kind = field(1, T.goalKindFieldLabel);
-    expect(kind).toHaveValue("outspeed");
-    expect(kind).toHaveFocus();
-    expect(optionTexts(kind)).toEqual([
-      T.goalKindOption.outspeed,
-      T.goalKindOption.survive,
-      T.goalKindOption.ko,
-    ]);
+    const group = within(card(1)).getByRole("radiogroup", { name: T.goalFieldName(1, T.goalKindFieldLabel) });
+    expect(
+      within(group)
+        .getAllByRole("radio")
+        .map((radio) => radio.textContent),
+    ).toEqual([T.goalKindOption.outspeed, T.goalKindOption.survive, T.goalKindOption.ko]);
+    expect(kindRadio(1, "outspeed")).toBeChecked();
+    expect(kindRadio(1, "outspeed")).toHaveFocus();
     expect(within(goalsRegion()).queryByText(T.noGoalsNotice)).toBeNull();
   });
 
@@ -395,21 +439,19 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await chooseMode(user, "goals");
     await user.click(addButton());
 
-    const preset = field(1, T.goalPresetFieldLabel);
-    expect(optionTexts(preset)).toEqual([
+    expect(presetRadioLabels(1)).toEqual([
       T.speedPresetOption.fastest,
       T.speedPresetOption.neutral_max,
       T.speedPresetOption.none,
     ]);
-    expect(preset).toHaveValue("fastest");
+    expect(checkedPresetLabel(1)).toBe(T.speedPresetOption.fastest);
     const boost = field(1, T.goalBoostMoveFieldLabel);
-    expect(boost).toHaveValue("");
-    expect(optionTexts(boost)[0]).toBe(T.goalBoostMoveNone);
-    expect(optionValues(boost).filter((value) => value !== "")).toEqual([
-      MOVE_FIRE.id,
-      MOVE_BOOST.id,
-      MOVE_FLAME.id,
-    ]);
+    expect(moveValue(1, T.goalBoostMoveFieldLabel)).toBe("");
+    expect(boost).toHaveTextContent(T.goalBoostMoveNone);
+    // 技ピッカーの行はタイプ順(ADR-0341)なので、select の learnset 順ではなく集合で比べる。
+    expect((await moveRowIds(user, 1, T.goalBoostMoveFieldLabel)).sort()).toEqual(
+      [MOVE_FIRE.id, MOVE_BOOST.id, MOVE_FLAME.id].sort(),
+    );
     expect(within(card(1)).queryByRole("combobox", { name: T.goalFieldName(1, T.hitsLabel) })).toBeNull();
   });
 
@@ -419,13 +461,11 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await chooseMode(user, "goals");
     await addGoal(user, 1, { kind: "survive", species: FISH, move: MOVE_WATER });
 
-    expect(optionValues(field(1, T.goalOpponentMoveFieldLabel)).filter((value) => value !== "")).toEqual([
-      MOVE_WATER.id,
-      MOVE_TACKLE.id,
-    ]);
-    const preset = field(1, T.goalPresetFieldLabel);
-    expect(preset).toHaveValue("x_full");
-    expect(optionTexts(preset)).toEqual([
+    expect((await moveRowIds(user, 1, T.goalOpponentMoveFieldLabel)).sort()).toEqual(
+      [MOVE_WATER.id, MOVE_TACKLE.id].sort(),
+    );
+    expect(checkedPresetLabel(1)).toBe(attackerPresetLabel("x_full", "special"));
+    expect(presetRadioLabels(1)).toEqual([
       attackerPresetLabel("none", "special"),
       attackerPresetLabel("x_full", "special"),
       attackerPresetLabel("x", "special"),
@@ -443,11 +483,10 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await chooseMode(user, "goals");
     await addGoal(user, 1, { kind: "ko", species: FISH, move: MOVE_FLAME });
 
-    expect(optionValues(field(1, T.goalSelfMoveFieldLabel)).filter((value) => value !== "")).toEqual([
-      MOVE_FIRE.id,
-      MOVE_BOOST.id,
-      MOVE_FLAME.id,
-    ]);
+    // 技ピッカーの行はタイプ順(ADR-0341)なので、select の learnset 順ではなく集合で比べる。
+    expect((await moveRowIds(user, 1, T.goalSelfMoveFieldLabel)).sort()).toEqual(
+      [MOVE_FIRE.id, MOVE_BOOST.id, MOVE_FLAME.id].sort(),
+    );
     const preset = field(1, T.goalPresetFieldLabel);
     expect(preset).toHaveValue("none");
     expect(optionValues(preset)).toEqual([...defenderPresetKeysFor("special")]);
@@ -458,15 +497,15 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await fillSelf(user);
     await chooseMode(user, "goals");
     await addGoal(user, 1, { kind: "survive", species: FISH, move: MOVE_TACKLE, preset: "none" });
-    await user.selectOptions(field(1, T.goalKindFieldLabel), "ko");
+    await user.click(kindRadio(1, "ko"));
 
     expect(field(1, T.goalOpponentSpeciesFieldLabel)).toHaveValue(FISH.key);
-    expect(field(1, T.goalSelfMoveFieldLabel)).toHaveValue("");
+    expect(moveValue(1, T.goalSelfMoveFieldLabel)).toBe("");
     expect(field(1, T.goalPresetFieldLabel)).toHaveValue("none");
 
-    await user.selectOptions(field(1, T.goalKindFieldLabel), "outspeed");
-    expect(field(1, T.goalPresetFieldLabel)).toHaveValue("fastest");
-    expect(field(1, T.goalBoostMoveFieldLabel)).toHaveValue("");
+    await user.click(kindRadio(1, "outspeed"));
+    expect(checkedPresetLabel(1)).toBe(T.speedPresetOption.fastest);
+    expect(moveValue(1, T.goalBoostMoveFieldLabel)).toBe("");
   });
 
   test("外すと番号を詰め、フォーカスは「目標を追加」へ", async () => {
@@ -479,7 +518,7 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await user.click(within(card(1)).getByRole("button", { name: T.removeGoalName(1) }));
 
     expect(within(goalsRegion()).getAllByRole("group")).toHaveLength(1);
-    expect(field(1, T.goalKindFieldLabel)).toHaveValue("ko");
+    expect(kindRadio(1, "ko")).toBeChecked();
     expect(field(1, T.goalOpponentSpeciesFieldLabel)).toHaveValue(BUG.key);
     expect(addButton()).toHaveFocus();
   });
@@ -502,8 +541,8 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await addGoal(user, 1, { kind: "ko", species: FISH, move: MOVE_FIRE });
     await chooseMode(user, "bulk");
     await chooseMode(user, "goals");
-    expect(field(1, T.goalKindFieldLabel)).toHaveValue("ko");
-    expect(field(1, T.goalSelfMoveFieldLabel)).toHaveValue(MOVE_FIRE.id);
+    expect(kindRadio(1, "ko")).toBeChecked();
+    expect(moveValue(1, T.goalSelfMoveFieldLabel)).toBe(MOVE_FIRE.id);
   });
 
   test("自分のポケモンを変えて選べなくなった自分の技(倒す・先に使う技)は未選択に戻す", async () => {
@@ -513,8 +552,8 @@ describe("G1 目標の追加・切り替え・外す", () => {
     await addGoal(user, 1, { kind: "ko", species: FISH, move: MOVE_FIRE });
     await addGoal(user, 2, { kind: "outspeed", species: FISH, move: MOVE_BOOST });
     await user.selectOptions(screen.getByRole("combobox", { name: T.selfSpeciesLabel }), BUG.key);
-    expect(field(1, T.goalSelfMoveFieldLabel)).toHaveValue("");
-    expect(field(2, T.goalBoostMoveFieldLabel)).toHaveValue("");
+    expect(moveValue(1, T.goalSelfMoveFieldLabel)).toBe("");
+    expect(moveValue(2, T.goalBoostMoveFieldLabel)).toBe("");
   });
 });
 
@@ -872,7 +911,7 @@ describe("G5 エラー", () => {
 
     expect(await screen.findByRole("alert")).toHaveTextContent(adjustErrorText.invalid_input);
     expect(screen.queryByText(/internal detail/)).toBeNull();
-    expect(field(2, T.goalSelfMoveFieldLabel)).toHaveValue(MOVE_FIRE.id);
+    expect(moveValue(2, T.goalSelfMoveFieldLabel)).toBe(MOVE_FIRE.id);
     expect(within(resultRegion()).queryByRole("list", { name: T.goalOutcomesLabel })).toBeNull();
   });
 
@@ -938,10 +977,9 @@ describe("G7 a11y", () => {
     await chooseMode(user, "goals");
     await addGoal(user, 1, { kind: "survive", species: FISH });
 
+    // select と技ピッカー(combobox)は <label> の見える文字が短いラベル
     for (const label of [
-      T.goalKindFieldLabel,
       T.goalOpponentSpeciesFieldLabel,
-      T.goalPresetFieldLabel,
       T.goalOpponentMoveFieldLabel,
       T.hitsLabel,
       T.thresholdLabel,
@@ -949,6 +987,12 @@ describe("G7 a11y", () => {
       const control = within(card(1)).getByRole("combobox", { name: T.goalFieldName(1, label) });
       expect(visibleLabelOf(control)).toBe(label);
       expect(accessibleNameOf(control)).toContain(label);
+    }
+    // 種類・振り方(区切りボタン)は radiogroup の名前が見えるラベルの文字を含み、同じ文字が見えている
+    for (const label of [T.goalKindFieldLabel, T.goalPresetFieldLabel]) {
+      const group = within(card(1)).getByRole("radiogroup", { name: T.goalFieldName(1, label) });
+      expect(accessibleNameOf(group)).toContain(label);
+      expect(within(card(1)).getByText(label)).toBeVisible();
     }
     const remove = within(card(1)).getByRole("button", { name: T.removeGoalName(1) });
     expect(remove).toHaveTextContent(T.removeGoalLabel);
