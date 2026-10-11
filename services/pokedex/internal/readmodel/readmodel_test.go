@@ -396,7 +396,8 @@ func TestExportFailures(t *testing.T) {
 			q.AbilityEffects = append(q.AbilityEffects, store.AbilityEffect{AbilityID: "testhidden", Effect: json.RawMessage(`{"DefResistType": {"fire": 4915}}`)})
 		}, readmodel.ErrInvalidExport},
 		{"効果の JSON が共通マスタの検査を通らない", func(q *storetest.Querier) {
-			q.AbilityEffects = append(q.AbilityEffects, store.AbilityEffect{AbilityID: "testhidden", Effect: json.RawMessage(`{"Unknown": 1}`)})
+			q.AbilityEffects = append(q.AbilityEffects, store.AbilityEffect{AbilityID: "testhidden", Effect: json.RawMessage(`{"StabMod": "x"}`)})
+			// 未知のフィールドは ADR-0145 で読み捨てる(TestExportIgnoresUnknownEffectFields)。ここは知っている項目の型違い。
 		}, readmodel.ErrInvalidExport},
 		{"DB の失敗はそのまま包む", func(q *storetest.Querier) { q.Err = storetest.ErrDB }, storetest.ErrDB},
 	}
