@@ -16,10 +16,21 @@ export interface BalancePanelProps {
   readonly master: MasterData;
   readonly speciesFor: SpeciesResolutions["speciesFor"];
   readonly abilitiesFor: SpeciesResolutions["abilitiesFor"];
+  /** おすすめのポケモンのタイルを押したとき(ADR-0422 §2)。渡さなければタイルでなく従来の文字で出す。 */
+  readonly onPickPokemon?: (speciesKey: string) => void;
+  /** 押して入れられるか(構築に空き枠があるか)。false ならタイルは押せない。 */
+  readonly canPick?: boolean;
 }
 
 /** 結果の節(Fragment。置かれた側のコンテナの子としてそのまま並ぶ)。 */
-export function BalancePanel({ state, master, speciesFor, abilitiesFor }: BalancePanelProps) {
+export function BalancePanel({
+  state,
+  master,
+  speciesFor,
+  abilitiesFor,
+  onPickPokemon,
+  canPick = true,
+}: BalancePanelProps) {
   const { analyze, coverage, threats, recommendations, threatSlotNumbers } = state;
   const loading = analyze.status === "loading" || coverage.status === "loading";
 
@@ -84,7 +95,10 @@ export function BalancePanel({ state, master, speciesFor, abilitiesFor }: Balanc
         <RecommendationsSection
           master={master}
           abilitiesFor={abilitiesFor}
+          speciesFor={speciesFor}
           response={recommendations.value}
+          onPickPokemon={onPickPokemon}
+          canPick={canPick}
         />
       )}
     </>

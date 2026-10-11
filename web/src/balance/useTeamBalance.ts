@@ -29,6 +29,8 @@ export interface UseTeamBalanceOptions {
   readonly movesFor: SpeciesResolutions["movesFor"];
   /** 入力の変更から送るまでの待ち(ミリ秒)。0 なら待たない。 */
   readonly debounceMs?: number;
+  /** おすすめタイプの上限(ADR-0422 §1)。省くとサーバーの既定に任せる(タイプバランス画面は従来どおり省く)。 */
+  readonly recommendationsLimit?: number;
 }
 
 /** 直近に届いた応答と、それを生んだ入力の key(CalcScreen.tsx の CompletedCalc と同じ考え方)。 */
@@ -143,6 +145,7 @@ export function useTeamBalance({
   masterSearch,
   movesFor,
   debounceMs = 0,
+  recommendationsLimit,
 }: UseTeamBalanceOptions): TeamBalanceState {
   // P4-16b(ADR-0304 A-9): 使えなければ balance API を1本も呼ばない(誤解を招く診断を出さない)。
   const balanceAvailable = isBalanceAvailable(master, masterSearch);
@@ -198,7 +201,9 @@ export function useTeamBalance({
   // recommendations はパーティ1体以上そろえば呼ぶ(仮想敵は入力に含めない。ADR-0303 §7)。
   const recommendationsMembers: RecommendationsMembers = [...idOnlyMembers];
   const recommendationsKey =
-    recommendationsMembers.length === 0 ? "" : JSON.stringify(recommendationsMembers);
+    recommendationsMembers.length === 0
+      ? ""
+      : JSON.stringify({ members: recommendationsMembers, limit: recommendationsLimit ?? null });
 
   const completedAnalyze = useBalanceCall(client, analyzeKey, balanceAvailable, debounceMs, () =>
     client.analyze(analyzeMembers),
@@ -214,7 +219,7 @@ export function useTeamBalance({
     recommendationsKey,
     balanceAvailable,
     debounceMs,
-    () => client.recommendations(recommendationsMembers),
+    () => client.recommendations(recommendationsMembers, recommendationsLimit),
   );
 
   // idle・loading は入力から毎レンダー導出する(CalcScreen.tsx と同じ作法)。

@@ -110,6 +110,11 @@ export const balanceScreenText = {
   superEffectiveMembersLabel: (n: number): string => `抜群を取れる ${String(n)}人`,
   threatsLoadingNotice: "仮想敵を計算中",
   recommendationsRegionLabel: "おすすめタイプ",
+  /** おすすめのポケモンのタイル(構築の空き枠に入れる。ADR-0422 §2)。 */
+  pickGroupLabel: (typesText: string): string => `${typesText}のポケモン(押すと空き枠に入ります)`,
+  pickShowMore: "もっと見る",
+  pickShowLess: "閉じる",
+  pickNoEmptySlot: "空き枠がありません。枠を外すと入れられます",
   recommendationsLoadingNotice: "おすすめタイプを計算中",
   defenseHolesLabel: (list: string): string => `防御の穴: ${list}`,
   offenseHolesLabel: (list: string): string => `攻撃範囲の穴: ${list}`,

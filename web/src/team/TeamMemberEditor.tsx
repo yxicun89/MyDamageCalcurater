@@ -239,6 +239,46 @@ export function TeamMemberEditor({
     );
   }
 
+  /**
+   * おすすめのタイルから、最初の空き枠にポケモンを入れる(ADR-0422 §2)。一覧のあるマスタはその場で、
+   * 検索のマスタは resolveSpecies で実体を引いてから入れる(失敗しても何も起きない。タイルはそのまま残る)。
+   * 解決を待つ間に枠が埋まっていたら入れない。
+   */
+  function pickPokemon(speciesKey: string): void {
+    const target = state.entries.find((entry) => isEmptySlot(entry.draft));
+    if (target === undefined) {
+      return;
+    }
+    const targetId = target.id;
+    const place = (resolution: MasterSpeciesResolution): void => {
+      register(resolution);
+      edit((entries) =>
+        entries.map((entry) =>
+          entry.id === targetId && isEmptySlot(entry.draft)
+            ? {
+                ...entry,
+                draft: changeSpecies(
+                  entry.draft,
+                  resolution.species,
+                  selectableAbilities(resolution.species, resolution.abilities),
+                  { previous: null, items: master.items },
+                ),
+                correction: null,
+              }
+            : entry,
+        ),
+      );
+    };
+    if (masterCapabilities(master).speciesList) {
+      const species = master.species.find((candidate) => candidate.key === speciesKey);
+      if (species !== undefined) {
+        place({ species, abilities: master.abilities, moves: master.moves });
+      }
+    } else if (masterSearch !== undefined) {
+      masterSearch.resolveSpecies(speciesKey).then(place, () => undefined);
+    }
+  }
+
   /** 枠を外す: その枠だけ空に戻す(他の枠は動かさない)。 */
   function removeMember(index: number): void {
     setState((current) => ({
@@ -378,6 +418,8 @@ export function TeamMemberEditor({
           master={master}
           masterSearch={masterSearch}
           resolutions={resolutions}
+          onPickPokemon={pickPokemon}
+          canPick={drafts.some(isEmptySlot)}
         />
       )}
 
