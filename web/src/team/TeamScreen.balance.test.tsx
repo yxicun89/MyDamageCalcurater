@@ -4,19 +4,24 @@
 //   B-2 ポケモンが 0 体なら balance を呼ばず、案内の一言を出す
 //   B-3 balance が失敗しても(エラーは節の中の alert)構築の編集・保存は止まらない
 //   B-4 balanceClient を渡さない画面では節を出さない(既存の構築画面は変わらない)
+//   B-7 仮想敵は節の中の任意の入力(最初は 0 体)。追加して種族を選ぶと threats を呼ぶ(構築の枠は使わない)
+//   B-5 おすすめは limit 5 で呼び、該当ポケモンのタイルを出す(1 候補 8 個まで、残りは「もっと見る」)
+//   B-6 タイルを押すと最初の空き枠に入り(保存に載る)、6 枠が埋まっているとタイルは押せない
 
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
+import type { components as BalanceComponents } from "../api/balance.gen";
 import type { BalanceClient, BalanceResult } from "../api/balanceClient";
-import { teamBalanceText, teamMemberText } from "../i18n/ja";
+import { balanceScreenText, teamBalanceText, teamMemberText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
 import { createFakeTeamClient, flush, lastCall } from "../test/fakeTeamClient";
 import { MAX_TEAM_MEMBERS, TeamScreen } from "./TeamScreen";
 
 type Schemas = components["schemas"];
+type Schemas2 = BalanceComponents["schemas"];
 
 let master: MasterData;
 
@@ -47,11 +52,16 @@ function teamOf(id: string, members: Schemas["TeamMember"][]): Schemas["Team"] {
 interface RecordedBalanceClient extends BalanceClient {
   readonly analyzeCalls: unknown[];
   readonly allCalls: string[];
+  readonly recommendationsLimits: (number | undefined)[];
 }
 
-function createRecordingBalanceClient(failWith: string | null): RecordedBalanceClient {
+function createRecordingBalanceClient(
+  failWith: string | null,
+  recommendations?: Schemas2["RecommendationsResponse"],
+): RecordedBalanceClient {
   const analyzeCalls: unknown[] = [];
   const allCalls: string[] = [];
+  const recommendationsLimits: (number | undefined)[] = [];
   const failure: BalanceResult<never> = {
     ok: false,
     error: { code: failWith ?? "", message: "テストの失敗" },
@@ -59,6 +69,7 @@ function createRecordingBalanceClient(failWith: string | null): RecordedBalanceC
   return {
     analyzeCalls,
     allCalls,
+    recommendationsLimits,
     analyze(members) {
       allCalls.push("analyze");
       analyzeCalls.push(structuredClone(members));
@@ -72,9 +83,10 @@ function createRecordingBalanceClient(failWith: string | null): RecordedBalanceC
       allCalls.push("threats");
       return Promise.resolve(failure);
     },
-    recommendations() {
+    recommendations(_members, limit) {
       allCalls.push("recommendations");
-      return Promise.resolve(failure);
+      recommendationsLimits.push(limit);
+      return Promise.resolve(recommendations === undefined ? failure : { ok: true, value: recommendations });
     },
   };
 }
@@ -125,5 +137,76 @@ describe("構築編集の中のタイプバランス(ADR-0421)", () => {
   test("B-4: balanceClient が無い画面では節を出さない", async () => {
     await openEditor([FIRE], undefined);
     expect(screen.queryByRole("heading", { name: teamBalanceText.heading })).not.toBeInTheDocument();
+  });
+
+  const PICKED_ID = "9004-000";
+
+  function recommendationsWith(count: number): Schemas2["RecommendationsResponse"] {
+    return {
+      defenseHoles: [],
+      offenseHoles: [],
+      abilityOptions: [],
+      candidates: [
+        {
+          types: ["electric"],
+          defenseCovered: [],
+          offenseCovered: [],
+          weaknesses: 1,
+          pokemon: Array.from({ length: count }, (_, index) => ({
+            pokemonId: index === 0 ? PICKED_ID : `9${String(100 + index)}-000`,
+            nameJa: `候補${String(index + 1)}`,
+            types: ["electric"],
+            exactMatch: true,
+          })),
+        },
+      ],
+    };
+  }
+
+  test("B-5: おすすめは limit 5 で呼び、タイルは 8 個まで・残りは「もっと見る」", async () => {
+    const balance = createRecordingBalanceClient("balance_unavailable", recommendationsWith(10));
+    await openEditor([FIRE], balance);
+    const group = await screen.findByRole("group", { name: /ポケモン\(押すと空き枠に入ります\)/ });
+    expect(balance.recommendationsLimits).toEqual([5]);
+    expect(within(group).getAllByRole("button", { name: /^候補/ })).toHaveLength(8);
+    await userEvent.click(within(group).getByRole("button", { name: balanceScreenText.pickShowMore }));
+    expect(within(group).getAllByRole("button", { name: /^候補/ })).toHaveLength(10);
+  });
+
+  test("B-6: タイルを押すと空き枠に入り、保存に載る", async () => {
+    const balance = createRecordingBalanceClient("balance_unavailable", recommendationsWith(2));
+    const { client, user } = await openEditor([FIRE], balance);
+    await user.click(await screen.findByRole("button", { name: "候補1" }));
+    await user.click(screen.getByRole("button", { name: teamMemberText.saveLabel }));
+    const call = lastCall(client.updateCalls, "update");
+    expect(call.args.input.members.map((member) => member.speciesKey)).toEqual(["9001-000", PICKED_ID]);
+  });
+
+  test("B-6: 6 枠が埋まっていると、タイルは押せず理由を出す", async () => {
+    const balance = createRecordingBalanceClient("balance_unavailable", recommendationsWith(2));
+    await openEditor(
+      Array.from({ length: MAX_TEAM_MEMBERS }, () => FIRE),
+      balance,
+    );
+    const tile = await screen.findByRole("button", { name: "候補1" });
+    expect(tile).toBeDisabled();
+    expect(screen.getByText(balanceScreenText.pickNoEmptySlot)).toBeInTheDocument();
+  });
+
+  test("B-7: 仮想敵を追加して種族を選ぶと threats を呼ぶ(最初は入力欄が無い)", async () => {
+    const balance = createRecordingBalanceClient("balance_unavailable");
+    const { user } = await openEditor([FIRE], balance);
+    expect(
+      screen.queryByRole("group", { name: balanceScreenText.threatGroupLabel(1) }),
+    ).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: balanceScreenText.addThreatLabel }));
+    const group = screen.getByRole("group", { name: balanceScreenText.threatGroupLabel(1) });
+    await user.selectOptions(
+      within(group).getByRole("combobox", { name: balanceScreenText.speciesLabel }),
+      "9004-000",
+    );
+    await waitFor(() => {
+      expect(balance.allCalls).toContain("threats");
+    });
   });
 });
