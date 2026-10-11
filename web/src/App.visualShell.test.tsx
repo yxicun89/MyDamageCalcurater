@@ -6,7 +6,6 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { App } from "./App";
-import { SCREENS, visibleScreens } from "./app/screens";
 import { appText } from "./i18n/ja";
 import { createFakeEngine } from "./test/fakeEngine";
 
@@ -34,7 +33,8 @@ describe("タブ列", () => {
   });
 
   // 非表示の画面(判定。ADR-0330)はタブに出ないので対象外。
-  test.each(visibleScreens(SCREENS).map((registered) => [registered.label, registered.id] as const))(
+  // ADR-0356: 上位は区分(ダメージ・構築・素早さ・記録)、ダメージの下位は 計算・逆算・調整。
+  test.each(["ダメージ", "構築", "素早さ", "記録", "計算", "逆算", "調整"].map((label) => [label] as const))(
     "%s のタブは装飾のアイコン(aria-hidden の svg.ui-icon)を持ち、名前は画面名のまま",
     async (label) => {
       await renderApp();
@@ -58,13 +58,13 @@ describe("タブ列", () => {
   test("選択の状態は aria-selected のまま(クラスで選択を表さない)。クリックで移る", async () => {
     await renderApp();
     const user = userEvent.setup();
-    const calcTab = screen.getByRole("tab", { name: "計算" });
+    const damageTab = screen.getByRole("tab", { name: "ダメージ" });
     const speedTab = screen.getByRole("tab", { name: "素早さ" });
-    expect(calcTab).toHaveAttribute("aria-selected", "true");
+    expect(damageTab).toHaveAttribute("aria-selected", "true");
     await user.click(speedTab);
     expect(speedTab).toHaveAttribute("aria-selected", "true");
-    expect(calcTab).toHaveAttribute("aria-selected", "false");
-    expect(speedTab.className).toBe(calcTab.className);
+    expect(damageTab).toHaveAttribute("aria-selected", "false");
+    expect(speedTab.className).toBe(damageTab.className);
   });
 });
 

@@ -13,8 +13,7 @@ const SCREENS = [
   { path: "/speed", ready: { role: "tab", name: "素早さ" } },
   { path: "/team", ready: { role: "tab", name: "構築" } },
   { path: "/reverse", ready: { role: "tab", name: "逆算" } },
-  { path: "/balance", ready: { role: "tab", name: "タイプバランス" } },
-  { path: "/favorites", ready: { role: "tab", name: "お気に入り" } },
+  { path: "/favorites", ready: { role: "tab", name: "記録" } },
   { path: "/adjust", ready: { role: "tab", name: "調整" } },
 ] as const;
 
@@ -146,16 +145,28 @@ for (const scheme of ["light", "dark"] as const) {
       await expectNoHorizontalOverflow(page, "/reverse(種族を選択)");
     });
 
-    test("タイプバランスの結果(防御相性の表は 18 列)が 375px で横に溢れない(表は包みの中でスクロール)", async ({
+    test("構築編集の中のタイプバランスの結果(防御相性の表は 18 列)が 375px で横に溢れない(表は包みの中でスクロール)", async ({
       page,
     }) => {
       await routeBalanceFakes(page);
-      await page.goto("/balance");
-      await expect(page.getByRole("tab", { name: "タイプバランス", exact: true })).toHaveAttribute(
-        "aria-selected",
-        "true",
-      );
-      const member = page.getByRole("group", { name: "メンバー1", exact: true });
+      await page.route("**/api/team/teams", async (route) => {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              id: "00000000-0000-4000-8000-000000000001",
+              name: "名称未設定",
+              members: [],
+              createdAt: "2026-10-04T09:00:00Z",
+              updatedAt: "2026-10-04T09:00:00Z",
+            },
+          ]),
+        });
+      });
+      await page.goto("/team");
+      await page.getByRole("button", { name: "「構築 1」を開く", exact: true }).click();
+      const member = page.getByRole("group", { name: "1体目", exact: true });
       await member.getByRole("combobox", { name: "ポケモン", exact: true }).fill("テストほのお");
       await member
         .getByRole("listbox", { name: "ポケモン", exact: true })
@@ -163,7 +174,7 @@ for (const scheme of ["light", "dark"] as const) {
         .click();
       const table = page.getByRole("table", { name: "防御相性", exact: true }).first();
       await expect(table).toBeVisible();
-      await expectNoHorizontalOverflow(page, "/balance(結果の表)");
+      await expectNoHorizontalOverflow(page, "/team(タイプバランスの結果の表)");
     });
 
     test("調整の各モード(耐久・攻撃・最小の振り方。モードのチップ・相手の領域)が横に溢れない", async ({
@@ -184,3 +195,30 @@ for (const scheme of ["light", "dark"] as const) {
     });
   });
 }
+
+// ADR-0356: 狭い幅では上位のタブ(4 区分)を画面の下に固定する。320px でも横に溢れず、固定バーが本文・フッターを隠さない。
+test("320px: 上位のタブは画面の下に固定され、横に溢れず、フッターのリンクがバーに隠れない", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/calc");
+  const tablist = page.getByRole("tablist", { name: "画面の切り替え", exact: true });
+  await expect(tablist).toBeVisible();
+  await expect(tablist.getByRole("tab")).toHaveCount(4);
+  const box = await tablist.boundingBox();
+  expect(box).not.toBeNull();
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeGreaterThanOrEqual(640 - 1);
+  const { scrollWidth, clientWidth } = await page.evaluate(() => ({
+    scrollWidth: document.documentElement.scrollWidth,
+    clientWidth: document.documentElement.clientWidth,
+  }));
+  expect(scrollWidth).toBeLessThanOrEqual(clientWidth);
+  const tabListOverflow = await tablist.evaluate((element) => element.scrollWidth - element.clientWidth);
+  expect(tabListOverflow).toBeLessThanOrEqual(0);
+
+  const footerLink = page.getByRole("link", { name: "このアプリについて", exact: true });
+  await footerLink.scrollIntoViewIfNeeded();
+  const linkBox = await footerLink.boundingBox();
+  const barBox = await tablist.boundingBox();
+  expect((linkBox?.y ?? 0) + (linkBox?.height ?? 0)).toBeLessThanOrEqual(barBox?.y ?? 0);
+});

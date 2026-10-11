@@ -12,6 +12,7 @@ import {
   calcRows,
   combobox,
   openApp,
+  openScreenTab,
   selectMatchup,
   selectSpeciesBySearch,
 } from "./support/calcPage.ts";
@@ -106,7 +107,7 @@ test("計算画面で追加 → お気に入りタブの一覧に出る → 削�
   expect(Object.values(body.individual.sp).reduce((sum, value) => sum + value, 0)).toBeLessThanOrEqual(66);
   expect(backend.postHeaders[0]?.["x-device-id"]).toMatch(/^[0-9a-f-]{36}$/);
 
-  await page.getByRole("tab", { name: "お気に入り", exact: true }).click();
+  await openScreenTab(page, "お気に入り");
   const region = page.getByRole("region", { name: "お気に入り", exact: true });
   const list = region.getByRole("list", { name: "お気に入り一覧", exact: true });
   await expect(list).toContainText(SPECIES.fire.nameJa);
@@ -125,9 +126,9 @@ test("record が 503 のとき、お気に入りタブは alert を出すが、�
   await installRecordBackend(page, { down: true });
   await openApp(page);
   await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.fire.nameJa);
-  await page.getByRole("tab", { name: "お気に入り", exact: true }).click();
+  await openScreenTab(page, "お気に入り");
   await expect(page.getByRole("alert").filter({ hasText: "記録サービスに届きません" })).toBeVisible();
-  await page.getByRole("tab", { name: "計算", exact: true }).click();
+  await openScreenTab(page, "計算");
   await expect(page.getByRole("combobox", { name: "攻撃側のポケモン", exact: true })).toHaveValue(
     SPECIES.fire.nameJa,
   );
@@ -193,7 +194,7 @@ test("計算画面で追加(calc 付き)→ 攻撃側を変える → お気に�
   // 戻したことが分かるよう、攻撃側を別の種族に変えておく
   await selectSpeciesBySearch(page, "攻撃側のポケモン", SPECIES.water.nameJa);
 
-  await page.getByRole("tab", { name: "お気に入り", exact: true }).click();
+  await openScreenTab(page, "お気に入り");
   const region = page.getByRole("region", { name: "お気に入り", exact: true });
   await region.getByRole("button", { name: `「${body.label}」を計算に使う`, exact: true }).click();
 

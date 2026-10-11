@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { App } from "./App";
 import { teamScreenText } from "./i18n/team";
 import { createFakeEngine } from "./test/fakeEngine";
+import { openTab } from "./test/navTabs";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -35,16 +36,16 @@ describe("構築のタブ(F-08)も ADR-0308 の決まりに乗る", () => {
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(screen.getByRole("tab", { name: "構築" }));
+    await openTab(user, "構築");
     await screen.findByRole("button", { name: teamScreenText.createLabel });
     await waitFor(() => {
       expect(teamCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
     });
     const callsAfterFirstVisit = teamCallCount(fetchMock.mock.calls);
 
-    await user.click(screen.getByRole("tab", { name: "計算" }));
+    await openTab(user, "計算");
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(screen.getByRole("tab", { name: "構築" }));
+    await openTab(user, "構築");
 
     await screen.findByRole("button", { name: teamScreenText.createLabel });
     expect(teamCallCount(fetchMock.mock.calls)).toBe(callsAfterFirstVisit);

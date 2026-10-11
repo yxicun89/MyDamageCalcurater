@@ -294,3 +294,27 @@ boosts を持たない副次効果(状態異常・ひるみ等)は本 ADR の対
 (「ランク変化エントリが2件以上なら blocker」)は変えていない。
 
 いずれも `docs/plan.md` P5-6 の実装(未マージ)への修正であり、別タスクは起票しない。
+
+## CB-1: 変化技のランク変化(トップレベルの boosts。2026-10-11 追記)
+
+連続技の計算(docs/plan/combo-calc.md)は、りゅうのまい・つるぎのまい・からをやぶる・なきごえ等の変化技が起こすランク変化を手の間に反映する。
+Showdown は変化技のランク変化をトップレベルの `boosts` と `target` に持つが、決定6 の取り込みは `self`・`secondary` しか読んでいなかった。
+
+- **取り込み**: `ShowdownMove.Boosts`(取得物の `boosts`。ランク変化の無い技は `{}`)を読む。表現の4つ目:
+  トップレベルの `boosts` → **確率 100**(常に発動。ユーザー決定: 確率 100% の効果だけを扱う)。上げ下げ混在(からをやぶる)はそのまま 1 エントリ。
+- **対象の写し**(`target` → `RankTarget`): `self`・`allies`(使用者を含む味方全体。とおぼえ) → `self`。
+  `normal`・`adjacentFoe`・`allAdjacentFoes`・`allAdjacent`・`any`・`randomNormal` → `target`(相手)。
+  それ以外(`adjacentAlly` のあまいかおり・コーチング等。シングルでは効果が無い) → 行を作らず警告 `move-effect-unsupported-target`。
+  `allAdjacent`・`allies` の写しは**シングル前提**(相手 1 体・使用者 1 体。ダブル対応で見直す)。
+- **決定3 は維持**: 1 技 1 エントリ。トップレベル `boosts` と `self`/`secondary` が重なる技は、既存どおり blocker `move-effect-ambiguous`(実データには無い)。
+- **取得物**: `tools/importer/fetch-showdown.mjs` が技ごとに `boosts`(無ければ `{}`)を必ず出す。キーの無い古い取得物は `DecodeShowdownSnapshot` が拒否し、`make import-fetch` を案内する(ADR-0136・0140 の作法)。
+- **スキーマ**: 変更なし(migration 不要)。`move_effects` は JSON 列で、変化技の行を禁じる制約は master にも CHECK にも無かった。内部 API の `MasterMove.effect` は自由形式で値が増えるだけ(契約不変)。
+- **条件付きの変化技(既知の制限)**: 表の値を入れる。天候で変わる(growth)・HP で失敗する(clangoroussoul)・2 回目に失敗する(noretreat)等、
+  条件付きの増減・失敗は扱わない。技のフック(`mechanism.hooks`)を持つ変化技は、表の値を入れたうえで警告 `move-effect-conditional` をレポートに載せる(黙って入れない)。CB-3 で再検討する。
+- **engine のダメージ計算・ゴールデンは不変**(`MoveEffect` の形は同じ)。公開 `Move.effect` への露出は CB-4(API レーン)。
+- **調整への影響**: calc-svc の調整(outspeed 目標の先に使う技。ADR-0177 §4 `GuaranteedSelfSpeedStage`)で変化技を選ぶと、
+  素早さの段数が入るようになる(りゅうのまい +1 等。これまでは変化技に効果が無く 0)。engine と ADR-0177 §4 の意図どおり。
+  Web・iOS は UI 変更なしだが、調整の結果は変わる。
+- **実データ(dry-run)**: `move_effects` は 59 → 100 行(変化技 41 行)。blocker なし。警告 `move-effect-unsupported-target` は 2 技(aromaticmist・coaching)。
+  変化技でトップレベル boosts を持つ 72 技 → 41 行の内訳: moves 表に採らない(Past)26・evasion/accuracy だけで engine に持ち場が無い 3・味方だけ 2。
+  警告 `move-effect-conditional` は 3 技(clangoroussoul・growth・noretreat)。

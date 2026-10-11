@@ -11,7 +11,7 @@
 //   - Showdown 形式の取り込み・書き出しの入口は無い(G-03 で廃止)
 
 import { expect, test, type Locator, type Page, type Route } from "@playwright/test";
-import { MEGA, SPECIES, combobox, openApp } from "./support/calcPage.ts";
+import { MEGA, SPECIES, combobox, openApp, openScreenTab } from "./support/calcPage.ts";
 
 const DEFAULT_NAME = "名称未設定";
 
@@ -80,7 +80,7 @@ async function installTeamBackend(page: Page): Promise<TeamBackend> {
 }
 
 async function openTeamTab(page: Page): Promise<void> {
-  await page.getByRole("tab", { name: "構築", exact: true }).click();
+  await openScreenTab(page, "構築");
   await expect(page.getByRole("button", { name: "新しい構築", exact: true })).toBeVisible();
 }
 
@@ -184,9 +184,9 @@ test("編集中にタブを切り替えて戻っても、未保存の下書き�
   const editor = await createTeam(page);
   await selectSlotSpecies(editor.getByRole("group", { name: "3体目", exact: true }), SPECIES.water.nameJa);
 
-  await page.getByRole("tab", { name: "計算", exact: true }).click();
+  await openScreenTab(page, "計算");
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
-  await page.getByRole("tab", { name: "構築", exact: true }).click();
+  await openScreenTab(page, "構築");
 
   const restored = page
     .getByRole("region", { name: "「構築 1」のメンバー編集", exact: true })

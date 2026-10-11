@@ -110,6 +110,10 @@ func DecodeShowdownSnapshot(raw []byte) (ShowdownSnapshot, error) {
 		if m.Target == nil {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に target が無い(ADR-0136 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
 		}
+		// 変化技のランク変化(トップレベルの boosts)は必須(CB-1)。無いと変化技が「効果なし」として黙って取り込まれる。
+		if m.Boosts == nil {
+			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に boosts が無い(CB-1・ADR-0107 追記より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)
+		}
 		// 技のフラグは必須(ADR-0178)。無いと全技が「フラグなし」として黙って取り込まれる。
 		if m.Flags == nil {
 			return ShowdownSnapshot{}, fmt.Errorf("%w: 技 %q に flags が無い(ADR-0178 より前の古いスナップショット。`make import-fetch` で取り直す)", ErrInvalidInput, m.ID)

@@ -4,6 +4,8 @@
 // パスは Vite の BASE_URL(import.meta.env.BASE_URL、末尾は "/")からの相対として扱う。
 
 import { aboutText, appText } from "../i18n/ja";
+import type { NavGroup } from "./navGroups";
+import { screenIconName } from "./screenIcons";
 import { ABOUT_SEGMENT, SCREENS, visibleScreens } from "./screens";
 
 /** 画面 ID・URL の区切り・タブの表示名の1エントリ。 */
@@ -18,6 +20,8 @@ export interface ScreenRoute {
    * 読み込みに失敗していてもタブを選んで使える。
    */
   readonly usesMaster: boolean;
+  /** ナビの区分(登録の group。無ければこの画面だけの区分。ADR-0356)。 */
+  readonly group: NavGroup;
 }
 
 /**
@@ -28,7 +32,14 @@ export type ScreenId = string;
 
 /** 画面の定義順(hidden の画面を除く。ADR-0330。タブの並び順・ロービング tabIndex の移動順もこの順。登録ファイルの order の昇順)。 */
 export const SCREEN_ROUTES: readonly ScreenRoute[] = visibleScreens(SCREENS).map(
-  ({ id, segment, label, usesMaster }) => ({ id, segment, label, usesMaster }),
+  ({ id, segment, label, usesMaster, order, group }) => ({
+    id,
+    segment,
+    label,
+    usesMaster,
+    // 区分の指定が無い画面は、その画面だけの区分(名前・アイコンは画面のもの。名前付きの区分より後ろに並べる)。
+    group: group ?? { id, label, order: 1000 + order, icon: screenIconName(id) },
+  }),
 );
 
 /** 既定の画面(未知のパス・"/" のとき)。 */
@@ -50,6 +61,10 @@ function findRoute(id: ScreenId): ScreenRoute {
  * セグメントの後ろの "/" 1つだけは同じ画面として許す("/reverse/" も "/reverse" と同じ)。
  */
 export function screenFromPath(pathname: string, base: string): ScreenId | null {
+  const legacy = legacyScreenFromPath(pathname, base);
+  if (legacy !== null) {
+    return legacy;
+  }
   if (!pathname.startsWith(base)) {
     return null;
   }
@@ -60,6 +75,26 @@ export function screenFromPath(pathname: string, base: string): ScreenId | null 
   }
   const route = SCREEN_ROUTES.find((candidate) => candidate.segment === trimmed);
   return route === undefined ? null : route.id;
+}
+
+/**
+ * 廃止した画面の旧セグメント → 寄せ先の画面 ID(ADR-0421: タイプバランスは構築編集の中へ統合した)。
+ * 旧 URL(/balance)を開いても構築が出る。URL は寄せ先のパスに置き換える(App.tsx)。
+ */
+const LEGACY_SEGMENTS: Readonly<Record<string, ScreenId>> = { balance: "team" };
+
+function legacyScreenFromPath(pathname: string, base: string): ScreenId | null {
+  if (!pathname.startsWith(base)) {
+    return null;
+  }
+  const rest = pathname.slice(base.length);
+  const trimmed = rest.endsWith("/") ? rest.slice(0, -1) : rest;
+  return Object.hasOwn(LEGACY_SEGMENTS, trimmed) ? (LEGACY_SEGMENTS[trimmed] ?? null) : null;
+}
+
+/** 旧 URL(廃止した画面のパス)か。真なら、App は URL を寄せ先の画面のパスに置き換える。 */
+export function isLegacyScreenPath(pathname: string, base: string): boolean {
+  return legacyScreenFromPath(pathname, base) !== null;
 }
 
 /** 画面のタブの表示名。 */

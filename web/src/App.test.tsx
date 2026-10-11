@@ -5,7 +5,9 @@ import { App } from "./App";
 import { CALC_MODE_STORAGE_KEY } from "./app/calcMode";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
+import { appText } from "./i18n/ja";
 import { createFakeEngine, engineError } from "./test/fakeEngine";
+import { openTab } from "./test/navTabs";
 
 // P4-10: タブの選択が URL(History API)と連動するようになったため(App.routing.test.tsx が詳細を確かめる)、
 // このファイルの各テストは既定の「計算」タブ(パス "/")から始まる前提を置く。テストの間で URL が
@@ -128,7 +130,7 @@ describe("P4-4 計算・逆算の切り替え", () => {
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     expect(calcTab).toHaveAttribute("aria-selected", "true");
     expect(screen.getByRole("tab", { name: "逆算" })).toHaveAttribute("aria-selected", "false");
-    expect(screen.getByRole("tablist")).toBeInTheDocument();
+    expect(screen.getByRole("tablist", { name: appText.tabsLabel })).toBeInTheDocument();
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "自分のポケモン" })).toBeNull();
   });
@@ -138,12 +140,12 @@ describe("P4-4 計算・逆算の切り替え", () => {
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(screen.getByRole("tab", { name: "逆算" }));
+    await openTab(user, "逆算");
     expect(screen.getByRole("tab", { name: "逆算" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
 
-    await user.click(screen.getByRole("tab", { name: "計算" }));
+    await openTab(user, "計算");
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
   });
 
@@ -217,51 +219,54 @@ describe("P4-4 タブの ARIA 配線とキーボード操作", () => {
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toBeInTheDocument();
   });
 
-  test("Home/End で最初/最後のタブへ選択とフォーカスが移動する", async () => {
-    // P5-5 PR-A1: End で開く末尾のタブ(構築)はマウント時に構築 API を呼ぶ。通信は失敗させる
-    // (画面はそれでも壊れない。ADR-0309 §4)。
+  test("Home/End で最初/最後のタブへ選択とフォーカスが移動する(上位のタブ 4 つ + ダメージの下位のタブ 3 つ。ADR-0356)", async () => {
+    // End で開く記録タブ(お気に入り)はマウント時に API を呼ぶ。通信は失敗させる(画面はそれでも壊れない)。
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
     const calcTab = await screen.findByRole("tab", { name: "計算" });
     const reverseTab = screen.getByRole("tab", { name: "逆算" });
-
-    // AJ6(ADR-0319 §1): 最後のタブは調整。構築・素早さ・タイプバランスは End からそれぞれ
-    // 2・3・4つ手前(判定は ADR-0330 で非表示になり巡回の対象外)。
-    const balanceTab = screen.getByRole("tab", { name: "タイプバランス" });
-    const speedTab = screen.getByRole("tab", { name: "素早さ" });
-    const teamTab = screen.getByRole("tab", { name: "構築" });
-    // P5-3c(ADR-0327): お気に入りは構築と調整の間(order 650)。
-    const favoritesTab = screen.getByRole("tab", { name: "お気に入り" });
     const adjustTab = screen.getByRole("tab", { name: "調整" });
+
+    // 下位のタブ(ダメージの種類): 計算 → 逆算 → 調整。End で最後(調整)、Home で最初(計算)。
     calcTab.focus();
+    await user.keyboard("{ArrowRight}");
+    expect(reverseTab).toHaveAttribute("aria-selected", "true");
+    expect(reverseTab).toHaveFocus();
     await user.keyboard("{End}");
     expect(adjustTab).toHaveAttribute("aria-selected", "true");
     expect(adjustTab).toHaveFocus();
+    await user.keyboard("{Home}");
+    expect(calcTab).toHaveAttribute("aria-selected", "true");
+    expect(calcTab).toHaveFocus();
 
-    await user.keyboard("{ArrowLeft}");
-    expect(favoritesTab).toHaveAttribute("aria-selected", "true");
-    expect(favoritesTab).toHaveFocus();
-
-    await user.keyboard("{ArrowLeft}");
-    expect(teamTab).toHaveAttribute("aria-selected", "true");
-    expect(teamTab).toHaveFocus();
+    // 上位のタブ: ダメージ → 構築 → 素早さ → 記録(判定は ADR-0330 で非表示、タイプバランスは構築へ統合)。
+    const damageTab = screen.getByRole("tab", { name: "ダメージ" });
+    const teamTab = screen.getByRole("tab", { name: "構築" });
+    const speedTab = screen.getByRole("tab", { name: "素早さ" });
+    const recordsTab = screen.getByRole("tab", { name: "記録" });
+    damageTab.focus();
+    await user.keyboard("{End}");
+    expect(recordsTab).toHaveAttribute("aria-selected", "true");
+    expect(recordsTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
     expect(speedTab).toHaveAttribute("aria-selected", "true");
     expect(speedTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
-    expect(balanceTab).toHaveAttribute("aria-selected", "true");
-    expect(balanceTab).toHaveFocus();
+    expect(teamTab).toHaveAttribute("aria-selected", "true");
+    expect(teamTab).toHaveFocus();
 
     await user.keyboard("{ArrowLeft}");
-    expect(reverseTab).toHaveAttribute("aria-selected", "true");
-    expect(reverseTab).toHaveFocus();
+    expect(damageTab).toHaveAttribute("aria-selected", "true");
+    expect(damageTab).toHaveFocus();
 
+    await user.keyboard("{End}");
+    expect(recordsTab).toHaveAttribute("aria-selected", "true");
     await user.keyboard("{Home}");
-    expect(calcTab).toHaveAttribute("aria-selected", "true");
-    expect(calcTab).toHaveFocus();
+    expect(damageTab).toHaveAttribute("aria-selected", "true");
+    expect(damageTab).toHaveFocus();
   });
 });
 
@@ -532,12 +537,12 @@ describe("issue #218 タブの往復で入力が消えない", () => {
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
 
-    await user.click(screen.getByRole("tab", { name: "逆算" }));
+    await openTab(user, "逆算");
     // 逆算タブを出している間、計算画面の入力欄はアクセシビリティツリーから取れない(既存の保証)。
     expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
-    await user.click(screen.getByRole("tab", { name: "計算" }));
+    await openTab(user, "計算");
 
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attacker.key);
     expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(defender.key);
