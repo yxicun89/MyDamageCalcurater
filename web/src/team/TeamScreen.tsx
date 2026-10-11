@@ -16,6 +16,7 @@ import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
 import "./TeamScreen.css";
 import { TeamMemberEditor } from "./TeamMemberEditor";
+import type { BalanceClient } from "../api/balanceClient";
 import type { TeamClient, TeamError } from "./teamClient";
 import { teamDisplayNames } from "./teamName";
 import { TEAM_SLOT_COUNT, teamInputFromMembers } from "./teamSlots";
@@ -32,6 +33,8 @@ export const MAX_TEAM_MEMBERS = TEAM_SLOT_COUNT;
  */
 export interface TeamScreenProps {
   readonly teamClient: TeamClient;
+  /** タイプバランスの口(ADR-0421。編集画面の「タイプバランス」の節)。 */
+  readonly balanceClient?: BalanceClient;
   /**
    * 「この端末のデータを削除」の後に一覧を取り直す合図(P5-5d。ADR-0318 §6)。
    * マウント後に値が変わったら list() を呼び直す(最初の値ではマウント時の1回だけ)。
@@ -88,7 +91,13 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
 /**
  * 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。
  */
-export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: TeamScreenProps): ReactNode {
+export function TeamScreen({
+  teamClient,
+  balanceClient,
+  master,
+  masterSearch,
+  reloadToken,
+}: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
   // create()/update()/remove() が一度でも成功したら true にする。list() は mount 時に1回しか呼ばないが、
   // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
@@ -196,6 +205,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
           master={master}
           masterSearch={masterSearch}
           teamClient={teamClient}
+          balanceClient={balanceClient}
           onSaved={(updated) => {
             hasWrittenRef.current = true;
             setList((current) => replaceTeam(current, updated));

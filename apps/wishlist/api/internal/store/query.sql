@@ -2,19 +2,19 @@
 -- 並び: 商品は sort_order 昇順・同順は id 降順、ジャンルは sort_order 昇順・同順は id 昇順、サイトは id 昇順。
 
 -- name: ListGenres :many
-SELECT id, name, query_template, sort_order FROM genres ORDER BY sort_order, id;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres ORDER BY sort_order, id;
 
 -- name: GetGenre :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ?;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ?;
 
 -- name: GetGenreForUpdate :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ? FOR UPDATE;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ? FOR UPDATE;
 
 -- name: CreateGenre :execlastid
-INSERT INTO genres (name, query_template, sort_order) VALUES (?, ?, ?);
+INSERT INTO genres (name, query_template, sort_order, color, icon, match_hosts, match_keywords) VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateGenre :execrows
-UPDATE genres SET name = ?, query_template = ?, sort_order = ? WHERE id = ?;
+UPDATE genres SET name = ?, query_template = ?, sort_order = ?, color = ?, icon = ?, match_hosts = ?, match_keywords = ? WHERE id = ?;
 
 -- name: ListGenreSites :many
 SELECT genre_id, site_id, sort_order FROM genre_sites ORDER BY genre_id, sort_order, site_id;
@@ -104,8 +104,12 @@ VALUES (?, ?, NULL, NULL, 0, 0, 0, 'failed', ?)
 ON DUPLICATE KEY UPDATE status = 'failed';
 
 -- name: ListEstimatesByItem :many
-SELECT item_id, site_id, low, mid, `count`, suspicious_count, in_stock_count, status, fetched_at
+SELECT item_id, site_id, low, mid, `count`, suspicious_count, status, fetched_at, in_stock_count
 FROM estimates WHERE item_id = ? ORDER BY site_id;
+
+-- name: ListEstimates :many
+SELECT item_id, site_id, low, mid, `count`, suspicious_count, status, fetched_at, in_stock_count
+FROM estimates ORDER BY item_id, site_id;
 
 -- name: ListListingsByItem :many
 SELECT id, item_id, site_id, title, price, url, image_url, in_stock, suspicious_reasons, fetched_at

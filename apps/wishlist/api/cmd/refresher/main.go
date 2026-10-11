@@ -1,6 +1,6 @@
 // Command refresher は全商品の目安価格を順番に更新する(CronJob wishlist-refresher。毎日 03:00 JST。apps/wishlist/CLAUDE.md §11)。
 //
-//	wishlist-refresher   (引数なし。WISHLIST_DATABASE_DSN 必須・WISHLIST_YAHOO_APPID・WISHLIST_CHROMIUM_PATH 任意)
+//	wishlist-refresher   (引数なし。WISHLIST_DATABASE_DSN 必須・WISHLIST_CHROMIUM_PATH 任意)
 //
 // 1 商品の失敗で止めず、最後に件数と失敗数を 1 行で出す。終了コードは、商品があって全件失敗なら 1、設定の誤りは 1、
 // 引数を付けたら 2、それ以外は 0。受け入れ条件は docs/phase3-api-spec.md の AC-C6〜C8。
@@ -38,8 +38,7 @@ var errMissingEnv = errors.New("missing required environment variable")
 
 // config は refresher の設定。
 type config struct {
-	DSN        string // parseTime=true を付け、multiStatements を外した DSN
-	YahooAppID string // 前後の空白を除く。空なら api 型のサイトは取得しない
+	DSN string // parseTime=true を付け、multiStatements を外した DSN
 	// ChromiumPath は headless-shell の実行ファイル(WISHLIST_CHROMIUM_PATH。前後の空白を除く)。空なら headless のサイト(メルカリ)は取得しない。
 	ChromiumPath string
 }
@@ -107,7 +106,6 @@ func loadConfig(getenv func(string) string) (config, error) {
 	parsed.MultiStatements = false
 	return config{
 		DSN:          parsed.FormatDSN(),
-		YahooAppID:   strings.TrimSpace(getenv("WISHLIST_YAHOO_APPID")),
 		ChromiumPath: strings.TrimSpace(getenv("WISHLIST_CHROMIUM_PATH")),
 	}, nil
 }
@@ -127,7 +125,7 @@ func printReport(w io.Writer, r refresh.AllReport) {
 
 // newRegistry は取得の登録表を作る。ChromiumPath があるときだけ headless(メルカリ)用の Renderer を渡す。
 func newRegistry(cfg config) *fetcher.Registry {
-	fc := fetcher.Config{YahooAppID: cfg.YahooAppID}
+	fc := fetcher.Config{}
 	if cfg.ChromiumPath != "" {
 		fc.Renderer = chromium.New(cfg.ChromiumPath, chromium.Options{NoSandbox: chromiumNoSandbox})
 	}

@@ -27,6 +27,26 @@ var (
 // DefaultQueryTemplate はジャンル作成時にテンプレートを省略したときの値(DB の既定値と同じ)。
 const DefaultQueryTemplate = "{name} {option}"
 
+// ジャンルの色と絵柄(フェーズ5 5-1b。docs/phase5-spec.md)。
+const (
+	// DefaultGenreColor はジャンル作成時に色を省略したときの値(強調色の青。DB の既定値と同じ)。
+	DefaultGenreColor = "#1d5fd1"
+	// DefaultGenreIcon はジャンル作成時に絵柄を省略したときの値(DB の既定値と同じ)。
+	DefaultGenreIcon = IconBox
+)
+
+// GenreIcon はジャンルの絵柄(genres.icon)。
+type GenreIcon string
+
+const (
+	IconCard   GenreIcon = "card"
+	IconFigure GenreIcon = "figure"
+	IconRobot  GenreIcon = "robot"
+	IconGoods  GenreIcon = "goods"
+	IconStar   GenreIcon = "star"
+	IconBox    GenreIcon = "box"
+)
+
 // FetchType は価格の取得方式(仕様 §6)。
 type FetchType string
 
@@ -39,6 +59,9 @@ const (
 
 // Genre はジャンル。SiteIDs は表示するサイト(表示順。genre_sites.sort_order 昇順)。
 // Aliases は表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md AC-A*)。グループの順・グループ内の語の順は保存した順。無ければ長さ 0。
+//
+// Color は `#rrggbb`(小文字)、Icon は絵柄。MatchHosts・MatchKeywords は URL からジャンルを推定する手がかり
+// (フェーズ5 5-1b・5-1c。保存した順。無ければ長さ 0)。
 type Genre struct {
 	ID            int64
 	Name          string
@@ -46,24 +69,38 @@ type Genre struct {
 	SortOrder     int
 	SiteIDs       []int64
 	Aliases       [][]string
+	Color         string
+	Icon          GenreIcon
+	MatchHosts    []string
+	MatchKeywords []string
 }
 
 // NewGenre はジャンルの作成値。QueryTemplate が空なら Service が DefaultQueryTemplate にする。
+// Color が空なら DefaultGenreColor、Icon が空なら DefaultGenreIcon(Service が補う)。Color は大文字も受け、小文字に揃える。
 type NewGenre struct {
 	Name          string
 	QueryTemplate string
 	SortOrder     int
 	SiteIDs       []int64
 	Aliases       [][]string
+	Color         string
+	Icon          GenreIcon
+	MatchHosts    []string
+	MatchKeywords []string
 }
 
 // GenrePatch は部分更新。nil の項目は変えない。SiteIDs・Aliases を渡すと全件置き換え(空スライスなら全部外す)。
+// Color・Icon は nil なら変えない。MatchHosts・MatchKeywords は渡すと全件置き換え。
 type GenrePatch struct {
 	Name          *string
 	QueryTemplate *string
 	SortOrder     *int
 	SiteIDs       *[]int64
 	Aliases       *[][]string
+	Color         *string
+	Icon          *GenreIcon
+	MatchHosts    *[]string
+	MatchKeywords *[]string
 }
 
 // Site はサイト。
@@ -116,6 +153,9 @@ type Item struct {
 	WatchOfficial bool
 	// Official は保存した販売状況(official_status)。まだ無ければ nil。ListItems・GetItem・CreateItem・UpdateItem が埋める。
 	Official *OfficialStatus
+	// Summary は目安のまとめ(フェーズ5 5-1d。summary.go)。ListItems は必ず埋める(商品数に依らない回数のクエリで)。
+	// それ以外(GetItem・CreateItem・UpdateItem)は nil でよい。
+	Summary *Summary
 }
 
 // NewItem は商品の作成値。

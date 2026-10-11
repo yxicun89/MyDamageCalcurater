@@ -266,6 +266,11 @@ export const appText = {
   masterLoadSwitchToOfflineLabel: "オフラインに切り替える",
   /** 計算・逆算の切り替えタブ(P4-4、ADR-0300 §7)。 */
   tabsLabel: "画面の切り替え",
+  /** ナビの 4 区分(ADR-0356)。区分の中の画面は下位のタブ(名前は navDamageKindsLabel)で切り替える。 */
+  navDamageLabel: "ダメージ",
+  navSpeedLabel: "素早さ",
+  navRecordsLabel: "記録",
+  navDamageKindsLabel: "ダメージの種類",
   /** サイト名(index.html の <title> と同じ。文書タイトルの接尾辞)。 */
   siteTitle: "pokecalc",
   calcTabLabel: "計算",

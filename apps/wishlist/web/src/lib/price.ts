@@ -33,9 +33,9 @@ export function formatAge(iso: string, now: Date): string {
 }
 
 const REASON_LABELS: Record<SuspiciousReason, string> = {
-  title_mismatch: "商品名が一致しない",
-  too_cheap: "安すぎる",
-  below_min: "下限価格未満",
+  title_mismatch: "名前が違う",
+  too_cheap: "安すぎ",
+  below_min: "下限より下",
 };
 
 export function reasonLabel(reason: SuspiciousReason): string {

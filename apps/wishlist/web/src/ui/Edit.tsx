@@ -1,12 +1,14 @@
 import { useState } from "react";
 import type { Genre, Item, ItemUpdate } from "../api/types";
-import type { ApiClient } from "../lib/api";
+import { resolveImageUrl, type ApiClient } from "../lib/api";
+import { GenreGlyph, colorOf, genreColorProps } from "./icons";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
 interface Props {
   item: Item;
   genres: Genre[];
   client: ApiClient;
+  baseUrl: string;
   onClose: () => void;
   onUpdated: (item: Item) => void;
 }
@@ -14,7 +16,7 @@ interface Props {
 /** 空欄は null(消す)。 */
 const orNull = (s: string): string | null => (s.trim() === "" ? null : s.trim());
 
-export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
+export function Edit({ item, genres, client, baseUrl, onClose, onUpdated }: Props) {
   const sorted = [...genres].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
   const [name, setName] = useState(item.name);
   const [option, setOption] = useState(item.option_text ?? "");
@@ -68,8 +70,44 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
     });
 
   return (
-    <Modal label="編集" onClose={onClose}>
+    <Modal label="編集" className="tall" onClose={onClose}>
       <h2>編集</h2>
+      <div className="edit-head">
+        <img
+          className="edit-image"
+          src={resolveImageUrl(item.image_url, baseUrl)}
+          alt=""
+          {...genreColorProps(colorOf(genres, genreId))}
+        />
+        <label className="field grow">
+          <span>画像を差し替え</span>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void replaceImage(f);
+            }}
+          />
+        </label>
+      </div>
+      <div className="genre-pick" role="group" aria-label="ジャンル">
+        {sorted.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            className="genre-button compact"
+            aria-label={g.name}
+            aria-pressed={genreId === g.id}
+            {...genreColorProps(g.color)}
+            onClick={() => {
+              setGenreId(g.id);
+            }}
+          >
+            <GenreGlyph icon={g.icon} size={24} />
+          </button>
+        ))}
+      </div>
       <label className="field">
         <span>名前</span>
         <input
@@ -101,21 +139,6 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
         />
       </label>
       <label className="field">
-        <span>ジャンル</span>
-        <select
-          value={genreId}
-          onChange={(e) => {
-            setGenreId(Number(e.target.value));
-          }}
-        >
-          {sorted.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
         <span>最低価格(円)</span>
         <input
           type="number"
@@ -141,19 +164,8 @@ export function Edit({ item, genres, client, onClose, onUpdated }: Props) {
         </span>
       </label>
       {hasSource ? null : <p className="site-meta">公式ページの URL が無いので監視できません</p>}
-      <label className="field">
-        <span>画像を差し替え</span>
-        <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void replaceImage(f);
-          }}
-        />
-      </label>
       <ErrorText message={error} />
-      <div className="actions">
+      <div className="actions stretch">
         <button type="button" onClick={onClose}>
           キャンセル
         </button>

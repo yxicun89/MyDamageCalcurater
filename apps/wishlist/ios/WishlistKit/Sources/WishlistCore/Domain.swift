@@ -11,6 +11,14 @@ public enum FetchType: String, Codable, Sendable, CaseIterable, Equatable {
     case linkOnly = "link_only"
 }
 
+/// ジャンルの絵柄(api/openapi.yaml の GenreIcon。docs/phase5-spec.md 5-2「ジャンルの絵柄」。「すべて」専用の `all` は API の値ではないので含めない)
+public enum GenreIcon: String, Codable, Sendable, CaseIterable, Equatable, Hashable {
+    case card, figure, robot, goods, star, box
+
+    /// 新規ジャンルの初期色(強調色。12 色の見本に無い色)
+    public static let defaultColor = "#1d5fd1"
+}
+
 public struct Genre: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var id: Int
     public var name: String
@@ -21,10 +29,18 @@ public struct Genre: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var siteIDs: [Int]
     /// 表記揺れの辞書(フェーズ4-1)。1 グループ = 同じものを指す語(2 語以上)。無ければ空。
     public var aliases: [[String]]
+    /// ジャンルの色 `#rrggbb`(小文字。フェーズ5-1b。枠・点・絵柄の色)。応答に無ければ強調色の青
+    public var color: String
+    /// ジャンルの絵柄(フェーズ5-1b)。応答に無ければ `.box`
+    public var icon: GenreIcon
+    /// URL からジャンルを推定する手がかり(ホスト・語。フェーズ5-1c)。無ければ空
+    public var matchHosts: [String]
+    public var matchKeywords: [String]
 
     public init(
         id: Int, name: String, queryTemplate: String = "{name} {option}", sortOrder: Int = 0, siteIDs: [Int] = [],
-        aliases: [[String]] = []
+        aliases: [[String]] = [], color: String = GenreIcon.defaultColor, icon: GenreIcon = .box,
+        matchHosts: [String] = [], matchKeywords: [String] = []
     ) {
         self.id = id
         self.name = name
@@ -32,10 +48,14 @@ public struct Genre: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
         self.aliases = aliases
+        self.color = color
+        self.icon = icon
+        self.matchHosts = matchHosts
+        self.matchKeywords = matchKeywords
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, name, queryTemplate, sortOrder, siteIDs, aliases
+        case id, name, queryTemplate, sortOrder, siteIDs, aliases, color, icon, matchHosts, matchKeywords
     }
 
     /// 保存済みのキャッシュ(aliases を持たない古い JSON)も読めるよう、aliases が無ければ空にする。
@@ -44,7 +64,11 @@ public struct Genre: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.init(
             id: try c.decode(Int.self, forKey: .id), name: try c.decode(String.self, forKey: .name),
             queryTemplate: try c.decode(String.self, forKey: .queryTemplate), sortOrder: try c.decode(Int.self, forKey: .sortOrder),
-            siteIDs: try c.decode([Int].self, forKey: .siteIDs), aliases: try c.decodeIfPresent([[String]].self, forKey: .aliases) ?? [])
+            siteIDs: try c.decode([Int].self, forKey: .siteIDs), aliases: try c.decodeIfPresent([[String]].self, forKey: .aliases) ?? [],
+            color: try c.decodeIfPresent(String.self, forKey: .color) ?? GenreIcon.defaultColor,
+            icon: try c.decodeIfPresent(GenreIcon.self, forKey: .icon) ?? .box,
+            matchHosts: try c.decodeIfPresent([String].self, forKey: .matchHosts) ?? [],
+            matchKeywords: try c.decodeIfPresent([String].self, forKey: .matchKeywords) ?? [])
     }
 }
 
@@ -97,13 +121,15 @@ public struct Item: Codable, Sendable, Equatable, Hashable, Identifiable {
     public var watchOfficial: Bool
     /// 公式ページの販売状況(まだ確かめていなければ nil)
     public var officialStatus: OfficialStatus?
+    /// 目安のまとめ(フェーズ5-1d。ホームの価格の札)。`GET /api/items` では常にある。無ければ nil
+    public var summary: ItemSummary?
 
     public init(
         id: Int, genreID: Int, name: String, optionText: String? = nil, queryOverride: String? = nil,
         imageURLPath: String, sourceURL: String? = nil, minPrice: Int? = nil, sortOrder: Int = 0,
         siteOverrides: [SiteOverride] = [], createdAt: Date = Date(timeIntervalSince1970: 1_790_000_000),
         updatedAt: Date = Date(timeIntervalSince1970: 1_790_000_000), watchOfficial: Bool = false,
-        officialStatus: OfficialStatus? = nil
+        officialStatus: OfficialStatus? = nil, summary: ItemSummary? = nil
     ) {
         self.id = id
         self.genreID = genreID
@@ -119,11 +145,12 @@ public struct Item: Codable, Sendable, Equatable, Hashable, Identifiable {
         self.updatedAt = updatedAt
         self.watchOfficial = watchOfficial
         self.officialStatus = officialStatus
+        self.summary = summary
     }
 
     private enum CodingKeys: String, CodingKey {
         case id, genreID, name, optionText, queryOverride, imageURLPath, sourceURL, minPrice, sortOrder, siteOverrides, createdAt, updatedAt
-        case watchOfficial, officialStatus
+        case watchOfficial, officialStatus, summary
     }
 
     /// 保存済みのキャッシュ(watchOfficial・officialStatus を持たない古い JSON)も読めるよう、無ければ false・nil にする。
@@ -138,7 +165,30 @@ public struct Item: Codable, Sendable, Equatable, Hashable, Identifiable {
             siteOverrides: try c.decode([SiteOverride].self, forKey: .siteOverrides),
             createdAt: try c.decode(Date.self, forKey: .createdAt), updatedAt: try c.decode(Date.self, forKey: .updatedAt),
             watchOfficial: try c.decodeIfPresent(Bool.self, forKey: .watchOfficial) ?? false,
-            officialStatus: try c.decodeIfPresent(OfficialStatus.self, forKey: .officialStatus))
+            officialStatus: try c.decodeIfPresent(OfficialStatus.self, forKey: .officialStatus),
+            summary: try c.decodeIfPresent(ItemSummary.self, forKey: .summary))
+    }
+}
+
+// MARK: - フェーズ5-1d 目安のまとめ(docs/phase5-spec.md)
+
+/// api/openapi.yaml の ItemSummary.status。ok: low がある / noResult: 取得済みがすべて no_result / failed: low が無く failed のサイトがある / none: 取得済みが無い
+public enum ItemSummaryStatus: String, Codable, Sendable, Equatable, Hashable, CaseIterable {
+    case ok
+    case noResult = "no_result"
+    case failed
+    case none
+}
+
+public struct ItemSummary: Codable, Sendable, Equatable, Hashable {
+    public var low: Int?
+    public var status: ItemSummaryStatus
+    public var fetchedAt: Date?
+
+    public init(low: Int? = nil, status: ItemSummaryStatus, fetchedAt: Date? = nil) {
+        self.low = low
+        self.status = status
+        self.fetchedAt = fetchedAt
     }
 }
 
@@ -191,12 +241,15 @@ public struct ItemDraft: Codable, Sendable, Equatable {
     public var imageURL: String?
     public var sourceURL: String
     public var genreID: Int?
+    /// `genreID` をサーバーが推定で決めたら true(フェーズ5-1。表示の出し分けには使わない)
+    public var genreGuessed: Bool
 
-    public init(name: String, imageURL: String?, sourceURL: String, genreID: Int? = nil) {
+    public init(name: String, imageURL: String?, sourceURL: String, genreID: Int? = nil, genreGuessed: Bool = false) {
         self.name = name
         self.imageURL = imageURL
         self.sourceURL = sourceURL
         self.genreID = genreID
+        self.genreGuessed = genreGuessed
     }
 }
 
@@ -286,13 +339,25 @@ public struct GenreCreate: Sendable, Equatable {
     public var siteIDs: [Int]?
     /// 表記揺れの辞書(フェーズ4-1)。nil なら送らない
     public var aliases: [[String]]?
+    /// フェーズ5-1b/c。追加は color・icon・matchHosts・matchKeywords を常に送る(phase5-spec 5-2「ジャンルの編集」)
+    public var color: String?
+    public var icon: GenreIcon?
+    public var matchHosts: [String]?
+    public var matchKeywords: [String]?
 
-    public init(name: String, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil) {
+    public init(
+        name: String, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil,
+        color: String? = nil, icon: GenreIcon? = nil, matchHosts: [String]? = nil, matchKeywords: [String]? = nil
+    ) {
         self.name = name
         self.queryTemplate = queryTemplate
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
         self.aliases = aliases
+        self.color = color
+        self.icon = icon
+        self.matchHosts = matchHosts
+        self.matchKeywords = matchKeywords
     }
 }
 
@@ -304,13 +369,25 @@ public struct GenreUpdate: Sendable, Equatable {
     public var siteIDs: [Int]?
     /// 渡すと表記揺れの辞書を全件置き換える(空なら全部消す。フェーズ4-1)
     public var aliases: [[String]]?
+    /// フェーズ5-1b/c。変えた項目だけ入れる
+    public var color: String?
+    public var icon: GenreIcon?
+    public var matchHosts: [String]?
+    public var matchKeywords: [String]?
 
-    public init(name: String? = nil, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil) {
+    public init(
+        name: String? = nil, queryTemplate: String? = nil, sortOrder: Int? = nil, siteIDs: [Int]? = nil, aliases: [[String]]? = nil,
+        color: String? = nil, icon: GenreIcon? = nil, matchHosts: [String]? = nil, matchKeywords: [String]? = nil
+    ) {
         self.name = name
         self.queryTemplate = queryTemplate
         self.sortOrder = sortOrder
         self.siteIDs = siteIDs
         self.aliases = aliases
+        self.color = color
+        self.icon = icon
+        self.matchHosts = matchHosts
+        self.matchKeywords = matchKeywords
     }
 }
 

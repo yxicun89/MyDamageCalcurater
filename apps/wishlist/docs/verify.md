@@ -85,13 +85,11 @@ kubectl -n wishlist rollout status deploy/wishlist-web --timeout=120s
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-TOKEN=$(kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d)
 curl -s -o /dev/null -w "web %{http_code}\n" http://localhost:8080/wishlist/
-curl -s -o /dev/null -w "noauth %{http_code}\n" http://localhost:8080/wishlist/api/genres
-curl -s -o /dev/null -w "genres %{http_code}\n" -H "Authorization: Bearer $TOKEN" http://localhost:8080/wishlist/api/genres
+curl -s -o /dev/null -w "genres %{http_code}\n" http://localhost:8080/wishlist/api/genres
 curl -s -o /dev/null -w "calc %{http_code}\n" http://localhost:8080/
 ```
-→ `web 200`、`noauth 401`、`genres 200`、`calc 200`(最後はダメ計の画面。同居しても動いている)。
+→ `web 200`、`genres 200`、`calc 200`(最後はダメ計の画面。同居しても動いている)。
 
 夜間の更新(CronJob)を 1 回だけ手で動かす。商品が登録されていると、実サイトへ取得に行く(1 サイトにつき数回)。
 
@@ -104,40 +102,59 @@ kubectl -n wishlist delete job wishlist-refresher-manual
 ```
 → `refresher: items=<商品数> failed=0 official=<監視数> official_failed=0`(商品が 0 件なら `items=0 failed=0 official=0 official_failed=0`)。
 
+ジャンルの色と絵柄を確認する。
+
+```sh
+curl -s http://localhost:8080/wishlist/api/genres
+```
+→ 各ジャンルに `color`(`#` と 6 桁の小文字)と `icon`、`match_hosts`、`match_keywords` がある。
+
+URL からの下書きを確認する(取得先の実サイトへ 1 回アクセスする)。
+
+```sh
+curl -s -X POST -H "Content-Type: application/json" -d '{"url":"https://dm.takaratomy.co.jp/card/detail?id=dm26rp3-077"}' http://localhost:8080/wishlist/api/items/from-url
+curl -s http://localhost:8080/wishlist/api/genres
+```
+→ 1 つ目は `"genre_guessed":true`、`name` にサイト名と型番が付かない。`genre_id` が、2 つ目の「デュエル・マスターズ」の `id` と同じ。
+
+Yahoo!ショッピングの行を確認する(商品を登録済みで、上の手動 Job のあと)。
+
+```sh
+curl -s "http://localhost:8080/wishlist/api/items/<商品の id>/estimates"
+```
+→ Yahoo!ショッピングの `site_id` の行が、`low` に価格を持つか `status` が `no_result`(`failed` ではない)。
+
 ## 6. ブラウザで確認する(Chrome と Safari)
 
 `http://localhost:8080/wishlist/` を開く。開発者ツールの Network タブを開いておく(赤い行 = 失敗した通信)。
 
-トークンを表示する(画面に入れるため)。
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d; echo
-```
-→ 16 進の文字列が 1 行出る。
-
-1. 初回は設定画面が開く。「APIのURL」は空のまま、「トークン」に上の値を入れて「保存」→「戻る」 → ホームに戻る(画像のグリッドは空、上にジャンルのチップ)。
-2. 右下の「+」 → 「写真」で手元の画像を選び、「名前」に `グリス`、「ジャンル」に `S.H.Figuarts` を選んで「登録」 → グリッドに画像が 1 枚出る(文字は出ない)。
-3. 画像をタップ → 下から詳細シートが出る。検索ワードが `S.H.Figuarts グリス`。
-4. 「メルカリ」の行をタップ → 新しいタブでメルカリの検索結果(`S.H.Figuarts グリス`)が開く。「Amazon」の行も同じ。
-5. 詳細シートのサマリが数秒以内に「だいたい ¥A〜¥B で買えそう(M/D 時点)」か「出品ないかも」になる。サイト行に、取得したサイトの目安・件数・在庫が出る(取得しないサイトはリンクだけ)。
-6. 「参考外 N件」が出ていれば開く → 商品名が一致しない・安すぎる出品と、その理由が並ぶ。
-7. 「価格の推移」を開く → 初日は「推移はまだありません」。
-8. 検索ワードをタップして変え、閉じる → 開き直すと元の検索ワードに戻っている(「保存」を押したときだけ保存される)。
-9. 画像を長押し → 「編集」「削除」が出る。「編集」で「公式ページを監視する」は、元ページの URL が無い商品では選べない。
-10. 「設定」ボタン → ジャンルの「S.H.Figuarts を編集」 → 「別名グループ」に `S.H.Figuarts, SHフィギュアーツ` の行がある。
-11. Network に赤い行(4xx・5xx)が無い。
+1. ページを開く → 設定画面を挟まずホームが出る。上に「欲しいもの」と件数、右に設定ボタン。ジャンルの絵柄のボタンが並び、先頭の「すべて」が青で塗られている。
+2. 右下の「+」 → 下からシートが出て、「コピーした URL を追加」「URL を入力」「写真」が並ぶ。
+3. 「写真」で手元の画像を選ぶ → 確認の画面が出る。「名前」に `グリス` を入れ、ジャンルの絵柄で `S.H.Figuarts` を選ぶ。「追加」が青くなる → 「追加」で、グリッドに画像が 1 枚出る(枠はジャンルの色。文字は出ない)。
+4. 画像をタップ → 下から詳細シートが出る。ジャンル色の点と名前、検索ワード `S.H.Figuarts グリス` が出る。
+5. 「メルカリ」のタイルをタップ → 新しいタブでメルカリの検索結果(`S.H.Figuarts グリス`)が開く。「Amazon」のタイルも同じ。
+6. 数秒待つ → 価格の帯(`¥A` と `〜 ¥B`、サイトごとの点)か「出品ないかも」が出る。最安のタイルが青い縁で、出品なしのサイトは薄く「なし」と出る。取得しないサイトはマークだけ。
+7. 「あやしい出品 N」が出ていれば押す → 小さな画像・価格・理由のタグ(名前が違う・安すぎ・下限より下)・サイトが並ぶ。「戻る」で詳細に戻る。
+8. 「価格の推移」を開く → 初日は「推移はまだありません」。
+9. 検索ワードをタップして変え、閉じる → 開き直すと元の検索ワードに戻っている(「保存」を押したときだけ保存される)。
+10. 画像を長押し → 背景がぼけて、画像と「編集」「削除」が出る。元のページの URL がある商品には「元のページを開く」も出る。Esc か背景のタップで閉じる。
+11. 長押し → 「編集」 → ジャンルの絵柄を押して替え、「保存」 → 枠の色が替わる。「公式ページを監視する」は、元ページの URL が無い商品では選べない。
+12. 右上の設定ボタン → 「接続」の欄(トークン・APIのURL)が無い。「ジャンル」の各行に絵柄・色・商品の件数が出る。
+13. 「S.H.Figuarts を編集」 → 色の見本(12 色)から別の色を押し、「ホームでの見え方」の枠が同じ色になる → 「保存」して「戻る」 → ホームのタイルの枠の色が替わる。
+14. もう一度「S.H.Figuarts を編集」 → 「絵柄」「URL の手がかり」「別名グループ」に `S.H.Figuarts, SHフィギュアーツ` の行がある。
+15. Network に赤い行(4xx・5xx)が無い。
 
 URL からの登録:
 
-1. 「+」 → 「URL」に商品ページの URL を入れて「取得」 → 「名前」に商品ページのタイトルが入る。
-2. 「ジャンル」を選んで「登録」 → グリッドに画像が増える。
+1. 商品ページの URL をコピーしておく。「+」 → 「コピーした URL を追加」 → ブラウザが貼り付けの許可を聞いたら許可する。画像・名前・推定されたジャンルの絵柄(押された状態)が出る。
+2. ジャンルが違っていれば絵柄を押して替え、「追加」 → グリッドに画像が増える。
+3. 「+」 → 「URL を入力」 → URL を貼って「取得」 → 同じ確認の画面が出る。
 
 オフライン:
 
-1. 開発者ツールの Network で Offline にしてページを再読み込みする → グリッドと画像が出る。
-2. 画像をタップ → サマリが「オフライン」。サイト行のリンクは出ている。
-3. Offline を戻す。
+1. 開発者ツールの Network で Offline にしてページを再読み込みする → 上に「オフライン」の札。グリッドと画像が出る(価格の札は出ない)。
+2. 画像をタップ → 状態が「オフライン」。サイトのタイルは押せる。
+3. Offline を戻す → 「オフライン」の札が消える。
 
 確認用に登録した商品は、長押し → 「削除」 → 「削除する」で消す。
 
@@ -152,21 +169,13 @@ tailscale serve status
 ```
 → Tailscale が発行した HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る。この URL を控える(tailnet 固有の値なので、この手順書には書かない)。
 
-トークンを表示する(iPhone に入れるため)。
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d; echo
-```
-→ 16 進の文字列が 1 行出る。
-
-1. iPhone の Safari で `<控えた URL>/wishlist/` を開く → 設定画面が出る。
-2. 「トークン」に上の値を入れて「保存」→「戻る」 → ホームが出る。
-3. 共有 → 「ホーム画面に追加」 → ホーム画面に「欲しいもの」が出る。そこから開くとアドレスバーが無い。
-4. 「+」 → 「写真」で画像を選び、「名前」に `グリス`、「ジャンル」に `S.H.Figuarts` を選んで「登録」 → グリッドに画像が出る。
-5. 画像をタップ → 「メルカリ」の行をタップ → メルカリの検索結果が開く(アプリが入っていればアプリ側)。「Amazon」の行も同じ。
-6. 詳細シートのサマリが数秒以内に「だいたい ¥A〜¥B で買えそう(M/D 時点)」か「出品ないかも」になる。
-7. 機内モードにしてホーム画面から開く → 一覧と画像が出る。サイト行のリンクは出ている(遷移先はオンラインのときだけ)。
+1. iPhone の Safari で `<控えた URL>/wishlist/` を開く → ホームが出る(設定画面は挟まない)。
+2. 共有 → 「ホーム画面に追加」 → ホーム画面に「欲しいもの」が出る。そこから開くとアドレスバーが無い。上と下の端が切れていない。
+3. 「+」 → 「写真」で画像を選び、「名前」に `グリス`、ジャンルの絵柄で `S.H.Figuarts` を選んで「追加」 → グリッドに画像が出る。
+4. 商品ページの URL をコピーして「+」 → 「コピーした URL を追加」 → 貼り付けの許可を聞かれたら許可 → 画像・名前・ジャンルが入った確認の画面が出る → 「追加」。
+5. 画像をタップ → 「メルカリ」のタイルをタップ → メルカリの検索結果が開く(アプリが入っていればアプリ側)。「Amazon」のタイルも同じ。
+6. 詳細シートに、数秒以内に価格の帯か「出品ないかも」が出る。
+7. 機内モードにしてホーム画面から開く → 「オフライン」の札、一覧と画像が出る。サイトのタイルは押せる(遷移先はオンラインのときだけ)。
 8. 機内モードを戻し、確認用の商品を長押し → 「削除」 → 「削除する」で消す。
 
 公開をやめるとき:
@@ -179,22 +188,25 @@ tailscale serve off
 
 ## 8. iOS アプリを確認する(実機)
 
-iPhone に Tailscale の iOS アプリを入れ、Mac と同じ tailnet にログインしておく。
+iPhone に Tailscale の iOS アプリを入れ、Mac と同じ tailnet にログインしておく。接続先(API の URL)はビルド設定で渡し、アプリにトークンや URL の入力欄は無い(認証なし。フェーズ5-3)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 tailscale serve https / http://localhost:8080
 tailscale serve status
-open apps/wishlist/ios/Wishlist.xcodeproj
+cp apps/wishlist/ios/Config/Local.xcconfig.example apps/wishlist/ios/Config/Local.xcconfig
+open apps/wishlist/ios/Config/Local.xcconfig apps/wishlist/ios/Wishlist.xcodeproj
 ```
-→ HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る(この URL を控える)。Xcode が開く。
+→ HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る(この URL を控える)。`Local.xcconfig`(git に入らない)と Xcode が開く。
 
-1. target `Wishlist` と `WishlistShare` の Signing & Capabilities で、Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
-2. iPhone をつないで Run → アプリが起動する。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
-3. アプリの設定画面に、API のベース URL `<控えた URL>/wishlist/` と、トークン(Mac で `kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d` の出力)を入れて保存 → ホームに一覧が出る。
-4. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → 拡張の設定画面で同じ URL とトークンを入れて保存 → プレビュー(名前と画像)が出る。ジャンルを選んで保存 → アプリのホームに画像が増える。
-5. 画像をタップ → 詳細シートが出る。メルカリの行をタップ → メルカリ(アプリかブラウザ)の検索結果が開く。
-6. 機内モードにしてアプリを開き直す → 一覧と画像が出る。詳細シートのサマリが「オフライン」。
-7. 機内モードを戻し、確認用の商品を長押し → 「削除」 → 「削除する」で消す。
+1. `Local.xcconfig` の `<ホスト>` を、控えた URL のホスト名(`https://` を除いた部分)に書き換え、末尾は `/wishlist/` のままにして保存する。
+2. target `Wishlist` と `WishlistShare` の Signing & Capabilities で、Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
+3. iPhone をつないで Run → アプリが起動し、設定画面を挟まずホームに一覧が出る(上に「オフライン」の札は出ない)。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
+4. ホームの設定(右上の歯車)を開く → 「接続」の欄が無く、ジャンルの行に絵柄・名前・件数が出る。ジャンルの行をタップ → 色(12 色)と絵柄を替えられる。
+5. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → ページの画像と名前のプレビューが出て、推定したジャンルの絵柄が選ばれている。「追加」を押す → アプリのホームに画像が増える。
+6. ホームの「+」→ 「コピーした URL を追加」(先に Safari で URL をコピーしておく)→ 確認の画面で「追加」。
+7. 画像をタップ → 詳細シートが出る。価格の帯とサイトのタイルが並び、メルカリのタイルをタップ → メルカリ(アプリかブラウザ)の検索結果が開く。
+8. 機内モードにしてアプリを開き直す → 一覧と画像が出て、上に「オフライン」の札が出る(価格の札は消える)。
+9. 機内モードを戻し、確認用の商品を長押し → 背景がぼけてメニューが出る → 「削除」 → 「削除する」で消す。
 
-署名は 7 日で切れる。切れたら Xcode から Run し直す。
+署名は 7 日で切れる。切れたら Xcode から Run し直す。接続先を替えたら `Local.xcconfig` を直してビルドし直す。

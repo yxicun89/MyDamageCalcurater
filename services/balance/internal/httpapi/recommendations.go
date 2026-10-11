@@ -132,11 +132,13 @@ func recommendations(c *echo.Context, deps Dependencies, slots chan struct{}) er
 }
 
 func toRecommendationsResponse(r balance.Recommendation) api.RecommendationsResponse {
+	skewed := toRecommendationTypes(r.SkewedAttackTypes)
 	return api.RecommendationsResponse{
-		DefenseHoles:   toRecommendationTypes(r.DefenseHoles),
-		OffenseHoles:   toRecommendationTypes(r.OffenseHoles),
-		Candidates:     toTypeCandidates(r.Candidates),
-		AbilityOptions: toAbilityOptions(r.AbilityOptions),
+		SkewedAttackTypes: &skewed,
+		DefenseHoles:      toRecommendationTypes(r.DefenseHoles),
+		OffenseHoles:      toRecommendationTypes(r.OffenseHoles),
+		Candidates:        toTypeCandidates(r.Candidates),
+		AbilityOptions:    toAbilityOptions(r.AbilityOptions),
 	}
 }
 

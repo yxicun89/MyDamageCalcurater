@@ -9,7 +9,7 @@ final class APIWishlistOfficialTests: XCTestCase {
     private let base = URL(string: "https://wishlist.example/wishlist/")!
 
     private func service(_ transport: RecordingTransport) -> APIWishlistService {
-        APIWishlistService(baseURL: base, token: "secret-token", transport: transport)
+        APIWishlistService(baseURL: base, transport: transport)
     }
 
     private func itemJSON(_ extra: String) -> String {
@@ -58,14 +58,14 @@ final class APIWishlistOfficialTests: XCTestCase {
     func testGenreAliasesAreMappedAndMissingMeansEmpty() async throws {
         let transport = RecordingTransport(
             reply: .json(
-                #"{"genres":[{"id":1,"name":"S.H.Figuarts","query_template":"S.H.Figuarts {name}","sort_order":1,"site_ids":[2,1],"aliases":[["S.H.Figuarts","SHフィギュアーツ"]]},{"id":2,"name":"デュエマ","query_template":"{name} {option}","sort_order":2,"site_ids":[1]}]}"#
+                ##"{"genres":[{"id":1,"name":"S.H.Figuarts","query_template":"S.H.Figuarts {name}","sort_order":1,"site_ids":[2,1],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[],"aliases":[["S.H.Figuarts","SHフィギュアーツ"]]},{"id":2,"name":"デュエマ","query_template":"{name} {option}","sort_order":2,"site_ids":[1],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[]}]}"##
             ))
         let genres = try await service(transport).listGenres()
         XCTAssertEqual(genres.map(\.aliases), [[["S.H.Figuarts", "SHフィギュアーツ"]], []])
     }
 
     func testCreateAndUpdateGenreSendAliases() async throws {
-        let reply = #"{"id":3,"name":"ガンプラ","query_template":"{name}","sort_order":0,"site_ids":[],"aliases":[["HG","ハイグレード"]]}"#
+        let reply = ##"{"id":3,"name":"ガンプラ","query_template":"{name}","sort_order":0,"site_ids":[],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[],"aliases":[["HG","ハイグレード"]]}"##
         let transport = RecordingTransport { sent in sent.request.method == .post ? .json(201, reply) : .json(reply) }
         let created = try await service(transport).createGenre(GenreCreate(name: "ガンプラ", queryTemplate: "{name}", aliases: [["HG", "ハイグレード"]]))
         XCTAssertEqual(created.aliases, [["HG", "ハイグレード"]])

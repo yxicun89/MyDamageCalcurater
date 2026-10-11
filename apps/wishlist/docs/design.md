@@ -30,7 +30,7 @@ iPhone(PWA / 将来 iOS アプリ)
 
 ## 3. API(要点。詳細は `api/openapi.yaml`)
 
-- 認証: `/api/*` は `Authorization: Bearer <token>`。トークンは Secret `wishlist-api` の `api-token`。比較は定数時間
+- 認証なし(8080 は 127.0.0.1 だけで待ち、外からは Tailscale。ADR-0810・ユーザー決定 2026-10-11)
 - `/images/{name}` は**認証なし**。`<img>` はヘッダーを付けられないため。ファイル名はランダム(UUID v4 + 拡張子)で推測できない。
   公開範囲は Tailscale 内だけ(W-04)
 - `/healthz` は認証なし
@@ -71,7 +71,7 @@ iPhone(PWA / 将来 iOS アプリ)
 | `Job wishlist-migrate` | api イメージの `migrate up`。Job の template は変えられないため、2 回目以降は `kubectl delete job` してから apply(デプロイ用ターゲットは API 実装と一緒に足す) |
 | `Ingress wishlist` + Traefik `Middleware wishlist-strip` | `/wishlist` を外して api / web へ |
 | `NetworkPolicy` | wishlist 名前空間で default-deny ingress、Traefik → api/web だけ許可 |
-| `Secret wishlist-api` | **Git に置かない**。`scripts/bootstrap.sh` が無いときだけ作る(`database-dsn`・`api-token`。`yahoo-appid` は環境変数 `WISHLIST_YAHOO_APPID` があるときだけ入れる任意のキー) |
+| `Secret wishlist-api` | **Git に置かない**。`scripts/bootstrap.sh` が無いときだけ作る(`database-dsn` だけ。既存の Secret に `api-token`・`yahoo-appid` が残っていても読まない) |
 | `CronJob wishlist-refresher` | 毎日 03:00 JST。Chromium 入りの専用イメージ(`wishlist/refresher`。`api/Dockerfile.refresher`)の `/wishlist-refresher` を起動する。api のイメージには Chromium を載せない |
 
 ### 共有基盤の変更

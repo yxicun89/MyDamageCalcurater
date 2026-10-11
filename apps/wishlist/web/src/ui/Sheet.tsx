@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Genre, Item, ItemEstimates, Listing, PriceHistory, Site, SiteEstimate } from "../api/types";
+import { bandDots, bandLeft, bestSiteIds, hasBandRange } from "../lib/band";
 import { ApiError, resolveImageUrl, type ApiClient } from "../lib/api";
 import { CHART_BOX, buildChart, historyLabel } from "../lib/history";
-import { itemQuery, resolveSiteLinks } from "../lib/links";
+import { itemQuery, resolveSiteLinks, type SiteLink } from "../lib/links";
 import { officialChange, officialEvidence, officialLastAttempt, officialSummary } from "../lib/official";
-import { formatAge, formatJstDate, formatRange, formatYen, isHttpUrl, reasonLabel } from "../lib/price";
+import { formatAge, formatJstDate, formatYen, isHttpUrl, reasonLabel } from "../lib/price";
+import { siteColor, siteMark } from "../lib/siteMark";
+import { DEFAULT_GENRE_COLOR, UiIcon, genreColorProps, type UiIconName } from "./icons";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
 interface Props {
@@ -29,7 +32,8 @@ type Summary =
 type ListingsState =
   { kind: "idle" } | { kind: "loading" } | { kind: "ok"; listings: Listing[] } | { kind: "error" };
 
-function summaryText(s: Summary): string {
+/** 状態の短い文。成功して更新中でもないときは空(価格は帯とタイルが形で伝える)。 */
+function statusText(s: Summary): string {
   switch (s.kind) {
     case "loading":
       return "読み込み中…";
@@ -38,33 +42,10 @@ function summaryText(s: Summary): string {
     case "error":
       return "価格情報を取得できませんでした";
     case "ok": {
-      const { sites, summary_low: low, summary_mid: mid, summary_fetched_at: at } = s.estimates;
-      const refreshing = s.estimates.refreshing && !s.gaveUp ? " 更新中…" : "";
-      const notice = s.notice ? ` ${s.notice}` : "";
-      if (sites.length > 0 && low == null && sites.every((e) => e.status === "no_result"))
-        return `出品ないかも${refreshing}${notice}`;
-      if (sites.length === 0 || low == null) return `まだ価格情報はありません${refreshing}${notice}`;
-      const when = at ? `(${formatJstDate(at)} 時点)` : "";
-      return `だいたい ${formatRange(low, mid)} で買えそう${when}${refreshing}${notice}`;
+      const parts = [s.estimates.refreshing && !s.gaveUp ? "更新中…" : "", s.notice ?? ""];
+      return parts.filter((p) => p !== "").join(" ");
     }
   }
-}
-
-/** サイト行の目安(estimates にあるサイトだけ) */
-function SiteDetail({ est, now }: { est: SiteEstimate; now: Date }) {
-  if (est.status === "no_result") return <span className="site-meta">出品ないかも</span>;
-  if (est.low == null) return <span className="site-meta">取得できませんでした</span>;
-  return (
-    <>
-      <span className="site-meta">
-        {formatRange(est.low, est.mid)} / {String(est.count)}件 /{" "}
-        {est.in_stock_count > 0 ? "在庫あり" : "在庫なし"}
-      </span>
-      {est.status === "failed" ? (
-        <span className="site-meta">最終取得: {formatAge(est.fetched_at, now)}</span>
-      ) : null}
-    </>
-  );
 }
 
 /** 詳細シート。画像・検索ワード(その場編集)・サマリ・サイト行。 */
@@ -188,14 +169,72 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
     }
   };
 
+  const genreColor = genre?.color ?? DEFAULT_GENRE_COLOR;
+  const siteEstimates = estimates?.sites ?? [];
+  const fetchedAt = estimates?.summary_fetched_at;
+  const dots = bandDots(
+    links.map((l) => l.site),
+    siteEstimates,
+  );
+  const best = bestSiteIds(
+    siteEstimates,
+    links.map((l) => l.site.id),
+  );
+  const low = estimates?.summary_low;
+  const noPrice =
+    estimates !== null &&
+    (estimates.sites.length === 0 ||
+      (low == null && !estimates.sites.every((e) => e.status === "no_result")));
+  const noListing =
+    estimates !== null &&
+    low == null &&
+    estimates.sites.length > 0 &&
+    estimates.sites.every((e) => e.status === "no_result");
+
+  if (listingsOpen) {
+    return (
+      <Modal label="詳細" className="sheet" onClose={onClose}>
+        <div className="list-head">
+          <button
+            type="button"
+            className="square-button"
+            aria-label="戻る"
+            onClick={() => {
+              setListingsOpen(false);
+            }}
+          >
+            <UiIcon name="back" />
+          </button>
+          <h2>あやしい出品 {String(suspiciousTotal)}</h2>
+        </div>
+        <Suspicious state={listings} sites={sites} />
+      </Modal>
+    );
+  }
+
   return (
-    <Modal label="詳細" onClose={onClose}>
-      <div className="sheet-head">
-        <button type="button" className="text-button" onClick={onClose}>
-          閉じる
+    <Modal label="詳細" className="sheet" onClose={onClose}>
+      <div className="sheet-top">
+        <button type="button" className="square-button round" aria-label="閉じる" onClick={onClose}>
+          <UiIcon name="close" size={18} strokeWidth={2.4} />
         </button>
       </div>
-      <img className="sheet-image" src={resolveImageUrl(item.image_url, baseUrl)} alt={item.name} />
+      <div className="hero">
+        <div className="photo" {...genreColorProps(genreColor)}>
+          <img src={resolveImageUrl(item.image_url, baseUrl)} alt={item.name} />
+        </div>
+      </div>
+
+      <div className="title-row">
+        <span className="genre-dot" data-testid="genre-dot" {...genreColorProps(genreColor)} />
+        <span className="item-name">{item.name}</span>
+        {fetchedAt ? (
+          <span className="when" data-testid="fetched-at">
+            <UiIcon name="clock" size={12} strokeWidth={2.4} />
+            {formatJstDate(fetchedAt)}
+          </span>
+        ) : null}
+      </div>
 
       {editing ? (
         <div className="query-edit">
@@ -222,60 +261,101 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
             setEditing(true);
           }}
         >
-          {itemQuery(item, genre)}
+          <UiIcon name="search" size={16} />
+          <span className="query-text">{itemQuery(item, genre)}</span>
+          <UiIcon name="edit" size={14} />
         </button>
       )}
       <ErrorText message={error} />
 
-      <p role="status" className="summary">
-        {summaryText(summary)}
+      {low != null && !noPrice ? (
+        <div className="band-card" data-testid="price-band">
+          <div className="band-numbers">
+            <span className="band-low" data-testid="band-low">
+              {formatYen(low)}
+            </span>
+            <span className="band-high" data-testid="band-high">
+              〜{estimates?.summary_mid == null ? "" : ` ${formatYen(estimates.summary_mid)}`}
+            </span>
+          </div>
+          <div className="band-track">
+            <span className="band-line" />
+            {hasBandRange(dots) ? <span className="band-range" data-testid="band-range" /> : null}
+            {dots.map((d) => (
+              <span
+                key={d.site.id}
+                className="price-dot"
+                data-testid="price-dot"
+                data-site-id={d.site.id}
+                data-position={d.position}
+                aria-label={d.site.name}
+                style={{
+                  left: bandLeft(dots, d),
+                  background: siteColor(d.site.name),
+                }}
+              >
+                {siteMark(d.site.name)}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {noListing ? (
+        <div className="no-listing" data-testid="no-listing">
+          <UiIcon name="search" size={28} />
+          <span>出品ないかも</span>
+        </div>
+      ) : null}
+
+      {noPrice ? (
+        <div className="band-card empty" data-testid="band-empty">
+          <UiIcon name="clock" size={16} />
+        </div>
+      ) : null}
+
+      <p role="status" className="status">
+        {statusText(summary)}
       </p>
+
+      <ul className="site-tiles" aria-label="サイト" data-columns="3">
+        {links.map((l) => (
+          <li key={l.site.id}>
+            <SiteTile link={l} est={siteEstimates.find((e) => e.site_id === l.site.id)} best={best} />
+          </li>
+        ))}
+      </ul>
+
+      {suspiciousTotal > 0 ? (
+        <button
+          type="button"
+          className="warn-button"
+          aria-expanded={false}
+          onClick={() => {
+            setListings({ kind: "loading" });
+            setListingsOpen(true);
+          }}
+        >
+          <UiIcon name="warn" size={16} />
+          あやしい出品 {String(suspiciousTotal)}
+        </button>
+      ) : null}
 
       {item.watch_official ? <OfficialStatusView status={item.official_status} /> : null}
 
       <p>
         <button
           type="button"
-          className="text-button"
+          className="square-button"
+          aria-label="更新"
           disabled={summary.kind === "offline" || busy}
           onClick={() => {
             setPosting(true);
             run(() => client.refreshEstimates(itemId), 0);
           }}
         >
-          更新
+          <UiIcon name="refresh" size={18} />
         </button>
       </p>
-
-      <ul className="site-list" aria-label="サイト">
-        {links.map((l) => {
-          const est = estimates?.sites.find((e) => e.site_id === l.site.id);
-          return (
-            <li key={l.site.id}>
-              <a href={l.url} target="_blank" rel="noopener">
-                <span className="site-main">
-                  <span>{l.site.name}</span>
-                  {est ? <SiteDetail est={est} now={new Date()} /> : null}
-                </span>
-                <span aria-hidden="true">›</span>
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-
-      {suspiciousTotal > 0 ? (
-        <details
-          className="suspicious"
-          open={listingsOpen}
-          onToggle={(e) => {
-            setListingsOpen(e.currentTarget.open);
-          }}
-        >
-          <summary>参考外 {String(suspiciousTotal)}件</summary>
-          {listingsOpen ? <Suspicious state={listings} /> : null}
-        </details>
-      ) : null}
 
       <details
         className="history"
@@ -288,6 +368,44 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
         {historyOpen ? <History state={history} sites={sites} /> : null}
       </details>
     </Modal>
+  );
+}
+
+/** サイトのタイル。押すと検索結果を新しいタブで開く。状態は文ではなく形で伝える。 */
+function SiteTile({ link, est, best }: { link: SiteLink; est: SiteEstimate | undefined; best: Set<number> }) {
+  const { site } = link;
+  const none = est?.status === "no_result";
+  const failedWithoutPrice = est?.status === "failed" && est.low == null;
+  const isBest = best.has(site.id);
+  let price: string | null = null;
+  if (none) price = "なし";
+  else if (est?.low != null) price = formatYen(est.low);
+  const title =
+    est?.status === "failed" && est.low != null
+      ? `最終取得: ${formatAge(est.fetched_at, new Date())}`
+      : undefined;
+  return (
+    <a
+      className="site-tile"
+      href={link.url}
+      target="_blank"
+      rel="noopener"
+      aria-label={site.name}
+      title={title}
+      data-dim={none ? "true" : undefined}
+      data-failed={failedWithoutPrice ? "true" : undefined}
+      data-best={isBest ? "true" : undefined}
+      aria-current={isBest ? "true" : undefined}
+    >
+      <span className="site-mark" data-testid="site-mark" style={{ background: siteColor(site.name) }}>
+        {siteMark(site.name)}
+      </span>
+      {price !== null && (
+        <span className="site-price" data-testid="site-price">
+          {price}
+        </span>
+      )}
+    </a>
   );
 }
 
@@ -389,27 +507,56 @@ function History({ state, sites }: { state: HistoryState; sites: Site[] }) {
   );
 }
 
-function Suspicious({ state }: { state: ListingsState }) {
-  if (state.kind === "error") return <p className="site-meta">参考外の出品を取得できませんでした</p>;
+const REASON_ICONS: Record<Listing["suspicious_reasons"][number], UiIconName> = {
+  title_mismatch: "tag",
+  too_cheap: "down",
+  below_min: "warn",
+};
+
+function Suspicious({ state, sites }: { state: ListingsState; sites: Site[] }) {
+  if (state.kind === "error") return <p className="site-meta">出品を取得できませんでした</p>;
   if (state.kind !== "ok") return <p className="site-meta">読み込み中…</p>;
   const rows = state.listings.filter((l) => l.suspicious_reasons.length > 0);
   return (
-    <ul className="suspicious-list" aria-label="参考外の出品">
-      {rows.map((l) => (
-        <li key={l.id}>
-          {l.image_url && isHttpUrl(l.image_url) ? <img src={l.image_url} alt={l.title} /> : null}
-          <div>
-            <div>{l.title}</div>
-            <div>{formatYen(l.price)}</div>
-            <div className="reason">{l.suspicious_reasons.map(reasonLabel).join("・")}</div>
+    <ul className="suspicious-list" aria-label="あやしい出品">
+      {rows.map((l) => {
+        const siteName = sites.find((s) => s.id === l.site_id)?.name ?? `サイト${String(l.site_id)}`;
+        const body = (
+          <>
+            {l.image_url && isHttpUrl(l.image_url) ? <img src={l.image_url} alt={l.title} /> : null}
+            <span className="listing-main">
+              <span className="listing-price">{formatYen(l.price)}</span>
+              <span className="listing-tags">
+                {l.suspicious_reasons.map((r) => (
+                  <span key={r} className="reason-tag" data-testid="reason-tag" data-reason={r}>
+                    <UiIcon name={REASON_ICONS[r]} size={12} strokeWidth={2.4} />
+                    {reasonLabel(r)}
+                  </span>
+                ))}
+              </span>
+            </span>
+            <span
+              className="site-mark small"
+              data-testid="listing-site"
+              aria-label={siteName}
+              style={{ background: siteColor(siteName) }}
+            >
+              {siteMark(siteName)}
+            </span>
+          </>
+        );
+        return (
+          <li key={l.id}>
             {isHttpUrl(l.url) ? (
-              <a href={l.url} target="_blank" rel="noopener">
-                出品を開く
+              <a className="listing-row" href={l.url} target="_blank" rel="noopener">
+                {body}
               </a>
-            ) : null}
-          </div>
-        </li>
-      ))}
+            ) : (
+              <div className="listing-row">{body}</div>
+            )}
+          </li>
+        );
+      })}
     </ul>
   );
 }

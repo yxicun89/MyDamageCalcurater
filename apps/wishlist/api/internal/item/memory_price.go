@@ -84,6 +84,11 @@ func (m *MemoryRepository) MarkFailed(_ context.Context, itemID, siteID int64, a
 func (m *MemoryRepository) ListEstimates(_ context.Context, itemID int64) ([]Estimate, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.itemEstimates(itemID), nil
+}
+
+// itemEstimates は商品の目安を site_id 昇順で返す(呼び出し側が m.mu を持つ)。
+func (m *MemoryRepository) itemEstimates(itemID int64) []Estimate {
 	out := []Estimate{}
 	for k, e := range m.estimates {
 		if k[0] == itemID {
@@ -92,7 +97,7 @@ func (m *MemoryRepository) ListEstimates(_ context.Context, itemID int64) ([]Est
 		}
 	}
 	slices.SortFunc(out, func(a, b Estimate) int { return cmp.Compare(a.SiteID, b.SiteID) })
-	return out, nil
+	return out
 }
 
 // ListListings は PriceRepository の実装。

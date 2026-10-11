@@ -66,7 +66,7 @@ private struct JudgeRowView: View {
                 .multilineTextAlignment(.leading)
                 .accessibilityIdentifier("judgeRowLabel-\(index)")
             HStack(spacing: SpacingToken.x2) {
-                SpeedEmblem(name: row.nameJa, primaryType: row.primaryType ?? "")
+                SpeedEmblem(name: row.nameJa, primaryType: row.primaryType ?? "", speciesKey: row.speciesKey)
                 line(row.nameJa, style: .heading, id: "judgeRowName-\(index)")
             }
             line(row.speedText, id: "judgeRowSpeed-\(index)")

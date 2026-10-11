@@ -103,13 +103,16 @@ struct FavoritesScreenView: View {
             : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x3))
         return VStack(alignment: .leading, spacing: SpacingToken.x2) {
             layout {
-                VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                    Text(row.title)
-                        .font(TextStyleToken.body.font)
-                        .foregroundStyle(ColorToken.textPrimary.color)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if let subtitle = row.subtitle {
-                        captionText(subtitle)
+                HStack(alignment: .center, spacing: SpacingToken.x2) {
+                    speciesIcon(key: row.favorite.individual.speciesKey, name: row.title)
+                    VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                        Text(row.title)
+                            .font(TextStyleToken.body.font)
+                            .foregroundStyle(ColorToken.textPrimary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                        if let subtitle = row.subtitle {
+                            captionText(subtitle)
+                        }
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -195,11 +198,15 @@ struct FavoritesScreenView: View {
             restoreTarget = CalcHistoryRestoreTarget(id: row.id, calc: row.entry.calc, favorite: nil)
         } label: {
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                Text(row.title)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .center, spacing: SpacingToken.x2) {
+                    speciesIcon(key: row.entry.calc.attacker.speciesKey, name: row.attackerName ?? "")
+                    speciesIcon(key: row.entry.calc.defender.speciesKey, name: row.defenderName ?? "")
+                    Text(row.title)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 captionText(row.moveText)
                 detailLayout {
                     Text(row.percentText)
@@ -249,11 +256,15 @@ struct FavoritesScreenView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x1))
             : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x3))
         return layout {
-            Text(row.title)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(alignment: .center, spacing: SpacingToken.x2) {
+                speciesIcon(key: row.speciesKey, name: row.title)
+                Text(row.title)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: isAccessibilitySize ? .leading : .trailing, spacing: SpacingToken.x1) {
                 Text(countText)
                     .font(TextStyleToken.body.font)
@@ -269,6 +280,11 @@ struct FavoritesScreenView: View {
     }
 
     // MARK: - 部品
+
+    /// 行の先頭のポケモン画像(G-06)。タイプは行に無いので、画像が無いときは中立色のエンブレム。名前は隣の文字が読む。
+    private func speciesIcon(key: String, name: String) -> some View {
+        SpeciesImageView(speciesKey: key, name: name, types: [])
+    }
 
     private func sectionHeading(_ text: String, systemImage: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {

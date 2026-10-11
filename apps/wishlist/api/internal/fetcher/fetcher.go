@@ -1,8 +1,7 @@
 // Package fetcher はサイト別の価格取得(apps/wishlist/CLAUDE.md §6)。受け入れ条件は docs/phase3-api-spec.md の AC-F*。
 //
 // 取得方式(sites.fetch_type)ごとの実装:
-//   - api      : Yahoo!ショッピング(Yahoo。appid が無ければ使わない)
-//   - scrape   : カードラッシュ・あみあみ・Yahoo!フリマ・駿河屋(検索 URL のホスト名で選ぶ。ForSite)。
+//   - scrape   : カードラッシュ・あみあみ・Yahoo!ショッピング・Yahoo!フリマ・駿河屋(検索 URL のホスト名で選ぶ。ForSite)。
 //     駿河屋(www.suruga-ya.jp)は Crawl-delay 30 秒を守り、夜間の CronJob だけで取る(HostMinIntervals・NightlyOnlyHosts)。
 //     ドラゴンスターは取得不可(docs/sites.md)
 //   - headless : メルカリ(jp.mercari.com。chromedp。Config.Renderer があるときだけ。夜間の CronJob だけで取る)
@@ -38,7 +37,7 @@ const (
 var (
 	// ErrUpstreamStatus は取得先が 2xx 以外を返したこと。
 	ErrUpstreamStatus = errors.New("fetcher: upstream returned non-2xx status")
-	// ErrUnavailable はこの Fetcher が使えないこと(appid が無い等)。
+	// ErrUnavailable はこの Fetcher が使えないこと(Chromium が無い等)。
 	ErrUnavailable = errors.New("fetcher: unavailable")
 )
 
@@ -154,11 +153,9 @@ func (t *throttled) Fetch(ctx context.Context, site Site, query string) ([]Listi
 
 // Config は NewRegistry の設定。
 type Config struct {
-	YahooAppID    string        // 空(空白だけを含む)なら api 型は「使えない」
-	YahooEndpoint string        // 空なら YahooEndpoint
-	Client        *http.Client  // nil なら netguard.NewClient(netguard.Options{})
-	Clock         Clock         // nil なら SystemClock
-	Interval      time.Duration // 0 なら MinInterval
+	Client   *http.Client  // nil なら netguard.NewClient(netguard.Options{})
+	Clock    Clock         // nil なら SystemClock
+	Interval time.Duration // 0 なら MinInterval
 	// Renderer は headless(メルカリ)の描画。nil なら headless は登録しない(Chromium が無い環境。refresher だけが渡す)。
 	Renderer Renderer
 }
@@ -174,7 +171,7 @@ type Registry struct {
 	gate *HostGate
 }
 
-// NewRegistry は本番の表を作る。api は Yahoo(YahooAppID があるときだけ)。scrape(ホスト別)・headless(メルカリ。Renderer があるときだけ)、link_only は取得しない。
+// NewRegistry は本番の表を作る。scrape(ホスト別)・headless(メルカリ。Renderer があるときだけ)、link_only は取得しない。
 // 登録する Fetcher はすべて Throttle(Interval・Clock)で包む(同じサイトの間隔は Fetcher をまたいで守る)。
 func NewRegistry(cfg Config) *Registry {
 	interval := cfg.Interval
@@ -187,15 +184,11 @@ func NewRegistry(cfg Config) *Registry {
 	}
 	gate := NewHostGate(interval, HostMinIntervals, clock)
 	m := map[item.FetchType]Fetcher{}
-	if appID := strings.TrimSpace(cfg.YahooAppID); appID != "" {
-		y := NewYahoo(appID, cfg.Client)
-		y.Endpoint = cfg.YahooEndpoint
-		m[item.FetchAPI] = throttleOn(y, gate)
-	}
 	scrape := map[string]Fetcher{
 		"www.cardrush-dm.jp":           throttleOn(NewCardrush(cfg.Client), gate),
 		"slist.amiami.jp":              throttleOn(NewAmiami(cfg.Client), gate),
 		"paypayfleamarket.yahoo.co.jp": throttleOn(NewYahooFurima(cfg.Client), gate),
+		"shopping.yahoo.co.jp":         throttleOn(NewYahooShopping(cfg.Client), gate),
 		"www.suruga-ya.jp":             throttleOn(NewSurugaya(cfg.Client), gate),
 	}
 	reg := &Registry{m: m, scrape: scrape, gate: gate}

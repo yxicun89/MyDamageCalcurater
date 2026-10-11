@@ -2,6 +2,7 @@
 
 上から順に実行する。各コマンドの下の「→」が成功の見え方。
 入口は 1 つ: **ブラウザ・iOS とも `http://localhost:8080`**(k3d → Traefik → gateway)。
+別アプリ「欲しいものリスト」の手順は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)。
 1-1(クラスタ作成とマスタ投入)は破壊的な操作を含むので、人間が自分のターミナルで実行する(Claude Code では先頭に `!` を付ける)。
 
 ## 0. 前提(初回だけ)
@@ -97,25 +98,33 @@ make web-k3d-e2e
 
 ## 3. iOS の確認
 
-シミュレータは `iPhone 17e` を使う(`IOS_SIMULATOR` で指定。未指定の既定は `iPhone 18 Pro`)。
+シミュレータは `iPhone 17 Pro` を使う(`IOS_SIMULATOR` で指定。未指定の既定も `iPhone 17 Pro`。`iPhone 18 Pro` など別の機種は `IOS_SIMULATOR="iPhone 18 Pro"` で指定できる)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-xcrun simctl list devices | grep "iPhone 17e"
+xcrun simctl list devices | grep "iPhone 17 Pro"
 ```
-→ `iPhone 17e (...)` の行が出る(`Booted` でなくてよい)。無ければ Xcode の Settings → Components で iOS シミュレータを入れる。
+→ `iPhone 17 Pro (...)` の行が出る(`Booted` でなくてよい)。無ければ `xcrun simctl create "iPhone 17 Pro" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro com.apple.CoreSimulator.SimRuntime.iOS-27-0` で作る(iOS のシミュレータ自体が無いときは Xcode の Settings → Components で入れる)。
 
 ### 3-1. コマンドで起動する(最短)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-make ios-run IOS_SIMULATOR="iPhone 17e" POKECALC_API_BASE_URL=http://localhost:8080
+make ios-run IOS_SIMULATOR="iPhone 17 Pro" POKECALC_API_BASE_URL=http://localhost:8080
 ```
 → 数分(初回は長め)でシミュレータが開き、アプリが起動する。計算画面に「APIに接続中(localhost)」のバッジと、実データのポケモンでの結果が出る(1-1 と 1-2 が済んでいることが前提。URL に `/api` は付けない)。
 防御側のカードをタップして別のポケモンを選ぶ → カードと技の行の相性・結果の%が変わる。
 `POKECALC_API_BASE_URL` を付けない、またはモック強制の `IOS_RUN_MOCK=1` を付けると、「モックデータで動作中」とテスト用の名前(「テスト…」)で動く。
+
+**実 API につながらない・反映されないとき**(「モックデータで動作中」と出る、結果が「テスト…」の名前のまま)
+
+1. Mac のブラウザで `http://localhost:8080` が開くか確認する。開かなければ k3d が止まっている(1-2 の `make deploy-latest`)。
+2. 起動した画面の出力に `接続先 http://localhost:8080` と出ているか確認する。`接続先 なし(モック)` なら `POKECALC_API_BASE_URL=...` を付け忘れている(上のコマンドを丸ごと使う)。
+3. URL の末尾に `/api` や `/` を付けていないか確認する。
+4. 前回のビルドが残って反映されないときは、シミュレータからアプリを削除(ホーム画面で長押し)してから、もう一度コマンドで起動する。
+5. Xcode から実行しているなら、次の 3-2 のとおり Edit Scheme で環境変数 `POKECALC_API_BASE_URL` を入れる(コマンドで入れた設定は Xcode の実行には引き継がれない)。
 
 ### 3-2. Xcode で開いて実行する
 
@@ -127,7 +136,7 @@ open ios/PokeCalc.xcodeproj
 
 Xcode で次の順に操作する。
 
-1. 画面上部のスキームが `PokeCalc`、実行先が `iPhone 17e`(シミュレータ)であることを確認する。
+1. 画面上部のスキームが `PokeCalc`、実行先が `iPhone 17 Pro`(シミュレータ)であることを確認する。
 2. 実 API につなぐ場合のみ、スキーム名 `PokeCalc` をクリック → Edit Scheme → Run → Arguments を開き、Environment Variables の `POKECALC_API_BASE_URL` に `http://localhost:8080` を入れる。入れなければモックで動く。
 3. Run(▶、または Cmd+R)を押す。
 
@@ -140,7 +149,7 @@ Xcode で次の順に操作する。
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
-make ios-test IOS_SIMULATOR="iPhone 17e"
+make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 ```
 → lint・生成物の一致・XCTest・XCUITest・Info.plist 検査がすべて成功する。UI テストが約 190 件あり 20〜50 分かかる(他のレーンがテスト中なら順番待ちで延びる)。速く見るだけなら `make ios-swift-test`(macOS で XCTest のみ)。
 

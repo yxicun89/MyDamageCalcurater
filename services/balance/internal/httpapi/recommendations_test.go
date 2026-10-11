@@ -262,10 +262,14 @@ func TestRecommendationsResponseUsesContractFieldNames(t *testing.T) {
 	if err := json.Unmarshal(recorder.Body.Bytes(), &raw); err != nil {
 		t.Fatalf("unmarshal: %v", err)
 	}
-	for _, key := range []string{"defenseHoles", "offenseHoles", "candidates", "abilityOptions"} {
+	for _, key := range []string{"skewedAttackTypes", "defenseHoles", "offenseHoles", "candidates", "abilityOptions"} {
 		if _, ok := raw[key]; !ok {
 			t.Errorf("response is missing %q", key)
 		}
+	}
+	// ADR-0422: one member is never skewed (needs weak - resist >= 2); the field is still present as [].
+	if got := string(raw["skewedAttackTypes"]); got != "[]" {
+		t.Errorf("skewedAttackTypes = %s, want []", got)
 	}
 	var candidates []map[string]json.RawMessage
 	if err := json.Unmarshal(raw["candidates"], &candidates); err != nil || len(candidates) < 5 {

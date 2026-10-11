@@ -22,8 +22,9 @@ const (
 	MercariOrigin = "https://jp.mercari.com"
 	// MercariReadySelector は「描画済みのセル」。スケルトンにも付く item-cell だけでは判定できない。
 	MercariReadySelector = `li[data-testid="item-cell"] a[data-testid="thumbnail-link"]`
-	// MercariWaitTimeout は最初の thumbnail-link が出るまで待つ上限。
-	MercariWaitTimeout = 10 * time.Second
+	// MercariWaitTimeout は最初の thumbnail-link が出るまで待つ上限。k3d の CronJob では 10 秒で描画が間に合わず
+	// 全件 context deadline exceeded になった(2026-10-11)ので 30 秒にする(夜間に 1 回、商品ごとに 1 回だけ待つ)。
+	MercariWaitTimeout = 30 * time.Second
 	// MercariScrollBudget はスクロールして描画を待つ全体の上限(Clock で測る)。
 	MercariScrollBudget = 10 * time.Second
 	// MercariScrollWait は 1 回スクロールしたあとの待ち。

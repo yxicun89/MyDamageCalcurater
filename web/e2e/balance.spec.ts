@@ -1,4 +1,5 @@
-// P4-12a: タイプバランスの画面の主な流れ(ADR-0303)。playwright.balance.config.ts が balance-svc を Web の例データの
+// P4-12a: タイプバランスの主な流れ(ADR-0303)。ADR-0421: 別画面は無くなり、構築編集の中の「タイプバランス」の節で見る
+// (team-svc は起動しないので、`/api/team/**` は spec の中の fake で受ける)。playwright.balance.config.ts が balance-svc を Web の例データの
 // read model で起動し、vite preview が /api/balance を転送する。倍率・集計は本物の balance-svc の計算。
 // 例データ: テストほのお(9001-000・ほのお)・テストみず(9002-000・みず)、技 テストかえんパンチ(ほのお・物理)。
 
@@ -13,8 +14,9 @@ const FIRE_PUNCH = "テストかえんパンチ";
 /** 倍率のセルの書式(「×2 弱点」「×1/2 耐性」など。docs/type-balance-design.md §10)。 */
 const DEFENSE_LABEL = /^×(0|[1-9][0-9]*(\/[1-9][0-9]*)?) (弱点|等倍|耐性|無効)$/;
 
+/** 構築編集の枠(「N体目」)。 */
 function member(page: Page, index: number): Locator {
-  return page.getByRole("group", { name: `メンバー${String(index)}`, exact: true });
+  return page.getByRole("group", { name: `${String(index)}体目`, exact: true });
 }
 
 /**
@@ -31,12 +33,32 @@ async function pickSpecies(page: Page, index: number, nameJa: string): Promise<v
   await expect(input).toHaveValue(nameJa);
 }
 
+/** 構築の一覧を fake で返し、[新しい構築]で編集画面を開く(構築の保存はこの spec の対象外)。 */
 async function openBalance(page: Page): Promise<void> {
-  await page.goto("/balance");
-  await expect(page.getByRole("tab", { name: "タイプバランス", exact: true })).toHaveAttribute(
-    "aria-selected",
-    "true",
-  );
+  const teams: unknown[] = [];
+  await page.route(/\/api\/team\/teams(?:\/[^/?]+)?$/, async (route) => {
+    const request = route.request();
+    const json = (status: number, body: unknown) =>
+      route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (request.method() === "GET") {
+      return json(200, teams);
+    }
+    if (request.method() === "POST") {
+      const created = {
+        id: "00000000-0000-4000-8000-000000000001",
+        name: "名称未設定",
+        members: [],
+        createdAt: "2026-10-04T09:00:00Z",
+        updatedAt: "2026-10-04T09:00:00Z",
+      };
+      teams.push(created);
+      return json(201, created);
+    }
+    return json(405, { code: "method_not_allowed", message: "対応していない操作です" });
+  });
+  await page.goto("/team");
+  await page.getByRole("button", { name: "新しい構築", exact: true }).click();
+  await expect(page.getByRole("region", { name: "「構築 1」のメンバー編集", exact: true })).toBeVisible();
 }
 
 /** 表の中で、行見出しが name の行のセル(見出し以外)。 */
@@ -56,7 +78,6 @@ test("2体を選ぶと analyze(200)で防御相性の表(18タイプ・文字の
       response.request().method() === "POST",
   );
   await pickSpecies(page, 1, FIRE.nameJa);
-  await page.getByRole("button", { name: "メンバーを追加", exact: true }).click();
   await pickSpecies(page, 2, WATER.nameJa);
   const response = await analyzeResponse;
   expect(response.status()).toBe(200);
@@ -96,9 +117,12 @@ test("攻撃技を選ぶと coverage(200)で攻撃範囲の表を出す", async 
       new URL(response.url()).pathname === "/api/balance/v1/team-balance/coverage" &&
       response.request().method() === "POST",
   );
+  // 技ピッカー(ADR-0350): 開いて、名前で行を選ぶ。
+  await member(page, 1).getByRole("combobox", { name: "技1", exact: true }).click();
   await member(page, 1)
-    .getByRole("combobox", { name: "技1", exact: true })
-    .selectOption({ label: FIRE_PUNCH });
+    .getByRole("listbox", { name: "技1", exact: true })
+    .getByRole("option", { name: new RegExp(FIRE_PUNCH) })
+    .click();
   expect((await coverageResponse).status()).toBe(200);
 
   const coverage = page.getByRole("table", { name: "攻撃範囲", exact: true });

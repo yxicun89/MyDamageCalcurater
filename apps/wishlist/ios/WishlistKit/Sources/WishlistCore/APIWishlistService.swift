@@ -8,7 +8,7 @@ private typealias Schemas = Components.Schemas
 
 /// `WishlistService` を生成クライアント(`WishlistAPI.Client`)で実装する。
 ///
-/// - 全 `/api/*` に `Authorization: Bearer <token>` を付ける(ClientMiddleware)。
+/// - 認証の情報は付けない(Tailscale 内のみ公開。docs/phase5-spec.md 5-3)。
 /// - ベース URL は末尾 `/` の有無によらず、前置(`/wishlist`)を残して `api/items` などを連結する。
 /// - **PATCH の null**: 生成型 `ItemUpdate` の nullable 項目は `String?` で、nil は JSON から省略される(null を送れない)。
 ///   `ItemPatch` の `.clear` は、ミドルウェアが送信直前にボディを組み直して JSON の `null` にする(`PatchNulls`)。
@@ -17,13 +17,11 @@ private typealias Schemas = Components.Schemas
 public struct APIWishlistService: WishlistService {
     private let client: Client
 
-    public init(baseURL: URL, token: String, transport: any ClientTransport = URLSessionTransport()) {
+    public init(baseURL: URL, transport: any ClientTransport = URLSessionTransport()) {
         // 前置パスを残すため、サーバー URL は末尾 `/` を除いて渡す(生成クライアントは `/api/...` を連結する)。
         var text = baseURL.absoluteString
         while text.hasSuffix("/") { text.removeLast() }
-        client = Client(
-            serverURL: URL(string: text) ?? baseURL, transport: transport,
-            middlewares: [WishlistMiddleware(token: token, baseURL: baseURL)])
+        client = Client(serverURL: URL(string: text) ?? baseURL, transport: transport, middlewares: [WishlistMiddleware()])
     }
 
     // MARK: - 共通
@@ -94,10 +92,21 @@ public struct APIWishlistService: WishlistService {
     public func draftFromURL(_ url: String, genreID: Int?) async throws -> ItemDraft {
         try await call {
             let body = Schemas.FromURLRequest(url: url, genreId: genreID.map(Int64.init))
-            let draft = try await client.draftItemFromURL(body: .json(body)).ok.body.json
-            return ItemDraft(
-                name: draft.name, imageURL: draft.imageUrl, sourceURL: draft.sourceUrl, genreID: draft.genreId.map(Int.init))
+            return Self.draft(try await client.draftItemFromURL(body: .json(body)).ok.body.json)
         }
+    }
+
+    public func draftFromPage(url: String, title: String?, imageURL: String?) async throws -> ItemDraft {
+        try await call {
+            let body = Schemas.FromURLRequest(url: url, title: title, imageUrl: imageURL)
+            return Self.draft(try await client.draftItemFromURL(body: .json(body)).ok.body.json)
+        }
+    }
+
+    private static func draft(_ d: Schemas.ItemDraft) -> ItemDraft {
+        ItemDraft(
+            name: d.name, imageURL: d.imageUrl, sourceURL: d.sourceUrl, genreID: d.genreId.map(Int.init),
+            genreGuessed: d.genreGuessed)
     }
 
     public func updateItem(id: Int, patch: ItemPatch) async throws -> Item {
@@ -210,7 +219,8 @@ public struct APIWishlistService: WishlistService {
         try await call {
             let request = Schemas.GenreCreate(
                 name: body.name, queryTemplate: body.queryTemplate, sortOrder: body.sortOrder, siteIds: body.siteIDs?.map(Int64.init),
-                aliases: body.aliases)
+                aliases: body.aliases, color: body.color.map { .init(value1: $0) }, icon: body.icon.map { .init(value1: Self.icon($0)) },
+                matchHosts: body.matchHosts, matchKeywords: body.matchKeywords)
             return Self.genre(try await client.createGenre(body: .json(request)).created.body.json)
         }
     }
@@ -219,7 +229,8 @@ public struct APIWishlistService: WishlistService {
         try await call {
             let request = Schemas.GenreUpdate(
                 name: patch.name, queryTemplate: patch.queryTemplate, sortOrder: patch.sortOrder,
-                siteIds: patch.siteIDs?.map(Int64.init), aliases: patch.aliases)
+                siteIds: patch.siteIDs?.map(Int64.init), aliases: patch.aliases, color: patch.color,
+                icon: patch.icon.map(Self.icon), matchHosts: patch.matchHosts, matchKeywords: patch.matchKeywords)
             return Self.genre(try await client.updateGenre(path: .init(id: Int64(id)), body: .json(request)).ok.body.json)
         }
     }
@@ -259,7 +270,11 @@ public struct APIWishlistService: WishlistService {
             imageURLPath: i.imageUrl, sourceURL: i.sourceUrl, minPrice: i.minPrice, sortOrder: i.sortOrder,
             siteOverrides: i.siteOverrides.map { SiteOverride(siteID: Int($0.siteId), query: $0.query, enabled: $0.enabled) },
             createdAt: i.createdAt, updatedAt: i.updatedAt, watchOfficial: i.watchOfficial ?? false,
-            officialStatus: i.officialStatus.map { Self.officialStatus($0.value1) })
+            officialStatus: i.officialStatus.map { Self.officialStatus($0.value1) },
+            summary: i.summary.map { s in
+                ItemSummary(
+                    low: s.value1.low, status: ItemSummaryStatus(rawValue: s.value1.status.rawValue) ?? .none, fetchedAt: s.value1.fetchedAt)
+            })
     }
 
     private static func officialStatus(_ o: Schemas.OfficialStatus) -> OfficialStatus {
@@ -271,8 +286,11 @@ public struct APIWishlistService: WishlistService {
 
     private static func genre(_ g: Schemas.Genre) -> Genre {
         Genre(id: Int(g.id), name: g.name, queryTemplate: g.queryTemplate, sortOrder: g.sortOrder, siteIDs: g.siteIds.map(Int.init),
-            aliases: g.aliases ?? [])
+            aliases: g.aliases ?? [], color: g.color, icon: GenreIcon(rawValue: g.icon.rawValue) ?? .box,
+            matchHosts: g.matchHosts, matchKeywords: g.matchKeywords)
     }
+
+    private static func icon(_ icon: GenreIcon) -> Schemas.GenreIcon { Schemas.GenreIcon(rawValue: icon.rawValue) ?? .box }
 
     private static func site(_ s: Schemas.Site) -> Site {
         Site(
@@ -286,24 +304,14 @@ enum PatchNulls {
     @TaskLocal static var keys: Set<String> = []
 }
 
-/// Bearer トークンの付与、PATCH の null の組み立て、エラー応答・通信失敗の `WishlistError` への変換。
+/// PATCH の null の組み立て、エラー応答・通信失敗の `WishlistError` への変換。
 struct WishlistMiddleware: ClientMiddleware {
-    let token: String
-    /// 設定したベース URL(トークンを付ける範囲の判定に使う)
-    let baseURL: URL
-
     func intercept(
         _ request: HTTPRequest, body: HTTPBody?, baseURL: URL, operationID: String,
         next: @Sendable (HTTPRequest, HTTPBody?, URL) async throws -> (HTTPResponse, HTTPBody?)
     ) async throws -> (HTTPResponse, HTTPBody?) {
         var request = request
         var body = body
-        if let full = URL(string: baseURL.absoluteString.trimmingSuffix("/") + (request.path ?? "")),
-            AuthPolicy.shouldAttachToken(url: full, baseURL: self.baseURL)
-        {
-            request.headerFields[.authorization] = "Bearer \(token)"
-        }
-
         // JSON は charset 無しの `application/json` で送る(契約の media type と一致させる)。
         if let type = request.headerFields[.contentType], type.hasPrefix("application/json") {
             request.headerFields[.contentType] = "application/json"
@@ -357,14 +365,6 @@ struct WishlistMiddleware: ClientMiddleware {
             default: .internal
             }
         return WishlistError(code: code, status: status, message: "HTTP \(status)")
-    }
-}
-
-private extension String {
-    func trimmingSuffix(_ suffix: Character) -> String {
-        var text = self
-        while text.last == suffix { text.removeLast() }
-        return text
     }
 }
 

@@ -16,7 +16,8 @@ import type {
 } from "../api/types";
 
 /** API の code に、通信できなかったときの "network" を足したもの */
-export type ApiErrorCode = ApiErrorBody["code"] | "network";
+// "unauthorized" は契約から外れた(5-1a)が、プロキシ等が返す 401 の値として残す(lib/api.test.ts AC-API-05 が固定している)。
+export type ApiErrorCode = ApiErrorBody["code"] | "network" | "unauthorized";
 
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
@@ -33,7 +34,6 @@ export class ApiError extends Error {
 export interface ApiClientOptions {
   /** 末尾 / の有無は問わない(内部で正規化する) */
   baseUrl: string;
-  token: string;
   /** 省略時は呼び出し時点の globalThis.fetch(vi.stubGlobal で差し替えられるように、生成時に捕まえない) */
   fetch?: typeof fetch;
 }
@@ -63,7 +63,7 @@ export interface ApiClient {
   updateSite(id: number, patch: SiteUpdate): Promise<Site>;
 }
 
-const CODE_BY_STATUS: Record<number, ApiErrorBody["code"]> = {
+const CODE_BY_STATUS: Record<number, ApiErrorCode> = {
   400: "bad_request",
   401: "unauthorized",
   404: "not_found",
@@ -74,7 +74,6 @@ const CODE_BY_STATUS: Record<number, ApiErrorBody["code"]> = {
 
 const ERROR_CODES: readonly string[] = [
   "bad_request",
-  "unauthorized",
   "not_found",
   "unprocessable",
   "bad_gateway",
@@ -122,7 +121,7 @@ export const createApiClient = (options: ApiClientOptions): ApiClient => {
   ): Promise<T> {
     const url = new URL(path, base);
     for (const [k, v] of Object.entries(query)) if (v !== undefined) url.searchParams.set(k, String(v));
-    const headers = new Headers({ Authorization: `Bearer ${options.token}` });
+    const headers = new Headers();
     const init: RequestInit = { method, headers };
     if (body?.json !== undefined) {
       headers.set("Content-Type", "application/json");

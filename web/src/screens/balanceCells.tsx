@@ -12,14 +12,14 @@ import { TypeBadge } from "../ui/TypeBadge";
 type Schemas = components["schemas"];
 
 /** 升目の色分け。背景は *-soft、記号は状態色、文字は text.primary(popPalette.test.ts で検査済みの組)。 */
-export type CellTone = "good" | "caution" | "bad" | "info" | "plain";
+export type CellTone = "good" | "caution" | "bad" | "info" | "resist" | "immune" | "plain";
 
 interface CellLook {
   readonly tone: CellTone;
   readonly icon: IconName;
 }
 
-/** 防御の分類 → 見た目。弱点=上向き(赤系)、耐性=下向き(緑系)、無効=×(青系)、等倍=横線。 */
+/** 防御の分類 → 見た目。弱点=上向き(赤)、耐性=下向き(水色系)、無効=×(灰)、等倍=横線(ADR-0422 §3。緑は相性に使わない)。 */
 export function defenseLook(category: Schemas["DefenseCategory"]): CellLook {
   switch (category) {
     case "quad_weak":
@@ -27,23 +27,23 @@ export function defenseLook(category: Schemas["DefenseCategory"]): CellLook {
       return { tone: "bad", icon: "up" };
     case "resist":
     case "quad_resist":
-      return { tone: "good", icon: "down" };
+      return { tone: "resist", icon: "down" };
     case "immune":
-      return { tone: "info", icon: "close" };
+      return { tone: "immune", icon: "close" };
     case "neutral":
       return { tone: "plain", icon: "minus" };
   }
 }
 
-/** 攻撃範囲の最大倍率 → 見た目。抜群=上向き(緑系)、いまひとつ=下向き(黄系)、無効=×(赤系)、等倍・攻撃技なし=横線。 */
+/** 攻撃範囲の最大倍率 → 見た目。抜群=上向き(赤)、いまひとつ=下向き(水色系)、無効=×(灰)、等倍・攻撃技なし=横線(ADR-0422 §3)。 */
 export function coverageLook(multiplier: Schemas["CoverageMultiplier"]): CellLook {
   switch (multiplier) {
     case "2":
-      return { tone: "good", icon: "up" };
+      return { tone: "bad", icon: "up" };
     case "1/2":
-      return { tone: "caution", icon: "down" };
+      return { tone: "resist", icon: "down" };
     case "0":
-      return { tone: "bad", icon: "close" };
+      return { tone: "immune", icon: "close" };
     case "1":
     case null:
       return { tone: "plain", icon: "minus" };

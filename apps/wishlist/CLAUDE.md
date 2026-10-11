@@ -124,7 +124,7 @@ apps/wishlist/
 ### 取得方式(`sites.fetch_type`)
 | 値 | 対象 | 実装 |
 |---|---|---|
-| `api` | Yahoo!ショッピング | 公式API(appidは Secret) |
+| `scrape` | Yahoo!ショッピング | 検索ページ(`__NEXT_DATA__`) |
 | `scrape` | カードラッシュ、ドラゴンスター、あみあみ、駿河屋 | HTTP取得 + goquery |
 | `headless` | メルカリ、Yahoo!フリマ | chromedp |
 | `link_only` | Amazon、プレバン、魂ウェブ、ポケセン | 価格は取得せず、リンクのみ |
@@ -249,7 +249,7 @@ CREATE TABLE estimates (
 
 ## 8. API
 
-全エンドポイントで `Authorization: Bearer <token>` を要求する(トークンは Secret)。
+認証なし。8080 は 127.0.0.1 だけで待ち、外からは Tailscale を通す(ADR-0810・ユーザー決定 2026-10-11)。
 
 | メソッド | パス | 内容 |
 |---|---|---|

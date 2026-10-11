@@ -1,4 +1,4 @@
-// issue 276(ADR-0411): API 専用の画面(タイプバランス・判定)は、計算モードに関係なく常にオンラインのマスタを使う。
+// issue 276(ADR-0411): API 専用の画面(調整・判定。タイプバランスは ADR-0421 で構築へ統合)は、計算モードに関係なく常にオンラインのマスタを使う。
 // 確かめること:
 //   - オフライン(既定)のままタイプバランスを開いても、画面にはオンラインのマスタの種族が出る
 //   - そのとき計算画面は引き続きオフラインのマスタ(計算する場所の選択に従う)
@@ -13,6 +13,7 @@ import { CALC_MODE_STORAGE_KEY } from "./app/calcMode";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
+import { openTab } from "./test/navTabs";
 
 beforeEach(() => {
   window.history.replaceState(null, "", "/");
@@ -43,14 +44,16 @@ function source(data: MasterData): { source: MasterSource; load: ReturnType<type
   return { source: { load }, load };
 }
 
+// ADR-0421: タイプバランスの別画面は無くなったので、API 専用でオンラインのマスタを使う調整の画面で確かめる
+// (調整は OnlineMasterGate で包まれている。登録は adjust/adjust.screen.tsx)。
 async function memberSpeciesLabels(): Promise<string[]> {
-  const group = await screen.findByRole("group", { name: "メンバー1" });
-  return within(within(group).getByRole("combobox", { name: "ポケモン" }))
+  const select = await screen.findByRole("combobox", { name: "自分のポケモン" });
+  return within(select)
     .getAllByRole("option")
     .map((option) => option.textContent);
 }
 
-test("オフラインのままタイプバランスを開いても、オンラインのマスタの種族が出る", async () => {
+test("オフラインのまま調整(API 専用の画面)を開いても、オンラインのマスタの種族が出る", async () => {
   const user = userEvent.setup();
   const { offline, online } = await masters();
   const offlineSource = source(offline);
@@ -63,13 +66,13 @@ test("オフラインのままタイプバランスを開いても、オンラ�
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
+  await openTab(user, "調整");
 
   const labels = await memberSpeciesLabels();
   expect(labels.some((label) => label.startsWith("オンライン"))).toBe(true);
   expect(labels).not.toContain(offline.species[0]?.nameJa);
   // 計算画面のマスタはオフラインのまま
-  await user.click(screen.getByRole("tab", { name: "計算" }));
+  await openTab(user, "計算");
   const attacker = await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
   expect(within(attacker).getAllByRole("option")[0]?.textContent).toBe(offline.species[0]?.nameJa);
 });
@@ -89,7 +92,7 @@ test("オンラインのマスタを読めないときは、日本語の案内�
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-  await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
+  await openTab(user, "調整");
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("サーバーからポケモンのデータを読み込めませんでした");
@@ -121,12 +124,12 @@ test("読めなかった後に再試行を押すと、次の取得が成功し�
     />,
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-  await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
+  await openTab(user, "調整");
   const alert = await screen.findByRole("alert");
 
   await user.click(within(alert).getByRole("button", { name: "再試行" }));
 
-  expect(await screen.findByRole("group", { name: "メンバー1" })).toBeInTheDocument();
+  expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   expect(onlineLoad).toHaveBeenCalledTimes(2);
 });
@@ -149,11 +152,11 @@ test("取得の完了前にタブを離れても、後から解決して状態�
     />,
   );
   await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-  await user.click(screen.getByRole("tab", { name: "タイプバランス" }));
+  await openTab(user, "調整");
   await waitFor(() => {
     expect(onlineLoad).toHaveBeenCalledTimes(1);
   });
-  await user.click(screen.getByRole("tab", { name: "計算" }));
+  await openTab(user, "計算");
 
   await act(async () => {
     resolveOnline(online);
@@ -161,7 +164,7 @@ test("取得の完了前にタブを離れても、後から解決して状態�
   });
 
   expect(errorSpy).not.toHaveBeenCalled();
-  expect(screen.queryByRole("group", { name: "メンバー1" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("combobox", { name: "自分のポケモン" })).not.toBeInTheDocument();
 });
 
 // ADR-0330: 判定は Web で非表示。judge.screen.tsx が OnlineMasterGate で包んでいる点の検証は、非表示の間は無い

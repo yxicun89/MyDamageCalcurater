@@ -40,34 +40,6 @@ extension Components {
                 self.body = body
             }
         }
-        public struct Unauthorized: Sendable, Hashable {
-            /// - Remark: Generated from `#/components/responses/Unauthorized/content`.
-            @frozen public enum Body: Sendable, Hashable {
-                /// - Remark: Generated from `#/components/responses/Unauthorized/content/application\/json`.
-                case json(Components.Schemas._Error)
-                /// The associated value of the enum case if `self` is `.json`.
-                ///
-                /// - Throws: An error if `self` is not `.json`.
-                /// - SeeAlso: `.json`.
-                public var json: Components.Schemas._Error {
-                    get throws {
-                        switch self {
-                        case let .json(body):
-                            return body
-                        }
-                    }
-                }
-            }
-            /// Received HTTP response body
-            public var body: Components.Responses.Unauthorized.Body
-            /// Creates a new `Unauthorized`.
-            ///
-            /// - Parameters:
-            ///   - body: Received HTTP response body
-            public init(body: Components.Responses.Unauthorized.Body) {
-                self.body = body
-            }
-        }
         public struct NotFound: Sendable, Hashable {
             /// - Remark: Generated from `#/components/responses/NotFound/content`.
             @frozen public enum Body: Sendable, Hashable {

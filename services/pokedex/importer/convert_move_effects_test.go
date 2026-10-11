@@ -320,3 +320,117 @@ func TestImportedMoveEffectDoesNotChangeDamage(t *testing.T) {
 		t.Fatalf("追加効果でダメージが変わった\n got = %+v\nwant = %+v", got, want)
 	}
 }
+
+// TestConvertStatusMoveBoosts は変化技のトップレベル boosts の取り込み(CB-1・ADR-0107 追記)。
+// 確率は常に 100。target が自分なら自分、相手なら相手。上げ下げ混在もそのまま。
+func TestConvertStatusMoveBoosts(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		boosts map[string]int
+		want   string // 空 = 行を作らない
+	}{
+		{"自分の上昇(りゅうのまい)", "self", map[string]int{"atk": 1, "spe": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1,"spe":1}}`},
+		{"上げ下げ混在(からをやぶる)", "self", map[string]int{"atk": 2, "def": -1, "spa": 2, "spd": -1, "spe": 2}, `{"Chance":100,"Target":"self","Stages":{"atk":2,"def":-1,"spa":2,"spd":-1,"spe":2}}`},
+		{"相手の下降(なきごえ)", "allAdjacentFoes", map[string]int{"atk": -1}, `{"Chance":100,"Target":"target","Stages":{"atk":-1}}`},
+		{"相手の下降(normal)", "normal", map[string]int{"spe": -2}, `{"Chance":100,"Target":"target","Stages":{"spe":-2}}`},
+		{"allies は自分(とおぼえ)", "allies", map[string]int{"atk": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1}}`},
+		{"adjacentFoe は相手", "adjacentFoe", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"allAdjacent は相手(シングル前提)", "allAdjacent", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"any は相手", "any", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"randomNormal は相手", "randomNormal", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"味方だけは取り込まない", "adjacentAlly", map[string]int{"spd": 1}, ""},
+		{"allySide は取り込まない", "allySide", map[string]int{"def": 1}, ""},
+		{"all は取り込まない", "all", map[string]int{"def": 1}, ""},
+		{"evasion だけは行を作らない", "self", map[string]int{"evasion": 1}, ""},
+		{"ランク変化なしは行を作らない", "self", map[string]int{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			in := loadFixture(t)
+			m := showdownMove(t, &in, "testglare") // 自分の効果が無い変化技
+			m.Target = &tt.target
+			m.Boosts = &tt.boosts
+			out, rep, err := importer.Convert(in)
+			if err != nil {
+				t.Fatalf("Convert: %v", err)
+			}
+			got, ok := moveEffectsByID(out)["testglare"]
+			if tt.want == "" {
+				if ok {
+					t.Fatalf("行を作ってはいけない: %s", got)
+				}
+			} else if got != tt.want {
+				t.Fatalf("move_effects = %q, want %q", got, tt.want)
+			}
+			unsupportedTarget := tt.target == "adjacentAlly" || tt.target == "allySide" || tt.target == "all"
+			if unsupportedTarget != hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedTarget, "testglare") {
+				t.Errorf("対象 %s の KindMoveEffectUnsupportedTarget 警告の有無が違う(want %v)", tt.target, unsupportedTarget)
+			}
+			if _, evasionOnly := tt.boosts["evasion"]; evasionOnly != hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedStat, "testglare") {
+				t.Errorf("KindMoveEffectUnsupportedStat 警告の有無が違う(evasion のみ = %v)", evasionOnly)
+			}
+		})
+	}
+}
+
+// TestConvertStatusMoveBoostsDoNotChangeAttackEffects は変化技の取り込みが攻撃技の既存の効果を変えないこと。
+func TestConvertStatusMoveBoostsDoNotChangeAttackEffects(t *testing.T) {
+	in := loadFixture(t)
+	boosts := map[string]int{"atk": 1}
+	showdownMove(t, &in, "testglare").Boosts = &boosts
+	out, _ := convertOK(t, in)
+	got := moveEffectsByID(out)
+	for id, want := range map[string]string{
+		"testflame":   `{"Chance":10,"Target":"self","Stages":{"spa":1}}`,
+		"teststrike":  `{"Chance":100,"Target":"self","Stages":{"def":-1,"spe":1}}`,
+		"testrevived": `{"Chance":20,"Target":"target","Stages":{"def":-1}}`,
+	} {
+		if got[id] != want {
+			t.Errorf("%s = %q, want %q", id, got[id], want)
+		}
+	}
+}
+
+// TestConvertBlocksOnStatusBoostsWithSelf は、トップレベル boosts と self.boosts が重なる技を blocker にすること。
+func TestConvertBlocksOnStatusBoostsWithSelf(t *testing.T) {
+	in := loadFixture(t)
+	m := showdownMove(t, &in, "teststrike") // self.boosts を持つ
+	boosts := map[string]int{"atk": 1}
+	m.Boosts = &boosts
+	_, rep, err := importer.Convert(in)
+	if err == nil && !hasFinding(rep.Blockers, importer.KindMoveEffectAmbiguous, "teststrike") {
+		t.Fatalf("重なりを素通りさせた: %+v", rep.Blockers)
+	}
+}
+
+// TestConvertWarnsOnConditionalStatusBoosts は、フック(条件付きの増減・失敗)を持つ変化技に、
+// 表の値を入れたうえで警告 KindMoveEffectConditional を出すこと(黙って入れない。CB-1)。
+// フックの無い変化技・攻撃技の self/secondary には出さない。
+func TestConvertWarnsOnConditionalStatusBoosts(t *testing.T) {
+	in := loadFixture(t)
+	boosts := map[string]int{"atk": 1, "spa": 1}
+	m := showdownMove(t, &in, "testglare")
+	self := "self"
+	m.Target = &self
+	m.Boosts = &boosts
+	m.Mechanism.Hooks = []string{"onModifyMove"}
+	out, rep := convertOK(t, in)
+	if got := moveEffectsByID(out)["testglare"]; got != `{"Chance":100,"Target":"self","Stages":{"atk":1,"spa":1}}` {
+		t.Errorf("表の値が入っていない: %q", got)
+	}
+	if !hasFinding(rep.Warnings, importer.KindMoveEffectConditional, "testglare") {
+		t.Errorf("条件付きの変化技の警告が無い")
+	}
+	for _, id := range []string{"testflame", "teststrike", "testrevived"} {
+		if hasFinding(rep.Warnings, importer.KindMoveEffectConditional, id) {
+			t.Errorf("攻撃技 %s に条件付きの警告を出した", id)
+		}
+	}
+
+	m.Mechanism.Hooks = nil
+	_, rep = convertOK(t, in)
+	if hasFinding(rep.Warnings, importer.KindMoveEffectConditional, "testglare") {
+		t.Errorf("フックの無い変化技に警告を出した")
+	}
+}

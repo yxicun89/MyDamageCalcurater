@@ -3,6 +3,7 @@
 // (楽観更新しない。失敗時は下書きを残す)。画面は TeamScreen が開いている間だけ mount される(閉じると下書きは捨てる)。
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { BalanceClient } from "../api/balanceClient";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
@@ -20,6 +21,7 @@ import { useSpeciesResolutions } from "../screens/speciesResolution";
 import { Icon } from "../ui/Icon";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
+import { TeamBalanceSection } from "./TeamBalanceSection";
 import { TeamSlotGrid } from "./TeamSlotGrid";
 import type { TeamClient, TeamError } from "./teamClient";
 import { changeSpecies, correctMegaItem, type MegaItemCorrection, type MemberDraft } from "./teamMember";
@@ -44,6 +46,8 @@ export interface TeamMemberEditorProps {
   readonly master: MasterData;
   readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly teamClient: TeamClient;
+  /** タイプバランスの口(ADR-0421)。無いときは「タイプバランス」の節を出さない(構築の編集・保存には関係しない)。 */
+  readonly balanceClient?: BalanceClient;
   /** update が成功したときに、応答の Team で親の一覧を書き換える。 */
   readonly onSaved: (team: Schemas["Team"]) => void;
   /** 一覧に戻る(未保存の変更があるときは、確認の後に呼ばれる)。 */
@@ -101,6 +105,7 @@ export function TeamMemberEditor({
   master,
   masterSearch,
   teamClient,
+  balanceClient,
   onSaved,
   onClose,
 }: TeamMemberEditorProps): ReactNode {
@@ -234,6 +239,46 @@ export function TeamMemberEditor({
     );
   }
 
+  /**
+   * おすすめのタイルから、最初の空き枠にポケモンを入れる(ADR-0422 §2)。一覧のあるマスタはその場で、
+   * 検索のマスタは resolveSpecies で実体を引いてから入れる(失敗しても何も起きない。タイルはそのまま残る)。
+   * 解決を待つ間に枠が埋まっていたら入れない。
+   */
+  function pickPokemon(speciesKey: string): void {
+    const target = state.entries.find((entry) => isEmptySlot(entry.draft));
+    if (target === undefined) {
+      return;
+    }
+    const targetId = target.id;
+    const place = (resolution: MasterSpeciesResolution): void => {
+      register(resolution);
+      edit((entries) =>
+        entries.map((entry) =>
+          entry.id === targetId && isEmptySlot(entry.draft)
+            ? {
+                ...entry,
+                draft: changeSpecies(
+                  entry.draft,
+                  resolution.species,
+                  selectableAbilities(resolution.species, resolution.abilities),
+                  { previous: null, items: master.items },
+                ),
+                correction: null,
+              }
+            : entry,
+        ),
+      );
+    };
+    if (masterCapabilities(master).speciesList) {
+      const species = master.species.find((candidate) => candidate.key === speciesKey);
+      if (species !== undefined) {
+        place({ species, abilities: master.abilities, moves: master.moves });
+      }
+    } else if (masterSearch !== undefined) {
+      masterSearch.resolveSpecies(speciesKey).then(place, () => undefined);
+    }
+  }
+
   /** 枠を外す: その枠だけ空に戻す(他の枠は動かさない)。 */
   function removeMember(index: number): void {
     setState((current) => ({
@@ -365,6 +410,18 @@ export function TeamMemberEditor({
           />
         );
       })}
+
+      {balanceClient !== undefined && (
+        <TeamBalanceSection
+          drafts={drafts}
+          client={balanceClient}
+          master={master}
+          masterSearch={masterSearch}
+          resolutions={resolutions}
+          onPickPokemon={pickPokemon}
+          canPick={drafts.some(isEmptySlot)}
+        />
+      )}
 
       <div className="team-member-editor__actions">
         <button

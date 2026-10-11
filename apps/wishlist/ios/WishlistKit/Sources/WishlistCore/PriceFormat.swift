@@ -38,12 +38,12 @@ public enum PriceFormat {
         return days <= 0 ? "今日" : "\(days)日前"
     }
 
-    /// `商品名が一致しない` / `安すぎる` / `下限価格未満`
+    /// `名前が違う` / `安すぎ` / `下限より下`(Web と同じ短いラベル)
     public static func reasonLabel(_ reason: SuspiciousReason) -> String {
         switch reason {
-        case .titleMismatch: "商品名が一致しない"
-        case .tooCheap: "安すぎる"
-        case .belowMin: "下限価格未満"
+        case .titleMismatch: "名前が違う"
+        case .tooCheap: "安すぎ"
+        case .belowMin: "下限より下"
         }
     }
 }

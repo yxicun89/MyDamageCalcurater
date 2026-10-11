@@ -1,12 +1,28 @@
-import { useState } from "react";
-import type { FetchType, Genre, Site } from "../api/types";
+import { useState, type CSSProperties } from "react";
+import type { FetchType, Genre, GenreUpdate, Item, Site } from "../api/types";
 import type { ApiClient } from "../lib/api";
 import { formatAliasGroup, parseAliasGroups } from "../lib/aliases";
-import { isHttpUrl, isValidSearchTemplate } from "../lib/deeplink";
-import type { Settings as SettingsValue } from "../lib/settings";
+import { isValidSearchTemplate } from "../lib/deeplink";
+import {
+  COLOR_SWATCHES,
+  DEFAULT_GENRE_COLOR,
+  GENRE_ICONS,
+  GenreGlyph,
+  UiIcon,
+  genreColorProps,
+  type GenreIconName,
+} from "./icons";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
 const FETCH_TYPES: FetchType[] = ["link_only", "api", "scrape", "headless"];
+
+/** カンマ(, 、)か改行で区切る。前後の空白と空の項目は除く。 */
+const parseList = (text: string): string[] =>
+  text
+    .split(/[,、\n]/)
+    .map((x) => x.trim())
+    .filter((x) => x !== "");
+const sameList = (a: readonly string[], b: readonly string[]) => JSON.stringify(a) === JSON.stringify(b);
 
 interface GenreDialogProps {
   genre: Genre | null;
@@ -21,6 +37,10 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
   const [name, setName] = useState(genre?.name ?? "");
   const [template, setTemplate] = useState(genre?.query_template ?? "{name} {option}");
   const [siteIds, setSiteIds] = useState<number[]>(genre?.site_ids ?? []);
+  const [color, setColor] = useState(genre?.color ?? DEFAULT_GENRE_COLOR);
+  const [icon, setIcon] = useState<GenreIconName>(genre?.icon ?? "box");
+  const [hosts, setHosts] = useState((genre?.match_hosts ?? []).join("\n"));
+  const [keywords, setKeywords] = useState((genre?.match_keywords ?? []).join("\n"));
   const originalAliases = genre?.aliases ?? [];
   const [aliasLines, setAliasLines] = useState<string[]>(originalAliases.map(formatAliasGroup));
   const [error, setError] = useState<string | null>(null);
@@ -55,12 +75,15 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
     setError(null);
     try {
       if (genre) {
-        const patch: { name?: string; query_template?: string; site_ids?: number[]; aliases?: string[][] } =
-          {};
+        const patch: GenreUpdate = {};
         if (name.trim() !== genre.name) patch.name = name.trim();
         if (template !== genre.query_template) patch.query_template = template;
         if (siteIds.join(",") !== genre.site_ids.join(",")) patch.site_ids = siteIds;
         if (JSON.stringify(groups) !== JSON.stringify(originalAliases)) patch.aliases = groups;
+        if (color !== genre.color) patch.color = color;
+        if (icon !== genre.icon) patch.icon = icon;
+        if (!sameList(parseList(hosts), genre.match_hosts)) patch.match_hosts = parseList(hosts);
+        if (!sameList(parseList(keywords), genre.match_keywords)) patch.match_keywords = parseList(keywords);
         const updated = Object.keys(patch).length === 0 ? genre : await client.updateGenre(genre.id, patch);
         onSaved(genres.map((g) => (g.id === genre.id ? updated : g)));
       } else {
@@ -72,6 +95,10 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
           sort_order: sortOrder,
           site_ids: siteIds,
           aliases: groups,
+          color,
+          icon,
+          match_hosts: parseList(hosts),
+          match_keywords: parseList(keywords),
         });
         onSaved([...genres, created]);
       }
@@ -84,18 +111,23 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
   };
 
   return (
-    <Modal label="ジャンル" onClose={onClose}>
+    <Modal label="ジャンル" className="tall" onClose={onClose}>
       <h2>ジャンル</h2>
-      <label className="field">
-        <span>ジャンル名</span>
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => {
-            setName(e.target.value);
-          }}
-        />
-      </label>
+      <div className="genre-edit-head">
+        <span className="genre-icon big" {...genreColorProps(color)}>
+          <GenreGlyph icon={icon} size={32} />
+        </span>
+        <label className="field grow">
+          <span>ジャンル名</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+            }}
+          />
+        </label>
+      </div>
       <label className="field">
         <span>検索ワードのテンプレート</span>
         <input
@@ -106,6 +138,47 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
           }}
         />
       </label>
+      <h3>色</h3>
+      <div className="swatches" role="group" aria-label="色">
+        {COLOR_SWATCHES.map((c) => (
+          <button
+            key={c.color}
+            type="button"
+            className="swatch"
+            aria-label={c.label}
+            aria-pressed={color === c.color}
+            style={{ background: c.color, "--swatch-color": c.color } as CSSProperties}
+            onClick={() => {
+              setColor(c.color);
+            }}
+          >
+            {color === c.color && <UiIcon name="check" size={18} strokeWidth={3} />}
+          </button>
+        ))}
+      </div>
+      <h3>絵柄</h3>
+      <div className="icon-pick" role="group" aria-label="絵柄">
+        {GENRE_ICONS.map((i) => (
+          <button
+            key={i.icon}
+            type="button"
+            className="genre-button large"
+            aria-label={i.label}
+            aria-pressed={icon === i.icon}
+            {...genreColorProps(color)}
+            onClick={() => {
+              setIcon(i.icon);
+            }}
+          >
+            <GenreGlyph icon={i.icon} size={24} />
+          </button>
+        ))}
+      </div>
+      <h3>ホームでの見え方</h3>
+      <div className="genre-preview" data-testid="genre-preview" {...genreColorProps(color)}>
+        <GenreGlyph icon={icon} size={28} />
+      </div>
+      <h3>見るサイト</h3>
       <ul className="plain">
         {ordered.map((s) => {
           const checked = siteIds.includes(s.id);
@@ -137,6 +210,29 @@ function GenreDialog({ genre, genres, sites, client, onClose, onSaved }: GenreDi
           );
         })}
       </ul>
+      <h3>URL の手がかり</h3>
+      <label className="field">
+        <span>ホスト(カンマか改行で区切る)</span>
+        <textarea
+          aria-label="手がかりのホスト"
+          rows={2}
+          value={hosts}
+          onChange={(e) => {
+            setHosts(e.target.value);
+          }}
+        />
+      </label>
+      <label className="field">
+        <span>語(カンマか改行で区切る)</span>
+        <textarea
+          aria-label="手がかりの語"
+          rows={2}
+          value={keywords}
+          onChange={(e) => {
+            setKeywords(e.target.value);
+          }}
+        />
+      </label>
       <h3>別名グループ</h3>
       {aliasLines.map((line, i) => (
         <div key={i} className="check-row">
@@ -307,90 +403,41 @@ function SiteDialog({ site, sites, client, onClose, onSaved }: SiteDialogProps) 
 }
 
 interface Props {
-  settings: SettingsValue;
   genres: Genre[];
+  items: Item[];
   sites: Site[];
   client: ApiClient;
-  onSaveSettings: (s: SettingsValue) => void;
   onGenres: (g: Genre[]) => void;
   onSites: (s: Site[]) => void;
   onBack: () => void;
 }
 
-export function SettingsScreen({
-  settings,
-  genres,
-  sites,
-  client,
-  onSaveSettings,
-  onGenres,
-  onSites,
-  onBack,
-}: Props) {
-  const [apiUrl, setApiUrl] = useState(settings.apiBaseUrl ?? "");
-  const [token, setToken] = useState(settings.token);
-  const [connError, setConnError] = useState<string | null>(null);
+export function SettingsScreen({ genres, items, sites, client, onGenres, onSites, onBack }: Props) {
   const [genreEdit, setGenreEdit] = useState<Genre | "new" | null>(null);
   const [siteEdit, setSiteEdit] = useState<Site | "new" | null>(null);
   const sortedGenres = [...genres].sort((a, b) => a.sort_order - b.sort_order || a.id - b.id);
 
   return (
     <main className="settings">
-      <header className="topbar">
-        <button type="button" className="text-button" onClick={onBack}>
-          戻る
+      <header className="settings-head">
+        <button type="button" className="square-button" aria-label="戻る" onClick={onBack}>
+          <UiIcon name="back" />
         </button>
         <h1>設定</h1>
       </header>
-
-      <section aria-label="接続">
-        <label className="field">
-          <span>APIのURL</span>
-          <input
-            type="text"
-            inputMode="url"
-            placeholder="空なら、このページと同じ場所"
-            value={apiUrl}
-            onChange={(e) => {
-              setApiUrl(e.target.value);
-            }}
-          />
-        </label>
-        <label className="field">
-          <span>トークン</span>
-          <input
-            type="password"
-            autoComplete="off"
-            value={token}
-            onChange={(e) => {
-              setToken(e.target.value);
-            }}
-          />
-        </label>
-        <button
-          type="button"
-          className="primary"
-          onClick={() => {
-            const url = apiUrl.trim();
-            if (url !== "" && !isHttpUrl(url)) {
-              setConnError("APIのURLは http(s) で始まる URL にしてください");
-              return;
-            }
-            setConnError(null);
-            onSaveSettings({ apiBaseUrl: url === "" ? null : url, token: token.trim() });
-          }}
-        >
-          保存
-        </button>
-        {connError !== null && <p role="alert">{connError}</p>}
-      </section>
 
       <section aria-label="ジャンル">
         <h2>ジャンル</h2>
         <ul className="plain">
           {sortedGenres.map((g) => (
-            <li key={g.id} className="list-row">
-              <span>{g.name}</span>
+            <li key={g.id} className="list-row genre-row">
+              <span className="genre-icon" data-testid="genre-icon" {...genreColorProps(g.color)}>
+                <GenreGlyph icon={g.icon} size={20} />
+              </span>
+              <span className="row-name">{g.name}</span>
+              <span className="row-count" data-testid="genre-count">
+                {String(items.filter((i) => i.genre_id === g.id).length)}
+              </span>
               <button
                 type="button"
                 aria-label={`${g.name}を編集`}

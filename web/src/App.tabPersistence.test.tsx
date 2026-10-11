@@ -14,6 +14,7 @@
 // 「壊していないこと」を確かめるもの(未訪問の画面の通信が無い・マスタ入れ替えで初期化される・
 // リロードで初期化される・tabpanel が1つ)は実装前から green の回帰ガード。
 
+import { openTab, screenTab } from "./test/navTabs";
 import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
@@ -65,7 +66,7 @@ function calcCombobox(name: string): HTMLElement {
 }
 
 function tabButton(name: string): HTMLElement {
-  return screen.getByRole("tab", { name });
+  return screenTab(name);
 }
 
 /** fetch の呼び出しのうち speed API(api/speed/…)のものの件数(App.test.tsx の urlOf と同じ形)。 */
@@ -95,12 +96,12 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     const moveIdBefore = selectedMoveId();
     expect(moveIdBefore).not.toBe("");
 
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     // 既存の保証(App.test.tsx): 別のタブの入力欄はアクセシビリティツリーから取れない。
     expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
 
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attackerKey);
     expect(calcCombobox("防御側のポケモン")).toHaveValue(defenderKey);
@@ -114,14 +115,14 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), attackerKey);
     await user.selectOptions(calcCombobox("相手のポケモン"), defenderKey);
     await user.type(screen.getByRole("textbox", { name: "ダメージ1" }), "45");
 
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
 
     expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toHaveValue(attackerKey);
     expect(calcCombobox("相手のポケモン")).toHaveValue(defenderKey);
@@ -136,14 +137,14 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     render(<App engine={createFakeEngine()} />);
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attackerKey);
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await user.selectOptions(await screen.findByRole("combobox", { name: "自分のポケモン" }), defenderKey);
-    await user.click(tabButton("素早さ"));
+    await openTab(user, "素早さ");
     await screen.findByRole("region", { name: "自分のポケモン" });
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
 
     expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attackerKey);
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     expect(await screen.findByRole("combobox", { name: "自分のポケモン" })).toHaveValue(defenderKey);
   });
 
@@ -156,7 +157,7 @@ describe("issue #218 タブを往復しても入力が残る(同じマスタで�
     await user.selectOptions(calcCombobox("防御側のポケモン"), defenderKey);
 
     // タブのクリックで /reverse を pushState(P4-10)。
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     expect(window.location.pathname).toBe("/reverse");
     await user.type(await screen.findByRole("textbox", { name: "ダメージ1" }), "45");
 
@@ -182,7 +183,7 @@ describe("issue #218 構築のタブも同じ決まりに乗る(P5-5 PR-A1)", ()
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
     expect(teamCallCount(fetchMock.mock.calls)).toBe(0);
@@ -195,9 +196,9 @@ describe("issue #218 隠し方(ADR-0308 決定2: hidden 属性・tabpanel は1�
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await screen.findByRole("combobox", { name: "自分のポケモン" });
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
     // 逆算の入力欄は「取れない」(既存のアサーションと同じ)が、DOM には残っている
@@ -210,7 +211,7 @@ describe("issue #218 隠し方(ADR-0308 決定2: hidden 属性・tabpanel は1�
     const user = userEvent.setup();
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
     // 隠れたパネルを増やしていない(hidden: true でも1つ)。
@@ -233,7 +234,7 @@ describe("issue #218 未訪問の画面は mount しない(ADR-0308 決定1)", (
     render(<App engine={createFakeEngine()} />);
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attackerKey);
-    await user.click(tabButton("逆算"));
+    await openTab(user, "逆算");
     await screen.findByRole("combobox", { name: "自分のポケモン" });
 
     // SpeedScreen はマウント時に pokemon() と table() を呼ぶ(ADR-0604 §2)。まだ開いていないので0件。
@@ -246,16 +247,16 @@ describe("issue #218 未訪問の画面は mount しない(ADR-0308 決定1)", (
     render(<App engine={createFakeEngine()} />);
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
-    await user.click(tabButton("素早さ"));
+    await openTab(user, "素早さ");
     await screen.findByRole("region", { name: "自分のポケモン" });
     await waitFor(() => {
       expect(speedCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
     });
     const callsAfterFirstVisit = speedCallCount(fetchMock.mock.calls);
 
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
-    await user.click(tabButton("素早さ"));
+    await openTab(user, "素早さ");
     await screen.findByRole("region", { name: "自分のポケモン" });
 
     expect(speedCallCount(fetchMock.mock.calls)).toBe(callsAfterFirstVisit);
@@ -386,7 +387,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
 
     // 素早さタブを一度開く(speed API が呼ばれる)。
-    await user.click(tabButton("素早さ"));
+    await openTab(user, "素早さ");
     await screen.findByRole("region", { name: "自分のポケモン" });
     await waitFor(() => {
       expect(speedCallCount(fetchMock.mock.calls)).toBeGreaterThan(0);
@@ -394,7 +395,7 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
     const callsAfterSpeedVisit = speedCallCount(fetchMock.mock.calls);
 
     // 計算タブへ戻ってから、計算モードを切り替えてマスタを入れ替える。
-    await user.click(tabButton("計算"));
+    await openTab(user, "計算");
     await screen.findByRole("combobox", { name: "攻撃側のポケモン" });
     await user.click(modeRadio("サーバー(オンライン)"));
     await waitFor(() => {

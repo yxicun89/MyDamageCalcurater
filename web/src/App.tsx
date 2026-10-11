@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from "react";
 import "./App.css";
+import { buildNavTabs } from "./app/navGroups";
 import { screenIconName } from "./app/screenIcons";
 import { Icon } from "./ui/Icon";
 import type { components } from "./api/openapi.gen";
@@ -25,6 +26,7 @@ import {
   pathForAbout,
   pathForScreen,
   screenFromPath,
+  isLegacyScreenPath,
   screenLabel,
   type ScreenId,
 } from "./app/routes";
@@ -44,7 +46,13 @@ import { SCREENS, instantiateScreens } from "./app/screens";
 import type { ScreenInstance } from "./app/screenDefinition";
 
 /** タブの定義順(ロービング tabIndex・矢印キーの移動順。WAI-ARIA Authoring Practices の Tabs パターン)。 */
-const TAB_ORDER: readonly ScreenId[] = SCREEN_ROUTES.map((route) => route.id);
+/** 上位のタブ(ナビの区分。ADR-0356)。区分の中の画面は routes の並びのまま。 */
+const NAV_TABS = buildNavTabs(SCREEN_ROUTES);
+
+/** 画面 ID が属する区分の id。 */
+function groupIdOf(screenId: ScreenId): string {
+  return NAV_TABS.find((navTab) => navTab.screenIds.includes(screenId))?.group.id ?? screenId;
+}
 
 /** 計算モードの定義順(ラジオの表示順。既定のオフラインを先に出す)。 */
 const CALC_MODE_ORDER: readonly CalcMode[] = ["offline", "online"];
@@ -278,8 +286,17 @@ export function App({
     selectTab(DEFAULT_SCREEN);
   }
 
+  // 区分ごとに最後に開いていた画面(上位のタブを押したとき、その区分で最後に見ていた画面へ戻る。ADR-0356)。
+  const lastScreenOfGroup = useRef<Record<string, ScreenId>>({});
+  // 今の画面(popstate のハンドラは一度だけ登録されるので、閉じ込めた `tab` ではなく ref で持つ)。
+  const currentTabRef = useRef<ScreenId>(tab);
+
   /** タブを選ぶ(クリック・キーボード・popstate 共通の入口)。 */
   function selectTab(nextTab: ScreenId): void {
+    const previous = currentTabRef.current;
+    lastScreenOfGroup.current[groupIdOf(previous)] ??= previous;
+    lastScreenOfGroup.current[groupIdOf(nextTab)] = nextTab;
+    currentTabRef.current = nextTab;
     setTab(nextTab);
   }
 
@@ -293,7 +310,7 @@ export function App({
 
   // ロービング tabIndex(選択中のタブだけ 0、他は -1)のフォーカス移動先を、クリックでなく
   // キーボードで選んだときに参照する(WAI-ARIA Authoring Practices「automatic activation」)。
-  const tabRefs = useRef<Partial<Record<ScreenId, HTMLButtonElement>>>({});
+  const tabRefs = useRef<Partial<Record<string, HTMLButtonElement>>>({});
 
   /** タブの選択(クリック・キーボード)。URL を pushState する(同じタブの選び直しは履歴を積まない)。 */
   function navigateToTab(nextTab: ScreenId): void {
@@ -310,42 +327,62 @@ export function App({
     navigateToTab("calc");
   }
 
-  /** ArrowLeft/ArrowRight/Home/End でタブの選択とフォーカスを移動する(automatic activation)。 */
-  function handleTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number): void {
+  /** 上位のタブ(区分)を選ぶ: その区分で最後に見ていた画面(無ければ先頭の画面)を開く。 */
+  function navigateToGroup(groupId: string): void {
+    const navTab = NAV_TABS.find((candidate) => candidate.group.id === groupId);
+    const first = navTab?.screenIds[0];
+    if (navTab === undefined || first === undefined) {
+      return;
+    }
+    const last = lastScreenOfGroup.current[groupId];
+    navigateToTab(last !== undefined && navTab.screenIds.includes(last) ? last : first);
+  }
+
+  /**
+   * ArrowLeft/ArrowRight/Home/End でタブの選択とフォーカスを移動する(automatic activation)。
+   * keys はそのタブ列の要素の key(上位 = `group:<区分 id>`、下位 = 画面 ID)、select は index の要素を選ぶ。
+   */
+  function handleTabKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    keys: readonly string[],
+    index: number,
+    select: (nextIndex: number) => void,
+  ): void {
     let nextIndex: number;
     switch (event.key) {
       case "ArrowRight":
-        nextIndex = (index + 1) % TAB_ORDER.length;
+        nextIndex = (index + 1) % keys.length;
         break;
       case "ArrowLeft":
-        nextIndex = (index - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+        nextIndex = (index - 1 + keys.length) % keys.length;
         break;
       case "Home":
         nextIndex = 0;
         break;
       case "End":
-        nextIndex = TAB_ORDER.length - 1;
+        nextIndex = keys.length - 1;
         break;
       default:
         return;
     }
     event.preventDefault();
-    const nextTab = TAB_ORDER[nextIndex];
-    if (nextTab === undefined) {
+    const nextKey = keys[nextIndex];
+    if (nextKey === undefined) {
       return;
     }
-    navigateToTab(nextTab);
-    tabRefs.current[nextTab]?.focus();
+    select(nextIndex);
+    tabRefs.current[nextKey]?.focus();
   }
 
   // マウント時: URL が既知のパスでなければ /calc に置き換える(push でなく replace。履歴を増やさない)。
   // マスタの読み込みを待たない(state の初期値は既に既定になっているので、ここは URL の見た目を直すだけ)。
   useEffect(() => {
-    if (
-      screenFromPath(window.location.pathname, base) === null &&
-      !isAboutPath(window.location.pathname, base)
-    ) {
+    const initial = screenFromPath(window.location.pathname, base);
+    if (initial === null && !isAboutPath(window.location.pathname, base)) {
       window.history.replaceState(null, "", pathForScreen(DEFAULT_SCREEN, base));
+    } else if (initial !== null && isLegacyScreenPath(window.location.pathname, base)) {
+      // 廃止した画面の旧 URL(/balance)は、寄せ先(構築)のパスに置き換える(履歴を増やさない)。
+      window.history.replaceState(null, "", pathForScreen(initial, base));
     }
     // base は import.meta.env.BASE_URL(実行中は不変)なので依存配列に含めない。
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -367,6 +404,9 @@ export function App({
         selectTab(DEFAULT_SCREEN);
         return;
       }
+      if (isLegacyScreenPath(window.location.pathname, base)) {
+        window.history.replaceState(null, "", pathForScreen(next, base));
+      }
       selectTab(next);
     }
     window.addEventListener("popstate", handlePopState);
@@ -376,6 +416,10 @@ export function App({
     // base は import.meta.env.BASE_URL(実行中は不変)なので依存配列に含めない(購読を張り直さない)。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // 今の区分と、その区分の画面(下位のタブ。1 画面だけの区分では出さない)。
+  const currentGroupId = groupIdOf(tab);
+  const currentScreenIds = NAV_TABS.find((navTab) => navTab.group.id === currentGroupId)?.screenIds ?? [tab];
 
   // 文書のタイトル(「<画面名> | pokecalc」)。タブの切り替え・popstate に追従し、マスタ読み込み中も設定する。
   useEffect(() => {
@@ -408,40 +452,91 @@ export function App({
           {currentMasterLoad !== null && (
             <div className="app-tabs">
               <div role="tablist" aria-label={appText.tabsLabel} className="ui-tabs app-tabs__list">
-                {TAB_ORDER.map((id, index) => {
-                  const selected = tab === id;
+                {NAV_TABS.map((navTab, index) => {
+                  const selected = currentGroupId === navTab.group.id;
+                  const key = `group:${navTab.group.id}`;
                   return (
                     <button
-                      key={id}
+                      key={key}
                       type="button"
                       role="tab"
-                      id={tabElementId(id)}
+                      id={tabElementId(key)}
                       aria-selected={selected}
                       aria-controls={panelId}
                       // ロービング tabIndex(WAI-ARIA Authoring Practices): 選択中のタブだけ Tab キーで
                       // 止まり、他のタブは矢印キー(handleTabKeyDown)でだけ選ぶ。
                       tabIndex={selected ? 0 : -1}
                       ref={(element) => {
-                        tabRefs.current[id] = element ?? undefined;
+                        tabRefs.current[key] = element ?? undefined;
                       }}
                       className="ui-tab app-tabs__tab"
                       onClick={() => {
-                        navigateToTab(id);
+                        navigateToGroup(navTab.group.id);
                       }}
                       onKeyDown={(event) => {
-                        handleTabKeyDown(event, index);
+                        handleTabKeyDown(
+                          event,
+                          NAV_TABS.map((candidate) => `group:${candidate.group.id}`),
+                          index,
+                          (nextIndex) => {
+                            const target = NAV_TABS[nextIndex];
+                            if (target !== undefined) {
+                              navigateToGroup(target.group.id);
+                            }
+                          },
+                        );
                       }}
                     >
-                      <Icon name={screenIconName(id)} />
-                      {screenLabel(id)}
+                      <Icon name={navTab.group.icon} />
+                      {navTab.group.label}
                     </button>
                   );
                 })}
               </div>
+              {currentScreenIds.length > 1 && (
+                <div
+                  role="tablist"
+                  aria-label={appText.navDamageKindsLabel}
+                  className="ui-tabs app-tabs__sublist"
+                >
+                  {currentScreenIds.map((id, index) => {
+                    const selected = tab === id;
+                    return (
+                      <button
+                        key={id}
+                        type="button"
+                        role="tab"
+                        id={tabElementId(id)}
+                        aria-selected={selected}
+                        aria-controls={panelId}
+                        tabIndex={selected ? 0 : -1}
+                        ref={(element) => {
+                          tabRefs.current[id] = element ?? undefined;
+                        }}
+                        className="ui-tab app-tabs__tab"
+                        onClick={() => {
+                          navigateToTab(id);
+                        }}
+                        onKeyDown={(event) => {
+                          handleTabKeyDown(event, currentScreenIds, index, (nextIndex) => {
+                            const target = currentScreenIds[nextIndex];
+                            if (target !== undefined) {
+                              navigateToTab(target);
+                            }
+                          });
+                        }}
+                      >
+                        <Icon name={screenIconName(id)} />
+                        {screenLabel(id)}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
               <div
                 role="tabpanel"
                 id={panelId}
-                aria-labelledby={tabElementId(tab)}
+                aria-labelledby={tabElementId(currentScreenIds.length > 1 ? tab : `group:${currentGroupId}`)}
                 className="app-tabs__panel"
               >
                 {/* issue 218(ADR-0308 決定1・2・3): 訪れたタブの画面だけを mount したまま並べ、
