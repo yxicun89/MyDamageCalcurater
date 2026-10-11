@@ -14,6 +14,8 @@ interface ToggleChipProps {
   readonly name?: string;
   readonly disabled?: boolean;
   readonly describedBy?: string;
+  /** 画面側の追加クラス(画面ごとの余白・既存のクラス名の維持用)。 */
+  readonly className?: string;
 }
 
 export function ToggleChip({
@@ -24,9 +26,12 @@ export function ToggleChip({
   name,
   disabled = false,
   describedBy,
+  className,
 }: ToggleChipProps): ReactElement {
   return (
-    <label className={`ui-chip calc-chip${checked ? " ui-chip--selected" : ""}`}>
+    <label
+      className={`ui-chip calc-chip${checked ? " ui-chip--selected" : ""}${className === undefined ? "" : ` ${className}`}`}
+    >
       <input
         type={type}
         name={name}

@@ -105,9 +105,11 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { PokemonCard } from "../ui/PokemonCard";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { MegaItemReason } from "./MegaItemReason";
-import { PokemonIcon } from "../images/PokemonIcon";
+import { ToggleChip } from "./ToggleChip";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
@@ -126,6 +128,14 @@ const NARROWING_MIN_OBSERVATIONS = 2;
  * 上回る値にする(animationend が実際に来るまでの余裕。CSS の秒数そのものを TS に複製しない。P4-9)。
  */
 const NARROWING_ANIMATION_MAX_WAIT_MS = 1000;
+
+/** 予測ダメージ%のバーの上限(100% でバーが満たされる)。 */
+const BAR_MAX_PERCENT = 100;
+
+/** バーの幅(%)。範囲外(0 未満・100 超)は端に丸める。 */
+function barPercent(maxPercent: number): number {
+  return Math.min(BAR_MAX_PERCENT, Math.max(0, maxPercent));
+}
 
 /** 技を選んでいないときの、自分の調整の表示用の仮の分類(A/C 表記の既定は物理と同じ)。 */
 const DEFAULT_MOVE_CATEGORY: MoveCategory = "physical";
@@ -940,6 +950,13 @@ function ReverseCard({
   const droppedNoticeId = useId();
   const itemDescribedBy =
     itemLock.kind === "none" ? (droppedNotice === null ? undefined : droppedNoticeId) : itemReasonId;
+  // カードの持ち物の印: 持ち物欄がある側(自分)だけ。メガ種族は固定のメガストーン、そうでなければ選んだ持ち物(なしは出さない)。
+  const itemName =
+    itemSelectLabel === undefined
+      ? undefined
+      : itemLock.kind === "locked" && species !== null
+        ? megaStoneLabel(species, itemLock.item.nameJa)
+        : items.find((item) => item.id === selectedItemId)?.nameJa;
   return (
     // section の accessible name は今までどおり aria-label(cardLabel、「自分のポケモン」等。変えない)。
     // h2 は見える見出し(regionLabel、「自分」「相手」)を足すためだけに置く(issue 304)。
@@ -948,10 +965,17 @@ function ReverseCard({
       aria-label={cardLabel}
       style={typeAccentStyle(species?.types[0])}
     >
-      <h2 className="reverse-card__region">
-        {species !== null && <PokemonIcon speciesKey={species.key} typeId={species.types[0]} />}
-        {regionLabel}
-      </h2>
+      <h2 className="reverse-card__region">{regionLabel}</h2>
+      {species !== null && (
+        <PokemonCard
+          speciesKey={species.key}
+          name={species.nameJa}
+          types={species.types}
+          nameAsHeading
+          {...(itemName === undefined ? {} : { itemName })}
+          className="reverse-card__face"
+        />
+      )}
       {speciesListAvailable ? (
         <>
           <label className="reverse-card__label" htmlFor={speciesSelectId}>
@@ -1043,34 +1067,19 @@ interface SideSelectorProps {
   readonly onChange: (side: ReverseSide) => void;
 }
 
-/** 観測したダメージの側(与えた/受けた)のラジオグループ。 */
+/** 観測したダメージの側(与えた/受けた)の区切りボタン。 */
 function SideSelector({ side, onChange }: SideSelectorProps) {
-  const groupName = useId();
   return (
-    <div role="radiogroup" aria-label={reverseScreenText.sideGroupLabel} className="reverse-side">
-      <label className={`ui-chip${side === "defender" ? " ui-chip--selected" : ""} reverse-side__option`}>
-        <input
-          type="radio"
-          name={groupName}
-          checked={side === "defender"}
-          onChange={() => {
-            onChange("defender");
-          }}
-        />
-        {reverseScreenText.sideDefenderLabel}
-      </label>
-      <label className={`ui-chip${side === "attacker" ? " ui-chip--selected" : ""} reverse-side__option`}>
-        <input
-          type="radio"
-          name={groupName}
-          checked={side === "attacker"}
-          onChange={() => {
-            onChange("attacker");
-          }}
-        />
-        {reverseScreenText.sideAttackerLabel}
-      </label>
-    </div>
+    <SegmentedControl<ReverseSide>
+      label={reverseScreenText.sideGroupLabel}
+      className="reverse-side"
+      options={[
+        { value: "defender", label: reverseScreenText.sideDefenderLabel },
+        { value: "attacker", label: reverseScreenText.sideAttackerLabel },
+      ]}
+      value={side}
+      onChange={onChange}
+    />
   );
 }
 
@@ -1088,21 +1097,17 @@ function MyPresetSelector({ category, value, onChange }: MyPresetSelectorProps) 
       {ATTACKER_PRESET_KEYS.map((key) => {
         const selected = key === value;
         return (
-          <label
+          <ToggleChip
             key={key}
-            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
-          >
-            <input
-              type="radio"
-              name={groupName}
-              className="reverse-preset__input"
-              checked={selected}
-              onChange={() => {
-                onChange(key);
-              }}
-            />
-            {attackerPresetLabel(key, category)}
-          </label>
+            type="radio"
+            name={groupName}
+            label={attackerPresetLabel(key, category)}
+            checked={selected}
+            onChange={() => {
+              onChange(key);
+            }}
+            className="reverse-preset__option"
+          />
         );
       })}
     </div>
@@ -1126,21 +1131,17 @@ function MyDefenderPresetSelector({ category, value, onChange }: MyDefenderPrese
       {defenderPresetKeysFor(category).map((key) => {
         const selected = key === value;
         return (
-          <label
+          <ToggleChip
             key={key}
-            className={`ui-chip${selected ? " ui-chip--selected" : ""} reverse-preset__option`}
-          >
-            <input
-              type="radio"
-              name={groupName}
-              className="reverse-preset__input"
-              checked={selected}
-              onChange={() => {
-                onChange(key);
-              }}
-            />
-            {defenderPresetLabel(key)}
-          </label>
+            type="radio"
+            name={groupName}
+            label={defenderPresetLabel(key)}
+            checked={selected}
+            onChange={() => {
+              onChange(key);
+            }}
+            className="reverse-preset__option"
+          />
         );
       })}
     </div>
@@ -1199,7 +1200,6 @@ function ObservationRowView({
   onUnitChange,
   onRemove,
 }: ObservationRowViewProps) {
-  const groupName = useId();
   const inputId = useId();
   const hintId = useId();
   const messageId = useId();
@@ -1225,38 +1225,16 @@ function ObservationRowView({
           onTextChange(event.target.value);
         }}
       />
-      <div
-        role="radiogroup"
-        aria-label={reverseScreenText.observationUnitGroupLabel(n)}
+      <SegmentedControl<ObservationUnit>
+        label={reverseScreenText.observationUnitGroupLabel(n)}
         className="reverse-observation__unit"
-      >
-        <label
-          className={`ui-chip${row.unit === "percent" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
-        >
-          <input
-            type="radio"
-            name={groupName}
-            checked={row.unit === "percent"}
-            onChange={() => {
-              onUnitChange("percent");
-            }}
-          />
-          {reverseScreenText.percentUnitLabel}
-        </label>
-        <label
-          className={`ui-chip${row.unit === "damage" ? " ui-chip--selected" : ""} reverse-observation__unit-option`}
-        >
-          <input
-            type="radio"
-            name={groupName}
-            checked={row.unit === "damage"}
-            onChange={() => {
-              onUnitChange("damage");
-            }}
-          />
-          {reverseScreenText.damageUnitLabel}
-        </label>
-      </div>
+        options={[
+          { value: "percent", label: reverseScreenText.percentUnitLabel },
+          { value: "damage", label: reverseScreenText.damageUnitLabel },
+        ]}
+        value={row.unit}
+        onChange={onUnitChange}
+      />
       {/* critic指摘(issue 304): hint は入力欄の直後ではなく単位ラジオの後に置く(aria-describedby は
           DOM順に依存しないので支援技術への影響はない)。全幅行(grid-column: 1/-1)の hint が
           input と radiogroup の間に挟まると、grid の自動配置で両者が別々の行に分かれてしまうため。 */}
@@ -1425,21 +1403,15 @@ function ReverseResultsList({
               <span className="reverse-results__nature">
                 {natureClassLabel(candidate.natureClass, result.stat)}
               </span>
-              <span className="reverse-results__item">{reverseItemLabel(candidate.itemId, items)}</span>
-              {abilityLabel !== null && <span className="reverse-results__ability">{abilityLabel}</span>}
-              <span className="reverse-results__ranges">
-                {formatSPRanges(result.stat, candidate.ranges)}
-                {hasNoExactCandidate && (
-                  <span className="reverse-results__reference-label">
-                    {reverseResultText.referenceRangeLabel}
-                  </span>
-                )}
-              </span>
-              {guideNames.length > 0 && (
-                <span className="reverse-results__guide">{guideNames.join("・")}</span>
-              )}
+              {guideNames.map((name) => (
+                <span key={name} className="ui-badge reverse-results__badge">
+                  {name}
+                </span>
+              ))}
               {!candidate.exact && (
-                <span className="reverse-results__mismatch">{reverseResultText.closeCandidateLabel}</span>
+                <span className="ui-badge reverse-results__badge reverse-results__mismatch">
+                  {reverseResultText.closeCandidateLabel}
+                </span>
               )}
               <span className="reverse-results__percent">
                 <span className="reverse-results__percent-label">
@@ -1447,6 +1419,22 @@ function ReverseResultsList({
                 </span>
                 <span className="reverse-results__percent-value">{formatPercentRange(candidate)}</span>
               </span>
+              <div aria-hidden="true" data-testid="candidate-bar" className="reverse-results__bar">
+                <div
+                  className="reverse-results__bar-fill"
+                  style={{ width: `${String(barPercent(candidate.maxPercent))}%` }}
+                />
+              </div>
+              <span className="reverse-results__ranges">
+                {formatSPRanges(result.stat, candidate.ranges)}
+                {hasNoExactCandidate && (
+                  <span className="ui-badge reverse-results__badge">
+                    {reverseResultText.referenceRangeLabel}
+                  </span>
+                )}
+              </span>
+              <span className="reverse-results__item">{reverseItemLabel(candidate.itemId, items)}</span>
+              {abilityLabel !== null && <span className="reverse-results__ability">{abilityLabel}</span>}
               {candidateMarkLabels.length > 0 && (
                 <p className="reverse-results__unsupported">
                   <span
