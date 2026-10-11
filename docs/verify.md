@@ -236,3 +236,27 @@ kubectl -n wishlist delete job wishlist-refresher-manual
 | 価格がずっと出ない・refresher が `failed` を出す | 古い refresher のイメージ / 実サイト側の変更 | 4-2 のあと手動 Job のログを見る。詳しくは [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) §5 |
 
 詳しい切り分けは [impl/verify-mapping.md](impl/verify-mapping.md)。他の手順書は [runbooks/](runbooks/)(balance・speed・observability・ios-device-install)。
+
+## 6. 終わったら(メモリを空ける)
+
+動作確認が済んだら止める。クラスタは常時メモリを使う(Docker VM の上限まで使うことがある)ので、使わない間は止めておく。
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make stop
+export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+xcrun simctl shutdown all
+```
+→ `docker ps` に `k3d-pokecalc-*` が出ない。DB・マスタ・欲しいものリストのデータは残る(止めるだけで消さない)。
+`make dev` で起動していたときは、そのターミナルで Ctrl-C。Xcode のアプリは通常どおり終了してよい。
+
+次に動作確認するとき:
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make start
+make deploy-latest
+```
+→ Pod が揃うまで 1〜2 分かかる。`make deploy-latest` の最後に各サービスの READY が 1 の行が出る(§1-2)。
+
+クラスタとデータを完全に捨てるときは、Makefile の「k3d クラスタ削除」のターゲットを人間が実行する。次は §1-1 から。

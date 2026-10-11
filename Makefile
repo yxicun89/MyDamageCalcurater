@@ -295,6 +295,14 @@ deploy-latest: gen ## いまのチェックアウトで全サービスを作り�
 down: ## k3d クラスタ削除
 	@k3d cluster delete $(CLUSTER) || true
 
+.PHONY: stop
+stop: ## k3d クラスタを止める(データは残る。メモリを空ける。再開は make start)
+	@k3d cluster stop $(CLUSTER) || true
+
+.PHONY: start
+start: ## 止めた k3d クラスタを再開する(make stop の逆。DB・マスタはそのまま)
+	@k3d cluster start $(CLUSTER)
+
 .PHONY: dev
 dev: gen ## k8s を使わずローカルで全サービス起動
 	@./scripts/dev.sh
