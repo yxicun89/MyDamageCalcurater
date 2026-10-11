@@ -22,7 +22,7 @@ const (
 // speedModBounds は素早さの補正の連鎖の範囲(oracle の getFinalSpeed の chainMods)。
 var speedModBounds = modBounds{lower: 410, upper: 131172}
 
-// maxSpeed は素早さの上限(oracle)。
+// maxSpeed は素早さの上限(oracle)。正当な入力(種族値 ≤ 255・SP ≤ 32・ランク ≤ +6・補正の連鎖)では届かない防御的な分岐。
 const maxSpeed = 10000
 
 // SpeedSide はその個体の側にかかっている、素早さに効く場の効果。

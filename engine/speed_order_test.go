@@ -203,6 +203,22 @@ func TestFinalSpeedJudgeParityEffects(t *testing.T) {
 	})
 }
 
+// S5: judge の TestSpeedParalysis。まひは連結・五捨五超入のあとに floor(x × 50 / 100)(ADR-0179 §2 の 4)。
+func TestFinalSpeedJudgeParityParalysis(t *testing.T) {
+	n := NatureNeutral
+	para := StatusParalysis
+	runSpeedParity(t, []speedParityCase{
+		{"judge: まひ単独は半分", speedCase{base: 100, nature: n, status: para}, 60, 0},
+		{"judge: 奇数は切り捨て(91 → 45)", speedCase{base: 71, nature: n, status: para}, 45, 46},
+		{"judge: 奇数は切り捨て(93 → 46)", speedCase{base: 73, nature: n, status: para}, 46, 0},
+		{"judge: 追い風 + スカーフ + まひ", speedCase{base: 100, nature: n, tailwind: true, scarf: true, status: para}, 180, 0},
+		{"judge: スカーフ + まひ(補正の丸めが先)", speedCase{base: 73, nature: n, scarf: true, status: para}, 69, 0},
+		{"judge: スカーフ + まひ(91: 先にまひなら 67)", speedCase{base: 71, nature: n, scarf: true, status: para}, 68, 67},
+		{"judge: ランク +1 + まひ", speedCase{base: 100, nature: n, ranks: Ranks{Spe: 1}, status: para}, 90, 0},
+		{"judge: まひなしは変わらない(回帰)", speedCase{base: 100, nature: n}, 120, 0},
+	})
+}
+
 // S6: 成立を判定できない条件(item_lost・語彙に無い条件)は、既存の finalSpeed(oracle の既定)と同じく飛ばして次の要素へ進み、
 // 判定できなかったことを *Undetermined で返す。掛けた要素より前に無ければ立てない(ADR-0179 §2)。
 func TestFinalSpeedUndetermined(t *testing.T) {
@@ -299,6 +315,56 @@ func TestFinalSpeedRejectsOutOfRange(t *testing.T) {
 	})
 }
 
+// legacyFinalSpeed は ADR-0179 より前の finalSpeed 本体(origin/main の move_rule.go)を、条件判定・firstSpeedMod ごと
+// 写した参照実装。S8 はこれと FinalSpeed を比べる(finalSpeed は FinalSpeed 側への委譲なので自己比較を避ける)。
+func legacyFinalSpeed(ind Individual, f Field) int {
+	holds := func(c SpeedCondition) bool {
+		switch c {
+		case SpeedConditionAlways:
+			return true
+		case SpeedConditionWeatherSun:
+			return f.Weather == WeatherSun
+		case SpeedConditionWeatherRain:
+			return f.Weather == WeatherRain
+		case SpeedConditionWeatherSand:
+			return f.Weather == WeatherSand
+		case SpeedConditionWeatherSnow:
+			return f.Weather == WeatherSnow
+		case SpeedConditionTerrainElectric:
+			return f.Terrain == TerrainElectric
+		case SpeedConditionHasStatus:
+			return ind.Status != StatusNone && ind.Status != ""
+		}
+		return false
+	}
+	first := func(mods []SpeedMod) (int, bool) {
+		for _, m := range mods {
+			if holds(m.Condition) {
+				return m.Modifier, true
+			}
+		}
+		return 0, false
+	}
+	speed := applyStatStage(RealStats(ind).Spe, ind.Ranks.Spe)
+	var mods []int
+	ae := ind.Ability.Effect
+	if ae != nil {
+		if m, ok := first(ae.SpeedMods); ok {
+			mods = append(mods, m)
+		}
+	}
+	if e := itemEffect(ind.Item); e != nil {
+		if m, ok := first(e.SpeedMods); ok {
+			mods = append(mods, m)
+		}
+	}
+	speed = pokeRound(speed, chainMods(mods, speedModBounds))
+	if ind.Status == StatusParalysis && !(ae != nil && ae.IgnoresParalysisSpeedDrop) {
+		speed = speed * 50 / 100
+	}
+	return max(0, min(speed, 10000))
+}
+
 // S8: 追い風なしの FinalSpeed は、ジャイロボール等の威力の式が使う既存の finalSpeed(ADR-0143 §1)と全入力で一致する。
 // finalSpeed を FinalSpeed に寄せてもゴールデンが変わらないことの前提(ADR-0179 §2)。
 func TestFinalSpeedMatchesInternalFinalSpeed(t *testing.T) {
@@ -325,8 +391,8 @@ func TestFinalSpeedMatchesInternalFinalSpeed(t *testing.T) {
 									if err != nil {
 										t.Fatalf("FinalSpeed(%+v): %v", c, err)
 									}
-									if want := finalSpeed(ind, f); got.Speed != want {
-										t.Fatalf("FinalSpeed = %d, finalSpeed = %d (%+v, field %+v)", got.Speed, want, c, f)
+									if want := legacyFinalSpeed(ind, f); got.Speed != want {
+										t.Fatalf("FinalSpeed = %d, legacyFinalSpeed = %d (%+v, field %+v)", got.Speed, want, c, f)
 									}
 									count++
 								}

@@ -116,7 +116,7 @@ func EffectivePriority(m Move, user Individual, f Field) int
 | `Speed` | `FinalSpeed(...).Speed` | 値は同じ(`[item_lost, 他]` の並びだけ §2 のとおり違う) |
 | `ResolveSpeedMod` の undetermined | `SpeedResult.*Undetermined` | |
 | `ErrInvalidBaseSpeed`・`ErrInvalidSP`・`ErrInvalidRank` | `ErrInvalidSpeedInput`(%w) | |
-| `CompareSpeed(a, d, SpeedField{TrickRoom})` | `CompareSpeed(FinalSpeed(a), FinalSpeed(d), trickRoom)` | |
+| `CompareSpeed(a, d, SpeedField{TrickRoom})` | `CompareSpeed(FinalSpeed(a), FinalSpeed(d), trickRoom)` | judge の `TestCompareSpeedTailwindPerSide`・`TestCompareSpeedTrickRoom`・`TestCompareSpeedZeroSpeedFieldMatchesJD1` は S9 で代用(比較は素早さの値だけを見る) |
 | `CompareTurnOrder(pa, pd, SpeedComparison)` | `CompareTurnOrder(pa, pd, TurnOrder)` | |
 | `AppliedSpeedFactors`・`IgnoredSpeedInputs*`・`IsChoiceScarf` | 移さない | 判定の契約(ADR-0710)専用。CB-7 で判定ごと消える |
 
@@ -130,7 +130,7 @@ judge のコードはこの ADR では変えない(CB-7 まで自前のまま)�
 | S2 | 確率 100%・相手が対象だけを返す | `TestGuaranteedTargetStages` |
 | S3 | `GuaranteedSelfSpeedStage(m) == GuaranteedSelfStages(m).Spe`(ADR-0177 §4 の結果を変えない) | `TestGuaranteedSelfSpeedStageIsSelfStagesSpe` |
 | S4 | `AddClamped` は -6..+6 に収める(+6 にさらに +2 で +6、-6 にさらに -1 で -6) | `TestRanksAddClamped` |
-| S5 | judge の `TestSpeed`・`TestSpeedTailwind`・`TestSpeedTailwindAndChoiceScarfChainBeforeRounding`・`TestSpeedSingleModifiersUnchangedFromJD1`・`TestSpeedWithAbilityAndItemEffects`・`TestSpeedWithoutEffectsUnchanged` の期待値を engine で同じ値にする | `TestFinalSpeedJudgeParity*` |
+| S5 | judge の `TestSpeed`・`TestSpeedTailwind`・`TestSpeedTailwindAndChoiceScarfChainBeforeRounding`・`TestSpeedSingleModifiersUnchangedFromJD1`・`TestSpeedWithAbilityAndItemEffects`・`TestSpeedWithoutEffectsUnchanged`・`TestSpeedParalysis` の期待値を engine で同じ値にする | `TestFinalSpeedJudgeParity*` |
 | S6 | 判定できない条件は飛ばして `*Undetermined` を立てる。前に成立した要素があれば立てない | `TestFinalSpeedUndetermined` |
 | S7 | 範囲外の入力は `ErrInvalidSpeedInput`(judge の `TestSpeedRejectsOutOfRangeInput` の各ケース) | `TestFinalSpeedRejectsOutOfRange` |
 | S8 | 追い風なしの `FinalSpeed` は既存の `finalSpeed` と全入力で一致(ゴールデン不変の前提) | `TestFinalSpeedMatchesInternalFinalSpeed` |
