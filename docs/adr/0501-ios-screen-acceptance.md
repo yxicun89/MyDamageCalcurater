@@ -4918,6 +4918,7 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `DeviceDataDeletionUITests` の戻る | 残す | 「このアプリについて」はタブに積まれるので、戻るは今も意味を持つ |
 | `PokeCalcUITests.testBackendModeBadgeIsVisibleAtLaunch` | ホームの `backendModeBadge` → 起動直後の計算画面の `calcBackendModeBadge`(「モック」を含むことも検査に追加) | ホームを廃止。起動直後にモックで動いている表示が見えること自体は同じ強さ以上で確かめる |
 | `JudgeHiddenUITests` の「素早さの入口は出る」 | `app.buttons["openSpeedScreen"]` → 素早さのタブ(`tab-speed`) | 素早さはタブになった |
+| `SpeedScreenUITests.testPresetMaxWithScarfShowsATieAndHighlightsTheSameSpeedTier` | 「自分の段」を待つ前に、出るまでスクロールする(`scrollUntilExists`) | 下部タブの分だけ見える高さが減り、遅延して描く表の段が画面外になった。段が出ること・強調の検査は不変 |
 
 実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
 以前は画面を開き直すたびに `load()` で読み直していた挙動を保つため(`CalcScreenUITests` の構築の呼び出しの検査がこれに依存する)。
