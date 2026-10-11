@@ -1,18 +1,41 @@
 import { useRef } from "react";
 import type { Genre, Item } from "../api/types";
 import { resolveImageUrl } from "../lib/api";
+import { formatYen } from "../lib/price";
+import { GenreGlyph, UiIcon, colorOf, genreColorProps } from "./icons";
 
 const LONG_PRESS_MS = 500;
 
+/** 価格の札。目安が無い・取得失敗(none / failed / summary なし)なら出さない。 */
+function PriceTag({ summary }: { summary: Item["summary"] }) {
+  if (summary?.status === "ok" && summary.low != null) {
+    return (
+      <span className="price-tag" data-testid="price-tag" data-kind="price">
+        {formatYen(summary.low)}〜
+      </span>
+    );
+  }
+  if (summary?.status === "no_result") {
+    return (
+      <span className="price-tag" data-testid="price-tag" data-kind="none">
+        出品なし
+      </span>
+    );
+  }
+  return null;
+}
+
 interface TileProps {
   item: Item;
+  color: string;
   baseUrl: string;
+  showPrice: boolean;
   onTap: () => void;
   onLongPress: () => void;
 }
 
-/** 画像だけのタイル。長押し(500ms)でメニュー、短いタップで詳細。 */
-function Tile({ item, baseUrl, onTap, onLongPress }: TileProps) {
+/** 画像と価格の札だけのタイル。長押し(500ms)でメニュー、短いタップで詳細。 */
+function Tile({ item, color, baseUrl, showPrice, onTap, onLongPress }: TileProps) {
   const timer = useRef<number | undefined>(undefined);
   const fired = useRef(false);
 
@@ -25,6 +48,8 @@ function Tile({ item, baseUrl, onTap, onLongPress }: TileProps) {
     <button
       type="button"
       className="tile"
+      aria-label={item.name}
+      {...genreColorProps(color)}
       onPointerDown={() => {
         fired.current = false;
         clear();
@@ -50,6 +75,7 @@ function Tile({ item, baseUrl, onTap, onLongPress }: TileProps) {
       }}
     >
       <img src={resolveImageUrl(item.image_url, baseUrl)} alt={item.name} draggable={false} />
+      {showPrice && <PriceTag summary={item.summary} />}
     </button>
   );
 }
@@ -60,6 +86,9 @@ interface Props {
   baseUrl: string;
   genreFilter: number | null;
   loadError: string | null;
+  offline: boolean;
+  /** 長押しメニューが出ている間は背景をぼかす */
+  blurred: boolean;
   onFilter: (genreId: number | null) => void;
   onOpen: (item: Item) => void;
   onMenu: (item: Item) => void;
@@ -72,37 +101,52 @@ export function Home(p: Props) {
   const shown = p.genreFilter === null ? p.items : p.items.filter((i) => i.genre_id === p.genreFilter);
 
   return (
-    <main className="home">
-      <header className="topbar">
-        <nav className="chips" aria-label="ジャンル">
-          <button
-            type="button"
-            className="chip"
-            aria-pressed={p.genreFilter === null}
-            onClick={() => {
-              p.onFilter(null);
-            }}
-          >
-            すべて
-          </button>
-          {genres.map((g) => (
-            <button
-              key={g.id}
-              type="button"
-              className="chip"
-              aria-pressed={p.genreFilter === g.id}
-              onClick={() => {
-                p.onFilter(g.id);
-              }}
-            >
-              {g.name}
-            </button>
-          ))}
-        </nav>
-        <button type="button" className="icon-button" aria-label="設定" onClick={p.onSettings}>
-          ⚙
+    <main className="home" data-testid="home" data-blurred={p.blurred ? "true" : undefined}>
+      <header className="home-head">
+        <div className="home-title">
+          <h1>欲しいもの</h1>
+          <span className="count" data-testid="item-count">
+            {String(shown.length)}
+          </span>
+        </div>
+        {p.offline && (
+          <span className="offline-badge" data-testid="offline-badge">
+            <UiIcon name="offline" size={16} />
+            オフライン
+          </span>
+        )}
+        <button type="button" className="square-button" aria-label="設定" onClick={p.onSettings}>
+          <UiIcon name="gear" />
         </button>
       </header>
+      <nav className="genre-nav" aria-label="ジャンル">
+        <button
+          type="button"
+          className="genre-button"
+          aria-label="すべて"
+          aria-pressed={p.genreFilter === null}
+          onClick={() => {
+            p.onFilter(null);
+          }}
+        >
+          <GenreGlyph icon="all" />
+        </button>
+        {genres.map((g) => (
+          <button
+            key={g.id}
+            type="button"
+            className="genre-button"
+            aria-label={g.name}
+            aria-pressed={p.genreFilter === g.id}
+            {...genreColorProps(g.color)}
+            onClick={() => {
+              p.onFilter(g.id);
+            }}
+          >
+            <GenreGlyph icon={g.icon} />
+          </button>
+        ))}
+      </nav>
       {p.loadError !== null && (
         <p role="alert" className="error">
           {p.loadError}
@@ -113,7 +157,9 @@ export function Home(p: Props) {
           <Tile
             key={item.id}
             item={item}
+            color={colorOf(p.genres, item.genre_id)}
             baseUrl={p.baseUrl}
+            showPrice={!p.offline}
             onTap={() => {
               p.onOpen(item);
             }}
@@ -124,7 +170,7 @@ export function Home(p: Props) {
         ))}
       </div>
       <button type="button" className="fab" aria-label="追加" onClick={p.onAdd}>
-        +
+        <UiIcon name="plus" size={28} strokeWidth={2.6} />
       </button>
     </main>
   );

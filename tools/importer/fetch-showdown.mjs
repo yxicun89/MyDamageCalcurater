@@ -148,6 +148,9 @@ const moves = [...dex.moves.all()].map((m) => ({
   // 追加効果(命中時のランク変化。ADR-0107 決定6)。取得元の表現のまま出す
   // (ID化・正準化は Go 側の変換で行う)。
   self: m.self?.boosts ? { boosts: m.self.boosts } : null,
+  // 変化技のランク変化(トップレベルの boosts。target が自分なら自分・相手なら相手。常に発動。
+  // CB-1・ADR-0107 追記)。無い技も {} を出す(キーが無い古い取得物は Go 側が拒否する)。
+  boosts: m.boosts ?? {},
   secondary: m.secondary
     ? {
         chance: m.secondary.chance,

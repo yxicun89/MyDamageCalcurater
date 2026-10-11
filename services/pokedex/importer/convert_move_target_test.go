@@ -244,3 +244,24 @@ func TestOutputVersionReflectsMoveTarget(t *testing.T) {
 		t.Fatal("対象だけを変えても変換結果の版が変わらない(移行後の再投入が起きない)")
 	}
 }
+
+// boosts(変化技のランク変化。CB-1)を持たない古いスナップショットはデコードで拒否し、取り直しを案内する。
+func TestDecodeShowdownRequiresBoosts(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(fixtureRoot, "generated", "showdown", "abad1deaabad1deaabad1deaabad1deaabad1dea", "snapshot.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	delete(doc["moves"].([]any)[0].(map[string]any), "boosts")
+	old, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = importer.DecodeShowdownSnapshot(old)
+	if !errors.Is(err, importer.ErrInvalidInput) || !strings.Contains(err.Error(), "boosts") || !strings.Contains(err.Error(), "make import-fetch") {
+		t.Fatalf("err = %v", err)
+	}
+}

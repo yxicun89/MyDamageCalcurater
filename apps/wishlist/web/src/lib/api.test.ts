@@ -8,7 +8,7 @@ function json(body: unknown, status = 200): Response {
 }
 function setup(res: Response | (() => Promise<Response>) = json({})) {
   const fetchMock = vi.fn<typeof fetch>(() => (typeof res === "function" ? res() : Promise.resolve(res)));
-  const client = createApiClient({ baseUrl: "https://h.example/wishlist", token: "tok", fetch: fetchMock });
+  const client = createApiClient({ baseUrl: "https://h.example/wishlist", fetch: fetchMock });
   const last = () => {
     const [input, init] = fetchMock.mock.calls.at(-1) ?? [];
     return { url: urlOf(input ?? ""), init: init ?? {}, headers: new Headers(init?.headers) };
@@ -18,12 +18,13 @@ function setup(res: Response | (() => Promise<Response>) = json({})) {
 
 // AC-API-01〜06
 describe("createApiClient", () => {
-  it("AC-API-01 ベース URL(末尾 / なしでも)基準で組み立て、Bearer を付ける", async () => {
+  // 旧: 「…Bearer を付ける」。認証を外した(phase5-spec 5-1a・5-2。ユーザー決定 2026-10-11)ので、Authorization は付けない。
+  it("AC-API-01 ベース URL(末尾 / なしでも)基準で組み立て、Authorization は付けない", async () => {
     const { client, last } = setup(json({ items: [makeItem({ id: 1 })] }));
     const items = await client.listItems();
     expect(items).toHaveLength(1);
     expect(last().url).toBe("https://h.example/wishlist/api/items");
-    expect(last().headers.get("Authorization")).toBe("Bearer tok");
+    expect(last().headers.has("Authorization")).toBe(false);
     expect(last().init.method ?? "GET").toBe("GET");
   });
   it("AC-API-01 genre_id をクエリに付ける", async () => {
@@ -103,7 +104,7 @@ describe("createApiClient", () => {
     await expect(client.listItems()).rejects.toMatchObject({ code: "network", status: 0 });
   });
   it("fetch を渡さないときは呼び出し時点の globalThis.fetch を使う", async () => {
-    const client = createApiClient({ baseUrl: "https://h.example/", token: "t" });
+    const client = createApiClient({ baseUrl: "https://h.example/" });
     const spy = vi.fn().mockResolvedValue(json({ items: [] }));
     vi.stubGlobal("fetch", spy);
     await client.listItems();
@@ -138,12 +139,12 @@ describe("画像・ベース URL の解決", () => {
 // AC-API-08: フェーズ3(更新・出品一覧)
 describe("createApiClient(フェーズ3)", () => {
   const estimates = { item_id: 5, sites: [], refreshing: true };
-  it("AC-API-08 refreshEstimates は POST .../estimates/refresh(202 でも本文を返す。Bearer 付き)", async () => {
+  it("AC-API-08 refreshEstimates は POST .../estimates/refresh(202 でも本文を返す。Authorization は付けない)", async () => {
     const { client, last } = setup(json(estimates, 202));
     expect(await client.refreshEstimates(5)).toEqual(estimates);
     expect(last().url).toBe("https://h.example/wishlist/api/items/5/estimates/refresh");
     expect(last().init.method).toBe("POST");
-    expect(last().headers.get("Authorization")).toBe("Bearer tok");
+    expect(last().headers.has("Authorization")).toBe(false);
   });
   it("AC-API-08 listListings は GET .../listings の配列だけを返し、siteId があれば site_id を付ける", async () => {
     const { client, last } = setup(json({ listings: [] }));
@@ -174,7 +175,7 @@ describe("createApiClient(価格の推移)", () => {
     expect(await client.getPriceHistory(5)).toEqual(history);
     expect(last().url).toBe("https://h.example/wishlist/api/items/5/price-history");
     expect(last().init.method ?? "GET").toBe("GET");
-    expect(last().headers.get("Authorization")).toBe("Bearer tok");
+    expect(last().headers.has("Authorization")).toBe(false);
     await client.getPriceHistory(5, 180);
     expect(last().url).toBe("https://h.example/wishlist/api/items/5/price-history?days=180");
   });

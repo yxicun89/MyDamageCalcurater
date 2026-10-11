@@ -54,11 +54,12 @@ describe("formatAge(JST の暦日の差)", () => {
   });
 });
 
+// 旧ラベルは「商品名が一致しない」「安すぎる」「下限価格未満」。5-2 の小さなタグ用に短くした(ユーザー決定 2026-10-11 / phase5-spec 5-2)。
 describe("reasonLabel", () => {
   it.each<[SuspiciousReason, string]>([
-    ["title_mismatch", "商品名が一致しない"],
-    ["too_cheap", "安すぎる"],
-    ["below_min", "下限価格未満"],
+    ["title_mismatch", "名前が違う"],
+    ["too_cheap", "安すぎ"],
+    ["below_min", "下限より下"],
   ])("%s → %s", (r, want) => {
     expect(reasonLabel(r)).toBe(want);
   });

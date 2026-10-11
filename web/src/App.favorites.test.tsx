@@ -18,6 +18,7 @@ import type { components } from "./api/openapi.gen";
 import { favoritesCalcText, favoritesScreenText } from "./i18n/favorites";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createFakeEngine } from "./test/fakeEngine";
+import { openTab, screenTab } from "./test/navTabs";
 
 type Favorite = components["schemas"]["Favorite"];
 
@@ -97,7 +98,7 @@ async function renderApp() {
   return user;
 }
 
-const favoritesTab = () => screen.getByRole("tab", { name: favoritesScreenText.tabLabel });
+const favoritesTab = () => screenTab("お気に入り");
 
 async function addFromCalc(user: ReturnType<typeof userEvent.setup>) {
   const master = await exampleMasterSource.load();
@@ -111,13 +112,13 @@ async function addFromCalc(user: ReturnType<typeof userEvent.setup>) {
   return species;
 }
 
-test("タブ「お気に入り」は「構築」の後ろに出る", async () => {
+test("お気に入りのタブは、記録の区分として最後(素早さの後ろ)に出る(ADR-0356)", async () => {
   installRecordBackend();
   await renderApp();
-  const names = screen.getAllByRole("tab").map((tab) => tab.textContent);
-  const team = names.indexOf("構築");
-  expect(team).toBeGreaterThanOrEqual(0);
-  expect(names[team + 1]).toBe(favoritesScreenText.tabLabel);
+  const names = screen
+    .getAllByRole("tab", { name: /ダメージ|構築|素早さ|記録/ })
+    .map((tab) => tab.textContent);
+  expect(names).toEqual(["ダメージ", "構築", "素早さ", "記録"]);
 });
 
 test("URL /favorites でお気に入りタブが開く", async () => {
@@ -168,7 +169,7 @@ test("お気に入りタブを先に開いて空でも、計算画面で追加�
   await user.click(favoritesTab());
   expect(await screen.findByText(favoritesScreenText.emptyNotice)).toBeInTheDocument();
 
-  await user.click(screen.getByRole("tab", { name: "計算" }));
+  await openTab(user, "計算");
   await addFromCalc(user);
   await user.click(favoritesTab());
   await waitFor(() => {
@@ -184,6 +185,6 @@ test("record が 503 でも、計算画面は壊れず、お気に入りタブ�
   await user.click(favoritesTab());
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent(favoritesScreenText.listErrorHeading);
-  await user.click(screen.getByRole("tab", { name: "計算" }));
+  await openTab(user, "計算");
   expect(screen.getByRole("combobox", { name: "攻撃側のポケモン" })).toBeVisible();
 });

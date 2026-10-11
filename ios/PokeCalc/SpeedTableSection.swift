@@ -130,7 +130,7 @@ private struct SpeedTierView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             ForEach(tier.entries) { entry in
                 HStack(spacing: SpacingToken.x2) {
-                    SpeedEmblem(name: entry.nameJa, primaryType: entry.primaryType)
+                    SpeedEmblem(name: entry.nameJa, primaryType: entry.primaryType, speciesKey: entry.speciesKey)
                     Text(entry.label)
                         .font(TextStyleToken.body.font)
                         .foregroundStyle(ColorToken.textPrimary.color)

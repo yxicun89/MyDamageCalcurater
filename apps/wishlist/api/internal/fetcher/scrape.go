@@ -54,6 +54,8 @@ type scrapeSite struct {
 	requestURL func(template, query string) string
 	// parse は本文から出品を最大 MaxListings 件まで読む(URL は base 基準で絶対化する)。
 	parse func(body []byte, base *url.URL) ([]Listing, error)
+	// zeroOn404 は、404 の本文が「検索結果 0 件」のページかを判定する(nil なら 404 は常にエラー)。
+	zeroOn404 func(body []byte) bool
 }
 
 type scraper struct {
@@ -81,6 +83,11 @@ func (s scraper) Fetch(ctx context.Context, site Site, query string) ([]Listing,
 		return nil, fmt.Errorf("fetcher: %s request failed: %w", s.site.name, err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound && s.site.zeroOn404 != nil {
+		if body, err := netguard.ReadLimited(resp.Body, MaxResponseBytes); err == nil && s.site.zeroOn404(body) {
+			return []Listing{}, nil
+		}
+	}
 	if resp.StatusCode < 200 || resp.StatusCode > 299 {
 		return nil, fmt.Errorf("%w: %s status %d", ErrUpstreamStatus, s.site.name, resp.StatusCode)
 	}
@@ -209,6 +216,8 @@ var surugaya = scrapeSite{
 			return Listing{Title: title, Price: price, URL: u, ImageURL: abs(base, img), InStock: true}, true
 		}), nil
 	},
+	// 0 件のときは「検索結果は０件です。」を出した検索ページを 404 で返す(2026-10-11 に実サイトで確認。testdata/surugaya_zero.html)。
+	zeroOn404: func(body []byte) bool { return bytes.Contains(body, []byte("検索結果は０件です")) },
 }
 
 // yahooFurima は埋め込み JSON(script#__NEXT_DATA__)を読む。robots.txt が並び替え・絞り込みのパラメータ付き検索を

@@ -5,23 +5,23 @@ import { expect, test } from "@playwright/test";
 import { combobox, openApp } from "./support/calcPage.ts";
 // ADR-0313: このファイルはタブ操作(キーボード)だけを見る。既定のオンラインで開いて pokedex フィクスチャのマスタを読む。
 
-test("タブは矢印キー・Home・End で選択とフォーカスが移り、パネルの中身が入れ替わる", async ({ page }) => {
+test("タブは矢印キー・Home・End で選択とフォーカスが移り、パネルの中身が入れ替わる(上位 4 区分 + ダメージの下位 3)", async ({
+  page,
+}) => {
   await openApp(page);
+  // ADR-0356: 上位のタブは ダメージ → 構築 → 素早さ → 記録。ダメージの中の下位のタブは 計算 → 逆算 → 調整。
+  // (判定は ADR-0330 で非表示、タイプバランスは ADR-0421 で構築へ統合。巡回の対象外)
   const calcTab = page.getByRole("tab", { name: "計算", exact: true });
   const reverseTab = page.getByRole("tab", { name: "逆算", exact: true });
-  const balanceTab = page.getByRole("tab", { name: "タイプバランス", exact: true });
-  const speedTab = page.getByRole("tab", { name: "素早さ", exact: true });
-  // P5-5 PR-A1(ADR-0309 §1): タブの並びは 計算 → 逆算 → タイプバランス → 素早さ → 構築
-  // (判定は ADR-0330 で非表示。巡回の対象外)。
-  const teamTab = page.getByRole("tab", { name: "構築", exact: true });
-  // AJ6(ADR-0319 §1): 調整を構築の後ろ(末尾)に足した(7件)。
   const adjustTab = page.getByRole("tab", { name: "調整", exact: true });
-  // P5-3c(ADR-0327 §1): お気に入りを構築と調整の間(order 650)に足した(8件)。
-  const favoritesTab = page.getByRole("tab", { name: "お気に入り", exact: true });
+  const damageTab = page.getByRole("tab", { name: "ダメージ", exact: true });
+  const teamTab = page.getByRole("tab", { name: "構築", exact: true });
+  const speedTab = page.getByRole("tab", { name: "素早さ", exact: true });
+  const recordsTab = page.getByRole("tab", { name: "記録", exact: true });
 
+  // 下位のタブ(ダメージの種類)。
   await calcTab.focus();
   await expect(calcTab).toHaveAttribute("aria-selected", "true");
-
   await page.keyboard.press("ArrowRight");
   await expect(reverseTab).toBeFocused();
   await expect(reverseTab).toHaveAttribute("aria-selected", "true");
@@ -31,48 +31,52 @@ test("タブは矢印キー・Home・End で選択とフォーカスが移り、
   await expect(combobox(page, "攻撃側のポケモン")).toHaveCount(0);
 
   await page.keyboard.press("ArrowRight");
-  await expect(balanceTab).toBeFocused();
-  await expect(balanceTab).toHaveAttribute("aria-selected", "true");
-  await expect(reverseTab).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("group", { name: "メンバー1", exact: true })).toBeVisible();
-
-  await page.keyboard.press("ArrowRight");
-  await expect(speedTab).toBeFocused();
-  await expect(speedTab).toHaveAttribute("aria-selected", "true");
-  await expect(balanceTab).toHaveAttribute("aria-selected", "false");
-
-  // P5-5 PR-A1: 構築(末尾)。team-svc に届かなくても、[新しい構築]は押せる(ADR-0309 §4。構築名の欄は F-08 で廃止。ADR-0332)。
-  await page.keyboard.press("ArrowRight");
-  await expect(teamTab).toBeFocused();
-  await expect(teamTab).toHaveAttribute("aria-selected", "true");
-  await expect(speedTab).toHaveAttribute("aria-selected", "false");
-  await expect(page.getByRole("button", { name: "新しい構築", exact: true })).toBeVisible();
-
-  // P5-3c: お気に入り(構築の次)。タブを選ぶだけで record API を呼んでよい(失敗は画面内の alert に留まる)。
-  await page.keyboard.press("ArrowRight");
-  await expect(favoritesTab).toBeFocused();
-  await expect(favoritesTab).toHaveAttribute("aria-selected", "true");
-  await expect(teamTab).toHaveAttribute("aria-selected", "false");
-
-  // AJ6: 調整(末尾)。タブを選ぶだけでは調整 API を呼ばない(「調整する」を押したときだけ。ADR-0319 §4)。
-  await page.keyboard.press("ArrowRight");
   await expect(adjustTab).toBeFocused();
   await expect(adjustTab).toHaveAttribute("aria-selected", "true");
-  await expect(favoritesTab).toHaveAttribute("aria-selected", "false");
-
   // 末尾から ArrowRight で先頭へ回り込む。
   await page.keyboard.press("ArrowRight");
   await expect(calcTab).toBeFocused();
   await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
-
   await page.keyboard.press("End");
   await expect(adjustTab).toBeFocused();
   await page.keyboard.press("Home");
   await expect(calcTab).toBeFocused();
+
+  // 上位のタブ(区分)。
+  await damageTab.focus();
+  await expect(damageTab).toHaveAttribute("aria-selected", "true");
+  await page.keyboard.press("ArrowRight");
+  await expect(teamTab).toBeFocused();
+  await expect(teamTab).toHaveAttribute("aria-selected", "true");
+  await expect(damageTab).toHaveAttribute("aria-selected", "false");
+  // 構築: team-svc に届かなくても、[新しい構築]は押せる(ADR-0309 §4)。
+  await expect(page.getByRole("button", { name: "新しい構築", exact: true })).toBeVisible();
+
+  await page.keyboard.press("ArrowRight");
+  await expect(speedTab).toBeFocused();
+  await expect(speedTab).toHaveAttribute("aria-selected", "true");
+  await expect(teamTab).toHaveAttribute("aria-selected", "false");
+
+  // 記録(お気に入り)。タブを選ぶだけで record API を呼んでよい(失敗は画面内の alert に留まる)。
+  await page.keyboard.press("ArrowRight");
+  await expect(recordsTab).toBeFocused();
+  await expect(recordsTab).toHaveAttribute("aria-selected", "true");
+  await expect(speedTab).toHaveAttribute("aria-selected", "false");
+
+  // 末尾から ArrowRight で先頭へ回り込む。ダメージに戻ると、最後に見ていた画面(計算)が出る。
+  await page.keyboard.press("ArrowRight");
+  await expect(damageTab).toBeFocused();
+  await expect(damageTab).toHaveAttribute("aria-selected", "true");
+  await expect(combobox(page, "攻撃側のポケモン")).toBeVisible();
+
+  await page.keyboard.press("End");
+  await expect(recordsTab).toBeFocused();
+  await page.keyboard.press("Home");
+  await expect(damageTab).toBeFocused();
   // 先頭から ArrowLeft で末尾へ回り込む。
   await page.keyboard.press("ArrowLeft");
-  await expect(adjustTab).toBeFocused();
-  await expect(adjustTab).toHaveAttribute("aria-selected", "true");
+  await expect(recordsTab).toBeFocused();
+  await expect(recordsTab).toHaveAttribute("aria-selected", "true");
 });
 
 test("Tab キーは選択中のタブにだけ止まる(ロービング tabIndex)", async ({ page }) => {

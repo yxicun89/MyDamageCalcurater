@@ -4908,3 +4908,9 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `PopPaletteTests` の期待値表・コントラスト組(新規 `matchupResist`/`matchupResistSoft`/`matchupImmune`/`matchupImmuneSoft`。文字 4.5:1・枠 3:1 をライト/ダーク全組。件数は表から導出) | 行と組を追加 | 耐性を緑でなく水色系にする要望と ADR-0422 §3 の相性色(追記) |
 | `DesignTokenTests` のタイプ色 16 色 | 新しい値へ(彩度×0.95) | 同上 |
 | `DesignTokenTests` の最小コントラスト(かくとう 4.59→4.71、どく 4.79→4.74) | 期待値を更新 | 色が変わったため。文字色の黒/白の選び(白は4タイプだけ)は不変 |
+
+## G-06 ポケモン画像を各画面に出す(ADR-0529。2026-10-11)
+
+受け入れ条件: (1) 素早さ表・相手選択シート・選択中ポケモン・判定結果の行・お気に入り・計算履歴・よく計算する相手の行に、manifest にあるキーだけ画像の枠(`speciesImage-<key>`)が出る。(2) 画像が無い・既定(`POKECALC_MOCK_IMAGES` なし)では枠が 1 つも出ず、従来のエンブレムのまま。(3) manifest の相対パスは `.webp` で終わるものだけ URL になる。
+
+追加テスト: `ImageURLWebpOnlyTests`、`SpeedEntryDisplay.speciesKey`(`SpeedViewModelTableTests`)、`JudgeMatchupDisplay.speciesKey`(`JudgeResultDisplayTests`)、`SpeciesImageUITests` に素早さ表の画像あり/なし 2 件。既存テストの変更なし。

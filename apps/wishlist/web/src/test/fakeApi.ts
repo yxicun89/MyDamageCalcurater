@@ -22,7 +22,16 @@ export interface FakeApi {
   /** true の間はすべての fetch が TypeError で失敗する(Mac が落ちている状態) */
   offline: boolean;
   /** POST /api/items/from-url が返す下書き */
-  draft: { name: string; image_url: string | null; source_url: string; genre_id: number | null };
+  draft: {
+    name: string;
+    image_url: string | null;
+    source_url: string;
+    genre_id: number | null;
+    /** フェーズ5 5-1c: 推定でジャンルを決めたら true */
+    genre_guessed: boolean;
+  };
+  /** 数字の間、/api/... の(上の個別の失敗以外の)すべてがその HTTP ステータスのエラー応答になる(例 500)。null なら通常 */
+  failStatus: number | null;
   /**
    * GET /api/items/:id/estimates の本文。nth は、その商品の GET を受けた回数(0 始まり。今回の呼び出しは含まない)。
    * 既定は「目安なし」(sites が空・refreshing:false)。
@@ -49,7 +58,8 @@ const jsonRes = (body: unknown, status = 200) =>
 const errRes = (status: number, code: string) => jsonRes({ code, message: code }, status);
 
 /**
- * 契約テスト用の最小のバックエンド。globalThis.fetch を差し替える。認証(Bearer が "test-token")も検査する。
+ * 契約テスト用の最小のバックエンド。globalThis.fetch を差し替える。
+ * 認証は無い(フェーズ5 5-1a・ユーザー決定 2026-10-11)。Authorization が付いていても見ない(付いていないことは各テストが call.headers で確かめる)。
  * 受け付けるのは /api/... のみ(画像は画面側が <img src> で読むだけで fetch しない)。
  */
 export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?: Site[] } = {}): FakeApi {
@@ -64,7 +74,9 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
       image_url: "https://img.example/og.png",
       source_url: "https://shop.example/p/1",
       genre_id: null,
+      genre_guessed: false,
     },
+    failStatus: null,
     estimates: (itemId) => ({ item_id: itemId, sites: [], refreshing: false }),
     listings: [],
     failEstimates: false,
@@ -91,7 +103,7 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
       throw new TypeError("Failed to fetch");
     if (api.failPriceHistory === "network" && method === "GET" && /\/price-history$/.test(path))
       throw new TypeError("Failed to fetch");
-    if (headers.get("Authorization") !== "Bearer test-token") return errRes(401, "unauthorized");
+    if (api.failStatus !== null) return errRes(api.failStatus, "internal");
     const body = call.json as Record<string, unknown> | undefined;
 
     if (path === "/api/items" && method === "GET") {
@@ -165,7 +177,17 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
     }
     if (path === "/api/genres" && method === "GET") return jsonRes({ genres: api.genres });
     if (path === "/api/genres" && method === "POST") {
-      const g = { sort_order: 0, site_ids: [], ...body, id: nextId++ } as unknown as Genre;
+      // サーバーの既定(5-1b): color=#1d5fd1・icon=box・手がかりは空配列
+      const g = {
+        sort_order: 0,
+        site_ids: [],
+        color: "#1d5fd1",
+        icon: "box",
+        match_hosts: [],
+        match_keywords: [],
+        ...body,
+        id: nextId++,
+      } as unknown as Genre;
       api.genres.push(g);
       return jsonRes(g, 201);
     }
@@ -210,9 +232,4 @@ export function installFakeApi(init: { items?: Item[]; genres?: Genre[]; sites?:
   };
   vi.stubGlobal("fetch", vi.fn(handler));
   return api;
-}
-
-/** 設定画面で保存済みの状態にする(キー・形式は src/lib/settings.ts と同じ契約)。 */
-export function seedSettings(token = "test-token"): void {
-  localStorage.setItem("wishlist.settings", JSON.stringify({ apiBaseUrl: null, token }));
 }

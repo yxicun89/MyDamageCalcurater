@@ -124,11 +124,7 @@ func SuggestSPForGoals(in SPGoalsInput) (SPGoalsResult, error) {
 // GuaranteedSelfSpeedStage は技の追加効果のうち「確率 100% で必ず起きる、使用者自身の素早さのランク変化」の段数を返す
 // (ADR-0177 §4・ADR-0107)。効果が無い・確率 100% 未満・対象が相手・素早さを含まないときは 0。
 func GuaranteedSelfSpeedStage(m Move) int {
-	e := m.Effect
-	if e == nil || e.Chance != 100 || e.Target != RankTargetSelf {
-		return 0
-	}
-	return e.Stages[StatSpe]
+	return GuaranteedSelfStages(m).Spe
 }
 
 // offenseStatKeys は素早さ・攻撃側(耐久側の表を引く側)の能力(ADR-0177 §6)。

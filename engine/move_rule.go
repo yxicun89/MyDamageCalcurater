@@ -397,9 +397,7 @@ func applyRulePreconditions(in DamageInput) DamageInput {
 		return in
 	}
 	attackerGrounded := isGrounded(in.Attacker)
-	if pb := r.PriorityBoost; pb != nil && attackerGrounded && in.Field.Terrain == pb.Terrain {
-		in.Move.Priority += pb.Delta
-	}
+	in.Move.Priority = EffectivePriority(in.Move, in.Attacker, in.Field)
 	if t, ok := r.TypeByWeather[in.Field.Weather]; ok {
 		in.Move.Type = t
 	}
@@ -492,64 +490,10 @@ func effectiveWeight(ind Individual) int {
 	return w
 }
 
-// speedModBounds は素早さの補正の連鎖の範囲(oracle の getFinalSpeed の chainMods)。
-var speedModBounds = modBounds{lower: 410, upper: 131172}
-
-// maxSpeed は素早さの上限(oracle)。
-const maxSpeed = 10000
-
-// speedCondHolds は素早さの補正の条件が成り立つか。item_lost は engine の入力に無いので常に不成立(oracle の既定と同じ)。
-func speedCondHolds(c SpeedCondition, ind Individual, f Field) bool {
-	switch c {
-	case SpeedConditionAlways:
-		return true
-	case SpeedConditionWeatherSun:
-		return f.Weather == WeatherSun
-	case SpeedConditionWeatherRain:
-		return f.Weather == WeatherRain
-	case SpeedConditionWeatherSand:
-		return f.Weather == WeatherSand
-	case SpeedConditionWeatherSnow:
-		return f.Weather == WeatherSnow
-	case SpeedConditionTerrainElectric:
-		return f.Terrain == TerrainElectric
-	case SpeedConditionHasStatus:
-		return ind.Status != StatusNone && ind.Status != ""
-	}
-	return false
-}
-
-// firstSpeedMod は成立した最初の素早さの補正を返す。
-func firstSpeedMod(mods []SpeedMod, ind Individual, f Field) (int, bool) {
-	for _, m := range mods {
-		if speedCondHolds(m.Condition, ind, f) {
-			return m.Modifier, true
-		}
-	}
-	return 0, false
-}
-
-// finalSpeed は戦闘中の素早さ: ランク → [特性・持ち物の SpeedMods(成立した最初の1つずつ)] の chainMods → pokeRound →
-// まひ(IgnoresParalysisSpeedDrop が無ければ ×50/100 floor)→ 0..10000(oracle の getFinalSpeed。ADR-0143 §1)。
+// finalSpeed は追い風なしの戦闘中の素早さ(威力の式用。ADR-0143 §1)。FinalSpeed(ADR-0179)に委譲する。
+// 呼び出し元(ruleBasePower)の入力は検証済みなので通常エラーは起きない。範囲外の入力でも値は式どおりに返す。
 func finalSpeed(ind Individual, f Field) int {
-	speed := applyStatStage(RealStats(ind).Spe, ind.Ranks.Spe)
-	var mods []int
-	ae := ind.Ability.Effect
-	if ae != nil {
-		if m, ok := firstSpeedMod(ae.SpeedMods, ind, f); ok {
-			mods = append(mods, m)
-		}
-	}
-	if e := itemEffect(ind.Item); e != nil {
-		if m, ok := firstSpeedMod(e.SpeedMods, ind, f); ok {
-			mods = append(mods, m)
-		}
-	}
-	speed = pokeRound(speed, chainMods(mods, speedModBounds))
-	if ind.Status == StatusParalysis && !(ae != nil && ae.IgnoresParalysisSpeedDrop) {
-		speed = speed * 50 / 100
-	}
-	return max(0, min(speed, maxSpeed))
+	return finalSpeedValue(ind, f, SpeedSide{}).Speed
 }
 
 // formulaComputable は威力の式をこの入力で計算できるか(重さの式は要る側の重さが分かること)。

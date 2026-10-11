@@ -86,6 +86,7 @@ func GuaranteedSelfSpeedStage(m Move) int
   確率 100% 未満・相手が対象・素早さを含まない効果・効果なし・変化技でも 0(エラーにしない。ADR-0331 §3)。下降(例: −1)もそのまま返す。
 - 純粋関数として engine に置く(ADR-0107 の `MoveEffect` の意味を知るのは engine)。calc-svc はマスタの `Move.Effect`
   (公開 `Move` には無い)を解決してこの関数で段数を求め、`SPGoal.SelfSpeedStage` に入れる。
+  変化技の効果は ADR-0107「CB-1」で取り込まれたので、りゅうのまい等を選ぶと段数(+1 等)が入る。
 
 ### 5. 探索の定義(候補と順序)
 

@@ -102,3 +102,15 @@ final class PokeImageURLTests: XCTestCase {
         XCTAssertEqual(url?.port, 8080)
     }
 }
+
+/// G-06: Web(`pokemonImages.ts`)と同じ規則 = `.webp` で終わる相対パスだけ URL にする(他の拡張子は画像なし)。
+final class ImageURLWebpOnlyTests: XCTestCase {
+    private let base = URL(string: "https://gw.example")!
+
+    func testOnlyWebpRelativePathsBecomeURLs() {
+        XCTAssertNotNil(PokeImageURL.url(baseURL: base, relativePath: "thumb/a.webp"))
+        for path in ["thumb/a.png", "thumb/a.jpg", "thumb/a", "thumb/a.webp.exe", "thumb/a.WEBP"] {
+            XCTAssertNil(PokeImageURL.url(baseURL: base, relativePath: path), "webp 以外は画像なし: \(path)")
+        }
+    }
+}

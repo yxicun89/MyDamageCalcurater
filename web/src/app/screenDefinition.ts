@@ -9,6 +9,7 @@ import type { MasterData, MasterSource, MasterSpeciesSearch } from "../master/ty
 import type { components } from "../api/openapi.gen";
 import type { FavoriteRestoreRequest } from "../favorites/favoriteCalc";
 import type { RecordClient } from "../record/recordClient";
+import type { NavGroup } from "./navGroups";
 
 type Favorite = components["schemas"]["Favorite"];
 
@@ -72,6 +73,8 @@ interface ScreenDefinitionBase<C> {
    * 再表示は、この行を消すだけでよい。
    */
   readonly hidden?: boolean;
+  /** ナビの区分(ADR-0356。app/navGroups.ts の NAV_GROUPS)。省略は、この画面だけの区分。 */
+  readonly group?: NavGroup;
 }
 
 /** マスタを使う画面の定義。 */
@@ -109,6 +112,8 @@ export interface RegisteredScreen {
   readonly usesMaster: boolean;
   /** 非表示の画面か(ADR-0330)。真の画面はタブにも URL にも出ず、クライアントも作らない。 */
   readonly hidden: boolean;
+  /** ナビの区分(省略は、この画面だけの区分)。 */
+  readonly group?: NavGroup;
   /** クライアントを作り、描画の口を返す。 */
   readonly instantiate: (deps: ScreenClientDeps) => ScreenInstance;
 }
@@ -117,7 +122,7 @@ export interface RegisteredScreen {
 export function defineScreen<C>(
   definition: MasterScreenDefinition<C> | MasterlessScreenDefinition<C>,
 ): RegisteredScreen {
-  const { id, segment, label, order, usesMaster, hidden = false } = definition;
+  const { id, segment, label, order, usesMaster, hidden = false, group } = definition;
   return {
     id,
     segment,
@@ -125,6 +130,7 @@ export function defineScreen<C>(
     order,
     usesMaster,
     hidden,
+    group,
     instantiate: (deps) => {
       const client = definition.createClient(deps);
       if (definition.usesMaster) {

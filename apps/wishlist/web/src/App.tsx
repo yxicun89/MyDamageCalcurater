@@ -1,9 +1,10 @@
 import { useState } from "react";
 import type { Item } from "./api/types";
 import type { ApiClient } from "./lib/api";
-import { loadSettings, saveSettings, type Settings } from "./lib/settings";
 import { Edit } from "./ui/Edit";
 import { Home } from "./ui/Home";
+import { colorOf } from "./ui/icons";
+import { Menu } from "./ui/Menu";
 import { ErrorText, Modal, errorMessage } from "./ui/Modal";
 import { Register } from "./ui/Register";
 import { SettingsScreen } from "./ui/Settings";
@@ -53,9 +54,8 @@ function DeleteConfirm({
 
 /** PWA のルート。画面は状態で切り替える(ルーティングのライブラリは入れない)。 */
 export function App() {
-  const [settings, setSettings] = useState<Settings>(loadSettings);
-  const w = useWishlist(settings);
-  const [view, setView] = useState<"home" | "settings">(settings.token === "" ? "settings" : "home");
+  const w = useWishlist();
+  const [view, setView] = useState<"home" | "settings">("home");
   const [genreFilter, setGenreFilter] = useState<number | null>(null);
   const [sheetId, setSheetId] = useState<number | null>(null);
   const [menuId, setMenuId] = useState<number | null>(null);
@@ -75,14 +75,10 @@ export function App() {
   if (view === "settings") {
     return (
       <SettingsScreen
-        settings={settings}
         genres={w.genres}
+        items={w.items}
         sites={w.sites}
         client={w.client}
-        onSaveSettings={(s) => {
-          saveSettings(s);
-          setSettings(s);
-        }}
         onGenres={w.setGenres}
         onSites={w.setSites}
         onBack={() => {
@@ -100,6 +96,8 @@ export function App() {
         baseUrl={w.baseUrl}
         genreFilter={genreFilter}
         loadError={w.loadError}
+        offline={w.offline}
+        blurred={menuItem !== undefined}
         onFilter={setGenreFilter}
         onOpen={(i) => {
           setSheetId(i.id);
@@ -116,36 +114,22 @@ export function App() {
       />
 
       {menuItem && (
-        <div
-          className="overlay"
-          onClick={() => {
+        <Menu
+          item={menuItem}
+          color={colorOf(w.genres, menuItem.genre_id)}
+          baseUrl={w.baseUrl}
+          onEdit={() => {
+            setMenuId(null);
+            setEditId(menuItem.id);
+          }}
+          onDelete={() => {
+            setMenuId(null);
+            setDeleteId(menuItem.id);
+          }}
+          onClose={() => {
             setMenuId(null);
           }}
-        >
-          <div className="panel menu" role="menu">
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setMenuId(null);
-                setEditId(menuItem.id);
-              }}
-            >
-              編集
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="danger"
-              onClick={() => {
-                setMenuId(null);
-                setDeleteId(menuItem.id);
-              }}
-            >
-              削除
-            </button>
-          </div>
-        </div>
+        />
       )}
 
       {sheetItem && (
@@ -183,6 +167,7 @@ export function App() {
           item={editItem}
           genres={w.genres}
           client={w.client}
+          baseUrl={w.baseUrl}
           onClose={() => {
             setEditId(null);
           }}

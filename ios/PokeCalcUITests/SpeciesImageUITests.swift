@@ -97,4 +97,32 @@ final class SpeciesImageUITests: XCTestCase {
         XCTAssertLessThanOrEqual(frame.frame.width, screenWidth / 2, "画像は文字サイズに引きずられて巨大化しない")
         XCTAssertTrue(element(app, "attackerSpeciesPicker").isHittable)
     }
+
+    // MARK: - G-06: 素早さ表・お気に入り
+
+    private func openSpeedScreen(images: Bool) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
+        if images { app.launchEnvironment["POKECALC_MOCK_IMAGES"] = "1" }
+        app.launch()
+        let open = app.buttons["openSpeedScreen"]
+        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
+        open.tap()
+        XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout))
+        return app
+    }
+
+    /// 画像あり: 素早さ表の行に、manifest にあるキー(9001-000)の画像の枠が出る。
+    func testSpeedTableRowsShowImageFrameWhenManifestHasKey() {
+        let app = openSpeedScreen(images: true)
+        XCTAssertTrue(element(app, "speciesImage-9001-000").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(element(app, "speciesImage-9002-000").exists, "manifest に無いキーはエンブレムのまま")
+    }
+
+    /// 画像なし(既定): 素早さ表に画像の枠が出ず、表の段は従来どおり出る。
+    func testSpeedTableHasNoImageFramesByDefault() {
+        let app = openSpeedScreen(images: false)
+        XCTAssertTrue(element(app, "speedScreen").exists)
+        XCTAssertFalse(imageFrames(app).firstMatch.waitForExistence(timeout: 1.5))
+    }
 }
