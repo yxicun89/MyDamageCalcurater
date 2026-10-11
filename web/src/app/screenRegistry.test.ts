@@ -201,13 +201,15 @@ describe("hidden(非表示の画面。ADR-0330)", () => {
     expect(dummy(true).hidden).toBe(true);
   });
 
-  test("実際の登録では、判定だけが hidden で、タブの表(SCREEN_ROUTES)に判定が無い", () => {
-    expect(SCREENS.filter((screen) => screen.hidden).map((screen) => screen.id)).toEqual(["judge"]);
+  test("実際の登録では、タイプバランス(ADR-0421)と判定だけが hidden で、タブの表(SCREEN_ROUTES)に無い", () => {
+    expect(SCREENS.filter((screen) => screen.hidden).map((screen) => screen.id)).toEqual([
+      "balance",
+      "judge",
+    ]);
     expect(SCREEN_ROUTES.map((route) => route.id)).not.toContain("judge");
     expect(SCREEN_ROUTES.map((route) => route.id)).toEqual([
       "calc",
       "reverse",
-      "balance",
       "speed",
       "team",
       "favorites",

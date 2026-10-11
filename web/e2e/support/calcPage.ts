@@ -39,6 +39,30 @@ export async function openApp(page: Page): Promise<void> {
   await expect(page.getByRole("tablist", { name: "画面の切り替え" })).toBeVisible();
 }
 
+/** 画面名 → 上位のタブの名前(ADR-0356: ダメージ〈計算・逆算・調整〉・構築・素早さ・記録〈お気に入り〉)。 */
+const GROUP_OF_SCREEN: Readonly<Record<string, string>> = {
+  計算: "ダメージ",
+  逆算: "ダメージ",
+  調整: "ダメージ",
+  構築: "構築",
+  素早さ: "素早さ",
+  お気に入り: "記録",
+};
+
+/** 画面を開く: 上位のタブ(区分)を押し、ダメージの中の画面なら下位のタブも押す。 */
+export async function openScreenTab(page: Page, screenName: string): Promise<void> {
+  const group = page.getByRole("tab", { name: GROUP_OF_SCREEN[screenName] ?? screenName, exact: true });
+  if ((await group.getAttribute("aria-selected")) !== "true") {
+    await group.click();
+  }
+  if (GROUP_OF_SCREEN[screenName] === "ダメージ") {
+    const sub = page.getByRole("tab", { name: screenName, exact: true });
+    if ((await sub.getAttribute("aria-selected")) !== "true") {
+      await sub.click();
+    }
+  }
+}
+
 export function combobox(page: Page, name: string): Locator {
   return page.getByRole("combobox", { name, exact: true });
 }

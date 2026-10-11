@@ -32,6 +32,49 @@
   overflow-x: auto;
 }
 
+/* 区分の中の画面を切り替える下位のタブ(ダメージの 計算 / 逆算 / 調整。ADR-0356)。 */
+.app-tabs__sublist {
+  display: flex;
+  justify-content: safe center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4) var(--space-2);
+  overflow-x: auto;
+}
+
+/* ADR-0356: 狭い幅では上位のタブを画面の下に固定する(4 つなので 320px でも横スクロールが要らない)。
+   本文とフッターは固定バーに隠れないよう下に余白を取る。Sheet(z-index 100)はバーより前に出る。 */
+@media (max-width: 599px) {
+  .app-tabs__list {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 20;
+    justify-content: space-around;
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-2) calc(var(--space-2) + env(safe-area-inset-bottom));
+    background: var(--surface-card);
+    border-top: 1px solid var(--border-hairline);
+    overflow-x: visible;
+  }
+
+  .app-tabs__list .app-tabs__tab {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 44px;
+    flex-direction: column;
+    justify-content: center;
+    gap: var(--space-1);
+    padding: var(--space-1) var(--space-2);
+    font-size: var(--font-size-caption);
+  }
+
+  /* 後ろにある基本の .app-footer の padding に負けないよう、詳細度を上げる。 */
+  footer.app-footer {
+    padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
+  }
+}
+
 .app-tabs__tab {
   /* 見た目(ピル・選択色・押下)は共通部品 .ui-tab(styles/components.css)。ここは折り返さない指定だけ。
      white-space だけでも折り返さない(nowrap で min-content = max-content になり flex-shrink の余地が無い)。

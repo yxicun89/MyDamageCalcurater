@@ -1,6 +1,7 @@
 // F-12(I-web-6、ADR-0334。I-web-12 = PR-2、ADR-0336 で逆算・タイプバランス・お気に入り・調整・このアプリについてを追加):
 // ポップ・カラフルな見た目の基盤を当てた画面の a11y と「動き」の回帰。
-// - axe(WCAG 2.x A/AA。色のコントラストを含む)で、計算・素早さ・構築・逆算・タイプバランス・お気に入り・調整・/about を
+// - axe(WCAG 2.x A/AA。色のコントラストを含む)で、計算・素早さ・構築・逆算・お気に入り(記録)・調整・/about を
+//   (タイプバランスは ADR-0421 で構築へ統合。旧 /balance は構築へ寄る)
 //   ライト/ダークの両方で 0 件にする
 //   (計算はタイプ色のカード〈種族を選んだ状態〉も見る)。
 // - 常時動くアニメーションが無い(無限に繰り返す Animation が document に無い)。
@@ -21,8 +22,7 @@ const SCREENS = [
   { path: "/team", tab: "構築" },
   // I-web-12(ADR-0336)で追加。
   { path: "/reverse", tab: "逆算" },
-  { path: "/balance", tab: "タイプバランス" },
-  { path: "/favorites", tab: "お気に入り" },
+  { path: "/favorites", tab: "記録" },
   { path: "/adjust", tab: "調整" },
 ] as const;
 
@@ -76,7 +76,7 @@ for (const scheme of ["light", "dark"] as const) {
           }),
         }),
       );
-      await openScreen(page, "/favorites", "お気に入り");
+      await openScreen(page, "/favorites", "記録");
       await expect(page.getByRole("region", { name: "計算履歴" })).toBeVisible();
       await expect(page.getByRole("button", { name: "もっと見る" })).toBeVisible();
       await expectNoAxeViolations(page);
