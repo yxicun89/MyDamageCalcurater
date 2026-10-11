@@ -37,3 +37,6 @@ iOS の担当項目。表の F-番号は usability-round2.md §3。進める順�
 - [x] **I-ios-15(G-05)(ADR-0530 で実装)配色「K. 空色と白」**: `PokeCalcDesign` のトークンの値だけを差し替え(背景は淡い空色・主色 #1D66D0・タイプ色の彩度×0.95・ダークは紺・影は青み)。コントラスト検査は不変で通過。値の表は decisions/2026-10-11-ios-palette-sky-white.md。Web の tokens.css・design.md の表は Web レーンが追う。
 
 - [x] **I-ios-13(G-06)(ADR-0529 で実装)ポケモン画像を各画面に出す**: 既存の `SpeciesImageView` を一般化し、素早さ表・相手選択・判定結果・お気に入り・計算履歴・よく計算する相手の行に追加。manifest の相対パスは `.webp` のみ。画像なし・取得失敗はタイプ色エンブレム。
+
+- [x] **I-ios-16(ADR-0533 で実装)能力ランクの入力を 13 段のメーターに**: 数字の − / 値 / + をやめ、左 6 = 下降(warning)・中央 0(太い目印)・右 6 = 上昇(brandPrimary)のメーター。タップ・ドラッグ・− / + ・VoiceOver の adjustable(value「+2」)。計算の詳細(攻撃側・防御側)・素早さ・判定の 5 欄に適用。Web の ADR-0357 に揃える。ViewModel・契約は不変。
+

@@ -79,3 +79,6 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-11(G-05 配色 K「空色と白」。ブランチ feat/ios-g05-palette-sky。ADR-0530): `PokeCalcDesign` の色トークンの値だけを差し替え(キー名・画面は不変)。主色 #1D66D0(#2F80ED は白に 3.87:1 で届かず)・背景は淡い空色・タイプ色は彩度×0.95(かくとうだけ黒文字を保つ明度)・ダークは紺。PopPaletteTests/DesignTokenTests の期待値を新値に更新(検査は弱めず)。Web 未反映のため design.md の表は触らず、値の表は decisions/2026-10-11-ios-palette-sky-white.md。
 
 2026-10-11(G-06 ポケモン画像を各所に。ブランチ feat/ios-g06-images。ADR-0529): 既存の `SpeciesImageView`(ADR-0508)を fallback・直径を差し替えられる形に一般化し、素早さ表・相手選択シート・判定結果の行(`SpeedEmblem` 経由)、お気に入り・計算履歴・よく計算する相手の行に足した(`SpeedEntryDisplay`/`JudgeMatchupDisplay` に `speciesKey`)。manifest の相対パスは `.webp` のみ(Web と同じ)。画像なしは従来のエンブレム。後続: 詳細画像(detail)の使い道は詳細画面ができてから。
+
+2026-10-12(能力ランクのメーター。ブランチ feat/ios-rank-meter。ADR-0533): ランク入力を 13 段のメーター(`RankMeterView`。ロジックは `RankMeterLogic`)にし、計算の詳細(攻撃側・防御側)・素早さ(カスタム)・判定(5 欄)に適用。Web の ADR-0357 と色の意味・併記・読み上げ(label「攻撃」+ value「+2」)を揃えた。識別子は `rankMeter-<field>`/`rankMeterMinus-`/`rankMeterPlus-`。旧 `calc*Rank*`・`speedRank*` は廃止(UITest を付け替え)。ViewModel・契約は不変。
+
