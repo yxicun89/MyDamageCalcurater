@@ -50,9 +50,7 @@ final class SpeedScreenUITests: XCTestCase {
 
     private func launchSpeedScreen(scenario: String? = nil) -> XCUIApplication {
         let app = launch(scenario: scenario)
-        let open = element(app, "openSpeedScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
         return app
     }
@@ -74,6 +72,14 @@ final class SpeedScreenUITests: XCTestCase {
 
     private func wait(_ element: XCUIElement, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: Self.existenceTimeout), message, file: file, line: line)
+    }
+
+    /// 遅延して描く表の段が出るまでスクロールする(見つかったら止める)。
+    private func scrollUntilExists(_ app: XCUIApplication, prefix: String) {
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+        for _ in 0..<Self.maxScrolls where !first.exists {
+            app.swipeUp()
+        }
     }
 
     /// 画面外の要素をタップできる位置までスクロールする(画面は縦に長い単一の ScrollView)。
@@ -250,6 +256,8 @@ final class SpeedScreenUITests: XCTestCase {
         wait(element(app, "speedResultTieEntry-0"), "同速の一覧が出る")
         XCTAssertFalse(element(app, "speedResultNoTie").exists)
         XCTAssertFalse(element(app, "speedBoundary").exists, "同じ実数値の段があるときは境界線を引かない")
+        // 下部タブの分だけ見える高さが減り、表の段(遅延して描く)が画面の外にあることがあるので、出るまで送る(ADR-0531)。
+        scrollUntilExists(app, prefix: "speedTierSelf-")
         waitForAny(app, prefix: "speedTierSelf-", "自分と同じ段が強調される")
         XCTAssertFalse(elements(app, prefix: "speedTierTie-").isEmpty, "同速の段にはバッジが出る")
     }
@@ -320,14 +328,12 @@ final class SpeedScreenUITests: XCTestCase {
         XCTAssertFalse(elements(app, prefix: "speedTier-").isEmpty)
     }
 
-    /// 絶対ルール5: 素早さが全面的に失敗しても、ルートから計算画面はこれまでどおり開く。
+    /// 絶対ルール5: 素早さが全面的に失敗しても、計算画面はこれまでどおり開く。
     func testCalcScreenStillWorksWhenSpeedFailsEntirely() {
         let app = launchSpeedScreen(scenario: "all-error")
         wait(element(app, "speedTableError"), "表の失敗が表示されない")
-        app.navigationBars.buttons.firstMatch.tap()
-        let calc = element(app, "openCalcScreen")
-        wait(calc, "ルートに戻れない")
-        calc.tap()
+        // 素早さタブからダメージタブの計算へ移る(ADR-0531。以前はルートへ戻ってから開いた)。
+        app.openScreen("openCalcScreen")
         wait(element(app, "calcScreen"), "素早さが失敗しても計算画面は開く")
     }
 }

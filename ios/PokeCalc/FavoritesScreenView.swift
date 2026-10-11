@@ -57,6 +57,12 @@ struct FavoritesScreenView: View {
         .task { await favorites.load() }
         .task { await calcHistory.load() }
         .task { await history.load() }
+        // タブを移って戻ったら読み直す(計算タブで足したお気に入り・新しい計算を出す。画面を破棄しなくなったため。ADR-0531)。
+        .onReappear {
+            Task { await favorites.load() }
+            Task { await calcHistory.load() }
+            Task { await history.load() }
+        }
     }
 
     // MARK: - お気に入り

@@ -38,9 +38,7 @@ final class JudgeSpeedNotesUITests: XCTestCase {
         app.launchEnvironment["POKECALC_SHOW_JUDGE"] = "1"
         if let scenario { app.launchEnvironment["POKECALC_MOCK_JUDGE"] = scenario }
         app.launch()
-        let open = element(app, "openJudgeScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openJudgeScreen が無い")
-        open.tap()
+        app.openScreen("openJudgeScreen")
         XCTAssertTrue(element(app, "judgeScreen").waitForExistence(timeout: Self.existenceTimeout), "judgeScreen が開かない")
         return app
     }

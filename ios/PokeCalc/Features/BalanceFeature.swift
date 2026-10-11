@@ -1,11 +1,11 @@
 import PokeCalcCore
 import SwiftUI
 
-/// タイプバランス画面(P6-21。ADR-0415)の登録。
+/// タイプバランス画面(P6-21。ADR-0415)の登録。構築編集へ統合する(ADR-0421)までは構築一覧の行から開く(ADR-0531)。
 struct BalanceFeature: AppFeature {
     let id = "balance"
     let order = 500
-    let entry = FeatureEntry.rootButton(title: "タイプバランス", accessibilityIdentifier: "openBalanceScreen")
+    let entry = FeatureEntry.link(in: .team, title: "タイプバランス", accessibilityIdentifier: "openBalanceScreen")
 
     let requiredServices = [ServiceKey((any BalanceService).self)]
 

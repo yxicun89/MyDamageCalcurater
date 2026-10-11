@@ -130,6 +130,7 @@ struct PopIcon: View {
 
 /// 各画面・操作の SF Symbols の割り当て(意味の合うものを1か所で決める)。
 enum PopSymbol {
+    static let damage = "bolt"
     static let calc = "function"
     static let reverse = "arrow.uturn.backward.circle"
     static let speed = "hare"
@@ -151,7 +152,7 @@ enum PopSymbol {
     static let reload = "arrow.clockwise"
     static let save = "square.and.arrow.down"
 
-    /// ルートの入口(`AppFeature.id`)に付ける装飾アイコン。未知の ID は汎用の「情報」。
+    /// 画面の入口(`AppFeature.id`。区切り・画面の中の行)に付ける装飾アイコン。未知の ID は汎用の「情報」。
     static func forFeature(id: String) -> String {
         switch id {
         case "calc": return calc
@@ -164,6 +165,16 @@ enum PopSymbol {
         case "adjust": return adjust
         case "about": return about
         default: return info
+        }
+    }
+
+    /// 下部タブのアイコン(ADR-0531)。タブの意味はラベルの文字が持つ。
+    static func forTab(_ tab: AppTab) -> String {
+        switch tab {
+        case .damage: return damage
+        case .team: return team
+        case .speed: return speed
+        case .records: return history
         }
     }
 }

@@ -5,8 +5,8 @@ import SwiftUI
 // TeamListView: 構築一覧画面(P6-2c・ADR-0501「P6-2c」5章)。
 //
 // ロジックは持たない。`TeamListViewModel`(PokeCalcCore)の状態を描き、操作を async メソッドへ
-// つなぐだけ(ADR-0500 §1)。編集画面への行き先は `RootView` の `NavigationStack` の `path` を
-// そのまま共有する(`NavigationStack` を入れ子にすると SwiftUI が警告アイコンだけを表示して
+// つなぐだけ(ADR-0500 §1)。編集画面への行き先は `RootView` が構築タブに持つ `NavigationStack` の `path` を
+// そのまま共有する(ADR-0531。`NavigationStack` を入れ子にすると SwiftUI が警告アイコンだけを表示して
 // 中身を描かなくなる実機での不具合に当たったため。`navigationDestination(for:)` は宣言した
 // 場所に関わらず最も近い祖先の `NavigationStack` に登録される[Apple のドキュメントどおり]ので、
 // スタックそのものを増やさなくても済む)。
@@ -22,15 +22,18 @@ struct TeamListView: View {
     private let service: any PokeCalcService
     /// `RootView` が持つ `NavigationStack` の `path` をそのまま共有する(上記コメント参照)。
     @Binding var path: NavigationPath
+    /// 一覧の下に置く別画面への行(タイプバランス。構築編集へ統合する ADR-0421 までの入口。ADR-0531)。
+    private let links: [FeatureLink]
 
     @State private var isCreating = false
 
     /// 読み込み中インジケータの高さ(Calc/Reverse 画面と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(store: any TeamStore, service: any PokeCalcService, path: Binding<NavigationPath>) {
+    init(store: any TeamStore, service: any PokeCalcService, path: Binding<NavigationPath>, links: [FeatureLink] = []) {
         self.store = store
         self.service = service
+        self.links = links
         _path = path
         _viewModel = State(initialValue: TeamListViewModel(store: store, service: service))
     }
@@ -42,6 +45,14 @@ struct TeamListView: View {
                     ErrorBannerView(message: error.message, identifier: "teamListErrorMessage")
                 }
                 createButton
+                ForEach(links) { link in
+                    NavigationLink(value: FeatureRoute(featureID: link.id)) {
+                        PopLabel(title: link.title, systemImage: PopSymbol.forFeature(id: link.id))
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(PillButtonStyle(kind: .secondary))
+                    .accessibilityIdentifier(link.accessibilityIdentifier)
+                }
                 loadingSlot
                 if viewModel.teams.isEmpty {
                     if !viewModel.isLoading {

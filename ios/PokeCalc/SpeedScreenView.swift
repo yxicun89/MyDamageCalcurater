@@ -12,7 +12,11 @@ struct SpeedScreenView: View {
     @State private var viewModel: SpeedViewModel
     @State private var isPokemonSheetPresented = false
 
-    init(service: any SpeedService) {
+    /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
+    private let lifetime: ScreenLifetime
+
+    init(service: any SpeedService, lifetime: ScreenLifetime = .retained) {
+        self.lifetime = lifetime
         _viewModel = State(initialValue: SpeedViewModel(service: service))
     }
 
@@ -32,7 +36,8 @@ struct SpeedScreenView: View {
         .popScreenBackground()
         .accessibilityIdentifier("speedScreen")
         .task { await viewModel.load() }
-        .onDisappear { viewModel.cancelPendingWork() }
+        // 戻ると破棄される画面(積んだ画面)だけ、離れたら入力・送信を止める(issue #113 A6・ADR-0531 §2)。
+        .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
         .sheet(isPresented: $isPokemonSheetPresented) {
             SpeedPokemonSheet(viewModel: viewModel)
         }

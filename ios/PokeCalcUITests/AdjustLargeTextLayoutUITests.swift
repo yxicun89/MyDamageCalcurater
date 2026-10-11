@@ -36,9 +36,7 @@ final class AdjustLargeTextLayoutUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
         app.launch()
-        let open = element(app, "openAdjustScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openAdjustScreen")
         XCTAssertTrue(element(app, "adjustScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

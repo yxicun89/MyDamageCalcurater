@@ -5,7 +5,7 @@ import SwiftUI
 struct AdjustFeature: AppFeature {
     let id = "adjust"
     let order = 400
-    let entry = FeatureEntry.rootButton(title: AdjustText.screenTitle, accessibilityIdentifier: "openAdjustScreen")
+    let entry = FeatureEntry.tab(.damage, title: AdjustText.screenTitle, accessibilityIdentifier: "openAdjustScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH"
 
     let requiredServices = [ServiceKey((any AdjustService).self)]

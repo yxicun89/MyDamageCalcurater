@@ -38,9 +38,7 @@ final class TeamScreenUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons["openTeamListScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

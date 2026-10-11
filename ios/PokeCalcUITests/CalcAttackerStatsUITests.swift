@@ -42,9 +42,7 @@ final class CalcAttackerStatsUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(element(app, Self.firstRowID).waitForExistence(timeout: Self.existenceTimeout),
                       "起動時の行が出る")

@@ -31,9 +31,7 @@ final class DeviceDataDeletionUITests: XCTestCase {
     }
 
     private func openAbout(_ app: XCUIApplication) {
-        let open = element(app, "openAboutScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openAboutScreen")
         XCTAssertTrue(element(app, "aboutScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -110,9 +108,7 @@ final class DeviceDataDeletionUITests: XCTestCase {
         tapDeleteAndConfirm(app)
         XCTAssertTrue(element(app, "retryDeleteDeviceDataButton").waitForExistence(timeout: Self.completionTimeout))
         app.navigationBars.buttons.element(boundBy: 0).tap()
-        let openCalc = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openCalc.waitForExistence(timeout: Self.existenceTimeout))
-        openCalc.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", "calcResultRow-"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: Self.existenceTimeout), "計算結果の行が出ない")
