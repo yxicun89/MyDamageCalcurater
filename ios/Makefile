@@ -1,7 +1,7 @@
 # iOS レーンのターゲット(ADR-0500 §7)。ルートの Makefile から include する。
 # パスはリポジトリのルートからの相対。ターゲット名は ios- 接頭辞。
 
-IOS_SIMULATOR ?= iPhone 18 Pro
+IOS_SIMULATOR ?= iPhone 17 Pro
 IOS_DESTINATION ?= platform=iOS Simulator,name=$(IOS_SIMULATOR)
 # ios-sim-run の既定(手順書 docs/runbooks/ios.md)
 IOS_SCREEN ?= root
