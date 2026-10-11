@@ -50,6 +50,8 @@ struct JudgeScreenView: View {
         .popScreenBackground()
         .accessibilityIdentifier("judgeScreen")
         .task { await viewModel.load() }
+        // タブを移って戻ったら構築を読み直す(構築タブで作った構築を呼び出せるように。ADR-0531)。
+        .onReappear { Task { await viewModel.loadTeams() } }
         .onDisappear { viewModel.cancelPendingWork() }
         .sheet(item: $picker) { picker in
             sheetContent(for: picker)

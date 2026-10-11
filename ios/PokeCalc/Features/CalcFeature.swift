@@ -5,7 +5,7 @@ import SwiftUI
 struct CalcFeature: AppFeature {
     let id = "calc"
     let order = 100
-    let entry = FeatureEntry.rootButton(title: "計算する", accessibilityIdentifier: "openCalcScreen")
+    let entry = FeatureEntry.tab(.damage, title: "計算", accessibilityIdentifier: "openCalcScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_CALC_SCREEN_AT_LAUNCH"
 
     @MainActor func destination(in context: FeatureContext) -> AnyView {

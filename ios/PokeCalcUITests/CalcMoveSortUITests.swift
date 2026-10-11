@@ -26,9 +26,7 @@ final class CalcMoveSortUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
         app.launch()
-        let open = app.buttons["openCalcScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openCalcScreen")
         let picker = element(app, "movePicker")
         XCTAssertTrue(picker.waitForExistence(timeout: Self.existenceTimeout))
         picker.tap()

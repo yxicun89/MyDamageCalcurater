@@ -42,22 +42,12 @@ final class FavoritesScreenUITests: XCTestCase {
     }
 
     private func openFavorites(_ app: XCUIApplication) {
-        let open = app.buttons["openFavoritesScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openFavoritesScreen")
         XCTAssertTrue(element(app, "favoritesScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
-    private func goBack(_ app: XCUIApplication) {
-        let back = app.navigationBars.buttons.element(boundBy: 0)
-        XCTAssertTrue(back.waitForExistence(timeout: Self.existenceTimeout))
-        back.tap()
-    }
-
     private func openCalc(_ app: XCUIApplication) {
-        let open = app.buttons["openCalcScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -187,7 +177,7 @@ final class FavoritesScreenUITests: XCTestCase {
         expectation(for: already, evaluatedWith: status, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
 
-        goBack(app)
+        // 計算はダメージタブの根なので戻る先は無い。記録タブへ移る(ADR-0531)。
         openFavorites(app)
         let rows = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'favoriteRow-'"))
         XCTAssertTrue(rows.firstMatch.waitForExistence(timeout: Self.existenceTimeout))

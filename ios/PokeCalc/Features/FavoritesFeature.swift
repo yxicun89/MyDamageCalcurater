@@ -5,8 +5,8 @@ import SwiftUI
 struct FavoritesFeature: AppFeature {
     let id = "favorites"
     let order = 800
-    let entry = FeatureEntry.rootButton(
-        title: FavoritesLabels.rootButtonTitle, accessibilityIdentifier: "openFavoritesScreen")
+    let entry = FeatureEntry.tab(
+        .records, title: FavoritesLabels.rootButtonTitle, accessibilityIdentifier: "openFavoritesScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH"
     let requiredServices = [ServiceKey((any FavoritesService).self), ServiceKey((any CalcHistoryService).self)]
 

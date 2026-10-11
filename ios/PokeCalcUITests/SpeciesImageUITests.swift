@@ -22,9 +22,7 @@ final class SpeciesImageUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
         app.launch()
-        let open = app.buttons["openCalcScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

@@ -33,12 +33,10 @@ final class ReverseScreenUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
     }
 
-    /// ルート画面の構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
+    /// 構築タブの構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
     /// (`CalcScreenUITests.createTeamWithOneMember` と同じ操作列。P6-2d)。
     private func createTeamWithOneMember(_ app: XCUIApplication) {
-        let openTeamList = app.buttons["openTeamListScreen"]
-        XCTAssertTrue(openTeamList.waitForExistence(timeout: Self.existenceTimeout))
-        openTeamList.tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let createButton = element(app, "createTeamButton")
@@ -71,18 +69,14 @@ final class ReverseScreenUITests: XCTestCase {
         XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout))
         backButton.tap()
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
-
-        // ルートへ戻る(構築一覧の戻るボタン)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築一覧は構築タブの根なので戻る先は無い(ADR-0531。呼び出し側がタブを移る)。
     }
 
     private func launchReverseScreen() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons["openReverseScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }
@@ -222,14 +216,11 @@ final class ReverseScreenUITests: XCTestCase {
         XCTAssertFalse(teamButton.isEnabled, "構築が無いときは無効")
         XCTAssertTrue(element(app, "reverseTeamEmptyMessage").waitForExistence(timeout: Self.existenceTimeout))
 
-        // ルートへ戻り、構築を1つ作って逆算画面を開き直す(`loadTeams()` は画面の起動時に走る。
-        // `POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを再起動せず
-        // 同じアプリのまま画面を行き来する。`CalcScreenUITests` と同じ)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築タブで構築を1つ作り、ダメージタブの逆算へ戻る(逆算画面はタブを移って戻ると `loadTeams()` を
+        // 呼び直す。ADR-0531)。`POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを
+        // 再起動せず同じアプリのまま画面を行き来する(`CalcScreenUITests` と同じ)。
         createTeamWithOneMember(app)
-        let openReverseAgain = app.buttons["openReverseScreen"]
-        XCTAssertTrue(openReverseAgain.waitForExistence(timeout: Self.existenceTimeout))
-        openReverseAgain.tap()
+        app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let teamButtonAfter = element(app, "reverseTeamSourceButton")

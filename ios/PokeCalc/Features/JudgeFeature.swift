@@ -5,7 +5,7 @@ import SwiftUI
 struct JudgeFeature: AppFeature {
     let id = "judge"
     let order = 700
-    let entry = FeatureEntry.rootButton(title: JudgeLabels.openButton, accessibilityIdentifier: "openJudgeScreen")
+    let entry = FeatureEntry.tab(.damage, title: JudgeLabels.screenTitle, accessibilityIdentifier: "openJudgeScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH"
 
     let requiredServices = [ServiceKey((any JudgeService).self)]

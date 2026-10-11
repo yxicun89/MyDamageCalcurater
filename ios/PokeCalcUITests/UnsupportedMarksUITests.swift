@@ -29,9 +29,7 @@ final class UnsupportedMarksUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons[identifier]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen(identifier)
         XCTAssertTrue(element(app, screen).waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

@@ -33,9 +33,7 @@ final class MegaItemLockUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
         app.launch()
-        let openButton = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

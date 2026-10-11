@@ -130,6 +130,8 @@ struct CalcScreenView: View {
                 await viewModel.load()
             }
         }
+        // タブを移って戻ったら構築を読み直す(構築タブで作った構築を呼び出せるように。ADR-0531)。
+        .onReappear { Task { await viewModel.loadTeams() } }
         // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
         .onDisappear { viewModel.cancelPendingWork() }
     }
