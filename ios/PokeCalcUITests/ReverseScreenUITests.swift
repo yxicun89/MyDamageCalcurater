@@ -86,6 +86,13 @@ final class ReverseScreenUITests: XCTestCase {
     private func typeObservation(_ app: XCUIApplication, fieldIdentifier: String, text: String) {
         let field = element(app, fieldIdentifier)
         XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        // 下部タブ・区切りの分だけ欄が下がり、前の欄で出たキーボードの裏に隠れることがある(ADR-0531)。
+        // 前の欄のキーボードを「完了」で閉じてから押す(打つ内容・検査は不変)。
+        let done = app.buttons["完了"]
+        if app.keyboards.firstMatch.exists, done.exists {
+            done.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: Self.existenceTimeout))
+        }
         field.tap()
         field.typeText(text)
     }

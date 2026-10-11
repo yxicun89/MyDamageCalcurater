@@ -4939,6 +4939,7 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `JudgeHiddenUITests.testJudgeEntryIsHiddenByDefault` | 失敗(再現) | 計算画面が出た直後に素早さタブを `exists` で即時に見ており、17 Pro ではタブバーのボタンが支援技術へ出るのが遅れる | `waitForExistence` で待つ(期待値は不変)。5 回反復で全件成功 |
 | `AppNavigationUITests.testSegmentsFitAtAX5` | 成功(並列で 1 回再現) | 同じく末尾のタブの確認が `exists` の即時判定 | `waitForExistence` で待つ |
 | `ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects` | 成功(並列で 1 回再現) | 絞り込み後の「消える」・シートが閉じる・ラベルの更新を即時判定していた(非同期の完了を待たない) | それぞれ `waitForNonExistence`・述語の待ちにした(期待する状態は不変) |
+| `ReverseScreenUITests.testAddingObservationAndInvalidValueClearsCandidates`(ゲートでは成功。確認中に 17 Pro・18 Pro の単独実行で毎回再現) | 失敗(再現) | 下部タブ・区切りの分だけ 2 つ目の観測欄が下がり(y=506)、1 つ目の欄で出たテンキーの裏に隠れて押してもフォーカスが入らない。並列のクローンでは出ないことがある | 観測欄を打つ補助 `typeObservation` で、前の欄のキーボードを「完了」で閉じてから押す(打つ内容・検査は不変) |
 | `AdjustGoalsUITests.testOutspeedAndKo…`・`LargeTextLayoutUITests.testReverseScreenWithCandidate…AX5` | 成功 | 単独・並列の再実行(各 3 回)で再現せず(並列実行時の揺れ) | 変更なし |
 
 実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
