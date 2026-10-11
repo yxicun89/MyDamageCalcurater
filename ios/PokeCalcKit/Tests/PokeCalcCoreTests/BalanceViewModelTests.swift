@@ -281,6 +281,69 @@ final class BalanceViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - 構築編集の下書きから(setParty。ADR-0421)
+
+    private func party(_ keys: [String]) -> [TeamMember] {
+        keys.map { TeamMember(speciesKey: $0, natureId: "stub-nature-neutral") }
+    }
+
+    func testSetPartyRunsWithOneMemberAndKeepsOrder() async {
+        let balance = StubBalanceService()
+        let viewModel = await loadedViewModel(balance: balance)
+
+        await viewModel.setParty(party([StubMaster.beta.key]))
+        await settle(viewModel)
+        XCTAssertEqual(viewModel.members.map(\.speciesKey), [StubMaster.beta.key])
+        let one = await balance.analyzeRequests.last
+        XCTAssertEqual(one, [input(StubMaster.beta)], "1体でも結果を出す(技 0 個でも落ちない)")
+
+        await viewModel.setParty(party([StubMaster.alpha.key, StubMaster.beta.key]))
+        await settle(viewModel)
+        XCTAssertEqual(viewModel.members.map(\.speciesKey), [StubMaster.alpha.key, StubMaster.beta.key], "枠の順に従う")
+    }
+
+    func testSetPartyWithSameContentDoesNotRequestAgain() async {
+        let balance = StubBalanceService()
+        let viewModel = await loadedViewModel(balance: balance)
+        await viewModel.setParty(party([StubMaster.alpha.key]))
+        await settle(viewModel)
+        let before = await balance.analyzeRequests.count
+
+        await viewModel.setParty(party([StubMaster.alpha.key]))
+        await settle(viewModel)
+
+        let after = await balance.analyzeRequests.count
+        XCTAssertEqual(after, before, "同じ内容なら送り直さない")
+    }
+
+    func testSetPartyEmptyClearsResultsAndDoesNotRequest() async {
+        let balance = StubBalanceService()
+        let viewModel = await loadedViewModel(balance: balance)
+        await viewModel.setParty(party([StubMaster.alpha.key]))
+        await settle(viewModel)
+        XCTAssertNotNil(viewModel.analysis)
+        let before = await balance.analyzeRequests.count
+
+        await viewModel.setParty([])
+
+        XCTAssertTrue(viewModel.members.isEmpty)
+        XCTAssertNil(viewModel.analysis)
+        XCTAssertFalse(viewModel.isLoadingAnalysis)
+        let after = await balance.analyzeRequests.count
+        XCTAssertEqual(after, before, "0体なら呼ばない")
+    }
+
+    func testSetPartyKeepsCurrentMembersWhenMasterFails() async {
+        let viewModel = await loadedViewModel()
+        await viewModel.setParty(party([StubMaster.alpha.key]))
+        await settle(viewModel)
+
+        await viewModel.setParty(party([StubMaster.alpha.key, "unknown-species"]))
+
+        XCTAssertEqual(viewModel.members.map(\.speciesKey), [StubMaster.alpha.key], "引けないときは今の結果を残す")
+        XCTAssertNotNil(viewModel.masterError)
+    }
+
     // MARK: - エラー(analyze と coverage は独立)
 
     func testAnalyzeFailureDoesNotBlockCoverage() async {
