@@ -188,9 +188,6 @@ export const calcConditionsText = {
   rankDownLabel: "攻撃側のランクを下げる",
   defenderRankUpLabel: "防御側のランクを上げる",
   defenderRankDownLabel: "防御側のランクを下げる",
-  /** ランクの増減ボタンの見た目の記号。 */
-  rankUpSymbol: "+",
-  rankDownSymbol: "-",
 } as const;
 
 /** 計算画面の「対戦の状態」(残り HP・多段の回数。ADR-0144 §3、I-web-14)。 */

@@ -115,8 +115,9 @@ describe("カード", () => {
         expect(within(card).getByText(typeNameJa[type as TypeId])).toBeInTheDocument();
       }
       // 色の値は CSS 変数(P4-1 の --type-<id>)で参照し、TS に色を書かない
-      expect(within(card).getByTestId("type-emblem").getAttribute("style") ?? "").toContain(
-        `var(--type-${species.types[0] ?? ""})`,
+      expect(within(card).getByTestId("pokemon-icon-emblem").getAttribute("style") ?? "").toContain(
+        // 共通のエンブレム(PokemonIcon)は既定値つきの var(--type-<id>, …) で参照する
+        `var(--type-${species.types[0] ?? ""},`,
       );
     }
   });
@@ -135,7 +136,7 @@ describe("カード", () => {
     ] as const) {
       for (const type of species.types) {
         const badge = within(card).getByText(typeNameJa[type as TypeId]);
-        expect(badge).toHaveClass("calc-card__type");
+        expect(badge).toHaveClass("ui-badge");
         expect(badge.style.getPropertyValue("background-color")).toMatch(
           new RegExp(`^var\\(\\s*--type-${type}\\s*[,)]`),
         );
@@ -162,14 +163,11 @@ describe("カード", () => {
     await user.selectOptions(attackerSpeciesSelect(), target.key);
 
     const badge = within(attackerCard()).getByText(unknownType);
-    expect(badge).toHaveClass("calc-card__type");
-    // 既定値(`,` の後ろ)を必ず持つこと。`var(--type-mysteryType)` だけだと宣言ごと無効になる。
-    expect(badge.style.getPropertyValue("background-color")).toMatch(
-      new RegExp(`^var\\(\\s*--type-${unknownType}\\s*,`),
-    );
-    expect(badge.style.getPropertyValue("color")).toMatch(
-      new RegExp(`^var\\(\\s*--type-${unknownType}-ink\\s*,`),
-    );
+    expect(badge).toHaveClass("ui-badge");
+    // 共通の TypeBadge は、CSS 変数名に使えないタイプ ID(英小文字・数字・ハイフン以外)では --type-<id> を参照せず、
+    // 未解決の var にならない中立色(hairline / text.primary)に落とす。`var(--type-mysteryType)` だけの宣言にはしない。
+    expect(badge.style.getPropertyValue("background-color")).toBe("var(--border-hairline)");
+    expect(badge.style.getPropertyValue("color")).toBe("var(--text-primary)");
   });
 });
 

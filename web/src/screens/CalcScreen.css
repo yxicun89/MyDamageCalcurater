@@ -112,7 +112,7 @@
 
 /* 領域(カード)の見える見出し(issue 304、design.md「入力のラベル」)。
    accessible name はこの見出しの文字から作る(section の aria-labelledby)。
-   critic指摘: 下の .calc-card__name(種族名。h3)と同じ大きさだと見出し階層(h2→h3)が視覚的に
+   critic指摘: 下のカードの名前(種族名。h3)と同じ大きさだと見出し階層(h2→h3)が視覚的に
    区別できない。領域名(h2)は区画のラベルなので小さく、種族名(h3)を主役の大きさのままにする。 */
 .calc-card__region {
   margin: 0;
@@ -127,52 +127,14 @@
   color: var(--text-secondary);
 }
 
-.calc-card__info {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+/* 攻撃側・防御側の顔(ポケモンカード。G-05)。名前は h3 なので見出しの大きさにする。画像かエンブレムは PokemonIcon の枠。 */
+.calc-card__face {
+  box-shadow: none;
 }
 
-.calc-card__emblem {
-  display: inline-block;
-  width: var(--space-5);
-  height: var(--space-5);
-  border-radius: 50%;
-}
-
-/* ポケモン画像(ADR-0325)。エンブレムと同じ寸法の枠に収め、読み込み失敗・有無でレイアウトを動かさない。 */
-.calc-card__image {
-  display: inline-block;
-  width: var(--space-5);
-  height: var(--space-5);
-  object-fit: contain;
-}
-
-.calc-card__name {
+.calc-card__face .ui-pokemon-card__name {
   margin: 0;
   font-size: var(--font-size-heading);
-  color: var(--text-primary);
-}
-
-.calc-card__types {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  font-size: var(--font-size-caption);
-}
-
-/* タイプ名はバッジ(ピル)で出す(docs/design.md「タイプバッジ」、issue #306)。
-   背景色・文字色は CalcScreen.tsx でタイプごとの CSS 変数を style に設定する。 */
-.calc-card__type {
-  display: inline-block;
-  border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-2);
-  font-weight: 600;
-  line-height: 1.2;
 }
 
 .calc-preset {
@@ -181,34 +143,30 @@
   gap: var(--space-2);
 }
 
-.calc-preset__option {
-  /* 隠したネイティブのラジオ(.calc-preset__input)の位置の基準をラベルにする。 */
+/* チップ(ネイティブの入力を包む label。G-05)。主な操作は 44px。ネイティブの丸は隠すが、
+   アクセシビリティツリー上は checkbox / radio のまま残す(視覚的に隠すだけ)。 */
+.calc-chip {
   position: relative;
-  display: inline-flex;
-  align-items: center;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-3);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-  cursor: pointer;
-  /* 選択の切り替えはタップへの反応だけ(design.md「動き」、CLAUDE.md ドメイン規約: 常時動くアニメーションを入れない)。 */
-  transition:
-    background-color var(--duration-swap) ease,
-    color var(--duration-swap) ease;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
-.calc-preset__option--selected {
-  /* 既存のトークンだけで選択状態を表す(design.md にアクセントトークンは無いため、地・文字を反転させる)。 */
-  background: var(--text-primary);
-  border-color: var(--text-primary);
-  color: var(--bg-base);
+/* ネイティブの入力はチップいっぱいに広げて透明にする(押す先が入力そのものになり、操作の自動化でもそのまま押せる)。 */
+.calc-chip__input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.calc-chip__input:disabled {
+  cursor: not-allowed;
 }
 
 .calc-preset__input {
-  /* 選択の見た目はピルの背景色で表す(design.md)。ネイティブのラジオの丸は隠すが、
-     アクセシビリティツリー上は role=radio のまま残す(視覚的に隠すだけ)。 */
   position: absolute;
   opacity: 0;
   width: 1px;
@@ -232,9 +190,6 @@
 .calc-screen__compare {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: var(--font-size-body);
-  color: var(--text-secondary);
 }
 
 .calc-screen__notice {
@@ -255,8 +210,15 @@
 
 .calc-results__effectiveness {
   margin: 0;
+}
+
+/* 技の相性のバッジ(ばつぐん等)。確定数のバッジより控えめ(枠 + 文字色。塗りは確定数だけ)。 */
+.calc-results__effectiveness-badge {
+  border: 1px solid var(--text-secondary);
+  background: var(--surface-card);
+  color: var(--text-primary);
   font-size: var(--font-size-body);
-  color: var(--text-secondary);
+  padding: var(--space-1) var(--space-3);
 }
 
 .calc-results__list {
@@ -268,39 +230,60 @@
   padding: 0;
 }
 
+/* 結果の行(G-05): 主は「ダメージ幅の数字」と「確定数のバッジ」(大きく)。バーを添え、
+   調整・持ち物・特性は下に小さく並べる。見た目の順と DOM の順は同じ(WCAG 1.3.2。order を使わない)。 */
 .calc-results__row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   column-gap: var(--space-3);
-  row-gap: var(--space-1);
+  row-gap: var(--space-2);
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
   padding: var(--space-3);
 }
 
-.calc-results__preset {
-  font-size: var(--font-size-heading);
-  color: var(--text-primary);
-}
-
-.calc-results__ability,
-.calc-results__item {
-  grid-column: 1 / -1;
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
 .calc-results__percent {
   font-size: var(--font-size-result);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-strong);
   color: var(--text-primary);
 }
 
 .calc-results__ko {
-  display: inline-block;
-  font-size: var(--font-size-body);
+  margin-inline-start: auto;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+  color: var(--on-primary);
+  font-size: var(--font-size-heading);
+  padding: var(--space-1) var(--space-3);
+  text-align: center;
+}
+
+.calc-results__bar {
+  flex-basis: 100%;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.calc-results__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  /* ダメージバーの伸び縮み(design.md「動き」: spring アニメーションで減る)。 */
+  transition: width var(--duration-swap) var(--ease-spring);
+}
+
+.calc-results__preset {
+  font-size: var(--font-size-caption);
   color: var(--text-secondary);
-  text-align: right;
+}
+
+.calc-results__item,
+.calc-results__ability {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }
 
 /* 確定数が変わった瞬間にバッジが弾む(design.md「動き」)。JS(CalcScreen.tsx)が変化した行だけに
@@ -321,21 +304,6 @@
   }
 }
 
-.calc-results__bar {
-  grid-column: 1 / -1;
-  height: var(--space-2);
-  border-radius: var(--radius-pill);
-  background: var(--border-hairline);
-  overflow: hidden;
-}
-
-.calc-results__bar-fill {
-  height: 100%;
-  border-radius: var(--radius-pill);
-  /* ダメージバーの伸び縮み(design.md「動き」: spring アニメーションで減る)。 */
-  transition: width var(--duration-swap) var(--ease-spring);
-}
-
 /* issue 271 / issue 270(ADR-0123): 全行に共通する印がある結果の先頭に出す案内(iOS レーンの決定。
    DECISIONS.md 2026-09-25「未対応の印の表示」)。数値は通常の式の目安として出ておりエラーではないので、
    補足文(calc-screen__notice 等)と同じ caption・text-secondary にし、danger・タイプ色は使わない。 */
@@ -351,7 +319,7 @@
 /* 行の中の「未対応」の印(design.md「画面: ダメージ計算」)。一部の行だけにある印をここに出す。
    バーと同じく行いっぱいに広げる。 */
 .calc-results__unsupported {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
   display: flex;
   align-items: baseline;
   gap: var(--space-1);
@@ -367,9 +335,10 @@
   line-height: 1;
 }
 
-/* ネイティブのラジオは隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
-.calc-preset__option:has(.calc-preset__input:focus-visible) {
-  outline: 2px solid var(--text-primary);
+/* ネイティブの入力は隠しているので、キーボード操作のフォーカス位置をラベル側に出す(WCAG 2.4.7)。 */
+.calc-chip:has(.calc-chip__input:focus-visible),
+.calc-chip:has(.calc-preset__input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -382,6 +351,10 @@
 
 .calc-conditions__toggle {
   align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-pill);
   background: var(--bg-glass);
@@ -417,33 +390,13 @@
   color: var(--text-secondary);
 }
 
-.calc-conditions__option {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-
-.calc-conditions__rank-button {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--bg-glass);
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  min-width: 2.5rem;
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
-}
-
-.calc-conditions__rank-button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
+/* ランクの値(増減ボタンの間)。等幅数字で、変わっても幅が動かない。 */
 .calc-conditions__rank-value {
   min-width: 4rem;
   text-align: center;
   color: var(--text-primary);
+  font-size: var(--font-size-heading);
+  font-variant-numeric: tabular-nums;
 }
 
 /* P5-5c: 「よく計算する相手」のチップ(結果の下。design.md)。色・余白はトークンのみ。 */
@@ -454,6 +407,7 @@
 }
 
 .calc-screen__frequent-chip {
+  min-height: 44px;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-pill);
   background: var(--bg-glass);
@@ -538,21 +492,19 @@
 
 .calc-attack-stat__sp {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--space-1) var(--space-3);
+}
+
+.calc-attack-stat__sp-label {
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
 
+/* 数値欄の幅は SP(0〜32)の 2 桁に合わせる(増減ボタンと並べて 1 行に収める)。 */
 .calc-attack-stat__sp-input {
-  width: 5em;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-input);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  padding: var(--space-1) var(--space-2);
+  width: 4em;
 }
 
 .calc-attack-stat__sp-input[aria-invalid="true"] {
@@ -560,7 +512,8 @@
 }
 
 /* 無効にした選択肢(攻撃と特攻を同じ向きにできない)は薄くし、操作できないことをカーソルでも示す。 */
-.calc-preset__option:has(.calc-preset__input:disabled) {
+.calc-chip:has(.calc-chip__input:disabled),
+.calc-chip:has(.calc-preset__input:disabled) {
   opacity: 0.5;
   cursor: not-allowed;
 }
@@ -616,6 +569,8 @@
 
 .battle-state__input {
   width: 6rem;
+  min-height: 44px;
+  box-sizing: border-box;
   padding: var(--space-1) var(--space-2);
 }
 
@@ -637,4 +592,9 @@
   margin: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
+}
+
+/* 区切りボタンは中身の幅(縦に並ぶ欄で横いっぱいに伸ばさない)。 */
+.calc-attack-stat .ui-segmented {
+  align-self: flex-start;
 }

@@ -232,3 +232,5 @@ Status(追記 2026-10-11): I-web-16(G-03、ADR-0342 採用)= Showdown 形式の�
 Status(追記 2026-10-11): I-web-17(G-06 Web、ADR-0343 採用)= `PokemonIcon` を検索候補・お気に入り・計算履歴・逆算/構築編集/バランスの枠に追加(画像なしでもエンブレムで成立)。判定・調整・select の option は対象外。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g06-pokemon-images.md` に揃える。
 
 Status(追記 2026-10-11): I-web-13a(G-05 共通の部品、ADR-0344 採用)= `web/src/ui/` に PokemonCard・Tile・SegmentedControl・Stepper・Sheet・HelpButton・TypeBadge と新アイコン 7 つ、`--duration-sheet`。画面は変えていない。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g05-components.md` に揃える。次は I-web-13b(計算の作り直し)。
+
+Status(追記 2026-10-11): I-web-13b(G-05 計算の画面、ADR-0345)= 計算を `PokemonCard`・`SegmentedControl`・増減ボタン・チップ・確定数を主にした結果に作り直した(`CalcScreen.tsx`・`CalcConditionsPanel.tsx`・`BattleStatePanel.tsx`・`ToggleChip.tsx`・`CalcScreen.css`)。既存テストは 8 か所を最小に付け替え(decisions に一覧)。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g05-calc.md`。次は I-web-13c(逆算)。

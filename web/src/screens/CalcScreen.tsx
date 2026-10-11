@@ -90,11 +90,9 @@ import {
   battleStateText,
   calcScreenText,
   frequentOpponentsText,
-  isTypeId,
   masterOnlineText,
   megaItemText,
   requestLimitText,
-  typeNameJa,
   unsupportedText,
 } from "../i18n/ja";
 import { itemRoleText } from "../i18n/items";
@@ -125,12 +123,15 @@ import { MegaItemReason } from "./MegaItemReason";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions } from "./speciesResolution";
 import { MovePicker } from "./MovePicker";
-import { PokemonImage } from "../images/PokemonImage";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import { Icon } from "../ui/Icon";
+import { PokemonCard } from "../ui/PokemonCard";
+import { SegmentedControl } from "../ui/SegmentedControl";
 import { typeAccentStyle } from "../ui/typeAccent";
+import { uiText } from "../i18n/ui";
+import { ToggleChip } from "./ToggleChip";
 import "./CalcScreen.css";
 
 /**
@@ -1312,18 +1313,16 @@ export function CalcScreen({
         />
       )}
 
-      <label className="calc-screen__compare">
-        <input
+      <div className="calc-screen__compare">
+        <ToggleChip
           type="checkbox"
+          label={calcScreenText.compareItemCandidatesLabel}
           checked={effectiveCompareItems}
           disabled={!capabilities.effects || compareDisabledByMega}
-          aria-describedby={compareDisabledByMega ? compareReasonId : undefined}
-          onChange={(event) => {
-            setCompareItems(event.target.checked);
-          }}
+          describedBy={compareDisabledByMega ? compareReasonId : undefined}
+          onChange={setCompareItems}
         />
-        {calcScreenText.compareItemCandidatesLabel}
-      </label>
+      </div>
       {compareDisabledByMega && (
         <p id={compareReasonId} className="calc-screen__notice">
           {megaItemText.compareDisabledReason}
@@ -1483,6 +1482,11 @@ function SpeciesCard({
   const itemSelectId = useId();
   const itemReasonId = useId();
   const droppedNoticeId = useId();
+  // カードの持ち物の印: メガ種族は固定のメガストーン(石の名前の表記つき)、そうでなければ選んだ持ち物(なしは出さない)。
+  const itemName =
+    itemLock.kind === "locked" && species !== null
+      ? megaStoneLabel(species, itemLock.item.nameJa)
+      : items.find((item) => item.id === selectedItemId)?.nameJa;
   const itemDescribedBy =
     itemLock.kind === "none" ? (droppedNotice === null ? undefined : droppedNoticeId) : itemReasonId;
   return (
@@ -1502,6 +1506,16 @@ function SpeciesCard({
       <h2 id={regionHeadingId} className="calc-card__region">
         {regionLabel}
       </h2>
+      {species !== null && (
+        <PokemonCard
+          speciesKey={species.key}
+          name={species.nameJa}
+          types={species.types}
+          nameAsHeading
+          {...(itemName === undefined ? {} : { itemName })}
+          className="calc-card__face"
+        />
+      )}
       {speciesListAvailable ? (
         <>
           <label className="calc-card__label" htmlFor={speciesSelectId}>
@@ -1570,39 +1584,6 @@ function SpeciesCard({
           <AbilitySelect labelClassName="calc-card__label" {...abilitySelect} />
         </>
       )}
-      {species !== null && primaryType !== undefined && (
-        <div className="calc-card__info">
-          <PokemonImage
-            speciesKey={species.key}
-            size="thumb"
-            className="calc-card__image"
-            fallback={
-              <span
-                className="calc-card__emblem"
-                data-testid="type-emblem"
-                style={{ backgroundColor: `var(--type-${primaryType})` }}
-              />
-            }
-          />
-          <h3 className="calc-card__name">{species.nameJa}</h3>
-          <ul className="calc-card__types">
-            {species.types.map((type) => (
-              <li
-                key={type}
-                className="ui-badge calc-card__type"
-                style={{
-                  backgroundColor: `var(--type-${type}, var(--border-hairline))`,
-                  color: `var(--type-${type}-ink, var(--text-primary))`,
-                }}
-              >
-                {/* マスタ由来の type は相性表の18種に限らないので、型ガードで確かめ、
-                    未知の ID はそのまま出す(未知データで画面を壊さない)。 */}
-                {isTypeId(type) ? typeNameJa[type] : type}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
       {children}
     </section>
   );
@@ -1657,7 +1638,6 @@ interface AttackerStatBlockProps {
 function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: AttackerStatBlockProps) {
   // ラジオの name・説明の id は画面内で一意にする(同じ部品を複数置いてもグループが混ざらないように)。
   const presetName = useId();
-  const natureName = useId();
   const reasonId = useId();
   const errorId = useId();
   const input = inputs[stat];
@@ -1688,7 +1668,7 @@ function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: Attacker
           return (
             <label
               key={key}
-              className={`ui-chip${selected ? " ui-chip--selected" : ""} calc-preset__option${selected ? " calc-preset__option--selected" : ""}`}
+              className={`ui-chip calc-chip${selected ? " ui-chip--selected" : ""} calc-preset__option`}
             >
               <input
                 type="radio"
@@ -1700,6 +1680,7 @@ function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: Attacker
                   onChange(presetInput(key));
                 }}
               />
+              {selected && <Icon name="check" size={16} />}
               {attackerPresetLabel(key, presetCategory)}
             </label>
           );
@@ -1708,44 +1689,33 @@ function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: Attacker
           <span className="calc-attack-stat__custom">{attackerStatText.custom}</span>
         )}
       </div>
-      <label className="calc-attack-stat__sp">
-        {attackerStatText.spLabel(name)}
-        <input
-          type="text"
-          inputMode="numeric"
-          className="calc-attack-stat__sp-input"
-          aria-invalid={spInvalid ? "true" : undefined}
-          aria-describedby={spInvalid ? errorId : undefined}
-          value={input.spText}
-          onChange={(event) => {
-            onChange({ ...input, spText: event.target.value });
-          }}
-        />
-      </label>
+      <SpField
+        label={attackerStatText.spLabel(name)}
+        text={input.spText}
+        invalid={spInvalid}
+        errorId={errorId}
+        onChange={(spText) => {
+          onChange({ ...input, spText });
+        }}
+      />
       {spInvalid && (
         <p id={errorId} role="alert" className="calc-screen__error">
           {attackerStatText.spInvalid(name)}
         </p>
       )}
-      <div
-        role="radiogroup"
-        aria-label={attackerStatText.natureGroupLabel(name)}
-        aria-describedby={anyDisabled ? reasonId : undefined}
-        className="calc-preset"
-      >
-        {NATURE_MODIFIERS.map((modifier) => (
-          <NatureModifierOption
-            key={modifier}
-            name={natureName}
-            modifier={modifier}
-            checked={input.modifier === modifier}
-            disabled={!isModifierSelectable(inputs, stat, modifier)}
-            onSelect={() => {
-              onChange({ ...input, modifier });
-            }}
-          />
-        ))}
-      </div>
+      <SegmentedControl<NatureModifier>
+        label={attackerStatText.natureGroupLabel(name)}
+        describedBy={anyDisabled ? reasonId : undefined}
+        options={NATURE_MODIFIERS.map((modifier) => ({
+          value: modifier,
+          label: attackerStatText.modifierLabel[modifier],
+          disabled: !isModifierSelectable(inputs, stat, modifier),
+        }))}
+        value={input.modifier}
+        onChange={(modifier) => {
+          onChange({ ...input, modifier });
+        }}
+      />
       {anyDisabled && (
         <p id={reasonId} className="calc-screen__notice">
           {attackerStatText.sameDirectionReason}
@@ -1755,30 +1725,77 @@ function AttackerStatBlock({ stat, inputs, used, spInvalid, onChange }: Attacker
   );
 }
 
-interface NatureModifierOptionProps {
-  readonly name: string;
-  readonly modifier: NatureModifier;
-  readonly checked: boolean;
-  readonly disabled: boolean;
-  readonly onSelect: () => void;
+const SP_MIN = 0;
+const SP_MAX = 32;
+
+interface SpFieldProps {
+  /** 欄の見えるラベル兼名前(「攻撃のSP」)。 */
+  readonly label: string;
+  readonly text: string;
+  readonly invalid: boolean;
+  readonly errorId: string;
+  readonly onChange: (text: string) => void;
 }
 
-/** 性格補正のピル(上昇・補正なし・下降)。 */
-function NatureModifierOption({ name, modifier, checked, disabled, onSelect }: NatureModifierOptionProps) {
+/**
+ * SP の数値欄(文字のまま持つ。不正な入力は誤りとして出すため、数値欄にはしない)と、1 ずつ増減するボタン(G-05)。
+ * 空欄は 0、整数でない・範囲外の文字から押したときは 0〜32 に収めた値に直す。
+ */
+function SpField({ label, text, invalid, errorId, onChange }: SpFieldProps) {
+  const inputId = useId();
+  const parsed = text.trim() === "" ? 0 : Number(text);
+  const current = Number.isInteger(parsed) ? parsed : SP_MIN;
+  const step = (delta: number): void => {
+    onChange(String(Math.min(SP_MAX, Math.max(SP_MIN, current + delta))));
+  };
+  const atMin = Number.isInteger(parsed) && current <= SP_MIN;
+  const atMax = Number.isInteger(parsed) && current >= SP_MAX;
   return (
-    <label
-      className={`ui-chip${checked ? " ui-chip--selected" : ""} calc-preset__option${checked ? " calc-preset__option--selected" : ""}`}
-    >
-      <input
-        type="radio"
-        name={name}
-        className="calc-preset__input"
-        checked={checked}
-        disabled={disabled}
-        onChange={onSelect}
-      />
-      {attackerStatText.modifierLabel[modifier]}
-    </label>
+    <div className="calc-attack-stat__sp">
+      <label htmlFor={inputId} className="calc-attack-stat__sp-label">
+        {label}
+      </label>
+      <div className="ui-stepper">
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperDecrease}`}
+          aria-disabled={atMin ? true : undefined}
+          onClick={() => {
+            if (!atMin) {
+              step(-1);
+            }
+          }}
+        >
+          <Icon name="minus" size={16} />
+        </button>
+        <input
+          id={inputId}
+          type="text"
+          inputMode="numeric"
+          className="ui-stepper__input calc-attack-stat__sp-input"
+          aria-invalid={invalid ? "true" : undefined}
+          aria-describedby={invalid ? errorId : undefined}
+          value={text}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+        />
+        <button
+          type="button"
+          className="ui-stepper__button"
+          aria-label={`${label}${uiText.stepperIncrease}`}
+          aria-disabled={atMax ? true : undefined}
+          onClick={() => {
+            if (!atMax) {
+              step(1);
+            }
+          }}
+        >
+          <Icon name="plus" size={16} />
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -1933,9 +1950,11 @@ function ResultsList({
         </p>
       )}
       {firstRow !== undefined && (
-        <p className="calc-results__effectiveness">
-          <strong>{formatEffectiveness(firstRow.result.effectiveness)}</strong>
-        </p>
+        <div className="calc-results__effectiveness">
+          <strong className="ui-badge calc-results__effectiveness-badge">
+            {formatEffectiveness(firstRow.result.effectiveness)}
+          </strong>
+        </div>
       )}
       <ul aria-label={calcScreenText.resultsListLabel} className="ui-rows calc-results__list">
         {result.rows.map((row, index) => {
@@ -1955,9 +1974,6 @@ function ResultsList({
               key={`${row.preset}-${row.itemId}-${row.abilityId ?? ""}-${String(index)}`}
               className="calc-results__row"
             >
-              <span className="calc-results__preset">{row.presetLabel}</span>
-              <span className="calc-results__item">{itemLabel}</span>
-              {abilityLabel !== null && <span className="calc-results__ability">{abilityLabel}</span>}
               <span className="calc-results__percent">{formatPercentRange(row.result)}</span>
               <span className={koClassName} onAnimationEnd={onKoAnimationEnd(koKey)}>
                 {formatKO(row.result.ko)}
@@ -1969,6 +1985,9 @@ function ResultsList({
                   style={{ width: `${String(barValue)}%`, backgroundColor: barColor }}
                 />
               </div>
+              <span className="calc-results__preset">{row.presetLabel}</span>
+              <span className="calc-results__item">{itemLabel}</span>
+              {abilityLabel !== null && <span className="calc-results__ability">{abilityLabel}</span>}
               {rowMarkLabels.length > 0 && (
                 <p className="calc-results__unsupported">
                   <span
