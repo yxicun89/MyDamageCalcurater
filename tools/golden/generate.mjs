@@ -2135,6 +2135,118 @@ assert.deepEqual(stage3GroundItems, ['Iron Ball'], 'Grounds を持つ持ち物�
 }
 const stage3Saved = stage3Fixed.map(stage3Out);
 
+// --- 連続技(ADR-0179 追記 CB-3 §7): combo.jsonl.gz ---------------------------------------------------------------
+// 手の開始時のランクを JS 側で独立に累積し(確率 100 の self / target のランク変化だけを足し、-6..+6 に収める。当たらない技は足さない)、
+// 手ごとに oracle の Pokemon の boosts に渡して calculate() する。素早さは getFinalSpeed(手の開始時の boosts)。
+// 合計と倒せる確率は oracle に機能が無いので、各手の 16 段階(多段は 1 発ごと)から 16^発数 通りを総当たりで数える。
+// 新しいファイルだけ(既存のファイル・乱数列は変えない。乱数も使わない)。
+const {getFinalSpeed} = createRequire(import.meta.url)('@smogon/calc/dist/mechanics/util');
+// 技の追加効果(Move.Effect)は oracle の技データに無いので、シナリオで使う技だけの表を置く。
+const comboEffects = {
+  'Dragon Dance':{Chance:100,Target:'self',Stages:{atk:1,spe:1}},
+  'Swords Dance':{Chance:100,Target:'self',Stages:{atk:2}},
+  'Flame Charge':{Chance:100,Target:'self',Stages:{spe:1}},
+  'Close Combat':{Chance:100,Target:'self',Stages:{def:-1,spd:-1}},
+  'Rock Tomb':{Chance:100,Target:'target',Stages:{spe:-1}},
+};
+const comboStatKeys = ['atk','def','spa','spd','spe'];
+const comboZero = () => Object.fromEntries(comboStatKeys.map(k => [k,0]));
+const comboAdd = (r, stages) => Object.fromEntries(comboStatKeys.map(k => [k, Math.max(-6, Math.min(6, (r[k] || 0) + ((stages || {})[k] || 0)))]));
+const comboNormalize = r => ({...comboZero(), ...(r || {})});
+const comboMoves = [];
+function comboCase(label, a, d, steps, options = {}) {
+  const {attacker, defender, aOptions = {}, dOptions = {}} = options;
+  let cur = comboNormalize(aOptions.ranks), oppCur = comboNormalize(dOptions.ranks);
+  const field = new Field({gameType:'Singles'});
+  const moveInputs = [], outSteps = [], draws = [];
+  let first;
+  for (const st of steps) {
+    const data = genC.moves.get(id(st.name));
+    assert(data, `連続技の技 ${st.name} が Champions 世代に無い`);
+    const effect = comboEffects[st.name] || null;
+    // 表と oracle の技データの照合: oracle に self.boosts があれば表と一致する。無い技は表も self のランク変化を持たない。
+    const oracleSelf = data.self && data.self.boosts;
+    if (effect && effect.Target === 'self' && data.category !== 'Status') {
+      if (oracleSelf) assert.deepEqual(oracleSelf, effect.Stages, `${st.name}: comboEffects が oracle の self.boosts と違う`);
+    } else if (!effect) {
+      assert(!oracleSelf, `${st.name}: oracle に self.boosts があるのに comboEffects に無い`);
+    }
+    const attack = individual(genC, a, {...aOptions, ranks:cur}), defend = individual(genC, d, {...dOptions, ranks:oppCur});
+    if (!first) first = {attack, defend};
+    const m = new Move(genC, st.name, {isCrit:false, ...(st.hits ? {hits:st.hits} : {})});
+    const status = data.category === 'Status';
+    const selfSpeed = getFinalSpeed(genC, attack.p, field, field.attackerSide);
+    const defenderSpeed = getFinalSpeed(genC, defend.p, field, field.defenderSide);
+    const out = {boosts:{...cur}, defenderBoosts:{...oppCur}, rolls:null, selfSpeed, defenderSpeed};
+    let hit = true;
+    if (!status) {
+      assert(m.bp > 0);
+      const result = calculate(genC, attack.p, defend.p, m, field);
+      const matrix = typeof result.damage === 'number' ? [Array(16).fill(result.damage)]
+        : Array.isArray(result.damage[0]) ? result.damage : [result.damage];
+      assert(matrix.every(r => r.length === 16 && r.every(Number.isInteger)), `${label}: oracle のダメージが16段階の整数でない`);
+      assert.equal(matrix.length, m.hits || 1, `${label}: 回数が oracle の Move と違う`);
+      out.rolls = matrix[0].map((_, i) => matrix.reduce((x, r) => x + r[i], 0));
+      if (matrix.length > 1) out.hitRolls = matrix;
+      draws.push(...matrix);
+      hit = out.rolls[15] > 0;
+      if (effect) assert(hit, `${label}: ${st.name} が当たらない(ランク変化の累積の前提が崩れる)`);
+    }
+    const mv = {ID:id(st.name),Type:data.type.toLowerCase(),Category:data.category.toLowerCase(),Power:m.bp,Priority:m.priority,Effect:effect};
+    if (data.multihit) {
+      const mech = mechanismsOf(st.name);
+      mv.Mechanisms = mech.mechanisms;
+      mv.mechanismParams = mech.params;
+    }
+    moveInputs.push({Move:mv, Critical:false, Hits:st.hits || 0});
+    outSteps.push(out);
+    if (hit && effect) {
+      if (effect.Target === 'self') cur = comboAdd(cur, effect.Stages); else oppCur = comboAdd(oppCur, effect.Stages);
+    }
+  }
+  assert(draws.length <= 6, `${label}: 発数 ${draws.length} が総当たりの上限 6 を超える`);
+  const hp = first.defend.p.rawStats.hp;
+  let koCount = 0;
+  const walk = (i, sum) => {
+    if (i === draws.length) { if (sum >= hp) koCount++; return; }
+    for (const r of draws[i]) walk(i + 1, sum + r);
+  };
+  walk(0, 0);
+  const sums = [0, 0];
+  for (const o of outSteps) if (o.rolls) { sums[0] += o.rolls[0]; sums[1] += o.rolls[15]; }
+  return {id:label, oracle:{attacker:a,defender:d,moves:steps.map(x => x.name)},
+    input:{Format:'single',Attacker:first.attack.input,Defender:first.defend.input,Field:{Weather:'none',Terrain:'none'},
+      Steps:moveInputs,OpponentSpeed:'from_defender',SpeedField:{TrickRoom:false,SelfTailwind:false,OpponentTailwind:false}},
+    expected:{steps:outSteps,defenderHp:hp,total:sums,koCount,koDenominator:16 ** draws.length}};
+}
+const spAtk = {hp:2,atk:32,spe:32}, spBulk = {hp:32,def:32,spe:2};
+const comboCases = [
+  comboCase('uc3/mimikyu-adamant/garchomp-jolly','Mimikyu','Garchomp',[{name:'Play Rough'},{name:'Shadow Sneak'}],
+    {aOptions:{sp:spAtk,nature:'Adamant'},dOptions:{sp:spAtk,nature:'Jolly'}}),
+  comboCase('uc3-bulky/mimikyu-adamant/garchomp-impish','Mimikyu','Garchomp',[{name:'Play Rough'},{name:'Shadow Sneak'}],
+    {aOptions:{sp:spAtk,nature:'Adamant'},dOptions:{sp:spBulk,nature:'Impish'}}),
+  comboCase('uc2/dragonite-adamant/garchomp-impish','Dragonite','Garchomp',[{name:'Dragon Dance'},{name:'Outrage'}],
+    {aOptions:{sp:spAtk,nature:'Adamant'},dOptions:{sp:spBulk,nature:'Impish'}}),
+  comboCase('flame-charge/garchomp-jolly/garchomp-jolly','Garchomp','Garchomp',[{name:'Flame Charge'},{name:'Outrage'}],
+    {aOptions:{sp:spAtk,nature:'Jolly'},dOptions:{sp:spAtk,nature:'Jolly'}}),
+  comboCase('close-combat/garchomp-jolly/dragonite-adamant','Garchomp','Dragonite',[{name:'Close Combat'},{name:'Dragon Claw'}],
+    {aOptions:{sp:spAtk,nature:'Jolly'},dOptions:{sp:spAtk,nature:'Adamant'}}),
+  comboCase('rock-tomb/mimikyu-adamant/garchomp-jolly','Mimikyu','Garchomp',[{name:'Rock Tomb'},{name:'Play Rough'}],
+    {aOptions:{sp:spAtk,nature:'Adamant'},dOptions:{sp:spAtk,nature:'Jolly'}}),
+  comboCase('multi-hit/garchomp-jolly/garchomp-impish','Garchomp','Garchomp',[{name:'Swords Dance'},{name:'Bullet Seed',hits:3},{name:'Close Combat'}],
+    {aOptions:{sp:spAtk,nature:'Jolly'},dOptions:{sp:spBulk,nature:'Impish'}}),
+  comboCase('three-steps/dragonite-adamant/garchomp-impish','Dragonite','Garchomp',[{name:'Dragon Dance'},{name:'Dragon Dance'},{name:'Outrage'}],
+    {aOptions:{sp:spAtk,nature:'Adamant'},dOptions:{sp:spBulk,nature:'Impish'}}),
+  comboCase('clamp/garchomp-jolly/garchomp-impish','Garchomp','Garchomp',[{name:'Swords Dance'},{name:'Outrage'}],
+    {aOptions:{sp:spAtk,nature:'Jolly',ranks:{atk:6}},dOptions:{sp:spBulk,nature:'Impish'}}),
+];
+for (const l of ['uc3','uc3-bulky','uc2','flame-charge','close-combat','rock-tomb','multi-hit','three-steps','clamp']) {
+  assert(comboCases.some(c => c.id.split('/')[0] === l), `連続技のラベル ${l} のベクタが無い`);
+}
+const comboAnchor = comboCases.find(c => c.id === 'uc3/mimikyu-adamant/garchomp-jolly');
+assert.equal(comboAnchor.expected.koCount, 132); assert.equal(comboAnchor.expected.koDenominator, 256);
+assert.deepEqual(comboAnchor.expected.total, [169, 201]);
+
 mkdirSync(out,{recursive:true});
 const files={};
 function save(name,data,compressed=false){const raw=compressed?data.map(v=>JSON.stringify(v)).join('\n')+'\n':JSON.stringify(data,null,2)+'\n';const bytes=compressed?gzipSync(raw,{level:9}):Buffer.from(raw);writeFileSync(`${out}/${name}`,bytes);files[name]={count:data.length,sha256:createHash('sha256').update(bytes).digest('hex')};}
@@ -2143,6 +2255,7 @@ save('legacy-effects.jsonl.gz',legacyEffectsCases,true);
 save('doubles.json',doubleFixed);save('doubles-random.jsonl.gz',doubleRandomCases,true);
 save('tera.json',teraFixed);save('tera-random.jsonl.gz',teraRandomCases,true);
 save('mechanisms.json',mechanismsFixed);
+save('combo.jsonl.gz',comboCases,true);
 save('mechanisms-stage2.json',stage2Fixed);
 save('mechanisms-stage3.json',stage3Saved);
 
@@ -2180,7 +2293,7 @@ assert.equal(Object.keys(typeChart).length*engineTypes.length,324);
 }
 
 // --- metadata.json(schemaVersion 2。ADR-0002 §決定4 / P2-1b) -----------------
-const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json','mechanisms-stage2.json','mechanisms-stage3.json'];
+const championsFiles=['fixed.json','random.jsonl.gz','attack-species.jsonl.gz','defense-species.jsonl.gz','stats-species.jsonl.gz','typechart.json','doubles.json','doubles-random.jsonl.gz','tera.json','tera-random.jsonl.gz','mechanisms.json','mechanisms-stage2.json','mechanisms-stage3.json','combo.jsonl.gz'];
 const legacyFiles=['legacy-effects.jsonl.gz'];
 const metadata={
   schemaVersion:2,
@@ -2203,6 +2316,7 @@ const metadata={
     {scope:'abilities/items',reason:'Only effects.json adapters; no default species ability; Eviolite/Choice Band/Choice Specs/Assault Vest/Steelworker moved to legacy-effects (gen9), not present in the Champions vectors. Champions vectors additionally cover ability-based type immunity/absorption (Levitate, Water Absorb, Volt Absorb, Earth Eater, Flash Fire, Sap Sipper, Motor Drive, Lightning Rod; ADR-0106); Dry Skin (also boosts Fire move power while absorbing Water, not representable yet) and Storm Drain (absent from the Champions generation) are excluded (ADR-0106 limits 1-2). Every non-legacy effects.json entry with a type-dependent effect (issue #270 / ADR-0120) or a stage-1 ability field (TypeConvert, PowerMods, AuraType/AuraMod, StatMods, SeparateStatMods, CritDamageMod, PreventsCritical, IgnoresOpponentRanks, IgnoresDefenderAbility; ADR-0176) has an apply/control pair (effects/<id>/...), and every Breakable definition has a breakable vector showing that an IgnoresDefenderAbility attacker (Mold Breaker) gets the same damage as against no ability (ADR-0176). The coverage survey also uses both-side +/-2 ranks, a poisoned defender and attacker-only probes against a defender ability (Thick Fat, Fur Coat, Fluffy, Multiscale, Levitate, critical hit x Shell Armor), so abilities that change damage only in combination (Mold Breaker, Unaware, Merciless, Long Reach) must be either defined or marked; Breakable is checked against the oracle in both directions, not listed by hand (ADR-0176). Champions items/abilities that change damage but are not representable by the effect schema (move-flag and HP-dependent abilities are later stages) are listed with reasons in tools/golden/unsupported-effects.json and never appear in vectors; unsupported-mark definitions carry no Breakable in stage 1, so Mold Breaker against a marked defender ability keeps the mark (ADR-0176)'},
     {scope:'terrain',reason:'Grounding (ADR-0116) covers Flying type and Levitate (Airborne ability effect) only; Gravity and Air Balloon are not modeled and never appear (Iron Ball grounding is modeled as the Grounds item effect and checked in mechanisms-stage3.json grounded-item/*, attacker side only because the defender side keeps an unsupported mark; ADR-0144); the Psychic Terrain priority block is covered by psychic-priority/* (ADR-0123); terrain-specific moves (Grassy Terrain Earthquake/Bulldoze halving, Terrain Pulse, Misty Explosion, Expanding Force, Rising Voltage) are checked in mechanisms-stage2.json (ADR-0143)'},
     {scope:'battle',reason:'Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects'},
+    {scope:'moves',reason:'combo.jsonl.gz (ADR-0179 CB-3) checks each step of a multi-move sequence against the oracle with the step-start boosts accumulated independently in the generator; the total damage and the KO probability are the oracle 16-roll values enumerated exhaustively over 16^draws combinations (no oracle feature exists for sequences).'},
     {scope:'KO',reason:'Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits'},
   ],
   oracles:[

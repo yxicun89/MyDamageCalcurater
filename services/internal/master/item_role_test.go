@@ -74,6 +74,9 @@ func itemRoleCases() []itemRoleCase {
 		{name: "UnsupportedAttacker", effect: &engine.ItemEffect{UnsupportedAttacker: true}, want: attackerOnly},
 		{name: "UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedDefender: true}, want: defenderOnly},
 		{name: "Grounds(接地は両側のフィールドの判定を変える。ADR-0144)", effect: &engine.ItemEffect{Grounds: true}, want: bothRoles},
+		// LocksMove・FullHPOnly: 連続技 CalcCombo の印にだけ使う(CalcDamage は読まない。ADR-0179 追記 CB-3)ので役割にならない。
+		{name: "LocksMove はダメージ計算で読まない", effect: &engine.ItemEffect{LocksMove: true}, want: noRoles},
+		{name: "FullHPOnly はダメージ計算で読まない", effect: &engine.ItemEffect{FullHPOnly: true}, want: noRoles},
 		{name: "UnsupportedAttacker と UnsupportedDefender", effect: &engine.ItemEffect{UnsupportedAttacker: true, UnsupportedDefender: true}, want: bothRoles},
 
 		// SpeedMods: 素早さの補正(ADR-0139)。ダメージ計算では読まないので役割にならない(判定・素早さの画面の役割は ADR-0175 の対象外)。
