@@ -678,7 +678,10 @@ func TestCalcComboStepDamageMatchesCalcDamage(t *testing.T) {
 			res := mustCombo(t, in)
 			for i, s := range res.Steps {
 				if in.Steps[i].Move.Category == CategoryStatus {
-					continue // 変化技の手は Damage nil(TestCalcComboDragonDanceOutrage)。CalcDamage と比べない
+					if s.Damage != nil { // 変化技の手は Damage nil(AC-3)。CalcDamage とは比べない
+						t.Errorf("手 %d: 変化技のダメージ = %+v, want nil", i, s.Damage)
+					}
+					continue
 				}
 				att, def := in.Attacker, in.Defender
 				att.Ranks, def.Ranks = s.SelfStartRanks, s.OpponentStartRanks
@@ -987,5 +990,28 @@ func TestCalcComboDoesNotMutateInput(t *testing.T) {
 	mustCombo(t, in)
 	if !reflect.DeepEqual(in.Attacker, before.Attacker) || !reflect.DeepEqual(in.Defender, before.Defender) || !reflect.DeepEqual(in.Steps, before.Steps) {
 		t.Error("CalcCombo が入力を書き換えた")
+	}
+}
+
+// 確定のふち: 合計の最小ダメージ = 残り HP なら確定、1 多ければ確定でない(HP は 1 に取れないので、種族値の HP で境目を作る)。
+func TestCalcComboKOBoundary(t *testing.T) {
+	base := mustCombo(t, comboInput(comboMimikyuAdamant(), comboGarchompImpish(), comboPlayRough, comboShadowSneak))
+	minSum, maxSum := base.Total.MinDamage, base.Total.MaxDamage
+	withHP := func(hp int) ComboResult {
+		def := comboGarchompImpish() // HP SP 32
+		def.Species.BaseStats.HP = hp - 75 - def.SP.HP
+		return mustCombo(t, comboInput(comboMimikyuAdamant(), def, comboPlayRough, comboShadowSneak))
+	}
+	if r := withHP(minSum); r.Total.DefenderHP != minSum || !r.Total.KO.Guaranteed || r.Total.KO.ChancePercent != 100 {
+		t.Errorf("HP = Σ最小: %+v, want 確定", r.Total.KO)
+	}
+	if r := withHP(minSum + 1); r.Total.KO.Guaranteed || r.Total.KO.ChancePercent <= 0 || r.Total.KO.ChancePercent >= 100 {
+		t.Errorf("HP = Σ最小 + 1: %+v, want 乱数(0〜100%% の間)", r.Total.KO)
+	}
+	if r := withHP(maxSum); r.Total.KO.Guaranteed || r.Total.KO.ChancePercent <= 0 {
+		t.Errorf("HP = Σ最大: %+v, want 乱数(最大の組だけ届く)", r.Total.KO)
+	}
+	if r := withHP(maxSum + 1); r.Total.KO != (ComboKOChance{}) {
+		t.Errorf("HP = Σ最大 + 1: %+v, want 倒せない", r.Total.KO)
 	}
 }

@@ -381,6 +381,17 @@ func CalcCombo(in ComboInput) (ComboResult, error)
    `TestGoldenCombo` を含め全件一致)。
 5. `make lint`・`make test`。docs/plan/improvements/data.md の I-data-12 を [x]、この追記の状態を「採用」に。
 
+### 互換・デプロイ順(CB-3。ADR-0144 §8・ADR-0145 にならう)
+
+`ItemEffect.LocksMove`・`FullHPOnly`・`AbilityEffect.FullHPOnly` は効果定義の JSON に新しいキーを足す(`services/internal/master` が往復する)。
+古い版の厳格なデコードは未知のキーを拒否する(calc-svc は 503、pokedex-svc の read model の書き出しは `ErrInvalidExport`)。したがって:
+
+1. **先に** 新しい calc-svc・pokedex-svc(read model の書き出しを含む)と WASM をデプロイする。
+2. **その後で** `LocksMove`・`FullHPOnly` を含む効果を取り込む。先に取り込むと、古い版が拒否する。
+
+いまの `effects.json` にこの 2 項目は無い(Champions にこだわり系も無い)ので、既存のイメージは壊れない。balance・speed の read model は
+防御側の相性の効果だけを出すので、新しいキーは出ない。WASM の DTO はこの 2 項目を持たない(CB-5 で連続技の DTO を足すときに決める)。
+
 ### 却下した案(CB-3)
 
 - **16^手数 の総当たりを本体で回す**: 多段 3 手で 16^15 を超える。畳み込みは HP に比例するだけ。
