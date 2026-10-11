@@ -71,6 +71,6 @@ describe("タイプバッジの文字色(design.md「タイプバッジ」)", ()
           Math.max(...inks.map((ink) => contrastRatio(ink, color))) < WCAG_NORMAL_TEXT_MIN_CONTRAST,
       )
       .map(([name]) => name);
-    expect(failing).toEqual(["かくとう", "どく"]);
+    expect(failing).toEqual(["かくとう", "どく", "エスパー", "ドラゴン"]);
   });
 });

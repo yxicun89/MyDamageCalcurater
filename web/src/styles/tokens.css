@@ -7,13 +7,13 @@
 
 /* ライトのベース値(docs/design.md「ベース」表のライト列)。 */
 :root {
-  --bg-base: #f4f5f7;
+  --bg-base: #eef6ff;
   /* bg.glass はガラス風の半透明背景。design.md の「白 70% + ぼかし」を rgba で表す。 */
   --bg-glass: rgba(255, 255, 255, 0.7);
   /* ぼかし量は色と別の変数で持つ(design.md の表の値そのものではないため)。 */
   --bg-glass-blur: 20px;
-  --text-primary: #14161a;
-  --text-secondary: #5c6270;
+  --text-primary: #14243a;
+  --text-secondary: #4a5a70;
   /* border.hairline は黒 8%(design.md)。 */
   --border-hairline: rgba(0, 0, 0, 0.08);
   /* issue #99(2026-09-24): 旧 #e5484d は通常文字の WCAG 2.2 SC 1.4.3(4.5:1)を満たさなかった。
@@ -25,23 +25,23 @@
   /* タイプ色(docs/design.md「タイプ色(自作パレット)」)。用途: バッジ・カードのふち・ダメージバー・効果抜群表示。
      ライト / ダークで同じ値(タイプの色は背景の明暗と独立)。 */
   --type-normal: #9fa19f;
-  --type-fire: #e8622b;
-  --type-water: #3b8fe0;
-  --type-electric: #f2c21b;
-  --type-grass: #4caf50;
-  --type-ice: #5cc8d8;
-  --type-fighting: #d0453a;
-  --type-poison: #9b51c6;
-  --type-ground: #b8863b;
-  --type-flying: #7fa7e8;
-  --type-psychic: #e8517f;
-  --type-bug: #93b21e;
-  --type-rock: #a99a62;
-  --type-ghost: #6b55a8;
-  --type-dragon: #5160d8;
+  --type-fire: #e36430;
+  --type-water: #3f8fdc;
+  --type-electric: #edbf20;
+  --type-grass: #4ead52;
+  --type-ice: #5fc6d5;
+  --type-fighting: #cc483e;
+  --type-poison: #9a54c3;
+  --type-ground: #b5853e;
+  --type-flying: #82a8e5;
+  --type-psychic: #e45580;
+  --type-bug: #91ae22;
+  --type-rock: #a79964;
+  --type-ghost: #6c57a6;
+  --type-dragon: #5463d5;
   --type-dark: #54474a;
-  --type-steel: #6e93a8;
-  --type-fairy: #e68ad6;
+  --type-steel: #6f93a7;
+  --type-fairy: #e48cd5;
 
   /* タイプバッジの文字色(docs/design.md「タイプバッジ」、2026-09-25、issue #306)。
      背景に敷く --type-<id> に対してコントラスト比が高い方(#000000 か #FFFFFF)を選んだ固定値。
@@ -52,7 +52,7 @@
   --type-electric-ink: #000000;
   --type-grass-ink: #000000;
   --type-ice-ink: #000000;
-  --type-fighting-ink: #000000;
+  --type-fighting-ink: #ffffff;
   --type-poison-ink: #ffffff;
   --type-ground-ink: #000000;
   --type-flying-ink: #000000;
@@ -109,7 +109,7 @@
   --duration-sheet: 0.25s;
 
   /* ポップ配色(docs/design.md「ポップ配色」、ADR-0334)。iOS と同じ名前・同じ値。 */
-  --brand-primary: #1f5fd6;
+  --brand-primary: #1f68d8;
   --on-primary: #ffffff;
   --brand-accent: #ffcb05;
   --on-accent: #14161a;
@@ -122,12 +122,12 @@
   --danger-soft: #fde3e4;
   --on-danger: #ffffff;
   --surface-card: #ffffff;
-  --bg-gradient-start: #fff6e0;
-  --bg-gradient-end: #e8f1ff;
-  --table-header: #dce7fb;
-  --table-zebra: #eef2f8;
-  --table-hover: #e3ecfb;
-  --focus-ring: #1f5fd6;
+  --bg-gradient-start: #f2f8ff;
+  --bg-gradient-end: #e6f1fd;
+  --table-header: #d9e8fb;
+  --table-zebra: #e8f1fc;
+  --table-hover: #dbe9fb;
+  --focus-ring: #1f68d8;
   --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
@@ -135,15 +135,15 @@
    (:not([data-theme="light"]) にすることで、常時ダークの OS でもライト表示を選べるようにする)。 */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg-base: #0e1015;
-    --bg-glass: rgba(26, 29, 36, 0.6);
-    --text-primary: #f2f3f5;
-    --text-secondary: #a3a9b6;
+    --bg-base: #0b1320;
+    --bg-glass: rgba(22, 32, 47, 0.6);
+    --text-primary: #eaf1fb;
+    --text-secondary: #a3b1c6;
     --border-hairline: rgba(255, 255, 255, 0.1);
     --danger: #ff6369;
 
-    --brand-primary: #7fa8ff;
-    --on-primary: #0e1015;
+    --brand-primary: #7fb0ff;
+    --on-primary: #0b1320;
     --brand-accent: #ffd84d;
     --on-accent: #14161a;
     --success: #5fd38a;
@@ -153,29 +153,29 @@
     --info: #5ec2f2;
     --info-soft: #0c2a3a;
     --danger-soft: #3a1416;
-    --on-danger: #0e1015;
-    --surface-card: #1a1d24;
-    --bg-gradient-start: #14131c;
-    --bg-gradient-end: #0e1622;
-    --table-header: #1c2638;
-    --table-zebra: #151922;
-    --table-hover: #1d2535;
-    --focus-ring: #7fa8ff;
+    --on-danger: #0b1320;
+    --surface-card: #16202f;
+    --bg-gradient-start: #0f1a2b;
+    --bg-gradient-end: #0b1320;
+    --table-header: #1b2a42;
+    --table-zebra: #121b2a;
+    --table-hover: #1b2840;
+    --focus-ring: #7fb0ff;
     --shadow-color: rgba(0, 0, 0, 0.4);
   }
 }
 
 /* data-theme="dark" の明示指定(OS の設定に関わらずダークを選んだとき)。 */
 :root[data-theme="dark"] {
-  --bg-base: #0e1015;
-  --bg-glass: rgba(26, 29, 36, 0.6);
-  --text-primary: #f2f3f5;
-  --text-secondary: #a3a9b6;
+  --bg-base: #0b1320;
+  --bg-glass: rgba(22, 32, 47, 0.6);
+  --text-primary: #eaf1fb;
+  --text-secondary: #a3b1c6;
   --border-hairline: rgba(255, 255, 255, 0.1);
   --danger: #ff6369;
 
-  --brand-primary: #7fa8ff;
-  --on-primary: #0e1015;
+  --brand-primary: #7fb0ff;
+  --on-primary: #0b1320;
   --brand-accent: #ffd84d;
   --on-accent: #14161a;
   --success: #5fd38a;
@@ -185,14 +185,14 @@
   --info: #5ec2f2;
   --info-soft: #0c2a3a;
   --danger-soft: #3a1416;
-  --on-danger: #0e1015;
-  --surface-card: #1a1d24;
-  --bg-gradient-start: #14131c;
-  --bg-gradient-end: #0e1622;
-  --table-header: #1c2638;
-  --table-zebra: #151922;
-  --table-hover: #1d2535;
-  --focus-ring: #7fa8ff;
+  --on-danger: #0b1320;
+  --surface-card: #16202f;
+  --bg-gradient-start: #0f1a2b;
+  --bg-gradient-end: #0b1320;
+  --table-header: #1b2a42;
+  --table-zebra: #121b2a;
+  --table-hover: #1b2840;
+  --focus-ring: #7fb0ff;
   --shadow-color: rgba(0, 0, 0, 0.4);
 }
 
