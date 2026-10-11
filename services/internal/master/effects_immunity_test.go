@@ -164,3 +164,21 @@ func TestDecodeAbilityEffectAbsorbWithoutSideEffect(t *testing.T) {
 		t.Errorf("DefAbsorbTypes = %+v, want %+v", got, want)
 	}
 }
+
+func TestDecodeAbilityEffectIgnoringUnknown(t *testing.T) {
+	chart := testChart(t)
+	e, ign, err := master.DecodeAbilityEffectIgnoringUnknown([]byte(`{"Zeta":1,"DefImmuneTypes":["grass"],"Alpha":2}`), chart)
+	if err != nil || len(e.DefImmuneTypes) != 1 || !reflect.DeepEqual(ign, []string{"Alpha", "Zeta"}) {
+		t.Fatalf("e=%+v ign=%v err=%v", e, ign, err)
+	}
+	// 厳格版は同じ入力を拒否し続ける。
+	if _, err := master.DecodeAbilityEffect([]byte(`{"Zeta":1,"DefImmuneTypes":["grass"]}`), chart); err == nil {
+		t.Error("DecodeAbilityEffect が未知のフィールドを受け入れた")
+	}
+	if _, _, err := master.DecodeAbilityEffectIgnoringUnknown([]byte(`{}`), chart); err == nil {
+		t.Error("空の効果を受け入れた")
+	}
+	if _, _, err := master.DecodeAbilityEffectIgnoringUnknown([]byte(`{"Zeta":1}`), engine.TypeChart{}); err == nil {
+		t.Error("タイプ相性表なしを受け入れた")
+	}
+}
