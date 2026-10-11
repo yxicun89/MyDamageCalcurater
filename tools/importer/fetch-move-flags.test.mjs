@@ -32,6 +32,7 @@ const dex = {
     move('testpunch', { flags: { punch: 1, protect: 1, contact: 1, mirror: 1 }, recoil: [33, 100] }),
     move('testcrash', { flags: { contact: 1 }, hasCrashDamage: true }),
     move('testplain', {}),
+    move('testdance', { category: 'Status', target: 'self', boosts: { atk: 1, spe: 1 } }),
   ] },
   items: { all: () => [] },
   abilities: { all: () => [] },
@@ -76,7 +77,10 @@ test('showdown: 技ごとに flags(真のキーの昇順)・recoil・hasCrashDam
     { id: 'testpunch', flags: ['contact', 'mirror', 'protect', 'punch'], recoil: [33, 100], hasCrashDamage: false },
     { id: 'testcrash', flags: ['contact'], recoil: null, hasCrashDamage: true },
     { id: 'testplain', flags: [], recoil: null, hasCrashDamage: false },
+    { id: 'testdance', flags: [], recoil: null, hasCrashDamage: false },
   ]);
+  // 変化技のトップレベル boosts(CB-1)。無い技も {} で必ずキーを出す。
+  assert.deepEqual(moves.map((m) => m.boosts), [{}, {}, {}, { atk: 1, spe: 1 }]);
 });
 
 test('calc: 技ごとに flags(真のキーの昇順)・recoil・hasCrashDamage・secondaries を必ず出す', () => {

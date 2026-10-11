@@ -281,7 +281,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 
 | ID | 内容 | レーン | 依存 | PR の大きさ | ADR |
 |---|---|---|---|---|---|
-| CB-1 | 変化技のランク変化を取り込む(§4-4。importer・move_effects・内部 API の値が増えるだけ) | データ | — | 小 | ADR-0107 に追記 |
+| CB-1 | 【実装済み 2026-10-11】変化技のランク変化を取り込む(§4-4。importer・move_effects・内部 API の値が増えるだけ。実データで変化技 41 行。ADR-0107「CB-1」) | データ | — | 小 | ADR-0107 に追記 |
 | CB-2 | engine: `GuaranteedSelfStages`・素早さと行動順の engine への移動(判定の式を移す。判定はまだ自前のまま)。ゴールデン不変 | データ(engine) | — | 中 | 0179 |
 | CB-3 | engine: `CalcCombo` と合計の畳み込み。tools/golden に連続技のベクタ(AC-1〜AC-4・AC-9)。spec-writer・critic は Opus | データ(engine) | CB-2 | 中〜大 | 0179 に追記 |
 | CB-4 | API: `POST /api/calc/combo` と公開 `Move.effect`。`make gen`、calc-svc のハンドラ、gateway の経路 | API | CB-3(CB-1 は変化技の手に必要) | 中 | 0252 |

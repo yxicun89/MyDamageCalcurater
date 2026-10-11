@@ -7,6 +7,8 @@ package importer
 //  1. トップレベルの self.boosts             → 命中すれば必ず発動(確率100に正規化)
 //  2. secondary.self.boosts                  → 確率つきの自分のランク変化
 //  3. secondary.boosts(self を伴わない)      → 確率つきの相手のランク変化
+//  4. トップレベルの boosts(変化技。CB-1)     → 常に発動(確率100)。target が自分(self・allies)なら自分、
+//     相手(normal・allAdjacentFoes 等)なら相手のランク変化
 //
 // ピン留めした取得元にはこれらが2つ以上重なる技が無い(ADR-0107 決定3)。重なりが見つかったら
 // blocker にして人に知らせる(黙って片方を落とさない)。
@@ -25,9 +27,34 @@ type rankEntry struct {
 	boosts map[string]int
 }
 
+// boostsTarget は変化技の target を、ランク変化を受ける側に写す(CB-1)。
+// ok=false は自分でも相手でもない対象(味方だけ・場全体 等)で、シングルでは効果が無い。
+// allies は味方全体(使用者を含む。とおぼえ)なので自分。
+// シングル前提(allAdjacent も相手1体に写す)。ダブル対応で見直す。
+func boostsTarget(target string) (engine.RankTarget, bool) {
+	switch target {
+	case "self", "allies":
+		return engine.RankTargetSelf, true
+	case "normal", "adjacentFoe", "allAdjacentFoes", "allAdjacent", "any", "randomNormal":
+		return engine.RankTargetOpponent, true
+	}
+	return "", false
+}
+
 // moveEffectEntries は1つの技が持つランク変化エントリを集める(0件のことも複数件のこともある)。
-func moveEffectEntries(m ShowdownMove) []rankEntry {
-	var entries []rankEntry
+// 変化技のトップレベル boosts の対象が自分でも相手でもないときは unsupportedTarget=true を返す(エントリは作らない)。
+func moveEffectEntries(m ShowdownMove) (entries []rankEntry, unsupportedTarget bool) {
+	if m.Boosts != nil && len(*m.Boosts) > 0 {
+		target := ""
+		if m.Target != nil {
+			target = *m.Target
+		}
+		if t, ok := boostsTarget(target); ok {
+			entries = append(entries, rankEntry{chance: 100, target: t, boosts: *m.Boosts})
+		} else {
+			unsupportedTarget = true
+		}
+	}
 	if m.Self != nil && len(m.Self.Boosts) > 0 {
 		entries = append(entries, rankEntry{chance: 100, target: engine.RankTargetSelf, boosts: m.Self.Boosts})
 	}
@@ -39,7 +66,7 @@ func moveEffectEntries(m ShowdownMove) []rankEntry {
 			entries = append(entries, rankEntry{chance: m.Secondary.Chance, target: engine.RankTargetOpponent, boosts: m.Secondary.Boosts})
 		}
 	}
-	return entries
+	return entries, unsupportedTarget
 }
 
 // secondaryBoostCount は取得元の secondaries 配列のうち、ランク変化(boosts)を伴う要素の件数を数える。
@@ -73,7 +100,10 @@ func buildMoveEffects(moves []ShowdownMove, included map[string]bool) ([]EffectR
 			blockers = append(blockers, Finding{Kind: KindMoveEffectAmbiguous, ID: m.ID})
 			continue
 		}
-		entries := moveEffectEntries(m)
+		entries, unsupportedTarget := moveEffectEntries(m)
+		if unsupportedTarget {
+			warnings = append(warnings, Finding{Kind: KindMoveEffectUnsupportedTarget, ID: m.ID})
+		}
 		if len(entries) == 0 {
 			continue
 		}
@@ -109,6 +139,11 @@ func buildMoveEffects(moves []ShowdownMove, included map[string]bool) ([]EffectR
 			return nil, nil, nil, err
 		}
 		rows = append(rows, EffectRow{ID: m.ID, Effect: canon})
+		// 変化技の表の値を入れた技に条件付きの増減・失敗のフック(growth の天候・clangoroussoul の HP・
+		// noretreat の2回目 等)があれば、黙って入れずに報告する(CB-1。条件は扱わない既知の制限)。
+		if m.Boosts != nil && len(*m.Boosts) > 0 && m.Mechanism != nil && len(m.Mechanism.Hooks) > 0 {
+			warnings = append(warnings, Finding{Kind: KindMoveEffectConditional, ID: m.ID})
+		}
 	}
 	return rows, warnings, blockers, nil
 }
