@@ -160,18 +160,23 @@ test("今の振りを入れると、行動順と「これ以上」の一覧が�
   ).toContainText("後に動く");
 });
 
-test("キーボードだけで、ポケモンの選択・想定のチップ・トリックルームを操作できる", async ({ page }) => {
+test("ポケモンを選んだあと、想定のチップとトリックルームをキーボードだけで操作できる", async ({ page }) => {
   await mockSpeedApi(page);
   await page.goto("/speed");
+  // <select> の矢印キーは OS ごとに挙動が違う(macOS の Chromium はポップアップを開くだけ)ので、値の選択は selectOption にする。
   const self = page.getByRole("combobox", { name: "自分のポケモンを選ぶ" });
-  await self.focus();
-  await page.keyboard.press("ArrowDown");
+  await self.selectOption({ index: 1 });
   await expect(self).not.toHaveValue("");
 
   const chip = page.getByRole("checkbox", { name: "最速スカーフ" });
   await chip.focus();
   await page.keyboard.press("Space");
   await expect(chip).not.toBeChecked();
+
+  const trickRoom = page.getByRole("checkbox", { name: "トリックルーム" });
+  await trickRoom.focus();
+  await page.keyboard.press("Space");
+  await expect(trickRoom).toBeChecked();
 });
 
 test("画面の幅いっぱいでも横にはみ出さない(スマホ幅)", async ({ page }) => {
