@@ -65,7 +65,7 @@
   - ルートの `Makefile`・`go.work`: 自分のレーンのターゲット・`use` 行の追加だけ。統合時の競合は両方を残して解決する。
   - `docs/ai-shared/state/<自分のレーン>.md`: 自分のレーンのファイルだけ。決定・提案は `docs/ai-shared/decisions/` に新規ファイルを足す。
 - 単発の修正は `fix/<レーン>-...`(例 `fix/calc-...`)。1つのブランチに複数の Phase/ステージを積まない。
-- **Go サービスの形(ADR-0811。2026-10-11)**: 新しいサービス・新しい機能は `internal/{domain,app,adapters}` を最初からそろえる。lint の `tools/archcheck` が依存の向きを検査する(未移行のサービスは一覧で通る)。既存サービスの移行は docs/plan/architecture-adoption.md の段階ごとに、そのサービスのレーンが 1 PR で行う。
+- **Go サービスの形(ADR-0811。2026-10-11)**: 新しいサービス・新しい機能は `internal/{domain,app,adapters}` を最初からそろえる。lint の `tools/archcheck` が依存の向きを検査する(未移行のサービスは一覧で通る)。既存サービスの移行は docs/plan/architecture-adoption.md の段階ごとに、そのサービスのレーンが 1 PR で行う。サービスを削除・改名する PR も `unmigrated` から該当行を消す。
 - git の作者情報は、このリポジトリのローカル設定(`pokecalc-dev <noreply@example.com>`)を使う。個人の identity をコミットしない。
 - リモートの URL・認証情報を文書・コミットに書かない。リポジトリを公開(public)にするのは、ユーザーの明示的な指示と `make check-publishable-full` の後だけ。
 

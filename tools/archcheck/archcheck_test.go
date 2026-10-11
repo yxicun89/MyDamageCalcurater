@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -57,5 +59,26 @@ func TestRealRepositoryPasses(t *testing.T) {
 	}
 	if len(got) != 0 {
 		t.Fatalf("実リポジトリで違反: %v", got)
+	}
+}
+
+// services/internal の実在パッケージは、外側(outerShared)か内側(master)のどちらかに分類されている。
+// パッケージが増えたら、ここで分類を強制する(外側なら outerShared に足す)。
+func TestSharedPackagesClassified(t *testing.T) {
+	entries, err := os.ReadDir("../../services/internal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var actual []string
+	for _, e := range entries {
+		if e.IsDir() {
+			actual = append(actual, e.Name())
+		}
+	}
+	want := append([]string{"master"}, outerShared...)
+	sort.Strings(actual)
+	sort.Strings(want)
+	if strings.Join(actual, ",") != strings.Join(want, ",") {
+		t.Fatalf("services/internal の実在パッケージ %v が outerShared + master %v と一致しません。新しいパッケージは外側なら outerShared に足し、内側ならこのテストの内側の一覧に足してください", actual, want)
 	}
 }

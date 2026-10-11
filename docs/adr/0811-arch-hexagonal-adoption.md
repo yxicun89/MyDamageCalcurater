@@ -17,6 +17,7 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 2. **新しいサービス・新しい機能は最初からこの形**で作る。
 3. **機械検査は自前の `tools/archcheck`**(go/parser・標準ライブラリだけ。依存追加なし)。向き(内側が外側を import しない)だけを検査し、`make lint` から走る。
    形をそろえたサービスは検査し、未移行の一覧(`tools/archcheck/archcheck.go` の `unmigrated`)のサービスは通す。一覧に無いのに形がそろっていないサービスは失敗する。
+   別サービスの `internal` を import する違反(サービス境界)は archcheck の対象外にする。サービス境界は CLAUDE.md 絶対ルール 4 と ADR-0012 の別の規則で、G1 は S1 で直し、検査を足すかは全サービスの移行の後に判断する。
 4. **移行は 1 サービス = 1 PR = そのサービスのレーン**。順番は judge → calc → record → pokedex(その後 team・gateway・balance・speed)。振る舞いは変えない。
    record・team は M2 の PR が無いときに行う。pokedex の importer は対象外(S5 の後で判断)。
 5. 中身の無い `domain`・`app` も、フォルダを置き `doc.go` に役割を書く。oapi-codegen の生成物(`internal/api`)の場所は今のまま(外側として扱う)。

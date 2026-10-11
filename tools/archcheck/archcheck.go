@@ -128,8 +128,17 @@ func checkService(root, svc string) ([]string, error) {
 		}
 		dir := filepath.Join(base, layer)
 		err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() || !strings.HasSuffix(path, ".go") {
+			if err != nil {
 				return err
+			}
+			if d.IsDir() {
+				if d.Name() == "testdata" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") {
+				return nil
 			}
 			f, perr := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
 			if perr != nil {
