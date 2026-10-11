@@ -148,6 +148,8 @@ const (
 	TurnOrderSelfFirst     TurnOrder = "self_first"
 	TurnOrderOpponentFirst TurnOrder = "opponent_first"
 	TurnOrderSpeedTie      TurnOrder = "speed_tie"
+	// TurnOrderDependsOnOpponentSpeed は相手の素早さが分からず行動順が決まらない(CalcCombo が出す。CompareSpeed は返さない)。
+	TurnOrderDependsOnOpponentSpeed TurnOrder = "depends_on_opponent_speed"
 )
 
 // CompareSpeed は素早さだけで行動順を決める。トリックルームなら遅い方が先。同速は TurnOrderSpeedTie(反転しない)。

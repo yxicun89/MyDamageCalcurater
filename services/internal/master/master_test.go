@@ -413,6 +413,8 @@ func fullItemEffect() engine.ItemEffect {
 		UnsupportedAttacker: true,
 		UnsupportedDefender: true,
 		Grounds:             true, // 持ち物による接地(ADR-0144)
+		LocksMove:           true, // 連続技の印(ADR-0179 追記 CB-3)
+		FullHPOnly:          true,
 	}
 }
 
@@ -453,6 +455,7 @@ func fullAbilityEffect() engine.AbilityEffect {
 		WeightMod:           8192, // 重さの補正(ADR-0143)
 		UnsupportedAttacker: true,
 		UnsupportedDefender: true,
+		FullHPOnly:          true, // 連続技の印(ADR-0179 追記 CB-3)
 	}
 }
 

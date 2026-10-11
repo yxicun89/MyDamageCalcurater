@@ -79,6 +79,10 @@
       "reason": "Doubles are covered only by doubles.json and doubles-random.jsonl.gz (ADR-0222): screens 2732/4096 and spread 3072/4096 for allAdjacent/allAdjacentFoes moves. Tera is absent from Pokemon Champions and appears only in tera.json and tera-random.jsonl.gz as an optional feature (ADR-0224): singles only; attacker STAB and has-type checks (grounding, Psychic Terrain priority, Sand/Snow defense) use the tera type, while defender type effectiveness ignores it (Champions generation quirk); no Stellar, Tera Blast or 60 BP floor (absent from the Champions generation). Doubles have no tera; ally effects (Helping Hand, Friend Guard), Dynamax, form transformations or unsupported status effects"
     },
     {
+      "scope": "moves",
+      "reason": "combo.jsonl.gz (ADR-0179 CB-3) checks each step of a multi-move sequence against the oracle with the step-start boosts accumulated independently in the generator; the total damage and the KO probability are the oracle 16-roll values enumerated exhaustively over 16^draws combinations (no oracle feature exists for sequences)."
+    },
+    {
       "scope": "KO",
       "reason": "Smogon residual/consumable multi-turn model differs from ADR-0006; direct smogonKO cross-check only residual/consumable-free fixed cases with 1-4 hits"
     }
@@ -104,7 +108,8 @@
         "tera-random.jsonl.gz",
         "mechanisms.json",
         "mechanisms-stage2.json",
-        "mechanisms-stage3.json"
+        "mechanisms-stage3.json",
+        "combo.jsonl.gz"
       ],
       "koCrossChecks": 37,
       "doublesRandomSeed": 1145195589,
@@ -180,6 +185,10 @@
     "mechanisms.json": {
       "count": 232,
       "sha256": "a69e942a3c20000cc1e9a8f511c795e3b9ab3d5da6e4f2bf7b7f56a0605e5e0b"
+    },
+    "combo.jsonl.gz": {
+      "count": 9,
+      "sha256": "0f1cf1d2ddafc1fdb6d79dc414dd8b514c21c1d732238f33a12b92b68b58a9f9"
     },
     "mechanisms-stage2.json": {
       "count": 654,

@@ -100,3 +100,52 @@ func koProbabilitySeq(seq [][16]int, hp, n int) float64 {
 	}
 	return dist[hp]
 }
+
+// koFold は発(16 段階 1 つ)の列を 1 つずつ畳み込み、合計が hp 以上になる確率を保つ(連続技。ADR-0179 追記 CB-3 §3)。
+// koProbabilitySeq は同じ列の繰り返しだけを扱うので別に持つ。hp 以上は 1 つのバケット(index=hp)に吸収する。
+type koFold struct {
+	hp         int
+	dist, next []float64
+	minSum     int // 発ごとの最小の和
+	maxSum     int // 発ごとの最大の和
+}
+
+func newKOFold(hp int) *koFold {
+	f := &koFold{hp: hp, dist: make([]float64, hp+1), next: make([]float64, hp+1)}
+	f.dist[0] = 1
+	return f
+}
+
+// add は発 rolls(独立な 16 段階)を 1 つ畳み込む。
+func (f *koFold) add(rolls [16]int) {
+	f.minSum += rolls[0]
+	f.maxSum += rolls[15]
+	const p = 1.0 / 16.0
+	clear(f.next)
+	for s := 0; s <= f.hp; s++ {
+		if f.dist[s] == 0 {
+			continue
+		}
+		if s == f.hp {
+			f.next[f.hp] += f.dist[s]
+			continue
+		}
+		for _, r := range rolls {
+			f.next[min(s+r, f.hp)] += f.dist[s] * p
+		}
+	}
+	f.dist, f.next = f.next, f.dist
+}
+
+// reach は合計が hp 以上になる確率(0..1)と、最小の和でも届く(確実)かを返す。確実は整数で決める。
+func (f *koFold) reach() (prob float64, guaranteed bool) {
+	switch {
+	case f.hp <= 0:
+		return 0, false
+	case f.minSum >= f.hp:
+		return 1, true
+	case f.maxSum < f.hp:
+		return 0, false
+	}
+	return f.dist[f.hp], false
+}
