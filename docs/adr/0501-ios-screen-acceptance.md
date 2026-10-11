@@ -4893,3 +4893,9 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `CalcMoveSortUITests` 切り替え 2 件 | 並び・見出し・切り替え無し・選択・AX5 の行の 3 件に置換 | チップを廃止 |
 
 検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。
+
+## G-06 ポケモン画像を各画面に出す(ADR-0529。2026-10-11)
+
+受け入れ条件: (1) 素早さ表・相手選択シート・選択中ポケモン・判定結果の行・お気に入り・計算履歴・よく計算する相手の行に、manifest にあるキーだけ画像の枠(`speciesImage-<key>`)が出る。(2) 画像が無い・既定(`POKECALC_MOCK_IMAGES` なし)では枠が 1 つも出ず、従来のエンブレムのまま。(3) manifest の相対パスは `.webp` で終わるものだけ URL になる。
+
+追加テスト: `ImageURLWebpOnlyTests`、`SpeedEntryDisplay.speciesKey`(`SpeedViewModelTableTests`)、`JudgeMatchupDisplay.speciesKey`(`JudgeResultDisplayTests`)、`SpeciesImageUITests` に素早さ表の画像あり/なし 2 件。既存テストの変更なし。

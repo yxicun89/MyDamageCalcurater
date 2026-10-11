@@ -50,8 +50,13 @@ public struct SpeedEntryDisplay: Equatable, Identifiable, Sendable {
     public let presetLabel: String
     /// 「名前・調整」(例「テストカソウドリ・最速」)。
     public let label: String
+    /// 画像の引き当てキー(speed の pokemonId = 種族キー。G-06)。無ければ nil(エンブレムのまま)。
+    public let speciesKey: String?
 
-    public init(id: String, nameJa: String, primaryType: String, presetLabel: String, label: String) {
+    public init(
+        id: String, nameJa: String, primaryType: String, presetLabel: String, label: String, speciesKey: String? = nil
+    ) {
+        self.speciesKey = speciesKey
         self.id = id
         self.nameJa = nameJa
         self.primaryType = primaryType
@@ -460,7 +465,7 @@ public final class SpeedViewModel {
         let presetLabel = SpeedLabels.preset(entry.preset)
         return SpeedEntryDisplay(
             id: entry.id, nameJa: entry.nameJa, primaryType: entry.types.first ?? "", presetLabel: presetLabel,
-            label: entry.nameJa + SpeedLabels.entrySeparator + presetLabel)
+            label: entry.nameJa + SpeedLabels.entrySeparator + presetLabel, speciesKey: entry.pokemonId)
     }
 
     /// 位置が読み込めているときの結果の整形。

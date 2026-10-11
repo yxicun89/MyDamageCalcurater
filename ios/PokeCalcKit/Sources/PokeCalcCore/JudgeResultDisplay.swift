@@ -47,6 +47,8 @@ public struct JudgeMatchupDisplay: Equatable, Identifiable, Sendable {
     public let attackerSpeedIgnoredText: String?
     /// 相手候補側(`defenderSpeedIgnored`)。
     public let defenderSpeedIgnoredText: String?
+    /// 画像の引き当てキー(要求の候補の speciesKey。G-06)。候補が引けなければ nil。
+    public let speciesKey: String?
 
     public init(
         defenderIndex: Int, candidateLabel: String, nameJa: String, primaryType: String?, speedText: String,
@@ -54,8 +56,10 @@ public struct JudgeMatchupDisplay: Equatable, Identifiable, Sendable {
         defenderKoText: String, attackerKoUnreliableText: String?, defenderKoUnreliableText: String?,
         attackerUnsupportedNote: String?, defenderUnsupportedNote: String?,
         attackerSpeedAppliedText: String? = nil, defenderSpeedAppliedText: String? = nil,
-        attackerSpeedIgnoredText: String? = nil, defenderSpeedIgnoredText: String? = nil
+        attackerSpeedIgnoredText: String? = nil, defenderSpeedIgnoredText: String? = nil,
+        speciesKey: String? = nil
     ) {
+        self.speciesKey = speciesKey
         self.attackerSpeedAppliedText = attackerSpeedAppliedText
         self.defenderSpeedAppliedText = defenderSpeedAppliedText
         self.attackerSpeedIgnoredText = attackerSpeedIgnoredText
@@ -155,7 +159,8 @@ public enum JudgeResultDisplayBuilder {
             attackerSpeedAppliedText: appliedNote(JudgeLabels.speedSideSelf, matchup.attackerSpeedApplied),
             defenderSpeedAppliedText: appliedNote(JudgeLabels.speedSideOpponent, matchup.defenderSpeedApplied),
             attackerSpeedIgnoredText: ignoredNote(JudgeLabels.speedSideSelf, matchup.attackerSpeedIgnored),
-            defenderSpeedIgnoredText: ignoredNote(JudgeLabels.speedSideOpponent, matchup.defenderSpeedIgnored))
+            defenderSpeedIgnoredText: ignoredNote(JudgeLabels.speedSideOpponent, matchup.defenderSpeedIgnored),
+            speciesKey: speciesKey)
     }
 
     /// 空配列は nil(出さない)。並びは応答のまま。

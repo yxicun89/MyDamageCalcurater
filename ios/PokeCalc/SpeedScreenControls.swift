@@ -139,13 +139,19 @@ struct SpeedStepper: View {
     }
 }
 
-/// 名前の頭文字を載せたタイプ色の円(画像は使わない)。色は文字列のタイプ ID から引き、未知の ID は無彩色。
+/// 名前の頭文字を載せたタイプ色の円。`speciesKey` があり manifest に画像があれば画像(G-06。同じ直径)。
+/// 色は文字列のタイプ ID から引き、未知の ID は無彩色。
 struct SpeedEmblem: View {
     let name: String
     let primaryType: String
+    var speciesKey: String?
     private static let diameter: CGFloat = 32
 
     var body: some View {
+        SpeciesImageView(speciesKey: speciesKey, diameter: Self.diameter) { emblem }
+    }
+
+    private var emblem: some View {
         Circle()
             .fill(TypeColorToken.color(forTypeID: primaryType) ?? ColorToken.textSecondary.color)
             .frame(width: Self.diameter, height: Self.diameter)
