@@ -12,7 +12,7 @@ flowchart LR
   subgraph HOST["ホスト(Mac)"]
     BR["ブラウザ / curl / iOS"]
     PF["kubectl port-forward<br/>(make web-k3d-open。手動・常駐)"]
-    DK["docker: k3d-pokecalc-serverlb<br/>0.0.0.0:8080 → 80, 52779 → 6443"]
+    DK["docker: k3d-pokecalc-serverlb<br/>127.0.0.1:8080 → 80, 52779 → 6443"]
   end
   subgraph K3D["k3d クラスタ pokecalc(1 server / 0 agent)"]
     subgraph KS["ns kube-system"]
