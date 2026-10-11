@@ -4,6 +4,7 @@
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from "react";
 import { deviceDataText } from "../i18n/ja";
+import { Icon } from "../ui/Icon";
 import {
   describeDeviceDataDeletion,
   runDeviceDataDeletion,
@@ -137,10 +138,15 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
 
   return (
     <section className="ui-card about__section about__data">
-      <h3>{deviceDataText.sectionHeading}</h3>
-      {deviceDataText.explanation.map((sentence) => (
-        <p key={sentence}>{sentence}</p>
-      ))}
+      <h3 className="about__section-heading">
+        <Icon name="about" size={24} />
+        {deviceDataText.sectionHeading}
+      </h3>
+      <ul aria-label={deviceDataText.sectionHeading} className="ui-rows about__points">
+        {deviceDataText.explanation.map((sentence) => (
+          <li key={sentence}>{sentence}</li>
+        ))}
+      </ul>
       <div className="about__actions">
         <button
           ref={deleteButtonRef}
@@ -151,6 +157,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
             setDialogOpen(true);
           }}
         >
+          <Icon name="trash" size={20} />
           {deviceDataText.deleteButton}
         </button>
       </div>
@@ -195,6 +202,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
             onKeyDown={onDialogKeyDown}
           >
             <h4 id={titleId} className="about__dialog-title">
+              <Icon name="alert" size={24} />
               {deviceDataText.deleteButton}
             </h4>
             <p id={descriptionId}>{deviceDataText.confirmMessage}</p>
@@ -213,6 +221,7 @@ export function DeviceDataSection({ recordClient, teamClient, onTeamDataDeleted 
                 className="ui-button ui-button--danger about__button about__button--danger"
                 onClick={confirmDeletion}
               >
+                <Icon name="trash" size={20} />
                 {deviceDataText.confirmAction}
               </button>
             </div>
