@@ -18,6 +18,11 @@ enum UITestNavigation {
         static let records = "tab-records"
     }
 
+    /// タブのラベル(`AppTab.title`)。識別子で見つからないときの引き直しに使う。
+    static let tabLabels: [String: String] = [
+        TabID.damage: "ダメージ", TabID.team: "構築", TabID.speed: "素早さ", TabID.records: "記録",
+    ]
+
     /// 入口 ID → その画面が入っているタブ。区切りの画面は、タブを開いたあと区切りのボタン(入口 ID)を押す。
     static let tabForEntry: [String: String] = [
         "openCalcScreen": TabID.damage,
@@ -38,14 +43,26 @@ enum UITestNavigation {
 
 @MainActor
 extension XCUIApplication {
-    /// 下部タブのボタン。
+    /// 下部タブのボタン(識別子で引く。識別子が引けることの検査は `AppNavigationUITests` が持つ)。
     func tabButton(_ tabID: String) -> XCUIElement {
         tabBars.buttons[tabID]
     }
 
     /// 下部タブを選ぶ(既に選ばれていても押さない: 選択中のタブを押し直すとスタックが根へ戻るため)。
+    /// 識別子で見つからないときはラベルで引き直す(移り方の補助なので、識別子の伝わり方の揺れで各画面のテストを落とさない)。
+    /// そのときは画面の要素の一覧を添付して残す。
     func selectTab(_ tabID: String, file: StaticString = #filePath, line: UInt = #line) {
-        let tab = tabButton(tabID)
+        var tab = tabButton(tabID)
+        if !tab.waitForExistence(timeout: UITestNavigation.existenceTimeout),
+            let label = UITestNavigation.tabLabels[tabID]
+        {
+            let attachment = XCTAttachment(string: debugDescription)
+            attachment.name = "タブ \(tabID) が識別子で見つからなかったときの要素の一覧"
+            attachment.lifetime = .keepAlways
+            XCTContext.runActivity(named: "タブ \(tabID) をラベルで引き直す") { $0.add(attachment) }
+            print("UITestNavigation: タブ \(tabID) が識別子で見つからない。タブバー: \(tabBars.debugDescription)")
+            tab = tabBars.buttons[label]
+        }
         XCTAssertTrue(
             tab.waitForExistence(timeout: UITestNavigation.existenceTimeout), "タブ \(tabID) が見つからない",
             file: file, line: line)

@@ -101,27 +101,29 @@ struct RootView: View {
         }
     }
 
-    /// タブの中身: 訪れた画面をすべて重ねて保持し、選択中の1つだけを見せる。
+    /// タブの中身: 訪れた画面をすべて重ねて保持し、選択中の1つだけを見せる。選んでいない画面は `RetainedScreenHost` が
+    /// UIKit の `isHidden` で隠す(見えない・押せない。状態は残る)。区切りは選択中の画面にだけ描く(XCUITest は隠れた
+    /// 画面の要素も木に残すため、区切りのボタンの識別子を 1 つに保つ。区切りは状態を持たないので描き直してよい)。
     private func tabContent(_ tab: AppTab, core: CoreServices, services: FeatureServices) -> some View {
         ZStack {
             ForEach(navigation.visitedFeatureIDs(in: tab), id: \.self) { featureID in
-                let isSelected = navigation.selectedFeatureID(in: tab) == featureID
-                featureStack(featureID, in: tab, core: core, services: services)
-                    .opacity(isSelected ? 1 : 0)
-                    .allowsHitTesting(isSelected)
-                    .accessibilityHidden(!isSelected)
+                let isVisible = navigation.selectedFeatureID(in: tab) == featureID
+                RetainedScreenHost(
+                    isVisible: isVisible,
+                    content: featureStack(featureID, in: tab, showsSegments: isVisible, core: core, services: services))
+                    .ignoresSafeArea()
             }
         }
     }
 
     @ViewBuilder
     private func featureStack(
-        _ featureID: String, in tab: AppTab, core: CoreServices, services: FeatureServices
+        _ featureID: String, in tab: AppTab, showsSegments: Bool, core: CoreServices, services: FeatureServices
     ) -> some View {
         if let feature = FeatureRegistry.feature(id: featureID) {
             NavigationStack(path: path(for: featureID)) {
                 VStack(spacing: 0) {
-                    if Self.segments(in: tab, model: navigation).count > 1 {
+                    if showsSegments, Self.segments(in: tab, model: navigation).count > 1 {
                         TabSegmentsView(
                             tab: tab, segments: Self.segments(in: tab, model: navigation),
                             selectedID: navigation.selectedFeatureID(in: tab)
@@ -184,6 +186,26 @@ struct RootView: View {
                 .accessibilityLabel(icon.accessibilityLabel)
             }
         }
+    }
+}
+
+/// 画面(とその `NavigationStack`)を 1 つの `UIHostingController` に載せ、選んでいないときは UIKit の `isHidden` で隠す入れ物。
+/// 隠しても破棄しないので、入力・積んだ画面が残る(ADR-0531)。
+private struct RetainedScreenHost<Content: View>: UIViewControllerRepresentable {
+    let isVisible: Bool
+    let content: Content
+
+    func makeUIViewController(context: Context) -> UIHostingController<Content> {
+        let host = UIHostingController(rootView: content)
+        // 背景は中の画面(`popScreenBackground`)が描く。入れ物は透明にする。
+        host.view.backgroundColor = .clear
+        host.view.isHidden = !isVisible
+        return host
+    }
+
+    func updateUIViewController(_ host: UIHostingController<Content>, context: Context) {
+        host.rootView = content
+        host.view.isHidden = !isVisible
     }
 }
 

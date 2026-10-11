@@ -124,8 +124,14 @@ final class AppNavigationUITests: XCTestCase {
 
         app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertFalse(element(app, "reverseScreen").exists, "選んでいない区切りは支援技術にも出さない")
         XCTAssertTrue(app.buttons["attackerPreset-aFull"].isSelected, "逆算から戻っても計算の入力が残る")
+        // 隠れた逆算の画面が上に重なっていない(押した操作が計算に届く)。XCUITest は隠れた画面の要素も木に残すので、
+        // 存在ではなく操作で確かめる。
+        let otherPreset = app.buttons["attackerPreset-none"]
+        otherPreset.tap()
+        waitSelected(otherPreset, true, "計算のプリセットを押せる(隠れた逆算に遮られない)")
+        calcPreset.tap()
+        waitSelected(calcPreset, true, "計算のプリセットを選び直せる")
 
         app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseObservationField-1").waitForExistence(timeout: Self.existenceTimeout),

@@ -74,6 +74,14 @@ final class SpeedScreenUITests: XCTestCase {
         XCTAssertTrue(element.waitForExistence(timeout: Self.existenceTimeout), message, file: file, line: line)
     }
 
+    /// 遅延して描く表の段が出るまでスクロールする(見つかったら止める)。
+    private func scrollUntilExists(_ app: XCUIApplication, prefix: String) {
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+        for _ in 0..<Self.maxScrolls where !first.exists {
+            app.swipeUp()
+        }
+    }
+
     /// 画面外の要素をタップできる位置までスクロールする(画面は縦に長い単一の ScrollView)。
     private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement) {
         for _ in 0..<Self.maxScrolls where !(target.exists && target.isHittable) {
@@ -248,6 +256,8 @@ final class SpeedScreenUITests: XCTestCase {
         wait(element(app, "speedResultTieEntry-0"), "同速の一覧が出る")
         XCTAssertFalse(element(app, "speedResultNoTie").exists)
         XCTAssertFalse(element(app, "speedBoundary").exists, "同じ実数値の段があるときは境界線を引かない")
+        // 下部タブの分だけ見える高さが減り、表の段(遅延して描く)が画面の外にあることがあるので、出るまで送る(ADR-0531)。
+        scrollUntilExists(app, prefix: "speedTierSelf-")
         waitForAny(app, prefix: "speedTierSelf-", "自分と同じ段が強調される")
         XCTAssertFalse(elements(app, prefix: "speedTierTie-").isEmpty, "同速の段にはバッジが出る")
     }
