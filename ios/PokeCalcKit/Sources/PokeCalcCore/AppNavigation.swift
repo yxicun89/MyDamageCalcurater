@@ -108,3 +108,20 @@ public enum AppNavigationText {
     /// タブ内の区切りの VoiceOver の見出し。
     public static let segmentsLabel = "画面の切り替え"
 }
+
+/// 画面の持ち方(ADR-0531 §2)。画面を離れたときに進行中の入力・送信を取り消すかを決める。
+public enum ScreenLifetime: Sendable {
+    /// タブ・区切りの画面。破棄しないので、離れても(タブ・区切りを移っても)送信は最後まで完了させる。
+    /// 取り消すと「入力は新しいのに結果は古い」「送信が黙って消える」になるため。
+    case retained
+    /// 画面の中から積んだ画面(記録から開いた計算など)。戻ると破棄されるので、離れたら取り消す(issue #113 A6)。
+    case pushed
+
+    /// `.onDisappear` で `cancelPendingWork()` を呼ぶか。
+    public var cancelsPendingWorkOnDisappear: Bool {
+        switch self {
+        case .retained: false
+        case .pushed: true
+        }
+    }
+}

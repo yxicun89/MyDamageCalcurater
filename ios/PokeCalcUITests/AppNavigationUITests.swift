@@ -106,6 +106,26 @@ final class AppNavigationUITests: XCTestCase {
         XCTAssertFalse(app.buttons["attackerPreset-none"].isSelected)
     }
 
+    /// 入力を変えた直後(計算の完了を待たず)にタブを移って戻っても、計算は取り消されず、新しい入力の結果が出ている
+    /// (読み込み中のまま・エラーのままにならない。ADR-0531 §2)。モックは即時に返すので、途中の取り消しそのものは
+    /// `RetainedScreenWorkTests` が確かめる。
+    func testInputChangedJustBeforeTabSwitchShowsResultAfterReturning() {
+        let app = launch()
+        XCTAssertTrue(element(app, "calcResultRow-none@-").waitForExistence(timeout: Self.existenceTimeout))
+        let preset = app.buttons["attackerPreset-aFull"]
+        preset.tap()
+        app.tabButton(UITestNavigation.TabID.speed).tap()
+        XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout))
+        app.selectTab(UITestNavigation.TabID.damage)
+
+        XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(preset.isSelected, "新しい入力が残る")
+        XCTAssertTrue(element(app, "calcResultRow-none@-").waitForExistence(timeout: Self.existenceTimeout), "結果が出ている")
+        XCTAssertTrue(
+            element(app, "calcLoadingIndicator").waitForNonExistence(timeout: Self.existenceTimeout), "読み込み中のままにならない")
+        XCTAssertFalse(element(app, "calcErrorMessage").exists, "取り消しをエラーにしない")
+    }
+
     /// ダメージタブの区切り: 計算 → 逆算 → 計算 → 逆算 と切り替えても、それぞれの入力が残る。
     func testDamageSegmentsKeepEachInput() {
         let app = launch()

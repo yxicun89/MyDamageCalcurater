@@ -28,7 +28,14 @@ struct JudgeScreenView: View {
     @State private var viewModel: JudgeViewModel
     @State private var picker: JudgePicker?
 
-    init(service: any JudgeService, master: any PokeCalcService, teamStore: any TeamStore) {
+    /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
+    private let lifetime: ScreenLifetime
+
+    init(
+        service: any JudgeService, master: any PokeCalcService, teamStore: any TeamStore,
+        lifetime: ScreenLifetime = .retained
+    ) {
+        self.lifetime = lifetime
         _viewModel = State(initialValue: JudgeViewModel(service: service, master: master, teamStore: teamStore))
     }
 
@@ -52,7 +59,8 @@ struct JudgeScreenView: View {
         .task { await viewModel.load() }
         // タブを移って戻ったら構築を読み直す(構築タブで作った構築を呼び出せるように。ADR-0531)。
         .onReappear { Task { await viewModel.loadTeams() } }
-        .onDisappear { viewModel.cancelPendingWork() }
+        // 戻ると破棄される画面(積んだ画面)だけ、離れたら入力・送信を止める(issue #113 A6・ADR-0531 §2)。
+        .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
         .sheet(item: $picker) { picker in
             sheetContent(for: picker)
         }

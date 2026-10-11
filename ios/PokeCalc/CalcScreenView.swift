@@ -33,12 +33,16 @@ struct CalcScreenView: View {
     /// 表示の有無に関わらず高さを固定で確保する(批評「任意」対応)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
+    /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
+    private let lifetime: ScreenLifetime
+
     init(
         service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
         favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil,
-        restoringFavorite: RestoringFavorite? = nil
+        restoringFavorite: RestoringFavorite? = nil, lifetime: ScreenLifetime = .retained
     ) {
+        self.lifetime = lifetime
         _viewModel = State(
             initialValue: CalcViewModel(service: service, teamStore: teamStore))
         _frequentOpponents = State(
@@ -132,8 +136,8 @@ struct CalcScreenView: View {
         }
         // タブを移って戻ったら構築を読み直す(構築タブで作った構築を呼び出せるように。ADR-0531)。
         .onReappear { Task { await viewModel.loadTeams() } }
-        // 画面破棄で保持中の入力 Task を止める(issue #113 A6)。
-        .onDisappear { viewModel.cancelPendingWork() }
+        // 戻ると破棄される画面(積んだ画面)だけ、離れたら入力・送信を止める(issue #113 A6・ADR-0531 §2)。
+        .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
     }
 
     private var backendBadge: some View {

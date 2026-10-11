@@ -37,7 +37,9 @@ struct FavoritesFeature: AppFeature {
                             service: context.core.pokeCalc, teamStore: context.teamStore,
                             backendDescription: context.core.backendDescription,
                             frequentOpponentsService: context.core.frequentOpponents, favoritesService: service,
-                            restoring: favorite == nil ? calc : nil, restoringFavorite: favorite))
+                            restoring: favorite == nil ? calc : nil, restoringFavorite: favorite,
+                            // 記録の画面に積む計算は、戻ると破棄されるので離れたら取り消す(ADR-0531 §2)。
+                            lifetime: .pushed))
                 }))
     }
 }
