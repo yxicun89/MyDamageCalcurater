@@ -243,3 +243,15 @@
   margin: 0;
   color: var(--text-secondary);
 }
+
+.team-balance__threats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.team-balance__threats-heading {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+}
