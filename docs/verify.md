@@ -2,6 +2,7 @@
 
 上から順に実行する。各コマンドの下の「→」が成功の見え方。
 入口は 1 つ: **ブラウザ・iOS とも `http://localhost:8080`**(k3d → Traefik → gateway)。
+別アプリ「欲しいものリスト」の手順は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)。
 1-1(クラスタ作成とマスタ投入)は破壊的な操作を含むので、人間が自分のターミナルで実行する(Claude Code では先頭に `!` を付ける)。
 
 ## 0. 前提(初回だけ)

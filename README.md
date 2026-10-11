@@ -3,11 +3,16 @@
 ポケモンチャンピオンズ向けのダメージ計算・構築ビルダー。純粋 Go の計算 engine を、API(Go のマイクロサービス)と
 ブラウザ WASM の両方から使います。
 
+同じリポジトリに、別アプリ「欲しいものリスト」(`apps/wishlist/`)も置いています。ダメージ計算とは機能もデータも
+共有せず、同じ k3d クラスタ(namespace `wishlist`)と MySQL のインスタンスだけを共用します。説明は
+[apps/wishlist/README.md](apps/wishlist/README.md)。
+
 ## 何が動くか
 
 - ブラウザ(Web): ダメージ計算・逆算・タイプバランス・素早さ比較・判定・構築ビルダー。オフライン(WASM。架空の例データ)とオンライン(API。実データ)の両方
 - サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・judge・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
 - iOS アプリ(SwiftUI。`make ios-test`)
+- 別アプリ「欲しいものリスト」: 欲しいものを画像で並べ、各サイトの目安価格と検索リンクを出す(Web〈PWA〉・iOS・API・夜間の価格取得。[apps/wishlist/README.md](apps/wishlist/README.md))
 - 未実装: `make assets`(画像の変換・配信。終了コード 2)と、k3d の有無で変わる E2E の一部(クラスタ分は `make up` が前提)
 - 進捗と残りの作業は [docs/plan.md](docs/plan.md)(索引)から辿る区画のファイル `docs/plan/`(状態の正)。要件・テスト・設計の入口は [docs/README.md](docs/README.md)
 
@@ -111,3 +116,4 @@ kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存�
 | `deploy/` / `scripts/` | k3d/Kustomize と開発補助 |
 | `.claude/` / `.codex/` | 各ツールのエージェント・ワークフロー設定 |
 | `docs/` | 要件、設計、テスト戦略、進捗、ADR、引き継ぎ |
+| `apps/wishlist/` | 別アプリ「欲しいものリスト」(API・Web・iOS・k8s・手順書を中に持つ。仕様は `apps/wishlist/CLAUDE.md`) |
