@@ -82,7 +82,7 @@ private struct SpeedSelfSection: View {
             } label: {
                 HStack(spacing: SpacingToken.x2) {
                     if let selected = viewModel.selectedPokemon {
-                        SpeedEmblem(name: selected.nameJa, primaryType: selected.types.first ?? "")
+                        SpeedEmblem(name: selected.nameJa, primaryType: selected.types.first ?? "", speciesKey: selected.pokemonId)
                     }
                     Text(viewModel.selectedPokemon?.nameJa ?? SpeedLabels.unselected)
                         .font(TextStyleToken.body.font)

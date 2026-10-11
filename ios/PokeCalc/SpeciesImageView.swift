@@ -17,24 +17,31 @@ extension EnvironmentValues {
 }
 
 /// `SpeciesEmblemView` の置き換え先。エンブレムと同じ直径の円に画像を切り抜く(文字サイズで大きくならない)。
-struct SpeciesImageView: View {
+/// `fallback` は画像が無い・読み込み中・失敗のときの表示(既定はタイプ色エンブレム。素早さ表などは小さい直径の自前エンブレム)。
+struct SpeciesImageView<Fallback: View>: View {
     let speciesKey: String?
-    let name: String
-    let types: [PokeType]
+    let diameter: CGFloat
+    private let fallback: Fallback
 
     @Environment(\.imageCatalog) private var catalog
     @State private var url: URL?
+
+    init(speciesKey: String?, diameter: CGFloat = SpeciesEmblemView.diameter, @ViewBuilder fallback: () -> Fallback) {
+        self.speciesKey = speciesKey
+        self.diameter = diameter
+        self.fallback = fallback()
+    }
 
     var body: some View {
         content
             .task(id: speciesKey) {
                 // キーが変わったら、新しい引き当てが済むまで前のポケモンの画像を残さない(エンブレムに戻す)。
                 url = nil
-                guard let key = SpeciesImageDisplay.lookupKey(speciesKey: speciesKey) else {
-                    url = nil
-                    return
-                }
-                url = await catalog.imageURL(speciesKey: key, size: .thumb)
+                guard let key = SpeciesImageDisplay.lookupKey(speciesKey: speciesKey) else { return }
+                let resolved = await catalog.imageURL(speciesKey: key, size: .thumb)
+                // 待っている間にキーが変わっていたら捨てる(ステイル応答)。
+                guard !Task.isCancelled else { return }
+                url = resolved
             }
     }
 
@@ -47,19 +54,25 @@ struct SpeciesImageView: View {
                     image
                         .resizable()
                         .scaledToFill()
-                        .frame(width: SpeciesEmblemView.diameter, height: SpeciesEmblemView.diameter)
+                        .frame(width: diameter, height: diameter)
                         .clipShape(Circle())
                         // 装飾(名前は隣のテキストが読む)。label は付けず、identifier だけで枠を公開する。
                         .accessibilityElement(children: .ignore)
                         .accessibilityIdentifier("speciesImage-\(key)")
                 case .empty, .failure:
-                    SpeciesEmblemView(name: name, types: types)
+                    fallback
                 @unknown default:
-                    SpeciesEmblemView(name: name, types: types)
+                    fallback
                 }
             }
         } else {
-            SpeciesEmblemView(name: name, types: types)
+            fallback
         }
+    }
+}
+
+extension SpeciesImageView where Fallback == SpeciesEmblemView {
+    init(speciesKey: String?, name: String, types: [PokeType]) {
+        self.init(speciesKey: speciesKey) { SpeciesEmblemView(name: name, types: types) }
     }
 }
