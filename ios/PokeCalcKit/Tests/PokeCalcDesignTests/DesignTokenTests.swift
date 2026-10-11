@@ -18,16 +18,16 @@ final class DesignTokenTests: XCTestCase {
     func testBaseColorTokensMatchDesignDoc() {
         let cases: [(name: String, token: ColorPair, light: RGBA, dark: RGBA)] = [
             ("bg.base", ColorToken.bgBase,
-             RGBA(red: 0xF4, green: 0xF5, blue: 0xF7, alpha: 1.0),
-             RGBA(red: 0x0E, green: 0x10, blue: 0x15, alpha: 1.0)),
+             RGBA(red: 0xEE, green: 0xF6, blue: 0xFF, alpha: 1.0),
+             RGBA(red: 0x0B, green: 0x16, blue: 0x24, alpha: 1.0)),
             ("bg.glass", ColorToken.bgGlass,
              RGBA(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0.70),
-             RGBA(red: 0x1A, green: 0x1D, blue: 0x24, alpha: 0.60)),
+             RGBA(red: 0x16, green: 0x25, blue: 0x3B, alpha: 0.60)),
             ("text.primary", ColorToken.textPrimary,
              RGBA(red: 0x14, green: 0x16, blue: 0x1A, alpha: 1.0),
              RGBA(red: 0xF2, green: 0xF3, blue: 0xF5, alpha: 1.0)),
             ("text.secondary", ColorToken.textSecondary,
-             RGBA(red: 0x5C, green: 0x62, blue: 0x70, alpha: 1.0),
+             RGBA(red: 0x4F, green: 0x5B, blue: 0x70, alpha: 1.0),
              RGBA(red: 0xA3, green: 0xA9, blue: 0xB6, alpha: 1.0)),
             ("border.hairline", ColorToken.borderHairline,
              RGBA(red: 0x00, green: 0x00, blue: 0x00, alpha: 0.08),
@@ -66,23 +66,23 @@ final class DesignTokenTests: XCTestCase {
     /// ドラゴン=dragon、あく=dark、はがね=steel、フェアリー=fairy)。タイプ色は不透明。
     private static let expectedTypeColors: [String: (Int, Int, Int)] = [
         "normal": (0x9F, 0xA1, 0x9F),
-        "fire": (0xE8, 0x62, 0x2B),
-        "water": (0x3B, 0x8F, 0xE0),
-        "electric": (0xF2, 0xC2, 0x1B),
-        "grass": (0x4C, 0xAF, 0x50),
-        "ice": (0x5C, 0xC8, 0xD8),
-        "fighting": (0xD0, 0x45, 0x3A),
-        "poison": (0x9B, 0x51, 0xC6),
-        "ground": (0xB8, 0x86, 0x3B),
-        "flying": (0x7F, 0xA7, 0xE8),
-        "psychic": (0xE8, 0x51, 0x7F),
-        "bug": (0x93, 0xB2, 0x1E),
-        "rock": (0xA9, 0x9A, 0x62),
-        "ghost": (0x6B, 0x55, 0xA8),
-        "dragon": (0x51, 0x60, 0xD8),
+        "fire": (0xE3, 0x64, 0x30),
+        "water": (0x3F, 0x8F, 0xDC),
+        "electric": (0xED, 0xBF, 0x20),
+        "grass": (0x4E, 0xAD, 0x52),
+        "ice": (0x5F, 0xC6, 0xD5),
+        "fighting": (0xCF, 0x4A, 0x40),
+        "poison": (0x9A, 0x54, 0xC3),
+        "ground": (0xB5, 0x85, 0x3E),
+        "flying": (0x82, 0xA8, 0xE5),
+        "psychic": (0xE4, 0x55, 0x80),
+        "bug": (0x91, 0xAE, 0x22),
+        "rock": (0xA7, 0x99, 0x64),
+        "ghost": (0x6C, 0x57, 0xA6),
+        "dragon": (0x54, 0x63, 0xD5),
         "dark": (0x54, 0x47, 0x4A),
-        "steel": (0x6E, 0x93, 0xA8),
-        "fairy": (0xE6, 0x8A, 0xD6),
+        "steel": (0x6F, 0x93, 0xA7),
+        "fairy": (0xE4, 0x8C, 0xD4),
     ]
 
     func testTypeColorsMatchDesignDocForAll18Types() throws {
@@ -146,7 +146,7 @@ final class DesignTokenTests: XCTestCase {
         }
     }
 
-    /// 最小は かくとう の 4.59:1、次が どく の 4.79:1(design.md)。
+    /// 最小は かくとう の 4.71:1、次が どく の 4.74:1(design.md。空色と白で彩度を 0.95 倍にした後の値)。
     func testMinimumTypeInkContrastIsAbout4_59() throws {
         var ratios: [(id: String, ratio: Double)] = []
         for typeID in TypeColorToken.allTypeIDs {
@@ -156,9 +156,9 @@ final class DesignTokenTests: XCTestCase {
         }
         let sorted = ratios.sorted { $0.ratio < $1.ratio }
         XCTAssertEqual(sorted[0].id, "fighting")
-        XCTAssertEqual(sorted[0].ratio, 4.59, accuracy: 0.01)
+        XCTAssertEqual(sorted[0].ratio, 4.71, accuracy: 0.01)
         XCTAssertEqual(sorted[1].id, "poison")
-        XCTAssertEqual(sorted[1].ratio, 4.79, accuracy: 0.01)
+        XCTAssertEqual(sorted[1].ratio, 4.74, accuracy: 0.01)
     }
 
     /// 純粋関数 `preferredInk(over:)` の境界: 黒背景→白、白背景→黒、中間の灰(#777777 は黒 4.69:1 / 白 4.48:1 で黒、#757575 は白 4.61 / 黒 4.56 で白、#707070 は白)。
