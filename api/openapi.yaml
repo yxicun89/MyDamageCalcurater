@@ -2558,8 +2558,9 @@ components:
         selfSpeed: { type: integer, description: この手の開始時の自分の素早さ(実数値にランク・補正・まひを掛けた値) }
         opponentSpeed:
           type: integer
-          nullable: true
-          description: この手の開始時の相手の素早さ。リクエストの opponentSpeed が from_defender のときだけ(unknown は null)
+          description: |
+            この手の開始時の相手の素早さ。リクエストの opponentSpeed が from_defender のときだけ意味を持つ(unknown は 0。
+            `speed.opponentSpeedKnown` で区別する。WASM の calcCombo と同じ形。ADR-0252)
         selfPriority: { type: integer }
         opponentPriority: { type: integer, description: 相手の技の優先度(相手の技なしは 0) }
         order: { $ref: '#/components/schemas/ComboTurnOrder' }
@@ -2599,14 +2600,12 @@ components:
     ComboSpeed:
       type: object
       description: 素早さの要約
-      required: [firstSelfSpeed, lastSelfSpeed, opponentSpeed]
+      required: [firstSelfSpeed, lastSelfSpeed, opponentSpeed, opponentSpeedKnown]
       properties:
         firstSelfSpeed: { type: integer, description: 1 手目の開始時の自分の素早さ }
         lastSelfSpeed: { type: integer, description: 最後の手の開始時の自分の素早さ }
-        opponentSpeed:
-          type: integer
-          nullable: true
-          description: 1 手目の開始時の相手の素早さ。`from_defender` のときだけ(`unknown` は null)
+        opponentSpeed: { type: integer, description: 1 手目の開始時の相手の素早さ(opponentSpeedKnown が false なら 0) }
+        opponentSpeedKnown: { type: boolean, description: リクエストの opponentSpeed が from_defender か }
 
     ComboOpponentTiming:
       type: string
@@ -2639,9 +2638,9 @@ components:
       description: |
         連続技を撃ち終わるまでに受ける相手の攻撃。行動順の決まらない手(`speed_tie`・`depends_on_opponent_speed`)を
         相手が先とした場合が `fast`(行動回数 = maxActions。画面はこちらを主に出す)、自分が先とした場合が `slow`(= minActions)
-      required: [selfHP, minActions, maxActions, fast, slow]
+      required: [selfHp, minActions, maxActions, fast, slow]
       properties:
-        selfHP: { type: integer, description: 自分(攻撃側)の最大 HP }
+        selfHp: { type: integer, description: 自分(攻撃側)の最大 HP }
         minActions: { type: integer }
         maxActions: { type: integer }
         fast: { $ref: '#/components/schemas/ComboOpponentScenario' }

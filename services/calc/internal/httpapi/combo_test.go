@@ -4,8 +4,8 @@ package httpapi
 //
 //   - K1 素通し: 成功時は同じ入力を engine.CalcCombo に直接渡した結果の写し(テスト側の独立した写し comboResultOf と一致)。
 //     opponentSpeed の省略は unknown、speedField の省略は全部 false、critical の省略は false、hits の省略は 0(既定の回数)。
-//   - K2 null の出し分け: 変化技の手の damage・相手の技なしの opponentAttack・unknown の opponentSpeed は null(キーは省かない)。
-//     印なしの unsupported は [](null にしない)。
+//   - K2 null の出し分け: 変化技の手の damage・相手の技なしの opponentAttack は null(キーは省かない)。unknown の opponentSpeed は 0 で
+//     speed.opponentSpeedKnown が false(WASM の calcCombo と同じ形)。印なしの unsupported は [](null にしない)。
 //   - K3(AC-13)各手の damage は、その手の開始時のランク(自分 = selfStartRanks・相手 = opponentStartRanks)を入れた
 //     POST /api/calc の応答(CalcResult)と同じ。
 //   - K4(AC-16)入力の検査: 手 0 件・4 件は ID の解決より前に 400 invalid_input(マスタを 1 回も引かない)。
@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"sort"
 	"testing"
 
 	"example.com/pokecalc/engine"
@@ -187,7 +188,7 @@ func comboResultOf(r engine.ComboResult) api.ComboResult {
 		st := api.ComboStepResult{
 			MoveId: s.MoveID, SelfStartRanks: comboRanksOf(s.SelfStartRanks), SelfEndRanks: comboRanksOf(s.SelfEndRanks),
 			OpponentStartRanks: comboRanksOf(s.OpponentStartRanks), OpponentEndRanks: comboRanksOf(s.OpponentEndRanks),
-			SelfSpeed: s.SelfSpeed, SelfPriority: s.SelfPriority, OpponentPriority: s.OpponentPriority,
+			SelfSpeed: s.SelfSpeed, OpponentSpeed: s.OpponentSpeed, SelfPriority: s.SelfPriority, OpponentPriority: s.OpponentPriority,
 			Order: api.ComboTurnOrder(s.Order),
 			Line: api.ComboSpeedLine{SelfSpeed: s.Line.SelfSpeed,
 				SelfFirst:     api.ComboSpeedRange{Min: s.Line.SelfFirst.Min, Max: s.Line.SelfFirst.Max},
@@ -197,10 +198,6 @@ func comboResultOf(r engine.ComboResult) api.ComboResult {
 			d := comboCalcResultOf(*s.Damage)
 			st.Damage = &d
 		}
-		if r.Speed.OpponentSpeedKnown {
-			v := s.OpponentSpeed
-			st.OpponentSpeed = &v
-		}
 		out.Steps = append(out.Steps, st)
 	}
 	minT, maxT := r.Total.DisplayPercentRangeTenths()
@@ -209,13 +206,10 @@ func comboResultOf(r engine.ComboResult) api.ComboResult {
 	for _, k := range r.Total.KOByStep {
 		out.Total.KoByStep = append(out.Total.KoByStep, comboKOOf(k))
 	}
-	out.Speed = api.ComboSpeed{FirstSelfSpeed: r.Speed.FirstSelfSpeed, LastSelfSpeed: r.Speed.LastSelfSpeed}
-	if r.Speed.OpponentSpeedKnown {
-		v := r.Speed.OpponentSpeed
-		out.Speed.OpponentSpeed = &v
-	}
+	out.Speed = api.ComboSpeed{FirstSelfSpeed: r.Speed.FirstSelfSpeed, LastSelfSpeed: r.Speed.LastSelfSpeed,
+		OpponentSpeed: r.Speed.OpponentSpeed, OpponentSpeedKnown: r.Speed.OpponentSpeedKnown}
 	if a := r.OpponentAttack; a != nil {
-		out.OpponentAttack = &api.ComboOpponentAttack{SelfHP: a.SelfHP, MinActions: a.MinActions, MaxActions: a.MaxActions,
+		out.OpponentAttack = &api.ComboOpponentAttack{SelfHp: a.SelfHP, MinActions: a.MinActions, MaxActions: a.MaxActions,
 			Fast: comboScenarioOf(a.Fast), Slow: comboScenarioOf(a.Slow)}
 	}
 	for _, m := range r.Unsupported {
@@ -336,12 +330,15 @@ func TestCalcComboHTTPNullFields(t *testing.T) {
 		t.Errorf("攻撃技の手の damage = %s(ある=%v), want CalcResult", v, ok)
 	}
 	for i, s := range raw.Steps {
-		if v, ok := s["opponentSpeed"]; !ok || string(v) != "null" {
-			t.Errorf("steps[%d].opponentSpeed = %s(ある=%v), want null(unknown)", i, v, ok)
+		if v, ok := s["opponentSpeed"]; !ok || string(v) != "0" {
+			t.Errorf("steps[%d].opponentSpeed = %s(ある=%v), want 0(unknown。WASM と同じ形)", i, v, ok)
 		}
 	}
-	if v, ok := raw.Speed["opponentSpeed"]; !ok || string(v) != "null" {
-		t.Errorf("speed.opponentSpeed = %s(ある=%v), want null(unknown)", v, ok)
+	if v, ok := raw.Speed["opponentSpeed"]; !ok || string(v) != "0" {
+		t.Errorf("speed.opponentSpeed = %s(ある=%v), want 0(unknown)", v, ok)
+	}
+	if v, ok := raw.Speed["opponentSpeedKnown"]; !ok || string(v) != "false" {
+		t.Errorf("speed.opponentSpeedKnown = %s(ある=%v), want false(unknown)", v, ok)
 	}
 }
 
@@ -540,11 +537,11 @@ func TestCalcComboContractHelperIsNotVacuous(t *testing.T) {
 	const line = `"line":{"selfSpeed":142,"selfFirst":{"min":0,"max":141},"opponentFirst":{"min":143,"max":10000}}`
 	const ranks = `{"atk":0,"def":0,"spa":0,"spd":0,"spe":0}`
 	step := `{"moveId":"test-dance","selfStartRanks":` + ranks + `,"selfEndRanks":` + ranks + `,"opponentStartRanks":` + ranks +
-		`,"opponentEndRanks":` + ranks + `,"damage":null,"selfSpeed":142,"opponentSpeed":null,"selfPriority":0,"opponentPriority":0,` +
+		`,"opponentEndRanks":` + ranks + `,"damage":null,"selfSpeed":142,"opponentSpeed":0,"selfPriority":0,"opponentPriority":0,` +
 		`"order":"depends_on_opponent_speed",` + line + `}`
 	total := `"total":{"minDamage":0,"maxDamage":0,"minPercent":0,"maxPercent":0,"defenderHP":200,` +
 		`"ko":{"chancePercent":0,"guaranteed":false,"displayChancePercent":0},"koByStep":[{"chancePercent":0,"guaranteed":false,"displayChancePercent":0}]}`
-	speed := `"speed":{"firstSelfSpeed":142,"lastSelfSpeed":142,"opponentSpeed":null}`
+	speed := `"speed":{"firstSelfSpeed":142,"lastSelfSpeed":142,"opponentSpeed":0,"opponentSpeedKnown":false}`
 	tests := []struct {
 		name    string
 		body    string
@@ -553,7 +550,7 @@ func TestCalcComboContractHelperIsNotVacuous(t *testing.T) {
 		{"妥当な結果", `{"steps":[` + step + `],` + total + `,` + speed + `,"opponentAttack":null,"unsupported":[]}`, false},
 		{"opponentAttack の欠落", `{"steps":[` + step + `],` + total + `,` + speed + `,"unsupported":[]}`, true},
 		{"order が語彙外", `{"steps":[` + `{"moveId":"x","selfStartRanks":` + ranks + `,"selfEndRanks":` + ranks + `,"opponentStartRanks":` + ranks +
-			`,"opponentEndRanks":` + ranks + `,"damage":null,"selfSpeed":1,"opponentSpeed":null,"selfPriority":0,"opponentPriority":0,` +
+			`,"opponentEndRanks":` + ranks + `,"damage":null,"selfSpeed":1,"opponentSpeed":0,"selfPriority":0,"opponentPriority":0,` +
 			`"order":"later",` + line + `}],` + total + `,` + speed + `,"opponentAttack":null,"unsupported":[]}`, true},
 	}
 	for _, tt := range tests {
@@ -567,5 +564,65 @@ func TestCalcComboContractHelperIsNotVacuous(t *testing.T) {
 				t.Errorf("検証エラー = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// AC-18 の代用(ADR-0252「AC-18」): WASM の calcCombo(engine/wasmapi/combo.go。CB-5 のブランチで先行)が main に入るまで、
+// 応答のキーの集合が CB-5 の DTO と同じであることを固定する(値の一致は K1 の engine.CalcCombo との比較で見る)。
+// wasmapi.CalcCombo が main に入ったら parity_test.go の流儀で同じ入力の JSON を突き合わせるテストに置き換える。
+func TestCalcComboResponseKeysMatchWasmShape(t *testing.T) {
+	h := NewHandler(newComboStore(t), nil)
+	rec := post(t, h, pathCombo, mustJSON(t, comboCases()[3].httpBody()), true) // 相手の技あり・from_defender・3 手
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d; body=%s", rec.Code, rec.Body)
+	}
+	object := func(raw json.RawMessage) map[string]json.RawMessage {
+		var m map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &m); err != nil {
+			t.Fatalf("オブジェクトでない: %s", raw)
+		}
+		return m
+	}
+	keysOf := func(raw json.RawMessage) []string {
+		var out []string
+		for k := range object(raw) {
+			out = append(out, k)
+		}
+		sort.Strings(out)
+		return out
+	}
+	first := func(raw json.RawMessage) json.RawMessage {
+		var a []json.RawMessage
+		if err := json.Unmarshal(raw, &a); err != nil || len(a) == 0 {
+			t.Fatalf("空でない配列でない: %s", raw)
+		}
+		return a[0]
+	}
+	sorted := func(ks ...string) []string { sort.Strings(ks); return ks }
+	top := object(rec.Body.Bytes())
+	step := first(top["steps"])
+	oa := top["opponentAttack"]
+	fast := object(oa)["fast"]
+	tests := []struct {
+		name string
+		raw  json.RawMessage
+		want []string
+	}{
+		{"ComboResult", rec.Body.Bytes(), sorted("steps", "total", "speed", "opponentAttack", "unsupported")},
+		{"steps[]", step, sorted("moveId", "selfStartRanks", "selfEndRanks", "opponentStartRanks", "opponentEndRanks", "damage",
+			"selfSpeed", "opponentSpeed", "selfPriority", "opponentPriority", "order", "line")},
+		{"steps[].line", object(step)["line"], sorted("selfSpeed", "selfFirst", "opponentFirst")},
+		{"steps[].selfStartRanks", object(step)["selfStartRanks"], sorted("atk", "def", "spa", "spd", "spe")},
+		{"total", top["total"], sorted("minDamage", "maxDamage", "defenderHP", "minPercent", "maxPercent", "ko", "koByStep")},
+		{"total.ko", object(top["total"])["ko"], sorted("chancePercent", "guaranteed", "displayChancePercent")},
+		{"speed", top["speed"], sorted("firstSelfSpeed", "lastSelfSpeed", "opponentSpeed", "opponentSpeedKnown")},
+		{"opponentAttack", oa, sorted("selfHp", "fast", "slow", "minActions", "maxActions")},
+		{"opponentAttack.fast", fast, sorted("actions", "surviveChancePercent")},
+		{"opponentAttack.fast.actions[]", first(object(fast)["actions"]), sorted("step", "timing", "damage", "surviveChancePercent")},
+	}
+	for _, tt := range tests {
+		if got := keysOf(tt.raw); !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("%s のキー = %v, want %v(WASM の calcCombo と同じ形)", tt.name, got, tt.want)
+		}
 	}
 }

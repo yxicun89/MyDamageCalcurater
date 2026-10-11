@@ -106,6 +106,8 @@ func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
 	e.POST("/api/calc/adjust/allocation", wrapper.AdjustAllocation, guard)
 	// 複数の目標(ADR-0177 §9)。
 	e.POST("/api/calc/adjust/goals", wrapper.AdjustGoals, guard)
+	// 連続技(ADR-0252)。ほかの計算と同じ guard を通す。
+	e.POST("/api/calc/combo", wrapper.CalcCombo, guard)
 }
 
 // registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを

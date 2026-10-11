@@ -57,6 +57,8 @@ func registerDeferredCalcRoutes(e *echo.Echo, current StoreFunc, publisher Event
 	e.POST("/api/calc/adjust/min-sp-to-survive", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustMinSpToSurvive }), guard)
 	e.POST("/api/calc/adjust/allocation", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustAllocation }), guard)
 	e.POST("/api/calc/adjust/goals", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.AdjustGoals }), guard)
+	// 連続技(ADR-0252。準備中は 503 master_unavailable)。
+	e.POST("/api/calc/combo", deferredCalcHandler(current, publisher, func(w *api.ServerInterfaceWrapper) echo.HandlerFunc { return w.CalcCombo }), guard)
 }
 
 // deferredCalcHandler は、current() が nil の間は 503 master_unavailable、Store が用意できたら
