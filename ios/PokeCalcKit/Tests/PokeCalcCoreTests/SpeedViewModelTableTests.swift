@@ -160,6 +160,7 @@ final class SpeedViewModelTableTests: XCTestCase {
         XCTAssertEqual(top.entries.first?.presetLabel, "最速スカーフ")
         XCTAssertEqual(top.entries.first?.nameJa, "テストカソウドリ")
         XCTAssertEqual(top.entries.first?.primaryType, "fire", "エンブレムは先頭のタイプ")
+        XCTAssertEqual(top.entries.first?.speciesKey, "9001-000", "G-06: 画像の引き当てキーは pokemonId(= 種族キー)")
         XCTAssertFalse(second.isTie)
     }
 

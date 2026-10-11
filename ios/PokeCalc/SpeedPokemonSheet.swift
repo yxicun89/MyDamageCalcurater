@@ -38,7 +38,7 @@ struct SpeedPokemonSheet: View {
                         dismiss()
                     } label: {
                         HStack(spacing: SpacingToken.x2) {
-                            SpeedEmblem(name: pokemon.nameJa, primaryType: pokemon.types.first ?? "")
+                            SpeedEmblem(name: pokemon.nameJa, primaryType: pokemon.types.first ?? "", speciesKey: pokemon.pokemonId)
                             Text(pokemon.nameJa)
                                 .font(TextStyleToken.body.font)
                                 .foregroundStyle(ColorToken.textPrimary.color)

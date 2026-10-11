@@ -56,12 +56,13 @@ public struct ImageManifest: Equatable, Sendable {
     }
 }
 
-/// 基点 URL + `/images/` + 相対パス。危険・不正な相対パスは nil(画像なし)。
+/// 基点 URL + `/images/` + 相対パス。危険・不正・`.webp` で終わらない相対パスは nil(画像なし)。
 public enum PokeImageURL {
     /// 拒否: 空・先頭 `/`・`..` や空のセグメント・scheme(`:`)・`//host`・制御文字・`?` `#` `\\` `%` を含む。
     /// 基点 URL の末尾スラッシュ有無・パスの有無(`http://h/prefix`)の両方で `/images/` を1本だけ挟む。
     public static func url(baseURL: URL, relativePath: String) -> URL? {
         guard !relativePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            relativePath.hasSuffix(".webp"),  // Web と同じ規則(G-06。manifest の画像は webp)
             !relativePath.hasPrefix("/"),
             !relativePath.unicodeScalars.contains(where: { forbiddenScalars.contains($0) })
         else { return nil }
