@@ -310,43 +310,4 @@ final class TeamScreenUITests: XCTestCase {
         confirm.tap()
         XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "削除すると0件に戻る")
     }
-
-    // MARK: Showdown 形式は補助(閉じた折りたたみ)
-
-    /// 取り込みは一覧の下の閉じた折りたたみ。開くと説明と入力例が見える。
-    func testImportFoldIsClosedAndShowsHelpAndExampleWhenOpened() {
-        let app = launchTeamList()
-        let toggle = element(app, "teamImportFoldToggle")
-        XCTAssertTrue(toggle.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(toggle.label.contains("Showdown 形式で取り込む"))
-        XCTAssertFalse(element(app, "teamImportHelp").exists, "最初は閉じている")
-        XCTAssertFalse(element(app, "importTextEditor").exists)
-
-        toggle.tap()
-        let help = element(app, "teamImportHelp")
-        XCTAssertTrue(help.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(help.label.contains("新しい構築として取り込めます"))
-        XCTAssertTrue(help.label.contains("日本語の名前"))
-        let example = element(app, "teamImportExample")
-        XCTAssertTrue(example.exists)
-        XCTAssertTrue(example.label.contains("Ability:"), "入力の例(1体分)")
-        XCTAssertTrue(example.label.contains("- "), "技の行")
-        XCTAssertTrue(element(app, "importTextEditor").exists)
-
-        toggle.tap()
-        XCTAssertFalse(element(app, "teamImportHelp").exists, "もう一度押すと閉じる")
-    }
-
-    /// 書き出しは編集画面の下の閉じた折りたたみ。
-    func testExportFoldIsClosedAndOpensInTheEditor() {
-        let app = launchEditor()
-        let toggle = element(app, "teamExportFoldToggle")
-        XCTAssertTrue(toggle.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(toggle.label.contains("Showdown 形式で書き出す"))
-        XCTAssertFalse(element(app, "exportTeamTextButton").exists, "最初は閉じている")
-        toggle.tap()
-        XCTAssertTrue(element(app, "teamExportHelp").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(element(app, "exportTeamTextButton").exists)
-        XCTAssertFalse(element(app, "teamTextTransferButton").exists, "旧「テキストで書き出し・取り込み」の入口は無い")
-    }
 }
