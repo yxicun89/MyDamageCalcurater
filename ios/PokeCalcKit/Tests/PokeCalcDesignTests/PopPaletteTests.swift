@@ -4,31 +4,35 @@ import XCTest
 @testable import PokeCalcDesign
 
 /// docs/design.md「ポップ配色」(ADR-0334 / F-12)の値を、実装の写しではなく design.md の表から
-/// **独立に**書き写して照合する(coding-rules §2)。design.md を変えたら、この表も同じ変更で直す。
+/// **独立に**書き写して照合する(coding-rules §2)。配色 K(ADR-0530)以降の値の正は docs/ai-shared/decisions/2026-10-11-ios-palette-sky-white.md(Web が追うまで design.md の表と異なる)。design.md を変えたら、この表も同じ変更で直す。
 /// Web の `web/src/styles/popPalette.test.ts` の `CONTRAST_PAIRS` と同じ組み合わせでコントラストも固定する。
 final class PopPaletteTests: XCTestCase {
 
     /// design.md の表(トークン名は camelCase。値は #RRGGBB。shadow.color だけ黒の alpha)。
     private static let expected: [(name: String, light: String, dark: String)] = [
-        ("brandPrimary", "1F5FD6", "7FA8FF"),
-        ("onPrimary", "FFFFFF", "0E1015"),
+        ("brandPrimary", "1D66D0", "7DB4FF"),
+        ("onPrimary", "FFFFFF", "0B1624"),
         ("brandAccent", "FFCB05", "FFD84D"),
         ("onAccent", "14161A", "14161A"),
         ("success", "17743A", "5FD38A"),
         ("successSoft", "E2F5E8", "12301F"),
+        ("matchupResist", "0A5E8E", "6CCBF5"),
+        ("matchupResistSoft", "D7F0FB", "0E2F40"),
+        ("matchupImmune", "4A5568", "AEB8C6"),
+        ("matchupImmuneSoft", "E6E9EE", "222B38"),
         ("warning", "9A5B00", "FFB547"),
         ("warningSoft", "FFF1D6", "33240B"),
         ("info", "0B6BA8", "5EC2F2"),
         ("infoSoft", "DCEFFB", "0C2A3A"),
         ("dangerSoft", "FDE3E4", "3A1416"),
-        ("onDanger", "FFFFFF", "0E1015"),
-        ("surfaceCard", "FFFFFF", "1A1D24"),
-        ("bgGradientStart", "FFF6E0", "14131C"),
-        ("bgGradientEnd", "E8F1FF", "0E1622"),
-        ("tableHeader", "DCE7FB", "1C2638"),
-        ("tableZebra", "EEF2F8", "151922"),
-        ("tableHover", "E3ECFB", "1D2535"),
-        ("focusRing", "1F5FD6", "7FA8FF"),
+        ("onDanger", "FFFFFF", "0B1624"),
+        ("surfaceCard", "FFFFFF", "16253B"),
+        ("bgGradientStart", "F4F9FF", "10203A"),
+        ("bgGradientEnd", "E6F1FF", "0B1624"),
+        ("tableHeader", "D9E9FC", "1B2E4A"),
+        ("tableZebra", "E9F3FE", "122035"),
+        ("tableHover", "DDEBFD", "1B2C45"),
+        ("focusRing", "1D66D0", "7DB4FF"),
     ]
 
     private static func hex(_ value: String) -> RGBA {
@@ -47,8 +51,8 @@ final class PopPaletteTests: XCTestCase {
             XCTAssertEqual(pair.dark, Self.hex(row.dark), "\(row.name) dark")
         }
         let shadow = try token("shadowColor")
-        XCTAssertEqual(shadow.light, RGBA(red: 0, green: 0, blue: 0, alpha: 0.10))
-        XCTAssertEqual(shadow.dark, RGBA(red: 0, green: 0, blue: 0, alpha: 0.40))
+        XCTAssertEqual(shadow.light, RGBA(red: 0x14, green: 0x3C, blue: 0x78, alpha: 0.12))
+        XCTAssertEqual(shadow.dark, RGBA(red: 0, green: 0, blue: 0, alpha: 0.45))
         XCTAssertEqual(ColorToken.popPalette.count, Self.expected.count + 1, "design.md に無い色を足さない")
     }
 
@@ -87,10 +91,12 @@ final class PopPaletteTests: XCTestCase {
             ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"), ("brandPrimary", "tableZebra"),
             ("danger", "bgGradientStart"), ("danger", "bgGradientEnd"), ("danger", "tableZebra"),
             ("success", "bgBase"), ("success", "surfaceCard"), ("success", "successSoft"),
+            ("matchupResist", "bgBase"), ("matchupResist", "surfaceCard"), ("matchupResist", "matchupResistSoft"),
+            ("matchupImmune", "bgBase"), ("matchupImmune", "surfaceCard"), ("matchupImmune", "matchupImmuneSoft"),
             ("warning", "bgBase"), ("warning", "surfaceCard"), ("warning", "warningSoft"),
             ("info", "bgBase"), ("info", "surfaceCard"), ("info", "infoSoft"),
             ("danger", "surfaceCard"), ("danger", "dangerSoft"), ("onDanger", "danger"),
-            ("textPrimary", "successSoft"), ("textPrimary", "warningSoft"),
+            ("textPrimary", "successSoft"), ("textPrimary", "matchupResistSoft"), ("textPrimary", "matchupImmuneSoft"), ("textPrimary", "warningSoft"),
             ("textPrimary", "infoSoft"), ("textPrimary", "dangerSoft"),
         ]
         for background in ["bgGradientStart", "bgGradientEnd", "surfaceCard", "tableHeader", "tableZebra", "tableHover"] {
@@ -101,6 +107,8 @@ final class PopPaletteTests: XCTestCase {
     }()
 
     private static let nonTextPairs: [(String, String)] = [
+        ("matchupResist", "surfaceCard"), ("matchupResist", "matchupResistSoft"), ("matchupResist", "bgBase"),
+        ("matchupImmune", "surfaceCard"), ("matchupImmune", "matchupImmuneSoft"), ("matchupImmune", "bgBase"),
         ("focusRing", "bgBase"), ("focusRing", "surfaceCard"),
         ("focusRing", "bgGradientStart"), ("focusRing", "bgGradientEnd"),
         ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"),

@@ -68,19 +68,19 @@ extension ColorPair {
 /// design.md「ベース」の6色。
 public enum ColorToken {
     public static let bgBase = ColorPair(
-        light: RGBA(red: 0xF4, green: 0xF5, blue: 0xF7, alpha: 1.0),
-        dark: RGBA(red: 0x0E, green: 0x10, blue: 0x15, alpha: 1.0)
+        light: RGBA(red: 0xEE, green: 0xF6, blue: 0xFF, alpha: 1.0),
+        dark: RGBA(red: 0x0B, green: 0x16, blue: 0x24, alpha: 1.0)
     )
     public static let bgGlass = ColorPair(
         light: RGBA(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0.70),
-        dark: RGBA(red: 0x1A, green: 0x1D, blue: 0x24, alpha: 0.60)
+        dark: RGBA(red: 0x16, green: 0x25, blue: 0x3B, alpha: 0.60)
     )
     public static let textPrimary = ColorPair(
         light: RGBA(red: 0x14, green: 0x16, blue: 0x1A, alpha: 1.0),
         dark: RGBA(red: 0xF2, green: 0xF3, blue: 0xF5, alpha: 1.0)
     )
     public static let textSecondary = ColorPair(
-        light: RGBA(red: 0x5C, green: 0x62, blue: 0x70, alpha: 1.0),
+        light: RGBA(red: 0x4F, green: 0x5B, blue: 0x70, alpha: 1.0),
         dark: RGBA(red: 0xA3, green: 0xA9, blue: 0xB6, alpha: 1.0)
     )
     public static let borderHairline = ColorPair(
@@ -104,9 +104,9 @@ extension ColorToken {
     }
 
     /// 主ボタン・選択中のタブとチップの塗り・リンク。
-    public static let brandPrimary = solid(0x1F5FD6, 0x7FA8FF)
+    public static let brandPrimary = solid(0x1D66D0, 0x7DB4FF)
     /// `brandPrimary` の塗りの上の文字。
-    public static let onPrimary = solid(0xFFFFFF, 0x0E1015)
+    public static let onPrimary = solid(0xFFFFFF, 0x0B1624)
     /// 塗りの装飾だけ(星・ハイライト)。文字色・境界線には使わない。
     public static let brandAccent = solid(0xFFCB05, 0xFFD84D)
     /// `brandAccent` の塗りの上の文字。
@@ -115,6 +115,14 @@ extension ColorToken {
     public static let success = solid(0x17743A, 0x5FD38A)
     /// 成功の案内の塗り。
     public static let successSoft = solid(0xE2F5E8, 0x12301F)
+    /// 耐性(×1/2 以下)の文字・枠・アイコン。緑でなく水色〜シアン系(弱点の `danger` の赤・主色の青と区別。色だけで示さず文字/アイコンも併用する)。
+    public static let matchupResist = solid(0x0A5E8E, 0x6CCBF5)
+    /// 耐性の案内・背景の塗り。
+    public static let matchupResistSoft = solid(0xD7F0FB, 0x0E2F40)
+    /// 無効(×0)の文字・枠・アイコン(灰。ADR-0422 §3)。
+    public static let matchupImmune = solid(0x4A5568, 0xAEB8C6)
+    /// 無効の案内・背景の塗り。
+    public static let matchupImmuneSoft = solid(0xE6E9EE, 0x222B38)
     /// 注意の文字・アイコン。
     public static let warning = solid(0x9A5B00, 0xFFB547)
     /// 注意の案内の塗り。
@@ -126,31 +134,33 @@ extension ColorToken {
     /// エラーの案内の塗り(文字は `danger`)。
     public static let dangerSoft = solid(0xFDE3E4, 0x3A1416)
     /// `danger` の塗り(危険ボタン)の上の文字。
-    public static let onDanger = solid(0xFFFFFF, 0x0E1015)
+    public static let onDanger = solid(0xFFFFFF, 0x0B1624)
     /// カード・ボタン(副)の不透明な面。
-    public static let surfaceCard = solid(0xFFFFFF, 0x1A1D24)
-    /// 背景のやさしいグラデーション(上)。
-    public static let bgGradientStart = solid(0xFFF6E0, 0x14131C)
-    /// 背景のやさしいグラデーション(下)。
-    public static let bgGradientEnd = solid(0xE8F1FF, 0x0E1622)
+    public static let surfaceCard = solid(0xFFFFFF, 0x16253B)
+    /// 背景のごく淡い空色(上。下との差はわずか)。
+    public static let bgGradientStart = solid(0xF4F9FF, 0x10203A)
+    /// 背景のごく淡い空色(下)。
+    public static let bgGradientEnd = solid(0xE6F1FF, 0x0B1624)
     /// 表の見出し行。
-    public static let tableHeader = solid(0xDCE7FB, 0x1C2638)
+    public static let tableHeader = solid(0xD9E9FC, 0x1B2E4A)
     /// 表・一覧の偶数行。
-    public static let tableZebra = solid(0xEEF2F8, 0x151922)
+    public static let tableZebra = solid(0xE9F3FE, 0x122035)
     /// 表・一覧の押下中の行(Web ではホバー)。
-    public static let tableHover = solid(0xE3ECFB, 0x1D2535)
+    public static let tableHover = solid(0xDDEBFD, 0x1B2C45)
     /// フォーカスの輪。
-    public static let focusRing = solid(0x1F5FD6, 0x7FA8FF)
-    /// 影の色(黒 10% / 40%)。
+    public static let focusRing = solid(0x1D66D0, 0x7DB4FF)
+    /// 影の色(ライトは青みの #143C78 12% / ダークは黒 45%)。
     public static let shadowColor = ColorPair(
-        light: RGBA(red: 0, green: 0, blue: 0, alpha: 0.10),
-        dark: RGBA(red: 0, green: 0, blue: 0, alpha: 0.40)
+        light: RGBA(red: 0x14, green: 0x3C, blue: 0x78, alpha: 0.12),
+        dark: RGBA(red: 0, green: 0, blue: 0, alpha: 0.45)
     )
 
     /// ポップ配色の全トークン(名前つき。テストと一覧用)。
     public static let popPalette: [(name: String, pair: ColorPair)] = [
         ("brandPrimary", brandPrimary), ("onPrimary", onPrimary), ("brandAccent", brandAccent),
         ("onAccent", onAccent), ("success", success), ("successSoft", successSoft),
+        ("matchupResist", matchupResist), ("matchupResistSoft", matchupResistSoft),
+        ("matchupImmune", matchupImmune), ("matchupImmuneSoft", matchupImmuneSoft),
         ("warning", warning), ("warningSoft", warningSoft), ("info", info), ("infoSoft", infoSoft),
         ("dangerSoft", dangerSoft), ("onDanger", onDanger), ("surfaceCard", surfaceCard),
         ("bgGradientStart", bgGradientStart), ("bgGradientEnd", bgGradientEnd),
@@ -168,23 +178,23 @@ public enum TypeColorToken {
     /// 宣言順は openapi `PokeType` enum の宣言順と同じにする。
     private static let orderedEntries: [(id: String, rgba: RGBA)] = [
         ("normal", RGBA(red: 0x9F, green: 0xA1, blue: 0x9F, alpha: 1.0)),
-        ("fire", RGBA(red: 0xE8, green: 0x62, blue: 0x2B, alpha: 1.0)),
-        ("water", RGBA(red: 0x3B, green: 0x8F, blue: 0xE0, alpha: 1.0)),
-        ("electric", RGBA(red: 0xF2, green: 0xC2, blue: 0x1B, alpha: 1.0)),
-        ("grass", RGBA(red: 0x4C, green: 0xAF, blue: 0x50, alpha: 1.0)),
-        ("ice", RGBA(red: 0x5C, green: 0xC8, blue: 0xD8, alpha: 1.0)),
-        ("fighting", RGBA(red: 0xD0, green: 0x45, blue: 0x3A, alpha: 1.0)),
-        ("poison", RGBA(red: 0x9B, green: 0x51, blue: 0xC6, alpha: 1.0)),
-        ("ground", RGBA(red: 0xB8, green: 0x86, blue: 0x3B, alpha: 1.0)),
-        ("flying", RGBA(red: 0x7F, green: 0xA7, blue: 0xE8, alpha: 1.0)),
-        ("psychic", RGBA(red: 0xE8, green: 0x51, blue: 0x7F, alpha: 1.0)),
-        ("bug", RGBA(red: 0x93, green: 0xB2, blue: 0x1E, alpha: 1.0)),
-        ("rock", RGBA(red: 0xA9, green: 0x9A, blue: 0x62, alpha: 1.0)),
-        ("ghost", RGBA(red: 0x6B, green: 0x55, blue: 0xA8, alpha: 1.0)),
-        ("dragon", RGBA(red: 0x51, green: 0x60, blue: 0xD8, alpha: 1.0)),
+        ("fire", RGBA(red: 0xE3, green: 0x64, blue: 0x30, alpha: 1.0)),
+        ("water", RGBA(red: 0x3F, green: 0x8F, blue: 0xDC, alpha: 1.0)),
+        ("electric", RGBA(red: 0xED, green: 0xBF, blue: 0x20, alpha: 1.0)),
+        ("grass", RGBA(red: 0x4E, green: 0xAD, blue: 0x52, alpha: 1.0)),
+        ("ice", RGBA(red: 0x5F, green: 0xC6, blue: 0xD5, alpha: 1.0)),
+        ("fighting", RGBA(red: 0xCF, green: 0x4A, blue: 0x40, alpha: 1.0)),
+        ("poison", RGBA(red: 0x9A, green: 0x54, blue: 0xC3, alpha: 1.0)),
+        ("ground", RGBA(red: 0xB5, green: 0x85, blue: 0x3E, alpha: 1.0)),
+        ("flying", RGBA(red: 0x82, green: 0xA8, blue: 0xE5, alpha: 1.0)),
+        ("psychic", RGBA(red: 0xE4, green: 0x55, blue: 0x80, alpha: 1.0)),
+        ("bug", RGBA(red: 0x91, green: 0xAE, blue: 0x22, alpha: 1.0)),
+        ("rock", RGBA(red: 0xA7, green: 0x99, blue: 0x64, alpha: 1.0)),
+        ("ghost", RGBA(red: 0x6C, green: 0x57, blue: 0xA6, alpha: 1.0)),
+        ("dragon", RGBA(red: 0x54, green: 0x63, blue: 0xD5, alpha: 1.0)),
         ("dark", RGBA(red: 0x54, green: 0x47, blue: 0x4A, alpha: 1.0)),
-        ("steel", RGBA(red: 0x6E, green: 0x93, blue: 0xA8, alpha: 1.0)),
-        ("fairy", RGBA(red: 0xE6, green: 0x8A, blue: 0xD6, alpha: 1.0)),
+        ("steel", RGBA(red: 0x6F, green: 0x93, blue: 0xA7, alpha: 1.0)),
+        ("fairy", RGBA(red: 0xE4, green: 0x8C, blue: 0xD4, alpha: 1.0)),
     ]
     private static let colorsByTypeID: [String: RGBA] = Dictionary(
         uniqueKeysWithValues: orderedEntries.map { ($0.id, $0.rgba) }

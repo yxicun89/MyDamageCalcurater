@@ -112,6 +112,8 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 - iOS(ADR-0521): 同じ名前(camelCase。`brandPrimary`・`onPrimary`・`bgGradientStart`・`shadowColor` など)で `PokeCalcDesign` の `ColorToken` に置き、値は上の表と同じ。
   背景は `popScreenBackground()` が bgBase の上に上→下のグラデーションを画面に固定する。`tableHover` は押下中の行(iOS にホバーは無い)。
   iOS のカード・ボタン・チップは Liquid Glass(`glassEffect`)をやめ、不透明の surfaceCard にする(下の「共通の部品」)。値の検査は `PopPaletteTests`
+- **iOS の配色 K「空色と白」(ADR-0530。2026-10-11)**: iOS は上の表・ベース・タイプ色より先に新配色(淡い空色の背景・白いカード・主色 #1D66D0・タイプ色の彩度×0.95・ダークは紺)へ差し替えた。
+  新旧の値の表は docs/ai-shared/decisions/2026-10-11-ios-palette-sky-white.md。Web が追うときにこの節の表と同時に直し、この項を消す(それまで iOS のテストは決定ファイルの値で固定)
 
 ### 共通の部品
 `web/src/styles/components.css` の `.ui-*` クラス(ADR-0334 §2)。画面の CSS は配置だけを持ち、見た目はこれらを足して使う。色・角丸・影・時間はトークンだけを参照する。

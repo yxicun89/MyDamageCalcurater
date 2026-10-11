@@ -74,4 +74,6 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 
 2026-10-11(G-01 技の行とタイプ順。ブランチ feat/ios-g01-move-rows。ADR-0527): 技の行をタイプ丸アイコン+技名+分類アイコン+威力の 1 行にし(読み上げは全情報)、並びをタイプ順だけにした(`MoveSortOrder`・`MoveSortStore`・チップを廃止。`MoveSort.byType`)。計算画面のみ群見出しつき。Web の ADR-0335 は Web レーンが更新する。
 
+2026-10-11(G-05 配色 K「空色と白」。ブランチ feat/ios-g05-palette-sky。ADR-0530): `PokeCalcDesign` の色トークンの値だけを差し替え(キー名・画面は不変)。主色 #1D66D0(#2F80ED は白に 3.87:1 で届かず)・背景は淡い空色・タイプ色は彩度×0.95(かくとうだけ黒文字を保つ明度)・ダークは紺。PopPaletteTests/DesignTokenTests の期待値を新値に更新(検査は弱めず)。Web 未反映のため design.md の表は触らず、値の表は decisions/2026-10-11-ios-palette-sky-white.md。
+
 2026-10-11(G-06 ポケモン画像を各所に。ブランチ feat/ios-g06-images。ADR-0529): 既存の `SpeciesImageView`(ADR-0508)を fallback・直径を差し替えられる形に一般化し、素早さ表・相手選択シート・判定結果の行(`SpeedEmblem` 経由)、お気に入り・計算履歴・よく計算する相手の行に足した(`SpeedEntryDisplay`/`JudgeMatchupDisplay` に `speciesKey`)。manifest の相対パスは `.webp` のみ(Web と同じ)。画像なしは従来のエンブレム。後続: 詳細画像(detail)の使い道は詳細画面ができてから。
