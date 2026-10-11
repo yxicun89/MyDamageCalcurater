@@ -237,3 +237,5 @@ Status(追記 2026-10-11): I-web-13b(G-05 計算の画面、ADR-0345)= 計算を
 
 Status(追記 2026-10-11): I-web-13c(G-05 逆算の画面、ADR-0346)= 逆算を `PokemonCard`・`SegmentedControl`・チップ・候補のカード + バッジ・バーに作り直し、共通の `SpeciesSearchField` の補足の文を「説明」ボタンの奥へ(`ReverseScreen.tsx`・`.css`・`SpeciesSearchField.tsx`・`ToggleChip.tsx`)。既存テストの付け替えは `ReverseScreen.visual.test.tsx` の 2 件・`SpeciesSearchField.test.tsx`/`speciesSearch.test.ts` の補足の 1 件ずつ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-reverse.md`。次は I-web-13d(構築)。
 注(13c): 種族検索欄の補足の文が「説明」ボタンの奥に移ったのは共通部品 `SpeciesSearchField` の変更で、計算・タイプバランス・構築の検索欄にも効く。
+
+Status(追記 2026-10-11): I-web-13d(G-05 構築の画面、ADR-0347)= 構築を 6 枠のタイルの格子(`TeamSlotGrid.tsx`)・SP の − / +・アイコンだけのボタン・一覧のカードの 6 枠に作り直した。既存テストの付け替えは 2 件のみ(空の一覧の文を短くしたため `teamRebuildText.test.ts`・`App.deviceData.test.tsx`)。技の `MovePicker` 化は I-web-13d2 に分けた。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-team.md`。次は I-web-13e(素早さ。speed レーンと調整)。

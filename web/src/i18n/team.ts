@@ -22,8 +22,8 @@ export const teamScreenText = {
   listHeading: "保存した構築",
   /** 一覧を読み込んでいる間([新しい構築]は先に使える。ADR-0309 §4)。 */
   loadingNotice: "読み込み中",
-  /** 1件も無いとき(エラーと取り違えない案内。次にすることを書く)。 */
-  emptyNotice: "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます",
+  /** 1件も無いとき(大きいアイコン + 短い一言。次にすることは「新しい構築」のボタンが示す。G-05)。 */
+  emptyNotice: "まだ構築がありません",
   /** 構築1件の要約(メンバー数・最終更新)。 */
   memberCountLabel: (count: number, max: number): string => `${count}/${max}体`,
   updatedAtLabel: (date: string): string => `最終更新 ${date}`,
@@ -35,7 +35,6 @@ export const teamScreenText = {
   createLabel: "新しい構築",
   /** カードの見える文字(ボタンの名前は editLabel / deleteLabel の「<名前>」を含む文。WCAG 2.5.3)。 */
   openLabel: "開く",
-  deleteShortLabel: "削除",
   // ---- 削除(2段階。window.confirm は使わない。ADR-0309 §5)----
   deleteLabel: (name: string): string => `「${name}」を削除`,
   deleteConfirmLabel: (name: string): string => `「${name}」の削除を確定`,
@@ -69,6 +68,9 @@ export const teamMemberText = {
   /** 空の枠の案内。 */
   emptySlotHint: "ポケモンを選ぶと、技・持ち物・特性などを決められます",
   memberLegend: (position: number): string => `${position}体目`,
+  /** 6 枠のタイルの格子(role="group")の名前と、空きのタイル(「+」)の見える名前(G-05)。 */
+  slotsLabel: "メンバー",
+  slotAddLabel: (position: number): string => `${position}体目を追加`,
   removeLabel: (position: number): string => `${position}体目を外す`,
   moveUpLabel: (position: number): string => `${position}体目を上へ`,
   moveDownLabel: (position: number): string => `${position}体目を下へ`,

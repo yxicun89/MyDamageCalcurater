@@ -12,6 +12,7 @@ import type { components } from "../api/openapi.gen";
 import { teamMemberText, teamScreenText } from "../i18n/ja";
 import { PokemonImage } from "../images/PokemonImage";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
 import "./TeamScreen.css";
 import { TeamMemberEditor } from "./TeamMemberEditor";
@@ -220,6 +221,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
             void handleCreate();
           }}
         >
+          <Icon name="plus" size={20} />
           {teamScreenText.createLabel}
         </button>
         {createState.error !== null && (
@@ -241,7 +243,10 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         </div>
       )}
       {list.status === "loaded" && list.teams.length === 0 && (
-        <p className="ui-notice ui-notice--empty team-screen__notice">{teamScreenText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty team-screen__notice team-screen__empty">
+          <Icon name="team" size={48} />
+          {teamScreenText.emptyNotice}
+        </p>
       )}
       {list.status === "loaded" && list.teams.length > 0 && (
         <ul aria-label={teamScreenText.listLabel} className="team-screen__list">
@@ -297,7 +302,7 @@ function TeamCard({
 }: TeamCardProps) {
   return (
     <li className="ui-card team-card">
-      <span className="team-card__name">{displayName}</span>
+      <h3 className="team-card__name">{displayName}</h3>
       <div
         role="group"
         aria-label={teamScreenText.memberIconsLabel(displayName)}
@@ -311,7 +316,7 @@ function TeamCard({
               key={index}
               role="img"
               aria-label={species?.nameJa ?? teamScreenText.unknownMemberIcon(index + 1)}
-              className="team-card__icon"
+              className="team-card__icon team-card__slot"
             >
               <PokemonImage
                 speciesKey={member.speciesKey}
@@ -328,6 +333,13 @@ function TeamCard({
             </span>
           );
         })}
+        {Array.from({ length: Math.max(0, MAX_TEAM_MEMBERS - team.members.length) }, (_, index) => (
+          <span
+            key={`empty-${String(index)}`}
+            aria-hidden="true"
+            className="team-card__slot team-card__slot--empty"
+          />
+        ))}
       </div>
       <span className="team-card__meta">
         {teamScreenText.memberCountLabel(team.members.length, MAX_TEAM_MEMBERS)}
@@ -342,16 +354,17 @@ function TeamCard({
           data-open-team={team.id}
           onClick={onOpen}
         >
+          <Icon name="edit" size={20} />
           {teamScreenText.openLabel}
         </button>
         {deleteState === null && (
           <button
             type="button"
-            className="ui-button ui-button--danger"
+            className="ui-button ui-button--danger team-screen__icon-button"
             aria-label={teamScreenText.deleteLabel(displayName)}
             onClick={onOpenDelete}
           >
-            {teamScreenText.deleteShortLabel}
+            <Icon name="trash" size={20} />
           </button>
         )}
       </div>

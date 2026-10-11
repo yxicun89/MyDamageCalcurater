@@ -19,6 +19,8 @@ export interface PokemonCardProps {
   readonly small?: boolean;
   readonly onClick?: () => void;
   readonly className?: string;
+  /** -1 にすると Tab の順から外す(onClick があるときだけ効く)。 */
+  readonly tabIndex?: number;
 }
 
 export function PokemonCard({
@@ -30,6 +32,7 @@ export function PokemonCard({
   small = false,
   onClick,
   className,
+  tabIndex,
 }: PokemonCardProps): ReactElement {
   const classes = ["ui-pokemon-card"];
   if (small) {
@@ -64,7 +67,7 @@ export function PokemonCard({
     return <div className={classes.join(" ")}>{content}</div>;
   }
   return (
-    <button type="button" className={classes.join(" ")} onClick={onClick}>
+    <button type="button" className={classes.join(" ")} tabIndex={tabIndex} onClick={onClick}>
       {content}
     </button>
   );

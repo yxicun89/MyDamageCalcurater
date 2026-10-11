@@ -17,8 +17,10 @@ import type {
 } from "../master/types";
 import { selectableAbilities } from "../domain/requests";
 import { useSpeciesResolutions } from "../screens/speciesResolution";
+import { Icon } from "../ui/Icon";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
+import { TeamSlotGrid } from "./TeamSlotGrid";
 import type { TeamClient, TeamError } from "./teamClient";
 import { changeSpecies, correctMegaItem, type MegaItemCorrection, type MemberDraft } from "./teamMember";
 import { defaultNatureId } from "./teamMemberOptions";
@@ -177,6 +179,16 @@ export function TeamMemberEditor({
     slot?.querySelector<HTMLElement>("select, input")?.focus();
   }, [focusRequest]);
 
+  /** 格子のタイルを押したとき: その枠の先頭の欄(空の枠では「ポケモン」欄)へ移る。 */
+  function jumpToSlot(index: number): void {
+    const slot = editorRef.current?.querySelectorAll<HTMLElement>("fieldset.team-member")[index];
+    const field = slot?.querySelector<HTMLElement>("select, input");
+    field?.focus();
+    // jsdom などには scrollIntoView が無いので、あるときだけ呼ぶ。
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    slot?.scrollIntoView?.({ block: "nearest" });
+  }
+
   function edit(update: (entries: readonly Entry[]) => readonly Entry[]): void {
     setState((current) => ({ ...current, entries: update(current.entries) }));
     setSaved(false);
@@ -308,6 +320,19 @@ export function TeamMemberEditor({
         </div>
       )}
 
+      <TeamSlotGrid
+        slots={state.entries.map((entry) => {
+          const key = entry.draft.speciesKey;
+          return {
+            speciesKey: key,
+            species: key === null ? null : resolutions.speciesFor(master.species, key),
+            itemId: entry.draft.itemId,
+          };
+        })}
+        items={master.items}
+        onSelect={jumpToSlot}
+      />
+
       {state.entries.map((entry, index) => {
         const key = entry.draft.speciesKey;
         const species = key === null ? null : resolutions.speciesFor(master.species, key);
@@ -352,11 +377,17 @@ export function TeamMemberEditor({
         >
           {teamMemberText.saveLabel}
         </button>
-        {unsaved && <span className="team-member-editor__unsaved">{teamMemberText.unsavedNotice}</span>}
+        {unsaved && (
+          <span className="team-member-editor__unsaved">
+            <Icon name="alert" size={16} />
+            {teamMemberText.unsavedNotice}
+          </span>
+        )}
       </div>
 
       {saved && (
         <p role="status" className="team-member-editor__notice">
+          <Icon name="check" size={16} />
           {teamMemberText.savedNotice}
         </p>
       )}
