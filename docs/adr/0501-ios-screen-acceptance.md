@@ -4893,3 +4893,17 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `CalcMoveSortUITests` 切り替え 2 件 | 並び・見出し・切り替え無し・選択・AX5 の行の 3 件に置換 | チップを廃止 |
 
 検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。
+
+## G-05 配色「K. 空色と白」への差し替え(ADR-0530。2026-10-11)
+
+受け入れ条件: (1) ポップ配色 20 色・ベース色・タイプ色が新しい値になり、`PopPaletteTests` のコントラスト(文字 4.5:1・枠/輪 3:1)とタイプ文字 4.5:1 がライト/ダークともそのまま通る。
+(2) 画面コード・識別子は不変。値の新旧の表は docs/ai-shared/decisions/2026-10-11-ios-palette-sky-white.md。
+
+### 既存テストの変更(値の固定だけ。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `PopPaletteTests` の期待値表・影 | 新しい値へ | 配色の差し替え(ユーザー決定) |
+| `DesignTokenTests` のベース色(bgBase・bgGlass ダーク・textSecondary ライト) | 新しい値へ | 同上。textSecondary は淡い空色の上で 4.5:1 を保つため少し濃く |
+| `DesignTokenTests` のタイプ色 16 色 | 新しい値へ(彩度×0.95) | 同上 |
+| `DesignTokenTests` の最小コントラスト(かくとう 4.59→4.71、どく 4.79→4.74) | 期待値を更新 | 色が変わったため。文字色の黒/白の選び(白は4タイプだけ)は不変 |
