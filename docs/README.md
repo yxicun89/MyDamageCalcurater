@@ -53,6 +53,16 @@
 | [runbooks/ios.md](runbooks/ios.md) | iOS(シミュレータ・モック) |
 | [runbooks/ios-device-install.md](runbooks/ios-device-install.md) | iOS 実機インストール(Tailscale serve。人間の作業) |
 
+## 別アプリ「欲しいものリスト」(apps/wishlist/)
+
+ダメージ計算とは別のアプリ。文書はアプリの中に置いている。
+
+| 文書 | 内容 |
+|---|---|
+| [../apps/wishlist/README.md](../apps/wishlist/README.md) | 何をするアプリか・構成・文書の入口 |
+| [../apps/wishlist/CLAUDE.md](../apps/wishlist/CLAUDE.md) | 仕様の正(画面・目安価格・データモデル・API・フェーズ) |
+| [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) | 動作確認の手順 |
+
 ## Claude Code / Codex 共有(ai-shared/)
 
 | 文書 | 内容 |
