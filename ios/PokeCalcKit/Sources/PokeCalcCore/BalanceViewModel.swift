@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-// BalanceViewModel: タイプバランス画面の状態(ADR-0415。第1段=防御相性・チーム集計、第2段=攻撃範囲、
+// BalanceViewModel: 構築編集の中の「タイプバランス」の状態(ADR-0421・ADR-0532。もとは別画面。ADR-0415。第1段=防御相性・チーム集計、第2段=攻撃範囲、
 // 第3段=仮想敵・おすすめタイプ・技範囲チェッカー〈§8〉)。
 //
 // マスタ(種族・技・特性)は構築画面と同じ `PokeCalcService` を再利用し、架空データへはフォールバックしない。
@@ -38,6 +38,8 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     private let master: any PokeCalcService
     private let refreshDebounce: Duration
     private let recommendationsDebounce: Duration
+    /// おすすめタイプの件数(nil なら送らない=契約の既定 10)。構築の節は `teamRecommendationsLimit`。
+    private let recommendationsLimit: Int?
     private let refreshRunner = LatestTaskRunner()
     private let threatsRunner = LatestTaskRunner()
     private let recommendationsRunner = LatestTaskRunner()
@@ -121,16 +123,22 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// おすすめタイプ専用の debounce の既定。サーバーは重い計算の同時数を絞り、超えると overloaded を返す(ADR-0409)ため、
     /// メンバーの編集ごとには呼ばず、操作が落ち着いてから1回だけ呼ぶ(ADR-0415 §8)。
     public static let defaultRecommendationsDebounce: Duration = .seconds(1)
+    /// 構築編集の中の「タイプバランス」の待ち(下書きの変更から送るまで。ADR-0421 §2)。
+    public static let teamRefreshDebounce: Duration = .milliseconds(300)
+    /// 構築編集の中の「タイプバランス」で出すおすすめタイプの数(上位 5 個。ADR-0422 §1)。
+    public static let teamRecommendationsLimit = 5
 
     public init(
         balance: any BalanceService, master: any PokeCalcService,
         refreshDebounce: Duration = MasterSearch.debounceInterval,
-        recommendationsDebounce: Duration = BalanceViewModel.defaultRecommendationsDebounce
+        recommendationsDebounce: Duration = BalanceViewModel.defaultRecommendationsDebounce,
+        recommendationsLimit: Int? = nil
     ) {
         self.balance = balance
         self.master = master
         self.refreshDebounce = refreshDebounce
         self.recommendationsDebounce = recommendationsDebounce
+        self.recommendationsLimit = recommendationsLimit
         speciesSearch = MasterSearchField(debounce: MasterSearch.debounceInterval) { query, limit in
             try await master.searchSpecies(query: query, limit: limit)
         }
@@ -272,28 +280,39 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         scheduleRefresh(for: slot)
     }
 
-    /// 保存済みの構築のメンバーで入れ替える。1体でもマスタを引けなければ入れ替えず `masterError` を立てる。
-    public func loadTeam(_ team: Team) async {
-        guard let loaded = await resolveParty(team.members) else { return }
-        await applyParty(loaded)
-    }
-
     /// 構築編集の下書きのメンバーを入力にする(ADR-0421)。空の枠は呼び出し側が除いて渡す(空配列なら結果を消し、要求を出さない)。
-    /// 今のメンバーと種族・特性・技が同じなら何もしない(送り直さない)。マスタを引けなければ今の結果を残し `masterError` を立てる。
+    /// 今のメンバーと種族・特性・技が同じなら何もしない(送り直さない)。マスタを引けなければ今の結果を残し `masterError` を立てる
+    /// (引けたら消す)。
     /// 連続して呼ばれたときは最後の呼び出しだけを反映する(待っている間に追い越された呼び出しは捨てる)。
     public func setParty(_ teamMembers: [TeamMember]) async {
         let wanted = Array(teamMembers.prefix(TeamLimits.maxMembers))
         partyGeneration += 1
         let token = partyGeneration
-        let sameAsCurrent =
-            wanted.count == members.count
+        guard !isCurrentParty(wanted) else { return }
+        guard let loaded = await resolveParty(wanted) else { return }
+        guard token == partyGeneration else { return }
+        // 引けたら、前の下書きで引けなかったときのエラーを消す(残ったままにしない)。
+        masterError = nil
+        await applyParty(loaded)
+    }
+
+    /// 節の「再計算」(ADR-0421 §2)。下書きが今のメンバーと違えば(マスタで失敗していたときなど)引き直し、
+    /// 同じなら analyze・coverage・(仮想敵があれば)threats を送り直す。おすすめは `refreshRecommendations()` で別に送る。
+    public func retry(party teamMembers: [TeamMember]) async {
+        masterError = nil
+        if isCurrentParty(Array(teamMembers.prefix(TeamLimits.maxMembers))) {
+            await refresh()
+        } else {
+            await setParty(teamMembers)
+        }
+    }
+
+    /// 今のメンバーと種族・特性・技が同じ(順も同じ)。
+    private func isCurrentParty(_ wanted: [TeamMember]) -> Bool {
+        wanted.count == members.count
             && zip(wanted, members).allSatisfy {
                 $0.speciesKey == $1.speciesKey && $0.abilityId == $1.abilityId && $0.moveIds == $1.moveIds
             }
-        guard !sameAsCurrent else { return }
-        guard let loaded = await resolveParty(wanted) else { return }
-        guard token == partyGeneration else { return }
-        await applyParty(loaded)
     }
 
     /// 構築のメンバーを順にマスタから引く。1体でも引けなければ `masterError` を立てて nil。
@@ -554,7 +573,7 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         }
     }
 
-    /// メンバーが1体以上のときだけ呼ぶ(仮想敵は含めない。`limit` は送らない)。失敗後の再試行にも使う。
+    /// メンバーが1体以上のときだけ呼ぶ(仮想敵は含めない。`limit` は `recommendationsLimit`)。失敗後の再試行にも使う。
     public func refreshRecommendations() async {
         guard !members.isEmpty else {
             clearRecommendations()
@@ -565,7 +584,7 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         isLoadingRecommendations = true
         let result: BalanceRecommendations
         do {
-            result = try await balance.recommendations(members: balanceInputs(members), limit: nil)
+            result = try await balance.recommendations(members: balanceInputs(members), limit: recommendationsLimit)
             guard token == recommendationsGeneration else { return }
             recommendations = result
             recommendationsError = nil

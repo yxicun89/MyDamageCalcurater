@@ -10,7 +10,6 @@ enum FeatureRegistry {
         ReverseFeature(),
         TeamListFeature(),
         AdjustFeature(),
-        BalanceFeature(),
         SpeedFeature(),
         JudgeFeature(),
         AboutFeature(),

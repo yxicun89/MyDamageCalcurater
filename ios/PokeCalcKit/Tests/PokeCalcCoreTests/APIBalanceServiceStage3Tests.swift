@@ -161,6 +161,43 @@ final class APIBalanceServiceStage3Tests: XCTestCase {
         XCTAssertEqual(result.abilityOptions[1].pokemon.count, 0)
     }
 
+    // MARK: - recommendations の skewedAttackTypes(契約 0.10.0。ADR-0422 §1)
+
+    private static let recommendationsWithSkewJSON = """
+    {"skewedAttackTypes":["fire","ground"],"defenseHoles":["fire"],"offenseHoles":[],
+     "candidates":[],"abilityOptions":[]}
+    """
+
+    func testRecommendationsMapsSkewedAttackTypesInResponseOrder() async throws {
+        let service = try makeService(transport: RecordingTransport(json: Self.recommendationsWithSkewJSON))
+
+        let result = try await service.recommendations(members: members, limit: 5)
+
+        XCTAssertEqual(result.skewedAttackTypes, [.fire, .ground])
+    }
+
+    func testRecommendationsWithoutSkewedAttackTypesIsEmpty() async throws {
+        let service = try makeService(transport: RecordingTransport(json: Self.recommendationsJSON))
+
+        let result = try await service.recommendations(members: members, limit: nil)
+
+        XCTAssertEqual(result.skewedAttackTypes, [], "0.10.0 より前のサーバー(項目なし)は空として扱う")
+    }
+
+    func testRecommendationsWithUnknownSkewedTypeIsDecodeError() async throws {
+        let json = """
+        {"skewedAttackTypes":["stellar"],"defenseHoles":[],"offenseHoles":[],"candidates":[],"abilityOptions":[]}
+        """
+        let service = try makeService(transport: RecordingTransport(json: json))
+
+        do {
+            _ = try await service.recommendations(members: members, limit: nil)
+            XCTFail("知らないタイプは decode エラー")
+        } catch let error as PokeCalcError {
+            XCTAssertEqual(error.code, PokeCalcError.Code.decode)
+        }
+    }
+
     // MARK: - move-range
 
     private static func typeChartJSON(fire: String) -> String {
