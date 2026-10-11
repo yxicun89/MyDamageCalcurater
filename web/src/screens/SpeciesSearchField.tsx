@@ -13,6 +13,7 @@ import {
 } from "../master/onlineSource";
 import type { MasterSpeciesResolution, MasterSpeciesSearch, MasterSpeciesSummary } from "../master/types";
 import { PokemonIcon } from "../images/PokemonIcon";
+import { HelpButton } from "../ui/HelpButton";
 import "./SpeciesSearchField.css";
 
 export interface SpeciesSearchFieldProps {
@@ -64,7 +65,6 @@ export function SpeciesSearchField({
   const debounceTimerRef = useRef<number | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const [followedName, setFollowedName] = useState<string | null>(selectedNameJa);
-  const hintId = useId();
   const listboxId = useId();
   const inputId = useId();
 
@@ -212,9 +212,13 @@ export function SpeciesSearchField({
       {/* critic指摘(issue 304): オンラインの種族検索欄はplaceholderだけで見えるラベルが無く、
           文字を入力すると消えてしまい SC 3.3.2 を満たさなかった。短い語(「ポケモン」)を見える
           ラベルにし、aria-label(既存のスロットの語。「攻撃側のポケモン」等)はそのまま残す。 */}
-      <label className="species-search__label" htmlFor={inputId}>
-        {calcScreenText.pokemonFieldLabel}
-      </label>
+      <div className="species-search__head">
+        <label className="species-search__label" htmlFor={inputId}>
+          {calcScreenText.pokemonFieldLabel}
+        </label>
+        {/* G-05(ADR-0339): 補足の文を出し続けず、「説明」ボタンの奥に置く。 */}
+        <HelpButton>{masterOnlineText.speciesSearchHint}</HelpButton>
+      </div>
       <input
         id={inputId}
         type="text"
@@ -225,7 +229,6 @@ export function SpeciesSearchField({
         aria-activedescendant={
           showListbox && highlightedCandidate !== undefined ? optionId(highlightedCandidate.key) : undefined
         }
-        aria-describedby={hintId}
         placeholder={masterOnlineText.speciesSearchLabel}
         value={inputText}
         disabled={disabled}
@@ -261,9 +264,6 @@ export function SpeciesSearchField({
           }
         }}
       />
-      <p id={hintId} className="species-search__hint">
-        {masterOnlineText.speciesSearchHint}
-      </p>
       {disabled && <p className="species-search__status">{masterOnlineText.speciesSearchFailed}</p>}
       {!disabled && status.kind === "empty" && (
         <p className="species-search__status">{masterOnlineText.speciesSearchEmpty}</p>

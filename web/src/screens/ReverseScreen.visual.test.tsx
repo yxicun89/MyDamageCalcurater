@@ -1,6 +1,6 @@
 // F-12 PR-2(I-web-12、ADR-0336 §2): 逆算画面への共通部品の適用。
 // 自分/相手のカードは ui-card ui-card--typed(--card-type は選んだ種族の最初のタイプ)、
-// ダメージ側・自分の調整の選択は ui-chip(選択中だけ ui-chip--selected)、ボタンは ui-button、
+// 自分の調整の選択は ui-chip(選択中だけ ui-chip--selected。ダメージの側・単位は I-web-13c で区切りボタンに)、ボタンは ui-button、
 // 案内・エラーは ui-notice、考えられる振り方の一覧は ui-rows。
 // 既存のクラス(reverse-*)・アクセシブルな名前・role・テキストは変えない(クラスの追加と包みだけ)。
 
@@ -73,20 +73,24 @@ describe("カード", () => {
 });
 
 describe("選択肢はチップ", () => {
-  test("どちらのダメージの側(ラジオ)は ui-chip。選択中だけ ui-chip--selected、切り替えに追従する", async () => {
+  // G-05(I-web-13c): 側は区切りボタン(.ui-segmented)になった。選択中の印は ui-chip--selected ではなく
+  // ui-segmented__option--selected(aria-checked と一致)。
+  test("どちらのダメージの側(ラジオ)は区切りボタン。選択中だけ ui-segmented__option--selected、切り替えに追従する", async () => {
     const user = renderScreen();
     const group = screen.getByRole("radiogroup", { name: "どちらのダメージ" });
+    expect(group).toHaveClass("ui-segmented", "reverse-side");
     for (const radio of within(group).getAllByRole("radio")) {
-      const option = radio.closest("label");
-      expect(option).toHaveClass("ui-chip", "reverse-side__option");
-      expect(option?.classList.contains("ui-chip--selected")).toBe((radio as HTMLInputElement).checked);
+      expect(radio).toHaveClass("ui-segmented__option");
+      expect(radio.classList.contains("ui-segmented__option--selected")).toBe(
+        radio.getAttribute("aria-checked") === "true",
+      );
     }
     await user.click(within(group).getByRole("radio", { name: "受けたダメージ" }));
-    expect(within(group).getByRole("radio", { name: "受けたダメージ" }).closest("label")).toHaveClass(
-      "ui-chip--selected",
+    expect(within(group).getByRole("radio", { name: "受けたダメージ" })).toHaveClass(
+      "ui-segmented__option--selected",
     );
-    expect(within(group).getByRole("radio", { name: "与えたダメージ" }).closest("label")).not.toHaveClass(
-      "ui-chip--selected",
+    expect(within(group).getByRole("radio", { name: "与えたダメージ" })).not.toHaveClass(
+      "ui-segmented__option--selected",
     );
   });
 
@@ -102,13 +106,15 @@ describe("選択肢はチップ", () => {
     }
   });
 
-  test("ダメージの単位(ラジオ)は ui-chip。選択中だけ ui-chip--selected", () => {
+  test("ダメージの単位(ラジオ)は区切りボタン。選択中だけ ui-segmented__option--selected", () => {
     renderScreen();
     const group = screen.getByRole("radiogroup", { name: "ダメージ1の単位" });
+    expect(group).toHaveClass("ui-segmented");
     for (const radio of within(group).getAllByRole("radio")) {
-      const option = radio.closest("label");
-      expect(option).toHaveClass("ui-chip");
-      expect(option?.classList.contains("ui-chip--selected")).toBe((radio as HTMLInputElement).checked);
+      expect(radio).toHaveClass("ui-segmented__option");
+      expect(radio.classList.contains("ui-segmented__option--selected")).toBe(
+        radio.getAttribute("aria-checked") === "true",
+      );
     }
   });
 });

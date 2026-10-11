@@ -6,8 +6,6 @@
 export const speciesSearchClass = {
   /** 検索欄全体の入れ物。 */
   root: "species-search",
-  /** 入力欄の補足(aria-describedby で結ぶ)。 */
-  hint: "species-search__hint",
   /** 状態の案内(入力前・0件・上限・失敗)。 */
   status: "species-search__status",
   /** 候補一覧(role="listbox")。 */

@@ -140,8 +140,8 @@ describe("色・形・余白は docs/design.md のトークンで書く", () => 
     expect(offenders).toEqual([]);
   });
 
-  test("補足・状態の案内は補足の文字サイズと text.secondary(CalcScreen の notice と同じ見え方)", () => {
-    for (const className of [speciesSearchClass.hint, speciesSearchClass.status]) {
+  test("状態の案内は補足の文字サイズと text.secondary(CalcScreen の notice と同じ見え方。補足の文は「説明」ボタンの奥なので共通部品 .ui-help__body が持つ)", () => {
+    for (const className of [speciesSearchClass.status]) {
       const declarations = declarationsForClass(className);
       expect(declarations.get("color"), className).toBe("var(--text-secondary)");
       expect(declarations.get("font-size"), className).toBe("var(--font-size-caption)");
