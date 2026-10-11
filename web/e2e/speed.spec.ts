@@ -1,155 +1,185 @@
-// F-06(Web・ADR-0608): 素早さ表の仮想スクロールと、右の位置マーカーの高さ揃えを実ブラウザ(chromium)で確かめる。
+// I-speed-4b(ADR-0610 §4・Web 画面の具体): 素早さ画面を実ブラウザ(chromium)で確かめる。
+// 旧 F-06 の仮想スクロール・位置マーカーの e2e(ADR-0608)は、表が画面から外れたので置き換えた。
 // speed-svc はこの構成では動いていないので、speed API は page.route で架空の応答(9xxx の架空ポケモン)に差し替える。
-// jsdom にはレイアウトが無いので、「左の該当行とマーカーが同じ高さに並ぶ」は実ブラウザの座標で確かめる。
+// jsdom にはレイアウトが無いので、ここでは「実ブラウザでしか分からないこと」(操作の通り道・はみ出し・キーボード)を見る。
+// 値の細かい表示規則は web/src/speed/SpeedScreen.test.tsx(コンポーネントテスト)が守る。
 
 import { expect, test, type Page } from "@playwright/test";
 
 const BIRD = { pokemonId: "9001-000", nameJa: "テストカソウドリ", types: ["fire", "flying"], baseSpeed: 100 };
-const TIER_COUNT = 300;
-/** 自分の素早さ。2560 の段と 2550 の段の間(同速なし)に入る。 */
-const OWN_SPEED = 2555;
+const FISH = { pokemonId: "9002-000", nameJa: "テストカソウギョ", types: ["water"], baseSpeed: 80 };
 
-function tiersFor(ascending: boolean) {
-  const speeds = Array.from({ length: TIER_COUNT }, (_, i) => 3000 - i * 10);
-  if (ascending) {
-    speeds.reverse();
-  }
-  return speeds.map((speed) => ({ speed, entries: [{ ...BIRD, preset: "max" }] }));
+interface Captured {
+  matchup: unknown[];
+  reach: unknown[];
+  table: number;
+  position: number;
 }
 
-async function mockSpeedApi(page: Page): Promise<void> {
+/** 通常の場: 最速は上昇 S12 以上で抜け、最速スカーフは届かない。 */
+function matchupFor(trickRoom: boolean) {
+  const lines = trickRoom
+    ? [
+        {
+          assumption: { preset: "max" },
+          opponentSpeed: 145,
+          natures: [
+            { nature: "minus", movesFirst: { min: 0, max: 32 } },
+            { nature: "neutral", movesFirst: { min: 0, max: 28 }, tie: { min: 29, max: 29 } },
+            { nature: "plus", movesFirst: { min: 0, max: 20 } },
+          ],
+        },
+      ]
+    : [
+        {
+          assumption: { preset: "max" },
+          opponentSpeed: 145,
+          current: "opponent_first",
+          natures: [
+            { nature: "minus" },
+            { nature: "neutral" },
+            { nature: "plus", movesFirst: { min: 12, max: 32 }, tie: { min: 11, max: 11 } },
+          ],
+        },
+        {
+          assumption: { preset: "max-scarf" },
+          opponentSpeed: 217,
+          natures: [{ nature: "minus" }, { nature: "neutral" }, { nature: "plus" }],
+        },
+      ];
+  return { self: BIRD, opponent: FISH, trickRoom, selfSpeed: 140, lines };
+}
+
+const REACH = {
+  speed: 140,
+  pokemon: BIRD,
+  lines: [
+    {
+      preset: "uninvested",
+      slower: { min: 1, max: 119 },
+      faster: { min: 120, max: 255 },
+      slowerCount: 20,
+      tieCount: 0,
+      fasterCount: 22,
+      fastestSlower: FISH,
+      slowestFaster: BIRD,
+    },
+    ...(["neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"] as const).map((preset) => ({
+      preset,
+      slower: { min: 1, max: 60 },
+      faster: { min: 61, max: 255 },
+      slowerCount: 5,
+      tieCount: 0,
+      fasterCount: 37,
+      fastestSlower: FISH,
+      slowestFaster: BIRD,
+    })),
+  ],
+};
+
+async function mockSpeedApi(page: Page): Promise<Captured> {
+  const captured: Captured = { matchup: [], reach: [], table: 0, position: 0 };
   await page.route("**/api/speed/v1/**", async (route) => {
     const url = new URL(route.request().url());
     if (url.pathname.endsWith("/pokemon")) {
-      await route.fulfill({ json: { regulationId: "example", pokemon: [BIRD] } });
+      await route.fulfill({ json: { regulationId: "example", pokemon: [BIRD, FISH] } });
+    } else if (url.pathname.endsWith("/matchup")) {
+      const body = route.request().postDataJSON() as { trickRoom?: boolean };
+      captured.matchup.push(body);
+      await route.fulfill({ json: matchupFor(body.trickRoom === true) });
+    } else if (url.pathname.endsWith("/reach")) {
+      captured.reach.push(route.request().postDataJSON());
+      await route.fulfill({ json: REACH });
     } else if (url.pathname.endsWith("/table")) {
-      const trickRoom = url.searchParams.get("trickRoom") === "true";
-      await route.fulfill({
-        json: {
-          regulationId: "example",
-          presets: ["uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"],
-          tiers: tiersFor(trickRoom),
-        },
-      });
+      captured.table += 1;
+      await route.fulfill({ status: 500, json: { code: "internal_error", message: "x" } });
     } else {
-      await route.fulfill({
-        json: { speed: OWN_SPEED, faster: 45, slower: 255, tie: [], pokemon: BIRD },
-      });
+      captured.position += 1;
+      await route.fulfill({ status: 500, json: { code: "internal_error", message: "x" } });
     }
   });
+  return captured;
 }
 
-async function openWithSelf(page: Page): Promise<void> {
-  await mockSpeedApi(page);
+async function openAndChoose(page: Page): Promise<Captured> {
+  const captured = await mockSpeedApi(page);
   await page.goto("/speed");
-  await expect(page.getByTestId("speed-viewport")).toBeVisible();
-  await page.getByRole("combobox", { name: "ポケモン", exact: true }).selectOption(BIRD.pokemonId);
-  await expect(page.getByTestId("speed-marker")).toBeVisible();
+  await page.getByRole("combobox", { name: "自分のポケモンを選ぶ" }).selectOption(BIRD.pokemonId);
+  await page.getByRole("combobox", { name: "相手のポケモンを選ぶ" }).selectOption(FISH.pokemonId);
+  return captured;
 }
 
-test("素早さ表は周辺の段だけを描画し、スクロールで入れ替わる(総数は aria-setsize で伝わる)", async ({
+test("自分と相手を選ぶと、想定ごとのカードに先に動くための最低ラインが出る(表は出ない)", async ({ page }) => {
+  const captured = await openAndChoose(page);
+
+  const cards = page.getByTestId("speed-matchup-card");
+  await expect(cards.first()).toBeVisible();
+  const max = page.locator('[data-testid="speed-matchup-card"][data-preset="max"]');
+  await expect(max.getByRole("heading", { level: 3 })).toContainText("最速");
+  await expect(max.locator('[data-testid="speed-nature-line"][data-nature="plus"]')).toContainText("S12");
+  const scarf = page.locator('[data-testid="speed-matchup-card"][data-preset="max-scarf"]');
+  await expect(scarf).toContainText("どう振っても上を取れません");
+
+  await expect(page.getByTestId("speed-viewport")).toHaveCount(0);
+  await expect(page.getByRole("region", { name: "素早さの表" })).toHaveCount(0);
+  expect(captured.table).toBe(0);
+  expect(captured.position).toBe(0);
+  expect(captured.matchup.length).toBeGreaterThan(0);
+});
+
+test("トリックルームを入れると上限 SP の読み方に切り替わり、下降補正の行が出る", async ({ page }) => {
+  await openAndChoose(page);
+  await expect(page.getByTestId("speed-matchup-card").first()).toBeVisible();
+
+  await page.getByRole("checkbox", { name: "トリックルーム" }).check();
+
+  const max = page.locator('[data-testid="speed-matchup-card"][data-preset="max"]');
+  await expect(max.locator('[data-testid="speed-nature-line"][data-nature="minus"]')).toBeVisible();
+  await expect(max.locator('[data-testid="speed-nature-line"][data-nature="neutral"]')).toContainText("S28");
+});
+
+test("今の振りを入れると、行動順と「これ以上」の一覧が出る(相手を選ばなくても一覧は出る)", async ({
   page,
 }) => {
+  const captured = await mockSpeedApi(page);
+  await page.goto("/speed");
+  await page.getByRole("combobox", { name: "自分のポケモンを選ぶ" }).selectOption(BIRD.pokemonId);
+  await page.getByRole("checkbox", { name: "今の振りも入れる" }).check();
+  await page.getByRole("radio", { name: "上昇" }).check();
+
+  const rows = page.getByTestId("speed-reach-line");
+  await expect(rows).toHaveCount(6);
+  await expect(rows.first()).toContainText("無振り 119 族まで抜ける");
+  await expect(rows.first()).toContainText("無振り 120 族以上に抜かれる");
+  expect(captured.matchup).toHaveLength(0);
+  expect(captured.reach.length).toBeGreaterThan(0);
+
+  await page.getByRole("combobox", { name: "相手のポケモンを選ぶ" }).selectOption(FISH.pokemonId);
+  await expect(
+    page.locator('[data-testid="speed-matchup-card"][data-preset="max"]').getByTestId("speed-current-order"),
+  ).toContainText("後に動く");
+});
+
+test("キーボードだけで、ポケモンの選択・想定のチップ・トリックルームを操作できる", async ({ page }) => {
   await mockSpeedApi(page);
   await page.goto("/speed");
-  const viewport = page.getByTestId("speed-viewport");
-  await expect(viewport).toBeVisible();
+  const self = page.getByRole("combobox", { name: "自分のポケモンを選ぶ" });
+  await self.focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(self).not.toHaveValue("");
 
-  const rows = viewport.getByTestId("speed-tier");
-  await expect(rows.first()).toHaveAttribute("data-speed", "3000");
-  expect(await rows.count()).toBeLessThan(40);
-  await expect(rows.first()).toHaveAttribute("aria-setsize", String(TIER_COUNT));
-
-  await viewport.evaluate((element) => {
-    element.scrollTop = element.scrollHeight;
-  });
-  await expect(rows.last()).toHaveAttribute("data-speed", String(3000 - (TIER_COUNT - 1) * 10));
-  await expect(rows.last()).toHaveAttribute("aria-posinset", String(TIER_COUNT));
-  expect(await rows.count()).toBeLessThan(40);
+  const chip = page.getByRole("checkbox", { name: "最速スカーフ" });
+  await chip.focus();
+  await page.keyboard.press("Space");
+  await expect(chip).not.toBeChecked();
 });
 
-test("キーボード(フォーカス + PageDown)でスクロールできる", async ({ page }) => {
-  await mockSpeedApi(page);
-  await page.goto("/speed");
-  const viewport = page.getByTestId("speed-viewport");
-  await expect(viewport.getByTestId("speed-tier").first()).toBeVisible();
-  await viewport.focus();
-  await page.keyboard.press("PageDown");
-  await expect.poll(() => viewport.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
-});
-
-test("右の位置マーカーが、左の境界の行と同じ高さに並び、スクロールに追従する", async ({ page }) => {
-  await openWithSelf(page);
-  await page.getByRole("button", { name: "自分の位置へ移動" }).click();
-
-  const boundary = page.getByTestId("speed-boundary");
-  const marker = page.getByTestId("speed-marker");
-  await expect(boundary).toBeVisible();
-  await expect(marker).toHaveAttribute("data-state", "visible");
-
-  async function boxes() {
-    const b = await boundary.boundingBox();
-    const m = await marker.boundingBox();
-    if (b === null || m === null) {
-      throw new Error("境界の行・マーカーの位置が取れない");
-    }
-    return { b, m };
-  }
-  const first = await boxes();
-  expect(Math.abs(first.b.y - first.m.y)).toBeLessThan(2);
-
-  // 少しスクロールしても同じ高さのまま(左のスクロールに追従)。
-  await page.getByTestId("speed-viewport").evaluate((element) => {
-    element.scrollTop += 90;
-  });
-  await expect
-    .poll(async () => {
-      const { b, m } = await boxes();
-      return Math.abs(b.y - m.y) < 2;
-    })
-    .toBe(true);
-});
-
-test("トリックルーム(昇順の表)でもマーカーが境界の行と揃う", async ({ page }) => {
-  await openWithSelf(page);
-  await page.getByRole("checkbox", { name: "トリックルーム" }).check();
-  await expect(page.getByTestId("speed-viewport").getByTestId("speed-tier").first()).toHaveAttribute(
-    "data-speed",
-    "10",
+test("画面の幅いっぱいでも横にはみ出さない(スマホ幅)", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 800 });
+  await openAndChoose(page);
+  await expect(page.getByTestId("speed-matchup-card").first()).toBeVisible();
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
-  await page.getByRole("button", { name: "自分の位置へ移動" }).click();
-  const boundary = page.getByTestId("speed-boundary");
-  await expect(boundary).toHaveAttribute("data-after-speed", "2550");
-  await expect(boundary).toHaveAttribute("data-before-speed", "2560");
-  const b = await boundary.boundingBox();
-  const m = await page.getByTestId("speed-marker").boundingBox();
-  if (b === null || m === null) {
-    throw new Error("境界の行・マーカーの位置が取れない");
-  }
-  expect(Math.abs(b.y - m.y)).toBeLessThan(2);
-});
-
-// F-12 のデザイン基盤が行の見た目を変えても、仮想スクロールの前提(行の実高さ = 計算した高さ、内容がはみ出さない)を保つ。
-test("段・境界の行の実高さが計算値(1行24px・余白16px)と一致し、内容がはみ出さない", async ({ page }) => {
-  await openWithSelf(page);
-  await page.getByRole("button", { name: "自分の位置へ移動" }).click();
-  await expect(page.getByTestId("speed-boundary")).toBeVisible();
-  const result = await page.getByTestId("speed-viewport").evaluate((viewport) => {
-    const rows = Array.from(viewport.querySelectorAll<HTMLElement>("li.speed-tier, li.speed-boundary"));
-    return rows.map((row) => ({
-      expected: Number.parseFloat(row.style.height),
-      actual: row.getBoundingClientRect().height,
-      overflow: row.scrollHeight > row.clientHeight,
-      entries: row.querySelectorAll("li.speed-entry").length,
-    }));
-  });
-  expect(result.length).toBeGreaterThan(0);
-  for (const row of result) {
-    expect(Math.abs(row.actual - row.expected)).toBeLessThan(1);
-    expect(row.overflow).toBe(false);
-    if (row.entries > 0) {
-      // 1行の段: 24px + 余白16px = 40px(枠から隙間8pxを引いた値)。
-      expect(row.expected).toBe(row.entries * 24 + 16);
-    }
-  }
+  expect(overflow).toBeLessThanOrEqual(0);
 });
