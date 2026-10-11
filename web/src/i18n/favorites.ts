@@ -11,7 +11,7 @@ export const favoritesScreenText = {
   /** 一覧(`<ul>`)の名前。 */
   listLabel: "お気に入り一覧",
   loadingNotice: "読み込み中…",
-  emptyNotice: "お気に入りはまだありません。計算画面で攻撃側を選んで追加できます。",
+  emptyNotice: "お気に入りはまだありません",
   /** オフライン(計算する場所がこの端末)のとき。サーバーには触れない。 */
   offlineNotice:
     "お気に入りはオンラインで使えます。画面上の「計算する場所」を「サーバー(オンライン)」にしてください。",
@@ -22,8 +22,12 @@ export const favoritesScreenText = {
   deleteConfirmLabel: (title: string): string => `「${title}」を削除する`,
   deleteCancelLabel: (title: string): string => `「${title}」の削除をやめる`,
   deleteErrorHeading: "お気に入りを削除できませんでした",
-  /** 各行の主ボタン(見える文字 = 名前。ADR-0333 §2)。 */
+  /** 各行の主ボタンの読み上げ名(見える文字 `useShort` を含む。WCAG 2.5.3。ADR-0333 §2・ADR-0348)。 */
   useLabel: (title: string): string => `「${title}」を計算に使う`,
+  /** 各行の主ボタンの見える文字(アイコンと並べる。ADR-0348)。 */
+  useShort: "使う",
+  /** 削除ボタンの見える文字(読み上げ名は `deleteLabel`)。 */
+  deleteShort: "削除",
   /** calc の無い旧お気に入りの行に添える案内。 */
   attackerOnlyHint: "攻撃側だけ(防御側・技・条件は今の計算のまま)",
 } as const;
@@ -86,11 +90,13 @@ export const calcHistoryText = {
   /** 一覧(`<ul>`)の名前。 */
   listLabel: "計算履歴の一覧",
   loadingNotice: "計算履歴を読み込み中…",
-  emptyNotice: "計算履歴はまだありません。計算すると、ここに残ります。",
+  emptyNotice: "計算履歴はまだありません",
   errorHeading: "計算履歴を読み込めませんでした",
   moreLabel: "もっと見る",
-  /** 各行の主ボタン(見える文字 = 名前)。 */
+  /** 各行の主ボタンの読み上げ名(見える文字 `useShort` を含む)。 */
   useLabel: "この計算を使う",
+  /** 各行の主ボタンの見える文字(アイコンと並べる。ADR-0348)。 */
+  useShort: "使う",
   /** 行の見出し(攻撃側 → 防御側)。お気に入りに包むときの label にも使う。 */
   pairLabel: (attacker: string, defender: string): string => `${attacker} → ${defender}`,
   /** 技の表示。 */

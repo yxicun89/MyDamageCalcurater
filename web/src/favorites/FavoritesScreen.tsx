@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { CalcHistorySection } from "./CalcHistorySection";
 import { PokemonIcon } from "../images/PokemonIcon";
+import { Icon } from "../ui/Icon";
 import { favoritesScreenText } from "../i18n/favorites";
 import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordError } from "../record/recordClient";
 import "./FavoritesScreen.css";
@@ -86,8 +87,12 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
   if (recordClient === undefined) {
     return (
       <section className="favorites-screen" aria-label={favoritesScreenText.regionLabel}>
-        <h2>{favoritesScreenText.regionLabel}</h2>
+        <h2 className="favorites-screen__title-heading">
+          <Icon name="favorites" size={24} />
+          {favoritesScreenText.regionLabel}
+        </h2>
         <p role="status" className="ui-notice ui-notice--info favorites-screen__notice">
+          <Icon name="info" size={24} />
           {favoritesScreenText.offlineNotice}
         </p>
       </section>
@@ -120,7 +125,10 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
 
   return (
     <section className="favorites-screen" aria-label={favoritesScreenText.regionLabel}>
-      <h2>{favoritesScreenText.regionLabel}</h2>
+      <h2 className="favorites-screen__title-heading">
+        <Icon name="favorites" size={24} />
+        {favoritesScreenText.regionLabel}
+      </h2>
       {count !== null && (
         <p className="ui-badge favorites-screen__count">
           {favoritesScreenText.countLabel(count, MAX_FAVORITES_PER_DEVICE)}
@@ -128,17 +136,22 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
       )}
       {list.status === "loading" && (
         <p className="ui-notice ui-notice--loading favorites-screen__notice">
+          <Icon name="history" size={24} />
           {favoritesScreenText.loadingNotice}
         </p>
       )}
       {list.status === "error" && (
         <div role="alert" className="ui-notice ui-notice--error favorites-screen__error">
-          <p>{favoritesScreenText.listErrorHeading}</p>
+          <p className="favorites-screen__error-heading">
+            <Icon name="alert" size={20} />
+            {favoritesScreenText.listErrorHeading}
+          </p>
           <p>{list.error.message}</p>
         </div>
       )}
       {list.status === "loaded" && list.favorites.length === 0 && (
-        <p className="ui-notice ui-notice--empty favorites-screen__notice">
+        <p className="ui-notice ui-notice--empty favorites-screen__notice favorites-screen__empty">
+          <Icon name="favorites" size={48} />
           {favoritesScreenText.emptyNotice}
         </p>
       )}
@@ -151,7 +164,10 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
             const rowError = rowState?.error ?? null;
             const submitting = rowState?.phase === "submitting";
             return (
-              <li key={favorite.id} className="ui-card favorites-screen__item">
+              <li
+                key={favorite.id}
+                className={`ui-card favorites-screen__item${onUse !== undefined ? " favorites-screen__item--pressable" : ""}`}
+              >
                 <div className="favorites-screen__heading">
                   <span className="favorites-screen__who">
                     <PokemonIcon speciesKey={favorite.individual.speciesKey} />
@@ -168,23 +184,27 @@ export function FavoritesScreen({ recordClient, reloadToken, onUse }: FavoritesS
                     <button
                       type="button"
                       className="ui-button ui-button--primary favorites-screen__use"
+                      aria-label={favoritesScreenText.useLabel(title)}
                       onClick={() => {
                         onUse(favorite);
                       }}
                     >
-                      {favoritesScreenText.useLabel(title)}
+                      <Icon name="calc" size={20} />
+                      {favoritesScreenText.useShort}
                     </button>
                   )}
                   {!confirming ? (
                     <button
                       type="button"
-                      className="ui-button ui-button--secondary"
+                      className="ui-button ui-button--secondary favorites-screen__delete"
+                      aria-label={favoritesScreenText.deleteLabel(title)}
                       disabled={deleteState?.phase === "submitting"}
                       onClick={() => {
                         setDeleteState({ id: favorite.id, phase: "confirming", error: null });
                       }}
                     >
-                      {favoritesScreenText.deleteLabel(title)}
+                      <Icon name="trash" size={20} />
+                      {favoritesScreenText.deleteShort}
                     </button>
                   ) : (
                     <div className="favorites-screen__confirm">
