@@ -262,6 +262,38 @@ type moveDTO struct {
 	Flags *[]string `json:"flags"`
 	// Rule は技の処理の定義(ADR-0143)。省略・null は定義なし。キーは camelCase(PascalCase も受ける)。
 	Rule *moveRuleDTO `json:"rule"`
+	// Effect は技の追加効果(命中時のランク変化。ADR-0107)。連続技のランクの累積にだけ使う。ダメージ計算は読まない。
+	Effect *moveEffectDTO `json:"effect"`
+}
+
+// moveEffectDTO は engine.MoveEffect の境界の形。stages のキーは atk/def/spa/spd/spe(HP は持てない)。
+type moveEffectDTO struct {
+	Chance int            `json:"chance"`
+	Target string         `json:"target"`
+	Stages map[string]int `json:"stages"`
+}
+
+func (e *moveEffectDTO) toEngine(path string) (*engine.MoveEffect, error) {
+	if e == nil {
+		return nil, nil
+	}
+	target := engine.RankTarget(e.Target)
+	if target != engine.RankTargetSelf && target != engine.RankTargetOpponent {
+		return nil, enumError(path+".target", e.Target)
+	}
+	stages := make(map[engine.StatKey]int, len(e.Stages))
+	for _, k := range sortedKeys(e.Stages) {
+		key, err := parseStatKey(path+".stages", k, false)
+		if err != nil {
+			return nil, err
+		}
+		stages[key] = e.Stages[k]
+	}
+	out := &engine.MoveEffect{Chance: e.Chance, Target: target, Stages: stages}
+	if err := out.Validate(); err != nil {
+		return nil, fail(CodeInvalidInput, "%s が不正: %v", path, err)
+	}
+	return out, nil
 }
 
 func (m moveDTO) toEngine(path string) (engine.Move, error) {
@@ -290,6 +322,9 @@ func (m moveDTO) toEngine(path string) (engine.Move, error) {
 	out := engine.Move{ID: m.ID, NameJa: m.NameJa, Type: typ, Category: cat, Power: m.Power, Priority: m.Priority,
 		Mechanisms: mechanisms, Params: params, Target: target}
 	if out.Rule, err = m.Rule.toEngine(path + ".rule"); err != nil {
+		return engine.Move{}, err
+	}
+	if out.Effect, err = m.Effect.toEngine(path + ".effect"); err != nil {
 		return engine.Move{}, err
 	}
 	if m.Flags != nil {
@@ -449,6 +484,10 @@ type itemEffectDTO struct {
 	UnsupportedDefender bool `json:"unsupportedDefender"`
 	// Grounds は持ち物で接地する(くろいてっきゅう型。ADR-0144)。
 	Grounds bool `json:"grounds"`
+	// LocksMove はこだわり系(最初に選んだ技しか出せない)・FullHPOnly は満タンのときだけ効く(タスキ型)。
+	// 連続技の印にだけ使う。ダメージ計算は読まない(ADR-0179 追記 CB-3・CB-5)。
+	LocksMove  bool `json:"locksMove"`
+	FullHPOnly bool `json:"fullHPOnly"`
 }
 
 func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
@@ -456,7 +495,7 @@ func (e itemEffectDTO) toEngine(path string) (*engine.ItemEffect, error) {
 		DamageMod: e.DamageMod, PowerMod: e.PowerMod, OnlySuperEffective: e.OnlySuperEffective,
 		BoostTypeMod:        e.BoostTypeMod,
 		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
-		Grounds: e.Grounds,
+		Grounds: e.Grounds, LocksMove: e.LocksMove, FullHPOnly: e.FullHPOnly,
 	}
 	if e.StatMods != nil {
 		out.StatMods = make(map[engine.StatKey]int, len(e.StatMods))
@@ -610,6 +649,7 @@ type abilityEffectDTO struct {
 	WeightMod           int                      `json:"weightMod"`           // 重さの補正(ADR-0143)
 	UnsupportedAttacker bool                     `json:"unsupportedAttacker"` // 「未対応」の印(ADR-0123)
 	UnsupportedDefender bool                     `json:"unsupportedDefender"`
+	FullHPOnly          bool                     `json:"fullHPOnly"` // 満タンのときだけ効く(連続技の印にだけ使う。ADR-0179 追記 CB-5)
 }
 
 // typeConvertDTO は技のタイプの変換(ADR-0176)。タイプが語彙に無ければ invalid_enum。
@@ -765,6 +805,7 @@ func (e abilityEffectDTO) toEngine(path string) (*engine.AbilityEffect, error) {
 		ReduceSuperEffective: e.ReduceSuperEffective, IgnoresBurn: e.IgnoresBurn,
 		Airborne: e.Airborne, IgnoresParalysisSpeedDrop: e.IgnoresParalysisSpeedDrop, WeightMod: e.WeightMod,
 		UnsupportedAttacker: e.UnsupportedAttacker, UnsupportedDefender: e.UnsupportedDefender,
+		FullHPOnly: e.FullHPOnly,
 	}
 	var err error
 	if out.SpeedMods, err = speedModsToEngine(path+".speedMods", e.SpeedMods); err != nil {

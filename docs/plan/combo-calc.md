@@ -285,7 +285,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 | CB-2 | engine: `GuaranteedSelfStages`・素早さと行動順の engine への移動(判定の式を移す。判定はまだ自前のまま)。ゴールデン不変 | データ(engine) | — | 中 | 0179 |
 | CB-3 | 【実装済み 2026-10-11】engine: `CalcCombo` と合計の畳み込み。tools/golden に連続技のベクタ(AC-1〜AC-4・AC-9)。spec-writer・critic は Opus | データ(engine) | CB-2 | 中〜大 | 0179 に追記 |
 | CB-4 | API: `POST /api/calc/combo` と公開 `Move.effect`。`make gen`、calc-svc のハンドラ、gateway の経路 | API | CB-3(CB-1 は変化技の手に必要) | 中 | 0252 |
-| CB-5 | WASM: `engine/wasmapi` に連続技、`wasmexpect` の期待値 | データ(engine) | CB-3 | 小〜中 | 0179 に追記 |
+| CB-5 | 【実装済み 2026-10-12】WASM: `engine/wasmapi` に連続技、`wasmexpect` の期待値 | データ(engine) | CB-3 | 小〜中 | 0179 に追記 |
 | CB-6 | Web: 案 A(§4-3)。素早さ表の例は `POST /api/speed/v1/position` の raw を呼ぶ | Web | CB-4(オフラインは CB-5) | 中〜大(結果の表示と入力で 2 つに分けてよい) | 0356 |
 | CB-7 | 判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |
 | CB-8 | iOS: 案 A を `CalcScreenView` に | iOS | CB-4 | 中 | 0531 |
