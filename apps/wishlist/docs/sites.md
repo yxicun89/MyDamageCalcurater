@@ -14,7 +14,7 @@
 | ドラゴンスター | 未確認(`https://dorasuta.jp/dm/product-list?keyword={q}` を試したが 403) | **取得不可(回避しない)** | Cloudflare のチャレンジ。headless でも通過せず | なし |
 | あみあみ | https://slist.amiami.jp/top/search/list?s_keywords={q}&s_sortkey=pricea | scrape | 確認済み(下記注意) | あり |
 | 駿河屋 | https://www.suruga-ya.jp/search?category=&search_word={q}&rankBy=price%3Aascending&inStock=On | scrape | 検索 URL とマークアップは確認。並び替え・在庫絞り込みの効きは未確認 | あり |
-| Yahoo!ショッピング | https://shopping.yahoo.co.jp/search/{q}/0/?X=2 | api(人が開く URL のみ) | 検索ページ取得 200。X=2 はページ内「価格が安い順」リンクの href から(直接は未取得) | 不要(API) |
+| Yahoo!ショッピング | https://shopping.yahoo.co.jp/search/{q}/0/?X=2 | scrape(埋め込み JSON。フェーズ5 5-1e) | 検索ページ取得 200。X=2 はページ内「価格が安い順」リンクの href から | JSON パス(下記) |
 | プレバン(プレミアムバンダイ) | https://p-bandai.jp/search_bst/?q={q} | link_only(初期データ 000006) | トップのフォーム定義から。検索ページは robots で禁止のため取得せず。検索語の文字コードは未確認 | なし |
 | 魂ウェブ | https://tamashiiweb.com/item/?wo={q} | link_only(初期データ 000006) | headless で描画後に検索結果が出ることを確認(sites-headless.md)。人が日本語ブラウザで開いた表示は未確認 | なし |
 | ポケモンセンターオンライン | https://www.pokemoncenter-online.com/search/?q={q} | link_only(初期データ 000006) | headless で「ピカチュウ」が一覧に転送されることを確認(sites-headless.md)。旧 URL(`?word=…&main_page=search_result`)は検索結果にならず不適 | なし |
@@ -28,7 +28,7 @@
 
 - メルカリ: /search は禁止されていない(禁止は /mypage/ /purchase/ /sell/ /transaction/ /v1/ /v2/ 等)。
 - Yahoo!フリマ: `/search/*?*sort=` `*order=` `*conditions=` `*minPrice=` `*maxPrice=` `*sold=` `*open=` `*specs=` `*showFilter=` が禁止。**並び替え・絞り込みのパラメータ付き検索ページは取得してはならない**。fetcher は `/search/{q}` のみ(パラメータなし)を使う。人向けのリンクに sort を付けるかは別途判断(付けた場合の挙動は未確認)。
-- Yahoo!ショッピング: /search は禁止されていない。`/searchbff/*/itemsInfo` は禁止。`/category/*?...` の絞り込みパラメータが多数禁止(/search には無かった)。価格取得は公式 API を使う。
+- Yahoo!ショッピング: /search は禁止されていない。`/searchbff/*/itemsInfo` は禁止。`/category/*?...` の絞り込みパラメータが多数禁止(/search には無かった)。価格取得は検索ページ(`/search/{q}/0/?X=2`)の `__NEXT_DATA__` を読む(2026-10-11 に公式 API から変更)。
 - カードラッシュ(cardrush.jp / cardrush-dm.jp どちらも同内容): GPTBot・Bytespider・TikTokSpider・meta-externalagent のみ全面禁止。他は制限なし。
 - 駿河屋: `User-agent: *` に **Crawl-delay: 30**。`Disallow: /search/`(末尾スラッシュ付き)があり、実際の検索 URL は `/search?...`(スラッシュなし)なのでパターン上は該当しないが、禁止の意図がある可能性が高い。**ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得**(Crawl-delay を守る。取るのは夜間の CronJob だけ)。
 - あみあみ: robots.txt が 404(制限の記載なし)。www.amiami.jp は curl の UA だと Cloudflare に 403 でブロックされた(検索は slist.amiami.jp なら 200)。
@@ -95,7 +95,9 @@
 
 ### Yahoo!ショッピング
 - 人が開く URL: `https://shopping.yahoo.co.jp/search?p={q}` は `/search/{q}/0/` にリダイレクトされ、クエリ(sort)は落ちた。ページ内の並び替えリンクは `https://shopping.yahoo.co.jp/search/{q}/0/?X=2`(価格が安い順)、`X=12`(価格+送料が安い順)。
-- 参考: 同ページにも `__NEXT_DATA__` があり、`props.initialState.bff.searchResults.items` に商品(`name`, `price`, `url`, `image`)があった。ただし価格は公式 API で取る方針なので、ここは使わない。
+- 取得: `script#__NEXT_DATA__` の `props.initialState.bff.searchResults.items["1"]` のうち `type == "RESULT"` のブロック `content.items[]` を、サイトの並び(価格の安い順)のまま上位 20 件。名前 `name` / 価格 `price`(整数の円) / URL `url` / 画像 `image.imageUrl`。在庫の項目は無いので常に在庫あり。
+- 0 件の検索: `searchResults` が `null`、`searchError.errorCode` が `"zeroMatch"`(2026-10-11 に確認)。この形は 0 件(エラーにしない)。それ以外で RESULT が無い・壊れているものはエラー。
+- fixture: `api/internal/fetcher/testdata/yahoo_shopping.html`(18 件)・`yahoo_shopping_zero.html`(0 件)。
 
 ### プレバン(プレミアムバンダイ。link_only。初期データ 000006)
 - robots は機械取得の話。人がブラウザで開くリンクとして出すのは問題ない。**検索語の文字コード(UTF-8 でよいか)は未確認**(下記のとおりトップは Shift_JIS 系に見えた)。
@@ -122,7 +124,6 @@
 
 ## 取得方式の見立て(まとめ)
 - scrape(静的 HTML): カードラッシュ、あみあみ(slist ホスト)、駿河屋(30 秒間隔・夜間のみ)
-- scrape(埋め込み JSON): Yahoo!フリマ(sort 指定は禁止のため付けない)
+- scrape(埋め込み JSON): Yahoo!フリマ(sort 指定は禁止のため付けない)、Yahoo!ショッピング(検索ページ。5 秒間隔)
 - headless: メルカリ(夜間のみ・refresher のイメージだけ)。ドラゴンスターは取得不可(回避しない)
-- api: Yahoo!ショッピング
 - link_only: Amazon、プレバン、魂ウェブ、ポケセン

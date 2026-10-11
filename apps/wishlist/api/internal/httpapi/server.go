@@ -48,20 +48,15 @@ type Deps struct {
 	Remote Remote
 	// Estimates は目安価格(必須。nil なら NewServer が panic する)。
 	Estimates Estimator
-	// Token は /api/* に要求する Bearer トークン(空は不可。比較は定数時間)。
-	Token  string
-	Logger *slog.Logger // nil なら slog.Default()
+	Logger    *slog.Logger // nil なら slog.Default()
 }
 
 // NewServer は API の Echo を組み立てる。
-//   - /api/* は Authorization: Bearer <Token> 必須(無い・違う → 401)。/healthz と /images/{name} は認証なし
+//   - 認証は無い(8080 は 127.0.0.1 だけで待ち、外からは Tailscale を通す。ADR-0810)。Authorization が付いていても無視する
 //   - エラーはすべて Error スキーマ({"code","message"})。Echo の既定のエラー応答をそのまま出さない
 //     (存在しないパス → 404 not_found、形式不正 → 400 bad_request、規則違反 → 422 unprocessable、
 //     外部取得の失敗 → 502 bad_gateway、内部エラー → 500 internal。500 の message に内部の詳細を出さない)
 func NewServer(d Deps) *echo.Echo {
-	if d.Token == "" {
-		panic("httpapi: Token is empty")
-	}
 	if d.Estimates == nil {
 		panic("httpapi: Estimates is nil")
 	}
@@ -73,7 +68,7 @@ func NewServer(d Deps) *echo.Echo {
 
 	e := echo.New()
 	e.HTTPErrorHandler = s.handleError
-	e.Use(s.recoverPanic, securityHeaders, limitBody, bearerAuth(d.Token))
+	e.Use(s.recoverPanic, securityHeaders, limitBody)
 	api.RegisterHandlers(e, api.NewStrictHandler(s, nil))
 	return e
 }

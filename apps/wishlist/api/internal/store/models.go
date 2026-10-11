@@ -55,6 +55,52 @@ func (ns NullEstimatesStatus) Value() (driver.Value, error) {
 	return string(ns.EstimatesStatus), nil
 }
 
+type GenresIcon string
+
+const (
+	GenresIconCard   GenresIcon = "card"
+	GenresIconFigure GenresIcon = "figure"
+	GenresIconRobot  GenresIcon = "robot"
+	GenresIconGoods  GenresIcon = "goods"
+	GenresIconStar   GenresIcon = "star"
+	GenresIconBox    GenresIcon = "box"
+)
+
+func (e *GenresIcon) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = GenresIcon(s)
+	case string:
+		*e = GenresIcon(s)
+	default:
+		return fmt.Errorf("unsupported scan type for GenresIcon: %T", src)
+	}
+	return nil
+}
+
+type NullGenresIcon struct {
+	GenresIcon GenresIcon
+	Valid      bool // Valid is true if GenresIcon is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullGenresIcon) Scan(value interface{}) error {
+	if value == nil {
+		ns.GenresIcon, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.GenresIcon.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullGenresIcon) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.GenresIcon), nil
+}
+
 type OfficialStatusLastResult string
 
 const (
@@ -260,6 +306,10 @@ type Genre struct {
 	Name          string
 	QueryTemplate string
 	SortOrder     int32
+	Color         string
+	Icon          GenresIcon
+	MatchHosts    json.RawMessage
+	MatchKeywords json.RawMessage
 }
 
 type GenreAlias struct {

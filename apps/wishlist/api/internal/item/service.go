@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"net/url"
+	"regexp"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -164,6 +165,18 @@ func (s *Service) CreateGenre(ctx context.Context, in NewGenre) (Genre, error) {
 		return Genre{}, err
 	}
 	in.Aliases = aliases
+	if in.Color == "" {
+		in.Color = DefaultGenreColor
+	}
+	if in.Icon == "" {
+		in.Icon = DefaultGenreIcon
+	}
+	if in.Color, err = checkColor(in.Color); err != nil {
+		return Genre{}, err
+	}
+	if err := checkIcon(in.Icon); err != nil {
+		return Genre{}, err
+	}
 	return s.repo.CreateGenre(ctx, in)
 }
 
@@ -186,6 +199,18 @@ func (s *Service) UpdateGenre(ctx context.Context, id int64, p GenrePatch) (Genr
 			return Genre{}, err
 		}
 		p.Aliases = &aliases
+	}
+	if p.Color != nil {
+		c, err := checkColor(*p.Color)
+		if err != nil {
+			return Genre{}, err
+		}
+		p.Color = &c
+	}
+	if p.Icon != nil {
+		if err := checkIcon(*p.Icon); err != nil {
+			return Genre{}, err
+		}
 	}
 	return s.repo.UpdateGenre(ctx, id, p)
 }
@@ -268,6 +293,25 @@ func checkAliases(groups [][]string) ([][]string, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+var genreColorRe = regexp.MustCompile(`^#[0-9a-fA-F]{6}$`)
+
+// checkColor はジャンルの色(#rrggbb。大文字も可)を検査し、小文字にして返す。
+func checkColor(c string) (string, error) {
+	if !genreColorRe.MatchString(c) {
+		return "", invalid("color must be #rrggbb")
+	}
+	return strings.ToLower(c), nil
+}
+
+// checkIcon はジャンルの絵柄が列挙のどれかであることを検査する。
+func checkIcon(i GenreIcon) error {
+	switch i {
+	case IconCard, IconFigure, IconRobot, IconGoods, IconStar, IconBox:
+		return nil
+	}
+	return invalid("icon must be one of card, figure, robot, goods, star, box")
 }
 
 // checkText は文字数(rune)の上限と、required なら空・空白だけでないことを検査する。

@@ -101,7 +101,16 @@ func cloneGenre(g Genre) Genre {
 		g.SiteIDs = []int64{}
 	}
 	g.Aliases = cloneAliases(g.Aliases)
+	g.MatchHosts, g.MatchKeywords = cloneStrings(g.MatchHosts), cloneStrings(g.MatchKeywords)
 	return g
+}
+
+// cloneStrings は v の複製(nil は長さ 0 の配列)。
+func cloneStrings(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return slices.Clone(v)
 }
 
 func (m *MemoryRepository) ListItems(_ context.Context, genreID *int64) ([]Item, error) {
@@ -110,7 +119,10 @@ func (m *MemoryRepository) ListItems(_ context.Context, genreID *int64) ([]Item,
 	out := []Item{}
 	for _, it := range m.items {
 		if genreID == nil || it.GenreID == *genreID {
-			out = append(out, cloneItem(m.withOfficial(it)))
+			c := cloneItem(m.withOfficial(it))
+			sum := SummarizeItem(c, m.genres[c.GenreID].SiteIDs, m.itemEstimates(c.ID))
+			c.Summary = &sum
+			out = append(out, c)
 		}
 	}
 	slices.SortFunc(out, func(a, b Item) int {
@@ -237,7 +249,14 @@ func (m *MemoryRepository) CreateGenre(_ context.Context, in NewGenre) (Genre, e
 	if err := checkAliasDuplicates(in.Aliases); err != nil {
 		return Genre{}, err
 	}
-	g := cloneGenre(Genre{ID: m.id(), Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: in.SortOrder, SiteIDs: in.SiteIDs, Aliases: in.Aliases})
+	if in.Color == "" {
+		in.Color = DefaultGenreColor
+	}
+	if in.Icon == "" {
+		in.Icon = DefaultGenreIcon
+	}
+	g := cloneGenre(Genre{ID: m.id(), Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: in.SortOrder, SiteIDs: in.SiteIDs, Aliases: in.Aliases,
+		Color: in.Color, Icon: in.Icon, MatchHosts: in.MatchHosts, MatchKeywords: in.MatchKeywords})
 	m.genres[g.ID] = g
 	return cloneGenre(g), nil
 }
@@ -276,6 +295,18 @@ func (m *MemoryRepository) UpdateGenre(_ context.Context, id int64, p GenrePatch
 	}
 	if p.SortOrder != nil {
 		g.SortOrder = *p.SortOrder
+	}
+	if p.Color != nil {
+		g.Color = *p.Color
+	}
+	if p.Icon != nil {
+		g.Icon = *p.Icon
+	}
+	if p.MatchHosts != nil {
+		g.MatchHosts = *p.MatchHosts
+	}
+	if p.MatchKeywords != nil {
+		g.MatchKeywords = *p.MatchKeywords
 	}
 	g = cloneGenre(g)
 	m.genres[id] = g

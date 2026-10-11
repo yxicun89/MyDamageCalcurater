@@ -27,7 +27,6 @@ const (
 	ErrorCodeInternal       ErrorCode = "internal"
 	ErrorCodeNotFound       ErrorCode = "not_found"
 	ErrorCodeNotImplemented ErrorCode = "not_implemented"
-	ErrorCodeUnauthorized   ErrorCode = "unauthorized"
 	ErrorCodeUnprocessable  ErrorCode = "unprocessable"
 )
 
@@ -43,8 +42,6 @@ func (e ErrorCode) Valid() bool {
 	case ErrorCodeNotFound:
 		return true
 	case ErrorCodeNotImplemented:
-		return true
-	case ErrorCodeUnauthorized:
 		return true
 	case ErrorCodeUnprocessable:
 		return true
@@ -98,6 +95,36 @@ func (e FetchType) Valid() bool {
 	}
 }
 
+// Defines values for GenreIcon.
+const (
+	Box    GenreIcon = "box"
+	Card   GenreIcon = "card"
+	Figure GenreIcon = "figure"
+	Goods  GenreIcon = "goods"
+	Robot  GenreIcon = "robot"
+	Star   GenreIcon = "star"
+)
+
+// Valid indicates whether the value is a known member of the GenreIcon enum.
+func (e GenreIcon) Valid() bool {
+	switch e {
+	case Box:
+		return true
+	case Card:
+		return true
+	case Figure:
+		return true
+	case Goods:
+		return true
+	case Robot:
+		return true
+	case Star:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthStatus.
 const (
 	HealthStatusOk HealthStatus = "ok"
@@ -107,6 +134,30 @@ const (
 func (e HealthStatus) Valid() bool {
 	switch e {
 	case HealthStatusOk:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for ItemSummaryStatus.
+const (
+	ItemSummaryStatusFailed   ItemSummaryStatus = "failed"
+	ItemSummaryStatusNoResult ItemSummaryStatus = "no_result"
+	ItemSummaryStatusNone     ItemSummaryStatus = "none"
+	ItemSummaryStatusOk       ItemSummaryStatus = "ok"
+)
+
+// Valid indicates whether the value is a known member of the ItemSummaryStatus enum.
+func (e ItemSummaryStatus) Valid() bool {
+	switch e {
+	case ItemSummaryStatusFailed:
+		return true
+	case ItemSummaryStatusNoResult:
+		return true
+	case ItemSummaryStatusNone:
+		return true
+	case ItemSummaryStatusOk:
 		return true
 	default:
 		return false
@@ -237,6 +288,12 @@ type FetchType string
 type FromURLRequest struct {
 	GenreId *ID `json:"genre_id,omitempty"`
 
+	// ImageUrl ページから読んだ画像の URL(`title` と一緒に使う)。http/https の絶対 URL でなければ下書きの image_url は null
+	ImageUrl *string `json:"image_url,omitempty"`
+
+	// Title ページから読んだタイトル(iOS の共有拡張が渡す)。渡すとサーバーはページを取りに行かず、これを名前の規則で整えて使う
+	Title *string `json:"title,omitempty"`
+
 	// Url http(s) の商品ページ URL
 	Url string `json:"url"`
 }
@@ -248,8 +305,22 @@ type Genre struct {
 	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
 	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
 	Aliases *AliasGroups `json:"aliases,omitempty"`
-	Id      ID           `json:"id"`
-	Name    string       `json:"name"`
+
+	// Color ジャンルの色(`#rrggbb`。常に小文字で返す。docs/phase5-spec.md 5-1b)
+	Color string `json:"color"`
+
+	// Icon ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+	Icon GenreIcon `json:"icon"`
+	Id   ID        `json:"id"`
+
+	// MatchHosts URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchHosts MatchHosts `json:"match_hosts"`
+
+	// MatchKeywords 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchKeywords MatchKeywords `json:"match_keywords"`
+	Name          string        `json:"name"`
 
 	// QueryTemplate `{name}` と `{option}` を埋め込む
 	QueryTemplate string `json:"query_template"`
@@ -259,18 +330,38 @@ type Genre struct {
 	SortOrder int  `json:"sort_order"`
 }
 
+// GenreColorInput `#rrggbb`(大文字も受け付け、小文字に揃えて保存する)。形式違反は 422
+type GenreColorInput = string
+
 // GenreCreate defines model for GenreCreate.
 type GenreCreate struct {
 	// Aliases 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
 	// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
 	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
 	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
-	Aliases       *AliasGroups `json:"aliases,omitempty"`
-	Name          string       `json:"name"`
-	QueryTemplate *string      `json:"query_template,omitempty"`
-	SiteIds       *[]ID        `json:"site_ids,omitempty"`
-	SortOrder     *int         `json:"sort_order,omitempty"`
+	Aliases *AliasGroups `json:"aliases,omitempty"`
+
+	// Color 省略したら `#1d5fd1`(強調色の青)
+	Color *GenreColorInput `json:"color,omitempty"`
+
+	// Icon 省略したら `box`
+	Icon *GenreIcon `json:"icon,omitempty"`
+
+	// MatchHosts URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchHosts *MatchHosts `json:"match_hosts,omitempty"`
+
+	// MatchKeywords 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchKeywords *MatchKeywords `json:"match_keywords,omitempty"`
+	Name          string         `json:"name"`
+	QueryTemplate *string        `json:"query_template,omitempty"`
+	SiteIds       *[]ID          `json:"site_ids,omitempty"`
+	SortOrder     *int           `json:"sort_order,omitempty"`
 }
+
+// GenreIcon ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+type GenreIcon string
 
 // GenreUpdate defines model for GenreUpdate.
 type GenreUpdate struct {
@@ -278,9 +369,23 @@ type GenreUpdate struct {
 	// 参考外の判定(title_mismatch)で、商品名のトークンがグループの語と正規化して一致すれば、同じグループのどの語がタイトルに含まれても一致とみなす。
 	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)。
 	// 各語は前後の空白を除いて 1〜64 文字、1 グループは 2 語以上、正規化後の語はジャンル内で重複しない(違反は 422)
-	Aliases       *AliasGroups `json:"aliases,omitempty"`
-	Name          *string      `json:"name,omitempty"`
-	QueryTemplate *string      `json:"query_template,omitempty"`
+	Aliases *AliasGroups `json:"aliases,omitempty"`
+
+	// Color `#rrggbb`(大文字も受け付け、小文字に揃えて保存する)。形式違反は 422
+	Color *GenreColorInput `json:"color,omitempty"`
+
+	// Icon ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+	Icon *GenreIcon `json:"icon,omitempty"`
+
+	// MatchHosts URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchHosts *MatchHosts `json:"match_hosts,omitempty"`
+
+	// MatchKeywords 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+	// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+	MatchKeywords *MatchKeywords `json:"match_keywords,omitempty"`
+	Name          *string        `json:"name,omitempty"`
+	QueryTemplate *string        `json:"query_template,omitempty"`
 
 	// SiteIds 渡すと表示するサイトと順序を全件置き換える
 	SiteIds   *[]ID `json:"site_ids,omitempty"`
@@ -317,7 +422,11 @@ type Item struct {
 	SiteOverrides  []SiteOverride                    `json:"site_overrides"`
 	SortOrder      int                               `json:"sort_order"`
 	SourceUrl      nullable.Nullable[string]         `json:"source_url,omitempty"`
-	UpdatedAt      time.Time                         `json:"updated_at"`
+
+	// Summary 目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
+	// (商品数に依らない回数のクエリで作る)。それ以外の応答では null のことがある
+	Summary   nullable.Nullable[ItemSummary] `json:"summary,omitempty"`
+	UpdatedAt time.Time                      `json:"updated_at"`
 
 	// WatchOfficial 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
 	// サーバーは常に返す(required にしないのは、古い応答・キャッシュを読めるようにするため。無ければ false として扱う)
@@ -358,13 +467,16 @@ type ItemCreateMultipart struct {
 
 // ItemDraft defines model for ItemDraft.
 type ItemDraft struct {
-	// GenreId リクエストの genre_id をそのまま返す(未指定なら null)
+	// GenreGuessed genre_id を推定で決めたら true(リクエストの genre_id を使った・決まらなかったなら false)
+	GenreGuessed bool `json:"genre_guessed"`
+
+	// GenreId リクエストの genre_id(あればそのまま)。無ければ推定したジャンル(決まらなければ null)
 	GenreId nullable.Nullable[int64] `json:"genre_id,omitempty"`
 
-	// ImageUrl og:image の絶対 URL(無ければ null)
+	// ImageUrl og:image の絶対 URL(無ければ null)。bandai-hobby.net は本文の商品画像、駿河屋の商品ページは photo.php の URL
 	ImageUrl nullable.Nullable[string] `json:"image_url,omitempty"`
 
-	// Name og:title(無ければ <title>)
+	// Name og:title(無ければ <title>)からサイト名の部分を除いたもの(駿河屋の商品ページは空文字)
 	Name      string `json:"name"`
 	SourceUrl string `json:"source_url"`
 }
@@ -399,6 +511,24 @@ type ItemFields struct {
 	WatchOfficial *bool `json:"watch_official,omitempty"`
 }
 
+// ItemSummary 商品の目安のまとめ。対象は「商品のジャンルの site_ids にあり、site_overrides で外していないサイト」の保存済みの目安(estimates)。
+// low・fetched_at は GET /api/items/{id}/estimates の summary_low・summary_fetched_at と同じ値
+type ItemSummary struct {
+	// FetchedAt low を持つサイトの fetched_at のうち最も古いもの(low が無ければ null)
+	FetchedAt nullable.Nullable[time.Time] `json:"fetched_at"`
+
+	// Low 対象の目安の low の最小(low を持つサイトが無ければ null)
+	Low nullable.Nullable[int] `json:"low"`
+
+	// Status ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+	// failed: それ以外(low が無く、failed のサイトがある)
+	Status ItemSummaryStatus `json:"status"`
+}
+
+// ItemSummaryStatus ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+// failed: それ以外(low が無く、failed のサイトがある)
+type ItemSummaryStatus string
+
 // ItemUpdate defines model for ItemUpdate.
 type ItemUpdate struct {
 	GenreId       *ID                       `json:"genre_id,omitempty"`
@@ -429,6 +559,14 @@ type Listing struct {
 	Title             string             `json:"title"`
 	Url               string             `json:"url"`
 }
+
+// MatchHosts URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+type MatchHosts = []string
+
+// MatchKeywords 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+type MatchKeywords = []string
 
 // OfficialState 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
 // unknown 決まった語が無い(判定できない)/ ambiguous 別の種類の語が両方ある(判定できない)/
@@ -581,9 +719,6 @@ type Internal = Error
 
 // NotFound defines model for NotFound.
 type NotFound = Error
-
-// Unauthorized defines model for Unauthorized.
-type Unauthorized = Error
 
 // Unprocessable defines model for Unprocessable.
 type Unprocessable = Error
@@ -1054,8 +1189,6 @@ type InternalJSONResponse Error
 
 type NotFoundJSONResponse Error
 
-type UnauthorizedJSONResponse Error
-
 type UnprocessableJSONResponse Error
 
 type ListGenresRequestObject struct {
@@ -1077,20 +1210,6 @@ func (response ListGenres200JSONResponse) VisitListGenresResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ListGenres401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListGenres401JSONResponse) VisitListGenresResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1141,20 +1260,6 @@ func (response CreateGenre400JSONResponse) VisitCreateGenreResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateGenre401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response CreateGenre401JSONResponse) VisitCreateGenreResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1220,20 +1325,6 @@ func (response UpdateGenre400JSONResponse) VisitUpdateGenreResponse(w http.Respo
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateGenre401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response UpdateGenre401JSONResponse) VisitUpdateGenreResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1318,20 +1409,6 @@ func (response ListItems400JSONResponse) VisitListItemsResponse(w http.ResponseW
 	return err
 }
 
-type ListItems401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListItems401JSONResponse) VisitListItemsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListItems500JSONResponse struct{ InternalJSONResponse }
 
 func (response ListItems500JSONResponse) VisitListItemsResponse(w http.ResponseWriter) error {
@@ -1379,20 +1456,6 @@ func (response CreateItem400JSONResponse) VisitCreateItemResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateItem401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response CreateItem401JSONResponse) VisitCreateItemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1475,20 +1538,6 @@ func (response DraftItemFromURL400JSONResponse) VisitDraftItemFromURLResponse(w 
 	return err
 }
 
-type DraftItemFromURL401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response DraftItemFromURL401JSONResponse) VisitDraftItemFromURLResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type DraftItemFromURL422JSONResponse struct{ UnprocessableJSONResponse }
 
 func (response DraftItemFromURL422JSONResponse) VisitDraftItemFromURLResponse(w http.ResponseWriter) error {
@@ -1547,20 +1596,6 @@ func (response DeleteItem204Response) VisitDeleteItemResponse(w http.ResponseWri
 	return nil
 }
 
-type DeleteItem401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response DeleteItem401JSONResponse) VisitDeleteItemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type DeleteItem404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response DeleteItem404JSONResponse) VisitDeleteItemResponse(w http.ResponseWriter) error {
@@ -1607,20 +1642,6 @@ func (response GetItem200JSONResponse) VisitGetItemResponse(w http.ResponseWrite
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(200)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type GetItem401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response GetItem401JSONResponse) VisitGetItemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1690,20 +1711,6 @@ func (response UpdateItem400JSONResponse) VisitUpdateItemResponse(w http.Respons
 	return err
 }
 
-type UpdateItem401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response UpdateItem401JSONResponse) VisitUpdateItemResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type UpdateItem404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response UpdateItem404JSONResponse) VisitUpdateItemResponse(w http.ResponseWriter) error {
@@ -1768,20 +1775,6 @@ func (response GetItemEstimates200JSONResponse) VisitGetItemEstimatesResponse(w 
 	return err
 }
 
-type GetItemEstimates401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response GetItemEstimates401JSONResponse) VisitGetItemEstimatesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type GetItemEstimates404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetItemEstimates404JSONResponse) VisitGetItemEstimatesResponse(w http.ResponseWriter) error {
@@ -1828,20 +1821,6 @@ func (response RefreshItemEstimates202JSONResponse) VisitRefreshItemEstimatesRes
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(202)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type RefreshItemEstimates401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response RefreshItemEstimates401JSONResponse) VisitRefreshItemEstimatesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -1907,20 +1886,6 @@ func (response ReplaceItemImage400JSONResponse) VisitReplaceItemImageResponse(w 
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type ReplaceItemImage401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ReplaceItemImage401JSONResponse) VisitReplaceItemImageResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2006,20 +1971,6 @@ func (response ListItemListings400JSONResponse) VisitListItemListingsResponse(w 
 	return err
 }
 
-type ListItemListings401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListItemListings401JSONResponse) VisitListItemListingsResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListItemListings404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response ListItemListings404JSONResponse) VisitListItemListingsResponse(w http.ResponseWriter) error {
@@ -2085,20 +2036,6 @@ func (response GetItemPriceHistory400JSONResponse) VisitGetItemPriceHistoryRespo
 	return err
 }
 
-type GetItemPriceHistory401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response GetItemPriceHistory401JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type GetItemPriceHistory404JSONResponse struct{ NotFoundJSONResponse }
 
 func (response GetItemPriceHistory404JSONResponse) VisitGetItemPriceHistoryResponse(w http.ResponseWriter) error {
@@ -2150,20 +2087,6 @@ func (response ListSites200JSONResponse) VisitListSitesResponse(w http.ResponseW
 	return err
 }
 
-type ListSites401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response ListSites401JSONResponse) VisitListSitesResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
 type ListSites500JSONResponse struct{ InternalJSONResponse }
 
 func (response ListSites500JSONResponse) VisitListSitesResponse(w http.ResponseWriter) error {
@@ -2210,20 +2133,6 @@ func (response CreateSite400JSONResponse) VisitCreateSiteResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type CreateSite401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response CreateSite401JSONResponse) VisitCreateSiteResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }
@@ -2289,20 +2198,6 @@ func (response UpdateSite400JSONResponse) VisitUpdateSiteResponse(w http.Respons
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(400)
-	_, err := buf.WriteTo(w)
-	return err
-}
-
-type UpdateSite401JSONResponse struct{ UnauthorizedJSONResponse }
-
-func (response UpdateSite401JSONResponse) VisitUpdateSiteResponse(w http.ResponseWriter) error {
-
-	var buf bytes.Buffer
-	if err := json.NewEncoder(&buf).Encode(response); err != nil {
-		return err
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(401)
 	_, err := buf.WriteTo(w)
 	return err
 }

@@ -18,6 +18,7 @@ import (
 	"example.com/pokecalc/apps/wishlist/api/internal/api"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
+	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
 	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
 	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 )
@@ -55,6 +56,20 @@ func toAPIItem(it item.Item) api.Item {
 		out.OfficialStatus = nullable.NewNullNullable[api.OfficialStatus]()
 	} else {
 		out.OfficialStatus = nullable.NewNullableWithValue(toAPIOfficial(*it.Official))
+	}
+	if it.Summary != nil {
+		out.Summary = nullable.NewNullableWithValue(toAPISummary(*it.Summary))
+	}
+	return out
+}
+
+func toAPISummary(sm item.Summary) api.ItemSummary {
+	out := api.ItemSummary{Status: api.ItemSummaryStatus(sm.Status), Low: nullable.NewNullNullable[int](), FetchedAt: nullable.NewNullNullable[time.Time]()}
+	if sm.Low != nil {
+		out.Low = nullable.NewNullableWithValue(*sm.Low)
+	}
+	if sm.FetchedAt != nil {
+		out.FetchedAt = nullable.NewNullableWithValue(sm.FetchedAt.UTC())
 	}
 	return out
 }
@@ -96,7 +111,17 @@ func toAPIGenre(g item.Genre) api.Genre {
 	if aliases == nil {
 		aliases = [][]string{}
 	}
-	return api.Genre{Id: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: g.SortOrder, SiteIds: ids, Aliases: &aliases}
+	hosts, keywords := g.MatchHosts, g.MatchKeywords
+	if hosts == nil {
+		hosts = []string{}
+	}
+	if keywords == nil {
+		keywords = []string{}
+	}
+	return api.Genre{
+		Id: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: g.SortOrder, SiteIds: ids, Aliases: &aliases,
+		Color: g.Color, Icon: api.GenreIcon(g.Icon), MatchHosts: hosts, MatchKeywords: keywords,
+	}
 }
 
 func toAPISite(s item.Site) api.Site {
@@ -252,14 +277,41 @@ func (s *server) DraftItemFromURL(ctx context.Context, req api.DraftItemFromURLR
 			return nil, err
 		}
 	}
-	if _, err := netguard.ValidateURL(b.Url); err != nil {
+	u, err := netguard.ValidateURL(b.Url)
+	if err != nil {
 		return nil, unprocessable("url must be an absolute http(s) URL")
 	}
-	d, err := s.remote.Draft(ctx, b.Url)
-	if err != nil {
-		return nil, remoteError(err, "url", http.StatusBadGateway)
+	host := u.Hostname()
+	var name string
+	var image *string
+	switch static, isStatic := ogp.StaticDraft(u); {
+	case b.Title != nil && strings.TrimSpace(*b.Title) != "":
+		// 共有拡張がページから読んだ値。取りに行かない。
+		name = ogp.CleanTitle(host, *b.Title)
+		if b.ImageUrl != nil {
+			if _, err := netguard.ValidateURL(*b.ImageUrl); err == nil {
+				image = b.ImageUrl
+			}
+		}
+	case isStatic:
+		name, image = static.Title, static.ImageURL
+	default:
+		d, err := s.remote.Draft(ctx, b.Url)
+		if err != nil {
+			return nil, remoteError(err, "url", http.StatusBadGateway)
+		}
+		name, image = ogp.CleanTitle(host, d.Title), d.ImageURL
 	}
-	out := api.ItemDraft{Name: d.Title, SourceUrl: b.Url, ImageUrl: nullableOf(d.ImageURL), GenreId: nullableOf(b.GenreId)}
+	out := api.ItemDraft{Name: name, SourceUrl: b.Url, ImageUrl: nullableOf(image), GenreId: nullableOf(b.GenreId)}
+	if b.GenreId == nil {
+		genres, err := s.items.ListGenres(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if id, ok := item.GuessGenre(genres, name, host); ok {
+			out.GenreId, out.GenreGuessed = nullable.NewNullableWithValue(id), true
+		}
+	}
 	return api.DraftItemFromURL200JSONResponse(out), nil
 }
 
@@ -453,6 +505,25 @@ func (s *server) CreateGenre(ctx context.Context, req api.CreateGenreRequestObje
 	if b.Aliases != nil {
 		in.Aliases = *b.Aliases
 	}
+	// 省略は既定値だが、空文字は形式違反(Service は空を省略とみなすので、ここで弾く)。
+	if b.Color != nil {
+		if *b.Color == "" {
+			return nil, unprocessable("color must be #rrggbb")
+		}
+		in.Color = *b.Color
+	}
+	if b.Icon != nil {
+		if *b.Icon == "" {
+			return nil, unprocessable("icon must not be empty")
+		}
+		in.Icon = item.GenreIcon(*b.Icon)
+	}
+	if b.MatchHosts != nil {
+		in.MatchHosts = *b.MatchHosts
+	}
+	if b.MatchKeywords != nil {
+		in.MatchKeywords = *b.MatchKeywords
+	}
 	g, err := s.items.CreateGenre(ctx, in)
 	if err != nil {
 		return nil, err
@@ -468,7 +539,15 @@ func (s *server) UpdateGenre(ctx context.Context, req api.UpdateGenreRequestObje
 	if b == nil {
 		return nil, badRequest("request body is required")
 	}
-	g, err := s.items.UpdateGenre(ctx, req.Id, item.GenrePatch{Name: b.Name, QueryTemplate: b.QueryTemplate, SortOrder: b.SortOrder, SiteIDs: b.SiteIds, Aliases: b.Aliases})
+	p := item.GenrePatch{
+		Name: b.Name, QueryTemplate: b.QueryTemplate, SortOrder: b.SortOrder, SiteIDs: b.SiteIds, Aliases: b.Aliases,
+		Color: b.Color, MatchHosts: b.MatchHosts, MatchKeywords: b.MatchKeywords,
+	}
+	if b.Icon != nil {
+		icon := item.GenreIcon(*b.Icon)
+		p.Icon = &icon
+	}
+	g, err := s.items.UpdateGenre(ctx, req.Id, p)
 	if err != nil {
 		return nil, err
 	}

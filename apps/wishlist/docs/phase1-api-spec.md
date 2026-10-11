@@ -1,5 +1,7 @@
 # wishlist フェーズ1 API の受け入れ条件
 
+> フェーズ5(5-1a)で認証(Bearer トークン)をやめた。以下の認証に関する条件は [phase5-spec.md](phase5-spec.md) が置き換える。
+
 仕様の正は [../CLAUDE.md](../CLAUDE.md)(§4 検索ワード・§7 DB・§8 API)、設計は [design.md](design.md)(W-01〜W-09)、
 API 契約は [../api/openapi.yaml](../api/openapi.yaml)。ここには、実装が満たす条件と、それを確かめるテストの対応を書く。
 テストは `apps/wishlist/api` 配下(`make wishlist-test`。MySQL 実装は `make wishlist-test-mysql`)。

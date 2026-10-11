@@ -46,7 +46,8 @@ func TestDockerfileBuildsRefresher(t *testing.T) {
 }
 
 // AC-K2: CronJob wishlist-refresher。毎日 03:00 JST、多重起動しない、refresher 専用イメージ(wishlist/refresher。AC-K4)の /wishlist-refresher を起動、
-// securityContext は Deployment と同じ、DSN と appid(optional)を Secret から渡す。base の kustomization に載る。
+// securityContext は Deployment と同じ、DSN を Secret から渡す。base の kustomization に載る。
+// (以前は appid〈optional〉も渡すことを確かめていた。5-1e で appid を読まなくなったので、渡さないことを確かめる。ユーザー決定 2026-10-11)
 func TestRefresherCronJob(t *testing.T) {
 	k := readFile(t, filepath.Join(baseDir, "kustomization.yaml"))
 	if !strings.Contains(k, "refresher-cronjob.yaml") {
@@ -82,20 +83,20 @@ func TestRefresherCronJob(t *testing.T) {
 	if b := envBlock(c, "WISHLIST_DATABASE_DSN"); !strings.Contains(b, "name: wishlist-api") || !strings.Contains(b, "key: database-dsn") {
 		t.Errorf("WISHLIST_DATABASE_DSN が Secret wishlist-api の database-dsn でない: %q", b)
 	}
-	checkYahooEnv(t, "CronJob", c)
+	checkNoRemovedEnv(t, "CronJob", c)
 }
 
-// AC-K3: api の Deployment にも WISHLIST_YAHOO_APPID を optional の secretKeyRef で渡す(無くても起動する)。
+// AC-K3 → 5-1a・5-1e で置き換え(ユーザー決定 2026-10-11)。以前は「api の Deployment にも WISHLIST_YAHOO_APPID を optional の secretKeyRef で渡す」を
+// 確かめていたが、トークン(Secret の api-token)と appid(yahoo-appid)は読まなくなったので、api の Deployment・CronJob とも渡さない。
 func TestAPIDeploymentYahooAppID(t *testing.T) {
-	checkYahooEnv(t, "Deployment", readFile(t, filepath.Join(baseDir, "api-deployment.yaml")))
+	checkNoRemovedEnv(t, "Deployment", readFile(t, filepath.Join(baseDir, "api-deployment.yaml")))
 }
 
-func checkYahooEnv(t *testing.T, what, doc string) {
+func checkNoRemovedEnv(t *testing.T, what, doc string) {
 	t.Helper()
-	b := envBlock(doc, "WISHLIST_YAHOO_APPID")
-	for _, want := range []string{"secretKeyRef:", "name: wishlist-api", "key: yahoo-appid", "optional: true"} {
-		if !strings.Contains(b, want) {
-			t.Errorf("%s の WISHLIST_YAHOO_APPID に %q が無い: %q", what, want, b)
+	for _, bad := range []string{"WISHLIST_YAHOO_APPID", "yahoo-appid", "WISHLIST_API_TOKEN", "api-token"} {
+		if strings.Contains(doc, bad) {
+			t.Errorf("%s に %q がある(5-1a・5-1e で読まなくなった)", what, bad)
 		}
 	}
 }

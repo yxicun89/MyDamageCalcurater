@@ -488,4 +488,6 @@ func RunRepositoryContract(t *testing.T, newRepo func(t *testing.T) item.Reposit
 
 	// フェーズ4-1: 表記揺れの辞書(docs/phase4-spec.md AC-A1〜A3)。
 	runAliasContract(t, newRepo)
+	// フェーズ5 5-1b: ジャンルの色・絵柄・URL の手がかり(docs/phase5-spec.md)。
+	runGenreStyleContract(t, newRepo)
 }

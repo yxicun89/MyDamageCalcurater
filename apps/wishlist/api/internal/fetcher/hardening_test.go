@@ -104,14 +104,11 @@ func TestYahooFurima_PriceRange(t *testing.T) {
 }
 
 // Yahoo!ショッピングの価格も同じ範囲。
+// (以前は API の Fetcher〈fetcher.Yahoo〉で確かめていた。5-1e〈ユーザー決定 2026-10-11〉で検索ページの scrape に替わったので、同じ範囲をそちらで確かめる)
 func TestYahoo_PriceRange(t *testing.T) {
-	body := fmt.Sprintf(`{"hits":[
-{"name":"zero","price":0,"url":"https://e.example/0"},
-{"name":"ok","price":100,"url":"https://e.example/1"},
-{"name":"max","price":%d,"url":"https://e.example/2"},
-{"name":"over","price":%d,"url":"https://e.example/3"}]}`, fetcher.MaxPrice, fetcher.MaxPrice+1)
-	ys := newYahooServer(t, func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(body)) })
-	got, err := newTestYahoo(ys).Fetch(context.Background(), yahooSite, "q")
+	page := shoppingPage(shoppingItem("zero", "zero", 0), shoppingItem("ok", "ok", 100), shoppingItem("max", "max", fetcher.MaxPrice), shoppingItem("over", "over", fetcher.MaxPrice+1))
+	srv := newHTMLServer(t, serveHTML(page))
+	got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "q")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,13 +130,14 @@ func TestUserAgent_Sent(t *testing.T) {
 	site := fetcher.Site{ID: 3, FetchType: item.FetchScrape, SearchURLTemplate: srv.URL + "/search/{q}"}
 	fetcher.NewYahooFurima(allowAll()).Fetch(context.Background(), site, "x")
 
-	ys := newYahooServer(t, func(w http.ResponseWriter, r *http.Request) {
+	// Yahoo!ショッピング(5-1e で API から検索ページの scrape に替わった。ユーザー決定 2026-10-11)
+	ys := newHTMLServer(t, func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
 		uas = append(uas, r.Header.Get("User-Agent"))
 		mu.Unlock()
-		w.Write([]byte(`{"hits":[]}`))
+		w.Write([]byte(shoppingPage()))
 	})
-	newTestYahoo(ys).Fetch(context.Background(), yahooSite, "q")
+	fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(ys.URL), "q")
 
 	if len(uas) != 2 {
 		t.Fatalf("リクエスト = %d 回, want 2", len(uas))

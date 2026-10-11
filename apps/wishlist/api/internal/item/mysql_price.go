@@ -92,13 +92,17 @@ func (r *MySQLRepository) ListEstimates(ctx context.Context, itemID int64) ([]Es
 	}
 	out := make([]Estimate, 0, len(rows))
 	for _, e := range rows {
-		out = append(out, Estimate{
-			ItemID: e.ItemID, SiteID: e.SiteID, Low: intPtr(e.Low), Mid: intPtr(e.Mid), Count: int(e.Count),
-			SuspiciousCount: int(e.SuspiciousCount), InStockCount: int(e.InStockCount),
-			Status: EstimateStatus(e.Status), FetchedAt: e.FetchedAt.UTC(),
-		})
+		out = append(out, toEstimate(e))
 	}
 	return out, nil
+}
+
+func toEstimate(e store.Estimate) Estimate {
+	return Estimate{
+		ItemID: e.ItemID, SiteID: e.SiteID, Low: intPtr(e.Low), Mid: intPtr(e.Mid), Count: int(e.Count),
+		SuspiciousCount: int(e.SuspiciousCount), InStockCount: int(e.InStockCount),
+		Status: EstimateStatus(e.Status), FetchedAt: e.FetchedAt.UTC(),
+	}
 }
 
 // ListListings は PriceRepository の実装。
