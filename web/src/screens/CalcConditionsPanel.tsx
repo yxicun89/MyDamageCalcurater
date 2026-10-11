@@ -3,8 +3,6 @@
 
 import { useId, useState, type ReactElement } from "react";
 import {
-  MAX_RANK,
-  MIN_RANK,
   TERRAIN_IDS,
   WEATHER_IDS,
   clampRank,
@@ -16,8 +14,10 @@ import {
   type WeatherId,
 } from "../domain/calcConditions";
 import type { Screens } from "../engine/types";
+import { rankStatNameJa } from "../i18n/common";
 import { calcConditionsText } from "../i18n/ja";
 import { Icon } from "../ui/Icon";
+import { RankMeter } from "../ui/RankMeter";
 import { ToggleChip } from "./ToggleChip";
 
 interface CalcConditionsPanelProps {
@@ -154,61 +154,29 @@ export function CalcConditionsPanel({
             </fieldset>
             <fieldset className="calc-conditions__group">
               <legend className="calc-conditions__legend">{calcConditionsText.ranksLabel}</legend>
-              <div className="ui-stepper">
-                <button
-                  type="button"
-                  className="ui-stepper__button"
-                  aria-label={calcConditionsText.rankDownLabel}
-                  disabled={rank <= MIN_RANK}
-                  onClick={() => {
-                    setRank(rank - 1);
-                  }}
-                >
-                  <Icon name="minus" size={16} />
-                </button>
-                <span className="calc-conditions__rank-value">{formatRank(rankStat, rank)}</span>
-                <button
-                  type="button"
-                  className="ui-stepper__button"
-                  aria-label={calcConditionsText.rankUpLabel}
-                  disabled={rank >= MAX_RANK}
-                  onClick={() => {
-                    setRank(rank + 1);
-                  }}
-                >
-                  <Icon name="plus" size={16} />
-                </button>
-              </div>
+              <RankMeter
+                asGroup={false}
+                label={calcConditionsText.ranksLabel}
+                statName={rankStatNameJa[rankStat]}
+                valueLabel={formatRank(rankStat, rank)}
+                value={rank}
+                onChange={setRank}
+                decreaseLabel={calcConditionsText.rankDownLabel}
+                increaseLabel={calcConditionsText.rankUpLabel}
+              />
             </fieldset>
             <fieldset className="calc-conditions__group">
               <legend className="calc-conditions__legend">{calcConditionsText.defenderRanksLabel}</legend>
-              <div className="ui-stepper">
-                <button
-                  type="button"
-                  className="ui-stepper__button"
-                  aria-label={calcConditionsText.defenderRankDownLabel}
-                  disabled={defenderRank <= MIN_RANK}
-                  onClick={() => {
-                    setDefenderRank(defenderRank - 1);
-                  }}
-                >
-                  <Icon name="minus" size={16} />
-                </button>
-                <span className="calc-conditions__rank-value">
-                  {formatRank(defenderRankStat, defenderRank)}
-                </span>
-                <button
-                  type="button"
-                  className="ui-stepper__button"
-                  aria-label={calcConditionsText.defenderRankUpLabel}
-                  disabled={defenderRank >= MAX_RANK}
-                  onClick={() => {
-                    setDefenderRank(defenderRank + 1);
-                  }}
-                >
-                  <Icon name="plus" size={16} />
-                </button>
-              </div>
+              <RankMeter
+                asGroup={false}
+                label={calcConditionsText.defenderRanksLabel}
+                statName={rankStatNameJa[defenderRankStat]}
+                valueLabel={formatRank(defenderRankStat, defenderRank)}
+                value={defenderRank}
+                onChange={setDefenderRank}
+                decreaseLabel={calcConditionsText.defenderRankDownLabel}
+                increaseLabel={calcConditionsText.defenderRankUpLabel}
+              />
             </fieldset>
           </div>
         )}

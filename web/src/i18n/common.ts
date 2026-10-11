@@ -20,3 +20,12 @@ export const statLetterJa: Record<StatKey, string> = {
   spd: "D",
   spe: "S",
 };
+
+/** ランクを持つステータスの読み上げ名(ランクのメーターの aria-valuetext「攻撃 +2」。ADR-0357)。HP にランクは無い。 */
+export const rankStatNameJa: Record<Exclude<StatKey, "hp">, string> = {
+  atk: "攻撃",
+  def: "防御",
+  spa: "特攻",
+  spd: "特防",
+  spe: "素早さ",
+};

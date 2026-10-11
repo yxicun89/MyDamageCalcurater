@@ -662,3 +662,69 @@ button.ui-pokemon-card:focus-visible {
     background: var(--table-hover);
   }
 }
+
+/* ---- ランクのメーター(RankMeter。ADR-0357) ---- */
+.ui-rank {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 13 段(左 6 = 下降・中央 = 0・右 6 = 上昇)。横にドラッグするので縦のスクロールだけ通す。 */
+.ui-rank__track {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 11rem;
+  max-width: 20rem;
+  min-height: 44px;
+  align-items: stretch;
+  padding: var(--space-2) 0;
+  box-sizing: border-box;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+
+.ui-rank__track:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-input);
+}
+
+.ui-rank__track[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.ui-rank__segment {
+  flex: 1 1 0;
+  border: 1px solid var(--text-secondary);
+  border-radius: 3px;
+  background: transparent;
+}
+
+/* 上昇 = brand.primary、下降 = warning(色名に頼らず、値の符号を文字でも出す)。0 は常に目印(太い縦棒)。 */
+.ui-rank__segment[data-state="up"] {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.ui-rank__segment[data-state="down"] {
+  background: var(--warning);
+  border-color: var(--warning);
+}
+
+.ui-rank__segment[data-state="zero"] {
+  flex-grow: 0;
+  flex-basis: 6px;
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.ui-rank__value {
+  min-width: 3.5rem;
+  text-align: center;
+  color: var(--text-primary);
+  font-size: var(--font-size-heading);
+  font-variant-numeric: tabular-nums;
+}

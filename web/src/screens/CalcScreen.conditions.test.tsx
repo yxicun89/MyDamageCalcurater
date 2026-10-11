@@ -251,6 +251,16 @@ describe("各入力が要求に出る", () => {
 });
 
 describe("攻撃側のランク", () => {
+  test("ランクはメーター(13 段のスライダー)で、矢印キーでも動く(ADR-0357)", async () => {
+    const { user } = await start();
+    await openDetails(user);
+    const meter = screen.getByRole("slider", { name: "攻撃側のランク" });
+    expect(meter).toHaveAttribute("aria-valuetext", "攻撃 ±0");
+    meter.focus();
+    await user.keyboard("{ArrowRight}{ArrowRight}");
+    expect(meter).toHaveAttribute("aria-valuetext", "攻撃 +2");
+  });
+
   const up = () => screen.getByRole("button", { name: "攻撃側のランクを上げる" });
   const down = () => screen.getByRole("button", { name: "攻撃側のランクを下げる" });
   const display = () => within(group("攻撃側のランク"));

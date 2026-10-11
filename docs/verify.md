@@ -1,8 +1,9 @@
-# 動作確認の手順(Web・iOS)
+# 動作確認の手順(ダメージ計算・欲しいものリスト)
 
 上から順に実行する。各コマンドの下の「→」が成功の見え方。
 入口は 1 つ: **ブラウザ・iOS とも `http://localhost:8080`**(k3d → Traefik → gateway)。
-別アプリ「欲しいものリスト」の手順は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md)。
+8080 は Mac の中(127.0.0.1)だけで待つ。iPhone の実機からは Tailscale を通す(ADR-0810)。
+別アプリ「欲しいものリスト」も同じクラスタに同居し、同じ流れで確かめる(`http://localhost:8080/wishlist/`。詳しい手順は [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md))。
 1-1(クラスタ作成とマスタ投入)は破壊的な操作を含むので、人間が自分のターミナルで実行する(Claude Code では先頭に `!` を付ける)。
 
 ## 0. 前提(初回だけ)
@@ -40,14 +41,25 @@ make pokedex-export-k3d
 → `import-dry-run` の出力に `blockers: none`。`wait` が `condition met` で終わる。最後に `export: ../data/generated/readmodel に書いた`。
 `import-fetch` はネットワークが要る。失敗したらそこで止め、ネットワークを戻して再実行する(DB は変わっていない)。
 
+欲しいものリストの DB と Secret を作る(2 回目以降は何もしない):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+make wishlist-web-deps
+apps/wishlist/scripts/bootstrap.sh
+```
+→ 初回は `DB 'wishlist' と Secret 'wishlist/wishlist-api' を作りました。`。2 回目以降は `既に存在します。何もしません`。
+
 ### 1-2. 毎回: 最新のコードを入れる(動作確認の前に必ず)
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 git switch main && git pull --ff-only
 make deploy-latest
+make wishlist-k3d-deploy
+kubectl -n wishlist rollout status deploy/wishlist-web --timeout=120s
 ```
-→ 最後に `deploy-latest: 全サービスを <コミット> の内容で入れ替えた` と、各サービスの READY が 1 の行が出る。
+→ 最後に `deploy-latest: 全サービスを <コミット> の内容で入れ替えた` と、各サービスの READY が 1 の行が出る。続けて `deployment "wishlist-web" successfully rolled out`。
 古いイメージが残ると、画面は開くのに API が 404 になる。
 
 ### 1-3. 自動の確認
@@ -57,8 +69,9 @@ cd "$(git rev-parse --show-toplevel)"
 make web-k3d-smoke
 API_SMOKE_STRICT=1 make api-smoke
 make web-k3d-e2e
+curl -s -o /dev/null -w "wishlist %{http_code}\n" http://localhost:8080/wishlist/api/genres
 ```
-→ `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行が `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`(400・404 は異常系を意図して確かめた値で、これが正常)。`web-k3d-e2e` が全件成功する。
+→ `web smoke: すべて成功(http://localhost:8080)`。`api-smoke` の最終行が `calc=200 bulk=200 reverse=200 missing_header=400 invalid_header=400 pokedex=200 internal=404 balance=200 web=200`(400・404 は異常系を意図して確かめた値で、これが正常)。`web-k3d-e2e` が全件成功する。最後が `wishlist 200`。
 
 ## 2. Web の確認
 
@@ -95,6 +108,27 @@ make web-k3d-e2e
 1. 引いた種族を攻撃側・防御側に選ぶ → 結果が 5 行出る(通信しない)。
 2. 「逆算」タブ → URL が `/reverse` になる。戻るで前のタブに戻る。`http://localhost:8080/reverse` を直接開く → 逆算タブが選ばれている。
 3. ページ下部「このアプリについて」→ `/about` に非公式の注記とデータ出典が出る。「計算に戻る」で入力が残っている。
+
+### 2-5. 欲しいものリスト
+
+`http://localhost:8080/wishlist/` を開く。
+
+1. 設定やトークンの画面を挟まずホームが出る。
+2. 商品ページの URL(例: デュエマ公式のカード詳細)をコピー → 右下の「+」→「コピーした URL を追加」→ 画像・名前・ジャンルの絵柄が入った確認の画面が出る →「追加」でグリッドに画像が増える(枠はジャンルの色)。
+3. 画像をタップ → 詳細シート。数秒で価格の帯か「出品ないかも」が出る。「メルカリ」のタイルで、メルカリの検索結果が新しいタブで開く。
+4. 画像を長押し → 「削除」→「削除する」で確認用の商品を消す。
+5. Network に赤い行(4xx・5xx)が無い。
+
+価格の帯を実サイトの値で見たいときは、夜間の取得(CronJob)を手で 1 回動かす(実サイトへ取得に行く):
+
+```sh
+cd "$(git rev-parse --show-toplevel)"
+kubectl -n wishlist create job --from=cronjob/wishlist-refresher wishlist-refresher-manual
+kubectl -n wishlist wait --for=condition=complete job/wishlist-refresher-manual --timeout=600s
+kubectl -n wishlist logs job/wishlist-refresher-manual | tail -1
+kubectl -n wishlist delete job wishlist-refresher-manual
+```
+→ `refresher: items=<商品数> failed=0 ...`。
 
 ## 3. iOS の確認
 
@@ -168,6 +202,11 @@ make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 
 署名チームの設定と実機インストールは人間の作業。手順は [runbooks/ios-device-install.md](runbooks/ios-device-install.md)。
 
+### 3-6. 欲しいものリスト
+
+ダメ計とは別の Xcode プロジェクト(`apps/wishlist/ios/Wishlist.xcodeproj`)。シミュレータのテストと実機(Tailscale・`Local.xcconfig`・署名)の手順は
+[../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) の §2(iOS のテスト)・§8(実機)。iPhone の Safari で PWA を使うときは同じ文書の §7。
+
 ## 4. うまくいかないとき
 
 | 症状 | 原因 | 対処 |
@@ -183,5 +222,8 @@ make ios-test IOS_SIMULATOR="iPhone 17 Pro"
 | iOS が「設定エラー: … 不正な URL」 | URL にスキームが無い、または xcconfig の `//` 以降が消えた | `http://localhost:8080` と書く(xcconfig では `http:/$()/localhost:8080`) |
 | iOS が赤字「通信に失敗しました」・カードが「-」 | 接続先に届かない | `curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/healthz` が 200 か確認。止まっていれば `make up` |
 | iOS の結果が 404 | URL の末尾に `/api` を付けた | `http://localhost:8080` までにする |
+| 欲しいものリストで `/wishlist/` が 404 | wishlist を入れていない | 1-1 の bootstrap → 1-2 の `make wishlist-k3d-deploy` |
+| 欲しいものリストの api が `ImagePullBackOff` | `kubectl apply -k` を直接実行した(イメージの版が合わない) | 1-2 `make wishlist-k3d-deploy` |
+| 価格がずっと出ない・refresher が `failed` を出す | 古い refresher のイメージ / 実サイト側の変更 | 2-5 の手動 Job のログを見る。詳しくは [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) §5 |
 
 詳しい切り分けは [impl/verify-mapping.md](impl/verify-mapping.md)。他の手順書は [runbooks/](runbooks/)(balance・speed・observability・ios-device-install)。
