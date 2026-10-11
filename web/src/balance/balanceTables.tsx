@@ -4,7 +4,7 @@ import { coverageMultiplierLabel, defenseMultiplierLabel } from "../domain/balan
 import { balanceScreenText } from "../i18n/ja";
 import type { MasterData } from "../master/types";
 import { TypeBadge } from "../ui/TypeBadge";
-import { coverageLook, defenseLook, ResultCell } from "../screens/balanceCells";
+import { coverageLook, defenseLook, ResultCell } from "./balanceCells";
 import type { SpeciesResolutions } from "../screens/speciesResolution";
 import { ColumnHeading, MemberHeading, TableScroll } from "./balanceParts";
 import type { Schemas } from "./types";

@@ -41,12 +41,10 @@ final class CalcScreenUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
     }
 
-    /// ルート画面の構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
+    /// 構築タブの構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
     /// (`TeamScreenUITests.testCreateAddMemberSaveAndDeleteTeamFlow` と同じ操作列。P6-2d)。
     private func createTeamWithOneMember(_ app: XCUIApplication) {
-        let openTeamList = app.buttons["openTeamListScreen"]
-        XCTAssertTrue(openTeamList.waitForExistence(timeout: Self.existenceTimeout))
-        openTeamList.tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let createButton = element(app, "createTeamButton")
@@ -83,18 +81,14 @@ final class CalcScreenUITests: XCTestCase {
         XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout))
         backButton.tap()
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
-
-        // ルートへ戻る(構築一覧の戻るボタン)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築一覧は構築タブの根なので戻る先は無い(ADR-0531。呼び出し側がタブを移る)。
     }
 
     private func launchCalcScreen() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }
@@ -197,14 +191,11 @@ final class CalcScreenUITests: XCTestCase {
         XCTAssertFalse(teamButton.isEnabled, "構築が無いときは無効")
         XCTAssertTrue(element(app, "attackerTeamEmptyMessage").waitForExistence(timeout: Self.existenceTimeout))
 
-        // ルートへ戻り、構築を1つ作って計算画面を開き直す(`loadTeams()` は画面の起動時に走る)。
-        // `POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを再起動せず
-        // 同じアプリのまま画面を行き来する(`RootView` のコメント参照)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築タブで構築を1つ作り、ダメージタブの計算へ戻る(計算画面はタブを移って戻ると `loadTeams()` を
+        // 呼び直す。ADR-0531)。`POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを
+        // 再起動せず同じアプリのまま画面を行き来する(`RootView` のコメント参照)。
         createTeamWithOneMember(app)
-        let openCalcAgain = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openCalcAgain.waitForExistence(timeout: Self.existenceTimeout))
-        openCalcAgain.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let teamButtonAfter = element(app, "attackerTeamSourceButton")

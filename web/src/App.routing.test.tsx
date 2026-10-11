@@ -308,7 +308,7 @@ function requestUrlOf(input: RequestInfo | URL): string {
 }
 
 // SP3: 素早さ比較の画面(ADR-0604 §2)。ルート表に1件足し、タブ「素早さ」と /speed で開く。
-// 画面はマウント時に speed API(使用可能なポケモンの一覧・素早さの表)を呼ぶ(ADR-0604 §4)。
+// 画面はマウント時に speed API の使用可能なポケモンの一覧だけを呼ぶ(ADR-0604 §4。表は ADR-0610 で画面から外れた)。
 describe("SP3 素早さのタブ", () => {
   test("タブ「素早さ」があり、/speed を直接開くと選択され、自分のポケモンの入力と speed API の呼び出しが出る", async () => {
     // speed-svc は居ないので通信は失敗させる(画面はそれでも壊れない。ADR-0604 §4)。
@@ -325,8 +325,12 @@ describe("SP3 素早さのタブ", () => {
     await waitFor(() => {
       // クライアントは文字列の URL で呼ぶ(speed/speedClient.ts)。
       const requested = fetchSpy.mock.calls.flatMap(([url]) => (typeof url === "string" ? [url] : []));
-      expect(requested).toEqual(expect.arrayContaining(["/api/speed/v1/pokemon", "/api/speed/v1/table"]));
+      expect(requested).toContain("/api/speed/v1/pokemon");
     });
+    // 表は画面から外れた(ADR-0610 §4)。table は呼ばない。
+    expect(fetchSpy.mock.calls.flatMap(([url]) => (typeof url === "string" ? [url] : []))).not.toContain(
+      "/api/speed/v1/table",
+    );
   });
 
   test("素早さのタブのクリックで /speed を pushState し、画面を切り替える", async () => {

@@ -1,6 +1,6 @@
 package httpapi_test
 
-// 公開 API の技(Move)に確率 100% のランク変化(move_effects)を出すことのテスト(ADR-0252。連続技 CB-4)。
+// 公開 API の技(Move)に確率 100% のランク変化(move_effects)を出すことのテスト(ADR-0253。連続技 CB-4)。
 //
 // 受け入れ条件(pokedex-svc):
 //   - AC-E1 getMove・getMovesByIds・searchMoves の Move.effect は、move_effects の行の Chance が 100 のときだけ、

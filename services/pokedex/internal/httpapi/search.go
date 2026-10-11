@@ -182,7 +182,7 @@ type moveExtras struct {
 	// paramsByID・ruleByID は機構の中身と処理の定義(ADR-0143 §6)。行の無い技はキーごと省く。
 	paramsByID map[string]*api.MasterMoveMechanismParams
 	ruleByID   map[string]*api.MasterEffect
-	// effectByID は確率 100% の追加効果(ランク変化。ADR-0252)。確率 100% 未満・行の無い技はキーごと省く。
+	// effectByID は確率 100% の追加効果(ランク変化。ADR-0253)。確率 100% 未満・行の無い技はキーごと省く。
 	effectByID map[string]*api.MasterEffect
 }
 
@@ -287,7 +287,7 @@ func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras
 }
 
 // publicGuaranteedMoveEffect は技の追加効果の行を共通マスタ(master.DecodeMoveEffect)で厳格に検証し、確率 100% のときだけ
-// 数値の字面を保った api.MasterEffect にする(ADR-0252)。確率 100% 未満は nil(キーを省く)。検証に通らなければ error
+// 数値の字面を保った api.MasterEffect にする(ADR-0253)。確率 100% 未満は nil(キーを省く)。検証に通らなければ error
 // (確率 100% 未満の行でも黙って捨てない。呼び出し側が 503 にする)。
 func publicGuaranteedMoveEffect(raw json.RawMessage) (*api.MasterEffect, error) {
 	decoded, err := master.DecodeMoveEffect(raw)

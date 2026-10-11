@@ -38,9 +38,7 @@ final class CalcHistoryUITests: XCTestCase {
     }
 
     private func openFavorites(_ app: XCUIApplication) {
-        let open = app.buttons["openFavoritesScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openFavoritesScreen")
         XCTAssertTrue(element(app, "favoritesScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -168,11 +166,8 @@ final class CalcHistoryUITests: XCTestCase {
                 element(app, "opponentHistoryRow-9003-000").waitForExistence(timeout: Self.existenceTimeout),
                 "履歴の失敗が「よく計算する相手」を巻き込まない: \(scenario)")
 
-            let back = app.navigationBars.buttons.element(boundBy: 0)
-            back.tap()
-            let openCalc = app.buttons["openCalcScreen"]
-            XCTAssertTrue(openCalc.waitForExistence(timeout: Self.existenceTimeout))
-            openCalc.tap()
+            // 記録タブからダメージタブの計算へ移る(ADR-0531。以前はルートへ戻ってから開いた)。
+            app.openScreen("openCalcScreen")
             XCTAssertTrue(element(app, "calcResultRow-none@-").waitForExistence(timeout: Self.existenceTimeout), "\(scenario): 計算は成功する")
             app.terminate()
         }

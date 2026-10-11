@@ -97,7 +97,7 @@ const MOVE_OPTIONAL_KEYS = [
   "flags",
   "mechanismParams", // ADR-0143: 中身の無い技・古いサーバーは返さない
   "rule",
-  "effect", // ADR-0252: 確率 100% のランク変化を持つ技だけ。古いサーバーは返さない
+  "effect", // ADR-0253: 確率 100% のランク変化を持つ技だけ。古いサーバーは返さない
 ] as const satisfies readonly (keyof Schemas["Move"])[];
 export type MoveKeysAreComplete = AssertNever<
   Exclude<keyof Schemas["Move"], (typeof MOVE_KEYS)[number] | (typeof MOVE_OPTIONAL_KEYS)[number]>

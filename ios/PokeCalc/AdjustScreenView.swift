@@ -21,10 +21,14 @@ struct AdjustScreenView: View {
     /// 読み込み中インジケータの高さ(`ReverseScreenView` と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
+    /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
+    private let lifetime: ScreenLifetime
+
     init(
         service: any PokeCalcService, adjust: any AdjustService, goals: (any AdjustGoalsService)? = nil,
-        backendDescription: String
+        backendDescription: String, lifetime: ScreenLifetime = .retained
     ) {
+        self.lifetime = lifetime
         _viewModel = State(initialValue: AdjustViewModel(service: service, adjust: adjust, goals: goals))
         self.backendDescription = backendDescription
     }
@@ -69,8 +73,8 @@ struct AdjustScreenView: View {
         .onChange(of: viewModel.alertSerial) { _, _ in
             if let message = viewModel.alertMessage { AccessibilityNotification.Announcement(message).post() }
         }
-        // 画面を閉じたら送信と一覧の読み込みを止める(issue #113 A6)。
-        .onDisappear { viewModel.cancelPendingWork() }
+        // 戻ると破棄される画面(積んだ画面)だけ、離れたら入力・送信を止める(issue #113 A6・ADR-0531 §2)。
+        .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
     }
 
     private var backendBadge: some View {

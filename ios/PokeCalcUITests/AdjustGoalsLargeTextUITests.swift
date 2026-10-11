@@ -65,7 +65,7 @@ final class AdjustGoalsLargeTextUITests: XCTestCase {
 
     /// 3種類の目標(素早さ・耐える・倒す)を足して全部入力し、送信して結果を出す。
     private func buildThreeGoalsAndSubmit(_ app: XCUIApplication) {
-        tap(app, "openAdjustScreen")
+        app.openScreen("openAdjustScreen")
         XCTAssertTrue(element(app, "adjustScreen").waitForExistence(timeout: Self.existenceTimeout))
         tap(app, "adjustOwnSpeciesButton")
         let own = element(app, "speciesSearchResult-9001-000")

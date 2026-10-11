@@ -10,7 +10,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
+	"example.com/pokecalc/apps/wishlist/api/internal/app/refresh"
 )
 
 func envOf(m map[string]string) func(string) string {

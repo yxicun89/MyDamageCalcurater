@@ -19,6 +19,10 @@ READMODEL_DIR=${READMODEL_DIR:-data/generated/readmodel}
 POKEDEX_SERVER_IMAGE=${POKEDEX_SERVER_IMAGE:-pokecalc/pokedex:0.1.0}
 POKEDEX_IMPORTER_IMAGE=${POKEDEX_IMPORTER_IMAGE:-pokecalc/pokedex-importer:0.1.0}
 MIGRATE_LOCAL_PORT=${MIGRATE_LOCAL_PORT:-13306}
+# pokedex のイメージ ID を、コミットごとに必ず変える。ビルドが同じ内容になると ID が共有レジストリへ push 済みの
+# イメージ(pokedex-registry-push)と同一になり、k3d image import したのに kubelet が「イメージが無い」と判断して
+# pull に行き ImagePullBackOff になる(再現済み)。ラベルを足すと ID が変わり、この衝突を避けられる。
+deploy_commit=$(git rev-parse --short=12 HEAD)-$(date +%s)
 
 CLUSTER="$CLUSTER" ./scripts/require-k3d-context.sh deploy-latest
 
@@ -72,11 +76,11 @@ wait "$pf_pid" 2>/dev/null || true
 trap - EXIT
 
 echo "== pokedex-importer(CronJob・make import-k8s が使うイメージ)"
-docker build -q -f services/pokedex/Dockerfile --target importer -t "$POKEDEX_IMPORTER_IMAGE" . >/dev/null
+docker build -q --label "pokecalc.deploy-latest.commit=$deploy_commit" -f services/pokedex/Dockerfile --target importer -t "$POKEDEX_IMPORTER_IMAGE" . >/dev/null
 k3d image import "$POKEDEX_IMPORTER_IMAGE" --cluster "$CLUSTER" >/dev/null
 
 echo "== pokedex"
-docker build -q -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" . >/dev/null
+docker build -q --label "pokecalc.deploy-latest.commit=$deploy_commit" -f services/pokedex/Dockerfile --target server -t "$POKEDEX_SERVER_IMAGE" . >/dev/null
 k3d image import "$POKEDEX_SERVER_IMAGE" --cluster "$CLUSTER" >/dev/null
 kubectl -n pokecalc rollout restart deployment/pokedex
 if ! kubectl -n pokecalc rollout status deployment/pokedex --timeout=180s; then

@@ -21,12 +21,12 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/chromium"
-	"example.com/pokecalc/apps/wishlist/api/internal/dbwait"
-	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
-	"example.com/pokecalc/apps/wishlist/api/internal/item"
-	"example.com/pokecalc/apps/wishlist/api/internal/official"
-	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/chromium"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/dbwait"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/fetcher"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/official"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/store"
+	"example.com/pokecalc/apps/wishlist/api/internal/app/refresh"
 )
 
 const usage = "usage: wishlist-refresher (no arguments)"
@@ -73,7 +73,7 @@ func run(ctx context.Context, args []string, getenv func(string) string, stdout,
 		return 1
 	}
 
-	repo := item.NewMySQLRepository(db)
+	repo := store.NewMySQLRepository(db)
 	reg := newRegistry(cfg)
 	svc := refresh.New(refresh.Deps{
 		Items: repo, Prices: repo, Fetchers: reg,

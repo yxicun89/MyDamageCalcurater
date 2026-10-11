@@ -51,7 +51,7 @@ const screenCss: Record<string, CssRule[]> = {
     parseCss(readFileSync(localPath("../screens/ReverseScreen.css", import.meta.url), "utf8")),
   ),
   balance: topLevelRules(
-    parseCss(readFileSync(localPath("../screens/BalanceScreen.css", import.meta.url), "utf8")),
+    parseCss(readFileSync(localPath("../balance/BalancePanel.css", import.meta.url), "utf8")),
   ),
 };
 

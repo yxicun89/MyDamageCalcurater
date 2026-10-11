@@ -1,5 +1,5 @@
-// 素早さ比較(SP3・ADR-0604)の文言。ADR-0323 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
-// このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。
+// 素早さ比較(SP3・ADR-0604。I-speed-4b で ADR-0610 の画面に作り直し)の文言。ADR-0323 で i18n/ja.ts から移した(ja.ts が再エクスポートする)。
+// このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。やさしい言葉で書く(F-13。「族」「準速」などの語は画面の中で説明する)。
 
 /**
  * SP3: speed API のクライアント(speed/speedClient.ts、ADR-0604 §3)の文言。
@@ -11,9 +11,9 @@ export const speedClientText = {
 } as const;
 
 /**
- * SP3: 素早さの表の行(PresetId。ADR-0601 §2、docs/speed-design.md §5)の表示名。
+ * SP3: 素早さの 6 つの振り方(PresetId。ADR-0601 §2、docs/speed-design.md §5)の表示名。
  * 表示名は契約に含めず、クライアントの文言資源が持つ(services/speed/api/openapi.yaml の PresetId の説明)。
- * MinimalPresetId(自分のポケモンで選べる3つ)も同じ語を使う。
+ * 画面では相手の想定のチップと、「これ以上」の行の名前に使う。
  */
 export const speedPresetText = {
   uninvested: "無振り",
@@ -24,59 +24,132 @@ export const speedPresetText = {
   "max-plus2": "最速+2",
 } as const;
 
-/** SP3: 素早さ比較の画面(speed/SpeedScreen.tsx、ADR-0604 §4)の文言。 */
+/** 想定の振り方(PresetId)の型。 */
+type PresetKey = keyof typeof speedPresetText;
+/** 性格補正(NatureId)の型。 */
+type NatureKey = "minus" | "neutral" | "plus";
+/** 素早さだけで比べた行動順(TurnOrder)の型。 */
+type TurnOrderKey = "self_first" | "opponent_first" | "speed_tie";
+
+/** 性格補正の表示名。 */
+const natureLabels = { minus: "下降", neutral: "補正なし", plus: "上昇" } as const satisfies Record<
+  NatureKey,
+  string
+>;
+
+/** SP の区間の文字。1 点なら「S20」、幅があれば「S20〜24」。 */
+function spRangeText(min: number, max: number): string {
+  return min === max ? `S${String(min)}` : `S${String(min)}〜${String(max)}`;
+}
+
+/** 族の区間の文字。1 つなら「118 族」、幅があれば「118〜120 族」。 */
+function baseRangeText(min: number, max: number): string {
+  return min === max ? `${String(min)} 族` : `${String(min)}〜${String(max)} 族`;
+}
+
+/**
+ * 素早さ比較の画面(speed/SpeedScreen.tsx、ADR-0604 §4 → ADR-0610 §4)の文言。
+ * 画面の構成: 入力(自分 / 相手 / 場)→ 出力 1「上を取る最低ライン」→ 出力 2「これ以上」。表は出さない。
+ */
 export const speedScreenText = {
-  /** 左(速い順の全体の表)・右(自分のポケモン)の領域の名前(ADR-0604 §1)。 */
-  tableRegionLabel: "素早さの表",
+  // ---- 領域の名前(region の aria-label と h2 の文字を同じにする) ----
   selfRegionLabel: "自分のポケモン",
-  /** 表がそろうまでの表示(左だけ。右の入力は先に使える。ADR-0604 §4)。 */
+  opponentRegionLabel: "相手のポケモン",
+  fieldGroupLabel: "場の状態",
+  /** 画面の使い方の一言(ポケモンを選ぶまで出す)。 */
+  introNotice: "自分と相手のポケモンを選ぶと、相手より先に動くために必要な素早さの振り方を表示します",
+  /** ポケモンの一覧を待っている間。 */
   loadingNotice: "読み込み中",
-  /** 段の素早さの実数値。 */
-  tierSpeedLabel: (speed: number): string => `素早さ ${String(speed)}`,
-  /** 左の表の絞り込み(道具・ランク。ADR-0601 §4、docs/plan.md「SP: 素早さ比較」の確定仕様)。 */
-  filterGroupLabel: "表の絞り込み",
-  /** 絞り込みで最後の1つを外そうとしたとき(契約上、presets は1つ以上。ADR-0601 §4)。 */
-  filterMinimumNotice: "少なくとも1つは選ぶ必要があります",
-  /** 同じ段に2行以上あるとき(同速)のバッジ。右の結果の同速の一覧の見出しにも使う。 */
-  tieLabel: "同速",
-  /** 右の結果で同速の行が無いとき。 */
-  noTieLabel: "同速なし",
-  /** 左の表で、自分と同じ段を強調したときに読み上げる語。 */
-  selfTierLabel: "自分と同速",
-  /** 左の表で、自分の行が挟まる境界に引く印。 */
-  selfBoundaryLabel: "ここに自分が入る",
-  /** F-06: 表のスクロール領域(キーボードの矢印・PageUp/Down でスクロールできる)の名前。 */
-  viewportLabel: "素早さの一覧(上下にスクロールできます)",
-  /** F-06: 段の一覧(リスト)の名前。画面外の段は描画しないが、総数は aria-setsize で伝える。 */
-  tiersListLabel: "素早さの段",
-  /** F-06: 自分の位置までスクロールするボタン。 */
-  jumpToSelfLabel: "自分の位置へ移動",
-  /** F-06: 左の該当行と同じ高さに置く、右の位置マーカーの文字(見た目だけ。aria-hidden)。 */
-  markerLabel: (speed: number): string => `自分 ${String(speed)}`,
-  /** F-06: マーカーの行が画面の上・下に外れているときの目印。 */
-  markerAboveHint: "↑",
-  markerBelowHint: "↓",
-  /** 行の中の区切り(「名前・調整」)。 */
-  entrySeparator: "・",
-  // ---- 右(自分のポケモン)の入力(ADR-0604 §4) ----
-  modeGroupLabel: "入力の方法",
-  modeLabel: { preset: "定番の振り方", custom: "カスタム", raw: "実数値" } as const,
-  pokemonLabel: "ポケモン",
-  /** ポケモンを選んでいないときの選択肢(raw では選ばなくてよい)。 */
+  pokemonListLoadingNotice: "ポケモンの一覧を読み込み中",
   unselectedOption: "未選択",
-  presetGroupLabel: "調整",
+  selfPokemonLabel: "自分のポケモンを選ぶ",
+  opponentPokemonLabel: "相手のポケモンを選ぶ",
+  // ---- 自分の入力 ----
+  rankLabel: "ランク",
   scarfLabel: "こだわりスカーフ",
+  selfTailwindLabel: "追い風(自分側)",
+  selfParalysisLabel: "まひ(自分)",
+  /** 「今の振り」(任意。入れると先に動けるか・「これ以上」が出る)。 */
+  currentToggleLabel: "今の振りも入れる",
+  currentHint: "入れると、今の素早さで先に動けるかと、「これ以上」の一覧が出ます",
   spLabel: "素早さ SP",
   natureGroupLabel: "性格補正",
-  natureLabel: { minus: "下降", neutral: "補正なし", plus: "上昇" } as const,
-  rankLabel: "ランク",
-  rawValueLabel: "実数値",
-  // ---- 入力の範囲外(送信前に画面で止める。issue 307。判定画面 judgeScreenText と同じ言い回し) ----
-  spRangeMessage: (max: number): string => `能力ポイントは0〜${String(max)}の整数で入力してください`,
-  rankRangeMessage: (min: number, max: number): string =>
-    `ランクは${String(min)}〜+${String(max)}の整数で入力してください`,
-  /** 実数値の下限(契約の minimum: 1)。上限は speed サービスだけが式から導くので、画面では判定せず API の 400 を日本語にする。 */
-  rawRangeMessage: "実数値は1以上の整数で入力してください",
+  natureLabel: natureLabels,
+  // ---- 相手の入力 ----
+  /** 想定 = 相手がどこまで素早さを振っているか(普通は分からないので並べて見せる)。 */
+  assumptionGroupLabel: "相手の振り方の想定",
+  assumptionHint: "相手がどこまで素早さを振っているかは分からないので、いくつか並べて見ます",
+  assumptionMinimumNotice: "想定は少なくとも1つ選びます",
+  opponentTailwindLabel: "追い風(相手側)",
+  opponentParalysisLabel: "まひ(相手)",
+  // ---- 場 ----
+  trickRoomLabel: "トリックルーム",
+  trickRoomHint: "トリックルーム中は、素早さが低いほうが先に動きます",
+  // ---- 出力 1: 上を取る最低ライン ----
+  matchupHeading: "先に動くための最低ライン",
+  matchupHeadingTrickRoom: "先に動ける上限(トリックルーム中)",
+  /** 想定ごとのカードの見出し。「最速 ・ 素早さ 200」。 */
+  cardHeading: (preset: PresetKey, opponentSpeed: number): string =>
+    `${speedPresetText[preset]} ・ 素早さ ${String(opponentSpeed)}`,
+  /** カスタムの想定(API の custom)のカード見出し。 */
+  customCardHeading: (opponentSpeed: number): string => `カスタム ・ 素早さ ${String(opponentSpeed)}`,
+  /** カードの一言見出し(補正なしの最小 SP から導く。ADR-0610 §1)。 */
+  headlineUninvested: "無振りで抜ける",
+  headlineNeutralMax: "準速で抜ける",
+  headlinePlusOnly: (min: number): string => `最速なら S${String(min)} 以上で抜ける`,
+  /** トリックルーム中の一言見出し(上限の SP から導く)。 */
+  headlineTrickRoom: (max: number): string => `S${String(max)} まで振っても先に動ける`,
+  /** どの性格でも上を取れない(同速だけの場合も含む)。 */
+  unreachableNotice: "どう振っても上を取れません",
+  unreachableTrickRoomNotice: "どう振っても先に動けません",
+  /** 性格ごとの行。 */
+  natureLineLabel: (nature: NatureKey): string => `性格補正 ${natureLabels[nature]}`,
+  /** 通常の場: 最小 SP(0 なら「振らなくても」)。 */
+  movesFirstMin: (min: number): string => (min === 0 ? "振らなくても抜ける" : `S${String(min)} 以上で抜ける`),
+  /** トリックルーム中: 上限 SP。 */
+  movesFirstMax: (max: number): string => `S${String(max)} まで振っても先に動ける`,
+  cannotMoveFirst: "上を取れません",
+  cannotMoveFirstTrickRoom: "先に動けません",
+  /** 同速は上を取るに含めず、別に出す。 */
+  tieAt: (min: number, max: number): string => `${spRangeText(min, max)} で同速`,
+  tieLabel: "同速",
+  /** 今の振りがあるときの行動順のバッジ(色だけに頼らず文字で言う)。 */
+  currentOrderLabel: {
+    self_first: "今の振りなら先に動く",
+    speed_tie: "今の振りなら同速",
+    opponent_first: "今の振りなら後に動く",
+  } as const satisfies Record<TurnOrderKey, string>,
+  /** 自分の今の素早さ(実数値)。 */
+  selfSpeedLabel: (speed: number): string => `自分の素早さ ${String(speed)}`,
+  matchupLoadingNotice: "最低ラインを計算中",
+  // ---- 出力 2: これ以上 ----
+  reachHeading: "これ以上",
+  reachIntro:
+    "今の素早さで、素早さの基本値がどこまでのポケモンを抜けるかの一覧です(「100 族」は、素早さの基本値が 100 のポケモンのことです)",
+  reachNeedsCurrent: "「今の振りも入れる」をオンにすると、ここに「これ以上」の一覧が出ます",
+  reachLoadingNotice: "「これ以上」を計算中",
+  /** 通常の場。「準速 117 族まで抜ける」「準速 118 族と同速」「準速 119 族以上に抜かれる」。 */
+  reachSlower: (preset: PresetKey, max: number): string =>
+    `${speedPresetText[preset]} ${String(max)} 族まで抜ける`,
+  reachTie: (preset: PresetKey, min: number, max: number): string =>
+    `${speedPresetText[preset]} ${baseRangeText(min, max)}と同速`,
+  reachFaster: (preset: PresetKey, min: number): string =>
+    `${speedPresetText[preset]} ${String(min)} 族以上に抜かれる`,
+  /** トリックルーム中は意味が反転する(素早さの比較は変えず、読み方だけ変える。ADR-0610 §1)。 */
+  reachSlowerTrickRoom: (preset: PresetKey, max: number): string =>
+    `${speedPresetText[preset]} ${String(max)} 族までは後に動く`,
+  reachFasterTrickRoom: (preset: PresetKey, min: number): string =>
+    `${speedPresetText[preset]} ${String(min)} 族以上には先に動ける`,
+  reachNoneSlower: "抜ける族はありません",
+  reachNoneFaster: "抜かれる族はありません",
+  reachNoneSlowerTrickRoom: "後に動く族はありません",
+  reachNoneFasterTrickRoom: "先に動ける族はありません",
+  /** 該当する使用可能なポケモンの数。 */
+  reachCount: (n: number): string => `${String(n)} 体`,
+  /** 境界の例(遅い側で最も速い 1 体 / 速い側で最も遅い 1 体)。 */
+  reachExample: (nameJa: string): string => `例: ${nameJa}`,
+  // ---- 連続技へのリンク(連続技の画面ができるまで出さない。ADR-0610 §4・§結果) ----
+  comboLinkLabel: "この相手で連続技を計算",
   // ---- API エラー(サーバーの英語 message は出さず、code から日本語にする。issue 307) ----
   /** services/speed/api/openapi.yaml の ErrorCode と、Web 側の speed_unavailable に対応する。 */
   errorByCode: {
@@ -95,44 +168,4 @@ export const speedScreenText = {
   } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",
-  // ---- 右(自分のポケモン)の結果(ADR-0604 §4) ----
-  positionLoadingNotice: "位置を計算中",
-  selfSpeedLabel: (speed: number): string => `実数値 ${String(speed)}`,
-  fasterLabel: (rows: number): string => `自分より速い ${String(rows)}行`,
-  slowerLabel: (rows: number): string => `自分より遅い ${String(rows)}行`,
-  // ---- 場の状態・追い風・まひ・トリックルーム(ADR-0607) ----
-  /** 左の表の場の状態のグループ(相手側の追い風・トリックルーム)。 */
-  fieldGroupLabel: "場の状態",
-  tableTailwindLabel: "追い風(相手側)",
-  trickRoomLabel: "トリックルーム",
-  /** 右の自分の追い風・まひ(preset / custom のみ)。 */
-  selfTailwindLabel: "追い風(自分側)",
-  paralysisLabel: "まひ",
-  /** トリックルーム中の行動順の読み替え(速い = 後に動く、遅い = 先に動く。ADR-0607 §4)。 */
-  movesBeforeLabel: (rows: number): string => `自分より先に動く ${String(rows)}行`,
-  movesAfterLabel: (rows: number): string => `自分より後に動く ${String(rows)}行`,
-  // ---- G-04: 自分の周りパネル(ADR-0609。スクロールなしで自分の上下が見える) ----
-  neighborhoodRegionLabel: "自分の周り",
-  neighborhoodHeading: "自分の周り",
-  neighborhoodEmpty: "自分のポケモンを選ぶと、ここに前後のポケモンが出ます",
-  /** 通常の場: 上 = 速い側。 */
-  neighborhoodFasterListLabel: "自分より速い側",
-  neighborhoodSlowerListLabel: "自分より遅い側",
-  /** トリックルーム: 速さの並びが逆なので、速い・遅いではなく先に動く・後に動くで言う(ADR-0607)。 */
-  neighborhoodBeforeListLabel: "先に動く側",
-  neighborhoodAfterListLabel: "後に動く側",
-  neighborhoodSelfBadge: "自分",
-  neighborhoodTieLabel: "同速",
-  neighborhoodBoundaryLabel: "ここに自分が入ります(同速なし)",
-  neighborhoodMore: (n: number): string => `ほか ${String(n)} 体`,
-  /** 端の合計行(通常の場)。 */
-  neighborhoodFasterTotal: (n: number): string => `これより速いポケモンは計 ${String(n)} 体`,
-  neighborhoodSlowerTotal: (n: number): string => `これより遅いポケモンは計 ${String(n)} 体`,
-  /** 端の合計行(トリックルーム)。 */
-  neighborhoodBeforeTotal: (n: number): string => `これより先に動くポケモンは計 ${String(n)} 体`,
-  neighborhoodAfterTotal: (n: number): string => `これより後に動くポケモンは計 ${String(n)} 体`,
-  neighborhoodNone: "いません",
-  /** 色だけに頼らない目印の文字。 */
-  neighborhoodUpArrow: "↑",
-  neighborhoodDownArrow: "↓",
 } as const;

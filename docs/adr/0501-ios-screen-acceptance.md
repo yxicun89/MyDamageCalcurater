@@ -4894,6 +4894,57 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 
 検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。
 
+## ナビゲーション案 B: 下部タブ 4 つとダメージの区切り(ADR-0531。2026-10-11)
+
+受け入れ条件: (1) 起動直後はホームではなくダメージタブの計算。下部タブは ダメージ・構築・素早さ・記録 の 4 つ(識別子 `tab-<タブ>`)。
+(2) ダメージタブの上部に 計算 / 逆算 / 調整 の区切りが常に見え(36pt 以上・AX5 で画面からはみ出さない)、区切りのボタンは旧ホームのピルの ID を持つ。
+(3) タブを移っても、区切りを切り替えても、各画面の入力と画面の中で積んだ状態(構築の編集・下書き)が残る。
+(4) 「このアプリについて」は各タブの右上のアイコンから開ける。(5) タイプバランスは構築タブの一覧の行から開ける(ADR-0421 の統合まで)。
+(6) 判定は既定で非表示(出すとダメージタブの区切りに並ぶ)。起動時に開く環境変数・モック・`IOS_SCREEN` は維持。
+
+新しいテスト: `AppNavigationModelTests`(PokeCalcKit。タブ・区切りの並び・選択の保持・訪れた画面)、`AppNavigationUITests`(上の (1)〜(5)、
+`Tab` の識別子がタブバーのボタンとして引けることの検証、AX5 の区切り)。
+
+### 既存テストの変更(画面への移り方だけ。各画面の検査・期待値は弱めていない)
+
+画面への移り方は `PokeCalcUITests/UITestNavigation.swift` の `app.openScreen("<入口 ID>")` に集約した(タブを選ぶ → 区切り/行を押す。
+右上のアイコンはそのまま押す)。下部タブの組み立てが変わったらこのファイルだけを直す。
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| 入口を開く 38 か所(`app.buttons["open…Screen"]` を待って押す 3 行。24 ファイル)・`JudgeScreenUITests` の手書きの 2 か所・`tap(app, "openAdjustScreen")` 3 か所・`FrequentOpponentsUITests`・`UnsupportedMarksUITests` の起動ヘルパ | `app.openScreen("open…Screen")` に置換 | 入口がホームのピルからタブ/区切りに変わった。存在の待ちはヘルパの中で同じ時間だけ行う |
+| `CalcScreenUITests`・`ReverseScreenUITests`・`JudgeScreenUITests` の「ルートへ戻ってから構築を作る/構築一覧からルートへ戻る」戻るボタンの押下(計 7 か所) | 削除(構築タブへ移って作り、元のタブへ移る) | 計算・逆算・判定・構築一覧はタブの根で戻る先が無い(押すと右上のアイコンに当たる)。構築を作った後に呼び出せることの検査はそのまま |
+| `CalcHistoryUITests`・`FavoriteCalcRestoreUITests`・`FavoritesScreenUITests`・`SpeedScreenUITests`・`JudgeScreenUITests` の「戻ってから計算/お気に入りを開く」 | 戻るを外し `openScreen` でタブを移る(未使用になった `goBack` を削除) | 同上。「計算は成功する」「一覧に 1 件」などの検査は不変 |
+| `DeviceDataDeletionUITests` の戻る | 残す | 「このアプリについて」はタブに積まれるので、戻るは今も意味を持つ |
+| `PokeCalcUITests.testBackendModeBadgeIsVisibleAtLaunch` | ホームの `backendModeBadge` → 起動直後の計算画面の `calcBackendModeBadge`(「モック」を含むことも検査に追加) | ホームを廃止。起動直後にモックで動いている表示が見えること自体は同じ強さ以上で確かめる |
+| `JudgeHiddenUITests` の「素早さの入口は出る」 | `app.buttons["openSpeedScreen"]` → 素早さのタブ(`tab-speed`) | 素早さはタブになった |
+| `SpeedScreenUITests.testPresetMaxWithScarfShowsATieAndHighlightsTheSameSpeedTier` | 「自分の段」を待つ前に、出るまでスクロールする(`scrollUntilExists`) | 下部タブの分だけ見える高さが減り、遅延して描く表の段が画面外になった。段が出ること・強調の検査は不変 |
+
+### 離れたときの取り消し(critic 指摘。ADR-0531 §2)
+
+| 対象 | 変更 | 理由 |
+|---|---|---|
+| 計算・逆算・調整・判定・素早さの `.onDisappear { cancelPendingWork() }` | `cancelsPendingWorkOnDisappear(lifetime)` に置換。タブ・区切りの画面(`.retained`)は取り消さず、記録から積む計算(`.pushed`)だけ取り消す | タブ切替で入力中・送信中の要求が消え、結果が古いまま/送信が黙って消えるため |
+| 既存の `cancelPendingWork` の XCTest(Calc・Reverse・Adjust・Judge・Speed) | 変更なし | 積んだ画面の取り消しとして引き続き使う |
+| 追加: `RetainedScreenWorkTests`(3 件)・`AdjustViewModelSubmitTests.testSubmitInFlightCompletesWhenLeavingRetainedScreen` | 取り消さないときも完了し、最新の入力の結果だけが残る | |
+| 追加: `AppNavigationUITests.testInputChangedJustBeforeTabSwitchShowsResultAfterReturning` | 入力直後にタブを移って戻ると、新しい入力で結果が出ている | |
+
+### iPhone 17 Pro のゲート(#724)で落ちた 7 件(2026-10-12)
+
+17 Pro(既定機種)・2 並列で 223 件中 7 件が失敗。main を取り込んだうえで 17 Pro で 1 件ずつ流して切り分けた。
+
+| テスト | 単独 | 原因 | 対処 |
+|---|---|---|---|
+| `SpeciesImageUITests.testSpeedTable…`(2 件) | (修正後)成功 | main から入った新しいテストが旧ホームの `app.buttons["openSpeedScreen"]` を押していた(取り込み時の食い違い) | `app.openScreen("openSpeedScreen")` に置換 |
+| `JudgeHiddenUITests.testJudgeEntryIsHiddenByDefault` | 失敗(再現) | 計算画面が出た直後に素早さタブを `exists` で即時に見ており、17 Pro ではタブバーのボタンが支援技術へ出るのが遅れる | `waitForExistence` で待つ(期待値は不変)。5 回反復で全件成功 |
+| `AppNavigationUITests.testSegmentsFitAtAX5` | 成功(並列で 1 回再現) | 同じく末尾のタブの確認が `exists` の即時判定 | `waitForExistence` で待つ |
+| `ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects` | 成功(並列で 1 回再現) | 絞り込み後の「消える」・シートが閉じる・ラベルの更新を即時判定していた(非同期の完了を待たない) | それぞれ `waitForNonExistence`・述語の待ちにした(期待する状態は不変) |
+| `ReverseScreenUITests.testAddingObservationAndInvalidValueClearsCandidates`(ゲートでは成功。確認中に 17 Pro・18 Pro の単独実行で毎回再現) | 失敗(再現) | 下部タブ・区切りの分だけ 2 つ目の観測欄が下がり(y=506)、1 つ目の欄で出たテンキーの裏に隠れて押してもフォーカスが入らない。並列のクローンでは出ないことがある | 観測欄を打つ補助 `typeObservation` で、前の欄のキーボードを「完了」で閉じてから押す(打つ内容・検査は不変) |
+| `AdjustGoalsUITests.testOutspeedAndKo…`・`LargeTextLayoutUITests.testReverseScreenWithCandidate…AX5` | 成功 | 単独・並列の再実行(各 3 回)で再現せず(並列実行時の揺れ) | 変更なし |
+
+実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
+以前は画面を開き直すたびに `load()` で読み直していた挙動を保つため(`CalcScreenUITests` の構築の呼び出しの検査がこれに依存する)。
+
 ## G-05 配色「K. 空色と白」への差し替え(ADR-0530。2026-10-11)
 
 受け入れ条件: (1) ポップ配色 20 色・ベース色・タイプ色が新しい値になり、`PopPaletteTests` のコントラスト(文字 4.5:1・枠/輪 3:1)とタイプ文字 4.5:1 がライト/ダークともそのまま通る。

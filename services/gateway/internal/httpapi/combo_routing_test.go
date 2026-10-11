@@ -1,6 +1,6 @@
 package httpapi
 
-// 連続技(POST /api/calc/combo。ADR-0252)の gateway 経由の受け入れテスト。
+// 連続技(POST /api/calc/combo。ADR-0253)の gateway 経由の受け入れテスト。
 //
 // gateway のルーティングは変えない(/api/calc/* の前方一致で calc-svc に届く。ADR-0202 §3)。ここでは
 //   - パスが calc の上流にだけ、メソッド・パス・本文付きで届くこと(ルーティングの回帰の固定)

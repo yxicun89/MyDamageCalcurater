@@ -56,6 +56,8 @@ func New(deps Dependencies) *echo.Echo {
 			"listPokemon":      {guard, requireRequestContext},
 			"getSpeedTable":    {guard, requireRequestContext},
 			"getSpeedPosition": {guard, requireRequestContext},
+			"getSpeedMatchup":  {guard, requireRequestContext},
+			"getSpeedReach":    {guard, requireRequestContext},
 		},
 	})
 	return e

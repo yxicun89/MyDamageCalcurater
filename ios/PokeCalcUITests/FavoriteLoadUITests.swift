@@ -26,9 +26,7 @@ final class FavoriteLoadUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if let favorites { app.launchEnvironment["POKECALC_MOCK_FAVORITES"] = favorites }
         app.launch()
-        let open = app.buttons["openCalcScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

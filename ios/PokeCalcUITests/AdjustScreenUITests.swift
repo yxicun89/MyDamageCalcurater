@@ -37,7 +37,7 @@ final class AdjustScreenUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        tap(app, "openAdjustScreen")
+        app.openScreen("openAdjustScreen")
         XCTAssertTrue(element(app, "adjustScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

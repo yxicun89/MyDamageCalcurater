@@ -190,7 +190,7 @@ v1 は「技を選ぶと段階が変わる」に絞り、場は**入力した状
 - `CalcCombo(in ComboInput) (ComboResult, error)`: §3 の手の進め方。入力・出力は §2。手の数の上限は定数 `MaxComboSteps`(§7 Q1)
 - 合計の倒せる確率は、`HitRolls` を持つ多段技も含めて手の列を畳み込む(`koProbabilitySeq` を「回数 n の繰り返し」から「違う手の列」に広げる)
 
-### 4-2. calc-svc の API(`api/openapi.yaml` から。ADR 予定 0252)
+### 4-2. calc-svc の API(`api/openapi.yaml` から。ADR-0253。予定の 0252 は main の calc ヘキサゴナル化〈ADR-0252〉と重なったため振り直した)
 
 - 新しい `POST /api/calc/combo`(`operationId: calcCombo`)。リクエストは §2-1、応答は §2-2。エラーは `/api/calc` と同じ形
   (400 `invalid_input`・422 `unknown_species` / `unknown_move` 等・503 `master_unavailable`)。検査の順序は ADR-0208 §3 に合わせ、
@@ -267,7 +267,7 @@ iOS は Web と同じ案(計算の画面 `CalcScreenView` の結果の下)。
 | AC-13 | 各手のダメージは、その手の開始時のランクを入れた `POST /api/calc` の応答の `rolls`・`ko` と一致する(新しい式を持たない) |
 | AC-14 | 倒せる確率は、各手の 16 段階(多段技は 1 発ごと)を独立とした総当たりの数え上げと一致する(手 3・多段技を含む性質テスト) |
 | AC-15 | こだわり系の持ち物で手ごとに技が違うと `choice_locked` の印が付き、計算結果は返る |
-| AC-16 | 入力の検査: 手 0 件・上限超えは 400(ID の解決より前)、ランク変化の無い変化技の手は 400、多段の回数 0 以下は 400、未知の技は 400 `unknown_move`(HTTP の語彙。ADR-0252。当初案の 422 は契約に無い)。エラーの形は `/api/calc` と同じ |
+| AC-16 | 入力の検査: 手 0 件・上限超えは 400(ID の解決より前)、ランク変化の無い変化技の手は 400、多段の回数 0 以下は 400、未知の技は 400 `unknown_move`(HTTP の語彙。ADR-0253。当初案の 422 は契約に無い)。エラーの形は `/api/calc` と同じ |
 | AC-17 | record・team・NATS が止まっていても `POST /api/calc/combo` は成功する(絶対ルール 5) |
 | AC-18 | WASM(オフライン)の結果は API の結果と一致する(`engine/cmd/wasmexpect` の期待値に連続技を足す) |
 | AC-19 | Web: 計算の結果から「+ 次の技」で 2 手目・3 手目を足せる。ダメージ計算の防御側の振り方を変えると、連続技の結果も変わる(UC-5)。相手の素早さが分からないとき、ラインと素早さ表の例が出る |
@@ -284,7 +284,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 | CB-1 | 【実装済み 2026-10-11】変化技のランク変化を取り込む(§4-4。importer・move_effects・内部 API の値が増えるだけ。実データで変化技 41 行。ADR-0107「CB-1」) | データ | — | 小 | ADR-0107 に追記 |
 | CB-2 | engine: `GuaranteedSelfStages`・素早さと行動順の engine への移動(判定の式を移す。判定はまだ自前のまま)。ゴールデン不変 | データ(engine) | — | 中 | 0179 |
 | CB-3 | 【実装済み 2026-10-11】engine: `CalcCombo` と合計の畳み込み。tools/golden に連続技のベクタ(AC-1〜AC-4・AC-9)。spec-writer・critic は Opus | データ(engine) | CB-2 | 中〜大 | 0179 に追記 |
-| CB-4 | 【実装済み 2026-10-12。データレーンが代行】API: `POST /api/calc/combo` と公開 `Move.effect`(確率 100% の効果だけ)。`make gen`、calc-svc のハンドラ、gateway の経路(前方一致のまま。テストで固定)。応答の形は WASM(CB-5)と同じ。未知の技は 422 ではなく 400 `unknown_move`(HTTP の語彙。ADR-0252) | API | CB-3(CB-1 は変化技の手に必要) | 中 | 0252 |
+| CB-4 | 【実装済み 2026-10-12。データレーンが代行】API: `POST /api/calc/combo` と公開 `Move.effect`(確率 100% の効果だけ)。`make gen`、calc-svc のハンドラ、gateway の経路(前方一致のまま。テストで固定)。応答の形は WASM(CB-5)と同じ。未知の技は 422 ではなく 400 `unknown_move`(HTTP の語彙。ADR-0253) | API | CB-3(CB-1 は変化技の手に必要) | 中 | 0253 |
 | CB-5 | 【実装済み 2026-10-12】WASM: `engine/wasmapi` に連続技、`wasmexpect` の期待値 | データ(engine) | CB-3 | 小〜中 | 0179 に追記 |
 | CB-6 | Web: 案 A(§4-3)。素早さ表の例は `POST /api/speed/v1/position` の raw を呼ぶ | Web | CB-4(オフラインは CB-5) | 中〜大(結果の表示と入力で 2 つに分けてよい) | 0356 |
 | CB-7 | 判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |

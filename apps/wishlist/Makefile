@@ -59,11 +59,11 @@ wishlist-kustomize:
 	@kubectl kustomize $(WISHLIST_DIR)/deploy/k8s/overlays/local >/dev/null
 
 # OpenAPI(oapi-codegen)と sqlc の生成。既存の services・tools モジュールの go tool を変更せずに使う(docs/design.md W-01)。
-# 生成物(internal/api/openapi.gen.go・internal/store/*.go)はコミットする(W-02)。
+# 生成物(internal/api/openapi.gen.go・internal/adapters/store/sqlcgen/*.go)はコミットする(W-02)。
 wishlist-gen: wishlist-web-gen
 	@cd services && GOWORK=off $(GO) tool oapi-codegen -config ../$(WISHLIST_API_DIR)/internal/api/cfg.yaml ../$(WISHLIST_API_DIR)/openapi.yaml
-	@cd tools && GOWORK=off $(GO) tool sqlc generate -f ../$(WISHLIST_API_DIR)/internal/store/sqlc.yaml
-	@echo "wishlist-gen: $(WISHLIST_API_DIR)/internal/api/openapi.gen.go・internal/store を生成"
+	@cd tools && GOWORK=off $(GO) tool sqlc generate -f ../$(WISHLIST_API_DIR)/internal/adapters/store/sqlcgen/sqlc.yaml
+	@echo "wishlist-gen: $(WISHLIST_API_DIR)/internal/api/openapi.gen.go・internal/adapters/store/sqlcgen を生成"
 
 # MySQL 実装の契約テスト(-tags mysql)。WISHLIST_TEST_DSN が無ければ docker の mysql:9.7.2 を使い捨てで起動する。
 wishlist-test-mysql:

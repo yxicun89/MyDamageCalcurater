@@ -696,7 +696,7 @@ paths:
       summary: 連続技(技を 2〜3 手続けて使う)の計算
       description: |
         ダメージ計算と同じ攻撃側・防御側・場で、技を最大 3 手続けて使ったときの手ごとのランク・ダメージ・行動順と、
-        合計ダメージ・倒せる確率・相手の攻撃を耐える確率を返す(ADR-0252・ADR-0179 追記 CB-3・docs/plan/combo-calc.md)。
+        合計ダメージ・倒せる確率・相手の攻撃を耐える確率を返す(ADR-0253・ADR-0179 追記 CB-3・docs/plan/combo-calc.md)。
         - 各手は、その手の開始時のランク(前の手までの確率 100% のランク変化を足し、-6..+6 に収めた値)で計算する。
           各手の `damage` は、そのランクを入れた `POST /api/calc` の応答と同じ値(新しい式を持たない)。
         - 確率 100% 未満の追加効果は計算にも印にも出さない(combo-calc.md §7 Q4 (b))。
@@ -1271,7 +1271,7 @@ components:
         | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         | unknown_field | 契約にないフィールド | 400 |
         | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。連続技(`/api/calc/combo`)の手の件数の範囲外・ランク変化の無い変化技の手・変化技の相手の技(ADR-0252)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
+        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。連続技(`/api/calc/combo`)の手の件数の範囲外・ランク変化の無い変化技の手・変化技の相手の技(ADR-0253)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
         | unknown_preset | 未知の防御側プリセット | 400 |
         | duplicate_preset | 防御側プリセットの重複 | 400 |
         | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -1497,7 +1497,7 @@ components:
           allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
           description: |
             技の追加効果のうち**確率 100%** のランク変化(move_effects の JSON。`Chance`・`Target`〈self / target〉・`Stages`。
-            値と形は内部 API の `MasterMove.effect` と同じ。ADR-0107・ADR-0252)。確率 100% 未満の効果・効果の無い技は**キーごと省く**
+            値と形は内部 API の `MasterMove.effect` と同じ。ADR-0107・ADR-0253)。確率 100% 未満の効果・効果の無い技は**キーごと省く**
             (連続技は確率 100% の効果だけを扱う。combo-calc.md §7 Q4 (b))。Web の技の候補で「ランクが変わる技」を示すために使う。
             pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeMoveEffect`)で厳格に検証し、検証を通らない効果を
             含む応答は返さない(503 `master_unavailable`)。古いサーバーは返さない。
@@ -2445,7 +2445,7 @@ components:
 
     ComboStepInput:
       type: object
-      description: 連続技の 1 手(ADR-0252)
+      description: 連続技の 1 手(ADR-0253)
       required: [moveId]
       properties:
         moveId:
@@ -2478,7 +2478,7 @@ components:
     ComboRequest:
       type: object
       description: |
-        連続技の入力(ADR-0252)。`format`・`attacker`・`defender`・`field` は `CalcRequest` と同じ形。
+        連続技の入力(ADR-0253)。`format`・`attacker`・`defender`・`field` は `CalcRequest` と同じ形。
         `attacker.ranks` は 1 手目の開始時のランク
       required: [format, attacker, defender, steps]
       properties:
@@ -2560,7 +2560,7 @@ components:
           type: integer
           description: |
             この手の開始時の相手の素早さ。リクエストの opponentSpeed が from_defender のときだけ意味を持つ(unknown は 0。
-            `speed.opponentSpeedKnown` で区別する。WASM の calcCombo と同じ形。ADR-0252)
+            `speed.opponentSpeedKnown` で区別する。WASM の calcCombo と同じ形。ADR-0253)
         selfPriority: { type: integer }
         opponentPriority: { type: integer, description: 相手の技の優先度(相手の技なしは 0) }
         order: { $ref: '#/components/schemas/ComboTurnOrder' }
@@ -2648,7 +2648,7 @@ components:
 
     ComboResult:
       type: object
-      description: 連続技の結果(engine の ComboResult の写し。ADR-0252)
+      description: 連続技の結果(engine の ComboResult の写し。ADR-0253)
       required: [steps, total, speed, opponentAttack, unsupported]
       properties:
         steps:

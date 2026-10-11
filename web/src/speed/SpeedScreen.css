@@ -1,267 +1,77 @@
 /*
- * SP3: 素早さ比較の画面(docs/adr/0604-speed-sp3-web-screen.md)。左 = 速い順の表、右 = 自分のポケモン。
+ * 素早さ画面(docs/adr/0610-speed-matchup-min-line.md §4・§7)。計算画面(CalcScreen.css)の領域・カードの作りに合わせる。
  * 色は必ず tokens.css の CSS 変数で参照する(web/src/styles/noColorLiterals.test.ts)。
- * 自分の位置の強調・境界線は --danger を使わず、控えめな強調(枠線・背景)にする(ADR-0604 §4)。
+ * 上昇は brand.primary、下降は warning(赤は弱点専用。色だけに頼らず文字も出す)。
  * 常時動くアニメーションは入れない(CLAUDE.md ドメイン規約)。
  */
 
 .speed-screen {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  gap: var(--space-5);
-  max-width: 960px;
+  flex-direction: column;
+  gap: var(--space-4);
+  max-width: 720px;
   margin: 0 auto;
   padding: var(--space-4);
 }
 
-/* 領域の見出し(G-05): アイコン + 短い名前。 */
-.speed-heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-3);
-  font-family: var(--font-family);
-  font-size: var(--font-size-heading);
-  color: var(--text-primary);
-}
-
-/* 「自分」のバッジ(表の自分の段・自分の周りのカード)。アイコン + 文字。 */
-.speed-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-caption);
-  line-height: 1.4;
-  white-space: nowrap;
-}
-
-.speed-badge--self {
-  background: var(--brand-primary);
-  color: var(--on-primary);
-}
-
-/* 左: 速い順の全体の表。 */
-.speed-table {
-  flex: 2 1 320px;
-  min-width: 0;
-  padding: var(--space-4);
-}
-
-/* 左の表の絞り込み(道具・ランク。ユーザー確定仕様)。 */
-.speed-table__filter {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-3);
-  margin-bottom: var(--space-3);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.speed-table__filter-option {
-  font-size: var(--font-size-caption);
-}
-
-/* F-06: 左の表の仮想スクロール。段の高さは speedWindow.ts の定数で決まる(同速の1行 = 24px。折り返さない)ので、
- * 行は絶対配置(top・height はインライン)。右に位置マーカーの列(speed-table__track)を並べ、同じ高さに揃える。 */
-.speed-table__body {
-  display: flex;
-  align-items: stretch;
-  gap: var(--space-2);
-}
-
-.speed-table__viewport {
-  flex: 1 1 auto;
-  min-width: 0;
-  height: min(70vh, 640px);
-  overflow-y: auto;
-}
-
-.speed-table__track {
-  position: relative;
-  flex: 0 0 7rem;
-}
-
-.speed-table__tiers {
-  position: relative;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.speed-table__jump {
-  margin-bottom: var(--space-2);
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  background: var(--bg-base);
-  color: var(--text-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  min-height: 44px;
-  padding: var(--space-1) var(--space-3);
-  cursor: pointer;
-}
-
-/* 右の位置マーカー。top・height はインライン(左の該当行と同じ高さ)。見た目は F-12 で整える。 */
-.speed-marker {
-  position: absolute;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border: 2px solid var(--brand-primary);
-  border-radius: var(--radius-card);
-  background: var(--brand-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--on-primary);
-  white-space: nowrap;
-}
-
-.speed-tier {
-  position: absolute;
-  left: 0;
-  right: 0;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
+/* 自分 / 相手の入力は、狭い幅では縦積み、広い幅では左右に並べる。 */
+.speed-screen__inputs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
   gap: var(--space-3);
-  overflow: hidden;
+}
+
+@media (min-width: 600px) {
+  .speed-screen__inputs {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.speed-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+  margin: 0;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-card);
   background: var(--bg-glass);
   backdrop-filter: blur(var(--bg-glass-blur));
-  padding: 0 var(--space-3);
+  padding: var(--space-4);
   font-family: var(--font-family);
-  font-size: var(--font-size-body);
   color: var(--text-primary);
 }
 
-/* 自分と同じ段(position の tie)。控えめな枠線と背景でだけ示す(ADR-0604 §4)。 */
-.speed-tier--self {
-  border-width: 2px;
-  border-color: var(--brand-primary);
+/* 領域の見える見出し(入力側。h2 / legend)。小さく、下の主役(ポケモン名 h3)と区別する。 */
+.speed-card__region {
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }
 
-.speed-tier__head {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: var(--space-2);
+/* 出力側の見出し。 */
+.speed-card__heading {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
 }
 
-.speed-tier__speed {
+.speed-card__face {
+  box-shadow: none;
+}
+
+.speed-card__face .ui-pokemon-card__name {
+  margin: 0;
   font-size: var(--font-size-heading);
 }
 
-.speed-tier__tie {
-  border: 1px solid var(--text-secondary);
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-caption);
-  line-height: 1.4;
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
-.speed-tier__entries {
-  display: flex;
-  flex-direction: column;
+.speed-select {
+  width: 100%;
   min-width: 0;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.speed-entry {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-/* タイプ色のエンブレム(画像は必須にしない。CLAUDE.md ドメイン規約・CalcScreen.css と同じ形)。 */
-.speed-entry__emblem {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: var(--radius-pill);
-}
-
-/* ポケモン画像(ADR-0325)。エンブレムと同じ寸法。 */
-.speed-entry__image {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  object-fit: contain;
-}
-
-/* 1行固定(ADR-0608)。長い名前は省略記号で切り、全文は li の title で出す。 */
-.speed-entry__name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.speed-entry__preset {
-  flex: 0 0 auto;
-  color: var(--text-secondary);
-  font-size: var(--font-size-caption);
-}
-
-/* 自分の行が挟まる境界(同速が無いとき)。 */
-.speed-boundary {
-  position: absolute;
-  left: 0;
-  right: 0;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  border-top: 2px solid var(--brand-primary);
-  font-family: var(--font-family);
-  font-size: var(--font-size-caption);
-  color: var(--text-primary);
-}
-
-/* 右: 自分のポケモン。 */
-.speed-self {
-  flex: 1 1 260px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  min-width: 0;
-  padding: var(--space-4);
-}
-
-/* 入力の方法・調整・性格補正は区切りボタン(.ui-segmented。components.css)。チップは ToggleChip(.ui-chip)。 */
-.speed-self__card {
-  align-self: flex-start;
-}
-
-.speed-self__field {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--space-2);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-primary);
-}
-
-.speed-self__field select,
-.speed-self__raw {
   min-height: 44px;
   box-sizing: border-box;
-}
-
-.speed-self__field select,
-.speed-self__raw {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
@@ -271,141 +81,234 @@
   padding: var(--space-2) var(--space-3);
 }
 
-.speed-self__result {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  backdrop-filter: blur(var(--bg-glass-blur));
-  padding: var(--space-3);
-}
-
-.speed-self__speed {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-result);
-  font-weight: var(--font-weight-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-.speed-self__count {
+.speed-field {
   display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin: 0 0 var(--space-1);
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
-.speed-self__result-label {
-  margin: var(--space-3) 0 var(--space-1);
-  font-weight: bold;
-}
-
-/* 自分と同じ段(position の tie)の読み上げ用の語。見た目には出さない(強調はボーダーで表す。ADR-0604 §4)。 */
-.speed-tier__self-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
+.speed-field__label {
   padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-.speed-screen__notice,
-.speed-screen__error {
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-secondary);
-}
-
-/* G-04: 自分の周りパネル(ADR-0609)。既存トークンのみ。表のスクロール領域の外に置く。 */
-.speed-neighbor {
-  margin-top: var(--space-4);
-  border-top: 1px solid var(--border-hairline);
-  padding-top: var(--space-3);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-primary);
-}
-
-.speed-neighbor__heading {
-  margin: 0 0 var(--space-2);
-  font-size: var(--font-size-heading);
-}
-
-.speed-neighbor__list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-/* 近傍の段・自分は小さなカード(G-05)。画像かエンブレム + 実数値の大きい数字 + 名前。 */
-.speed-neighbor__card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-1);
-  padding: var(--space-1) var(--space-3);
-  min-height: 44px;
-  box-sizing: border-box;
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-input);
-  background: var(--surface-card);
-}
-
-.speed-neighbor__speed {
-  font-size: var(--font-size-heading);
-  font-weight: var(--font-weight-strong);
-  font-variant-numeric: tabular-nums;
-}
-
-.speed-neighbor__names {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.speed-neighbor__card--self {
-  border: 2px solid var(--brand-primary);
-  background: var(--bg-glass);
-  font-weight: var(--font-weight-strong);
-}
-
-.speed-neighbor__total,
-.speed-neighbor__none,
-.speed-neighbor__empty {
-  margin: var(--space-1) 0;
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
 
-/* 自分の入力のチップは中身の幅(縦に積んでも横いっぱいに伸ばさない)。区切りボタンは折り返さず幅いっぱいに分ける。 */
-.speed-self__chip {
-  align-self: flex-start;
+.speed-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
 }
 
-.speed-self .ui-segmented {
+.speed-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.speed-current {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.speed-current .ui-segmented {
   display: flex;
 }
 
-.speed-self .ui-segmented__option {
+.speed-current .ui-segmented__option {
   flex: 1 1 auto;
   padding-inline: var(--space-2);
   white-space: nowrap;
 }
 
-/* 狭い幅: 右の位置マーカーの列を細くし、自分の段の「自分」「同速」のバッジを切らない(行の高さは変えない。ADR-0608)。 */
-@media (max-width: 480px) {
-  .speed-table__track {
-    flex-basis: 5rem;
-  }
+.speed-hint {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
 
-  /* 表の自分の段のバッジはアイコンだけにする(文字は読み上げ用の selfTierLabel が担う。aria-hidden のバッジの文字は見た目だけ)。 */
-  .speed-tier .speed-badge__text {
-    display: none;
-  }
+.speed-hint--warn {
+  color: var(--warning);
+}
 
-  .speed-tier {
-    gap: var(--space-2);
-    padding-inline: var(--space-2);
+.speed-screen__notice,
+.speed-screen__error {
+  margin: 0;
+  font-family: var(--font-family);
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
+.speed-screen__error {
+  color: var(--text-primary);
+  border-left: 4px solid var(--warning);
+  padding-left: var(--space-3);
+}
+
+.speed-self-speed {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-combo {
+  align-self: flex-start;
+  min-height: 44px;
+}
+
+/* ---- 出力 1: 想定ごとのカード ---- */
+.speed-matchup-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-3);
+}
+
+@media (min-width: 600px) {
+  .speed-matchup-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.speed-matchup-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--surface-card);
+  padding: var(--space-3);
+}
+
+.speed-matchup-card__title {
+  margin: 0;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-matchup-card__headline {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+}
+
+/* 行動順のバッジ(文字つき。色は補助)。 */
+.speed-order {
+  align-self: flex-start;
+  margin: 0;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-pill);
+  font-size: var(--font-size-caption);
+  line-height: 1.8;
+}
+
+.speed-order--self_first {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+.speed-order--speed_tie {
+  background: var(--info-soft);
+  color: var(--info);
+}
+
+.speed-order--opponent_first {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.speed-natures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.speed-nature {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  border-left: 4px solid var(--border-hairline);
+  padding-left: var(--space-2);
+  font-size: var(--font-size-body);
+}
+
+.speed-nature--plus {
+  border-left-color: var(--brand-primary);
+}
+
+.speed-nature--minus {
+  border-left-color: var(--warning);
+}
+
+.speed-nature__label {
+  min-width: 5em;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.speed-nature__main {
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-nature__tie {
+  font-size: var(--font-size-caption);
+  color: var(--info);
+}
+
+/* ---- 出力 2: これ以上 ---- */
+.speed-reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.speed-reach__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-input);
+  background: var(--surface-card);
+  padding: var(--space-3);
+}
+
+.speed-reach__title {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.speed-reach__cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-3);
+  overflow-wrap: anywhere;
+}
+
+.speed-reach__text {
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-reach__count,
+.speed-reach__example {
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }

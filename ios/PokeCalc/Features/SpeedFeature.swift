@@ -5,7 +5,7 @@ import SwiftUI
 struct SpeedFeature: AppFeature {
     let id = "speed"
     let order = 600
-    let entry = FeatureEntry.rootButton(title: SpeedLabels.openButton, accessibilityIdentifier: "openSpeedScreen")
+    let entry = FeatureEntry.tab(.speed, title: SpeedLabels.openButton, accessibilityIdentifier: "openSpeedScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH"
 
     let requiredServices = [ServiceKey((any SpeedService).self)]

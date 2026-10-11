@@ -292,9 +292,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     ]
 
     private func openCalcScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -489,9 +487,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     ]
 
     private func openReverseScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openReverseScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -600,9 +596,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     /// `RootView.makeTeamStore()` が `POKECALC_USE_MOCK=1` のとき起動のたびに専用 UserDefaults suite
     /// を空にするため(`TeamScreenUITests` のコメントと同じ)、他のテストの構築データと衝突しない。
     private func openTeamListScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openTeamListScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -707,9 +701,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     ]
 
     private func openAboutScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openAboutScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openAboutScreen")
         XCTAssertTrue(element(app, "aboutScreen").waitForExistence(timeout: Self.existenceTimeout))
     }
 
@@ -766,9 +758,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     }
 
     private func openSpeedScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openSpeedScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        openButton.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
     }
 
@@ -861,9 +851,7 @@ final class LargeTextLayoutUITests: XCTestCase {
         if let scenario { app.launchEnvironment["POKECALC_MOCK_JUDGE"] = scenario }
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         app.launch()
-        let openButton = app.buttons["openJudgeScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openJudgeScreen が無い")
-        openButton.tap()
+        app.openScreen("openJudgeScreen")
         XCTAssertTrue(element(app, "judgeScreen").waitForExistence(timeout: Self.existenceTimeout), "judgeScreen が開かない")
         return app
     }

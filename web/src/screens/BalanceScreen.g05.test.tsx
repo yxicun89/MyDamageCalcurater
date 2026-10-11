@@ -319,7 +319,7 @@ describe("文を出し続けない", () => {
 });
 
 describe("CSS", () => {
-  const css = readFileSync(localPath("./BalanceScreen.css", import.meta.url), "utf8");
+  const css = readFileSync(localPath("../balance/BalancePanel.css", import.meta.url), "utf8");
   const tokens = parseCss(readFileSync(localPath("../styles/tokens.css", import.meta.url), "utf8"));
   const isDark = (prelude: string): boolean => /^@media\b.*prefers-color-scheme\s*:\s*dark/.test(prelude);
   const light = declarationMap(

@@ -14,8 +14,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"example.com/pokecalc/services/calc/internal/httpapi"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/httpapi"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 )
 
 // 例のマスタに含まれる架空の ID(services/calc/testdata/master.example.json)。

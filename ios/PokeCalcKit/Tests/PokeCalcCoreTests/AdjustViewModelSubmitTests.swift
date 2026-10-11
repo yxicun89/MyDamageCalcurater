@@ -237,6 +237,21 @@ final class AdjustViewModelSubmitTests: XCTestCase {
         XCTAssertFalse(fixture.viewModel.isLoading, "取り消したら計算中を解く")
     }
 
+    /// ナビゲーション案 B(ADR-0531 §2): 調整は破棄しない画面なので、送信中にタブ・区切りを移っても取り消さず、結果が出る。
+    func testSubmitInFlightCompletesWhenLeavingRetainedScreen() async throws {
+        let fixture = await minKoFixture()
+        await fixture.adjust.setMode(.manual)
+        let task = fixture.viewModel.scheduleSubmit()
+        try await fixture.adjust.waitForCalls(count: 2)
+        // ここで画面を離れる(cancelPendingWork は呼ばない)。
+        await fixture.adjust.resolveWithDefault(at: 0)
+        await fixture.adjust.resolveWithDefault(at: 1)
+        await task.value
+        XCTAssertNotNil(fixture.viewModel.outcome, "離れても送信は完了して結果が出る")
+        XCTAssertNil(fixture.viewModel.alertMessage)
+        XCTAssertFalse(fixture.viewModel.isLoading)
+    }
+
     // MARK: - 未対応の印
 
     func testUnsupportedMarksOfModeResultBecomeOneNotice() async {

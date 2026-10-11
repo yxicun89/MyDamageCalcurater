@@ -4,7 +4,7 @@ package httpapi
 // gateway 自身が作るエラー応答と、上流が calc-svc の実物(calctest。架空マスタ)のときの応答を
 // api/openapi.yaml に照らして kin-openapi で検証する。仕様は生成物に埋め込まれたもの
 // (api.GetSpec。make gen で openapi.yaml から作られる)を使う。検証ヘルパーは
-// services/calc/internal/httpapi/contract_test.go と同じやり方(internal 規則で共有できないため写し)。
+// services/calc/internal/adapters/httpapi/contract_test.go と同じやり方(internal 規則で共有できないため写し)。
 
 import (
 	"bytes"

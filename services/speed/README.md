@@ -21,7 +21,7 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `api/openapi.yaml` | 外部 API 契約の正(`make speed-gen` で `internal/api` を生成) |
-| `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て)、`Position`(自分の位置) |
+| `internal/speed` | 純粋 Go のコア。`Speed`(実数値・ランクは engine、スカーフだけ自前)、`Presets`/`BuildTable`(表の組み立て)、`Position`(自分の位置)、`MovesFirstLines`/`Matchup`/`Reach`(相手を選んで上を取る最低ライン・族の区切り。ADR-0610) |
 | `internal/master` | read model(ポケモン)の loader。検証に失敗したら起動しない |
 | `internal/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
@@ -37,6 +37,8 @@ flowchart LR
 | `GET .../pokemon` | 使用可能なポケモン一覧(pokemonId 昇順) | 0600 |
 | `GET .../table` | 6 行のプリセット(`presets` で絞り込み)を速い順の段にまとめて返す。同じ値は同速として 1 段 | 0601 |
 | `POST .../position` | 自分のポケモン(`mode`: preset / custom / raw)の実数値と、表の中の位置(速い行数・同速の行・遅い行数) | 0602 |
+| `POST .../matchup` | 自分 × 相手(想定ごと)の「上を取る SP の範囲・同速の SP の範囲」(性格 3 通り)。`self.current` があれば今の行動順 | 0610 |
+| `POST .../reach` | 自分の素早さに対する、6 プリセットの種族値の区切り(遅い・同速・速い)・数・境界の例。body は `/position` と同じ | 0610 |
 
 ## よく使うコマンド
 

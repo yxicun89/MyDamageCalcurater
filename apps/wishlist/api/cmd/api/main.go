@@ -25,15 +25,17 @@ import (
 	migratemysql "github.com/golang-migrate/migrate/v4/database/mysql"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 
-	"example.com/pokecalc/apps/wishlist/api/internal/dbwait"
-	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
-	"example.com/pokecalc/apps/wishlist/api/internal/httpapi"
-	"example.com/pokecalc/apps/wishlist/api/internal/item"
-	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
-	"example.com/pokecalc/apps/wishlist/api/internal/ogp"
-	"example.com/pokecalc/apps/wishlist/api/internal/refresh"
-	"example.com/pokecalc/apps/wishlist/api/internal/storage"
 	"example.com/pokecalc/apps/wishlist/api/migrations"
+
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/dbwait"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/fetcher"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/httpapi"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/netguard"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/ogp"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/storage"
+	"example.com/pokecalc/apps/wishlist/api/internal/adapters/store"
+	"example.com/pokecalc/apps/wishlist/api/internal/app/items"
+	"example.com/pokecalc/apps/wishlist/api/internal/app/refresh"
 )
 
 const usage = "usage: api serve | api migrate up"
@@ -182,7 +184,7 @@ func migrateUp(cfg migrateConfig) error {
 		return err
 	}
 	defer db.Close()
-	// Pod の起動直後は DB に繋がらないことがあるので再試行する(internal/dbwait)。
+	// Pod の起動直後は DB に繋がらないことがあるので再試行する(internal/adapters/dbwait)。
 	if err := dbwait.Ping(context.Background(), db); err != nil {
 		return fmt.Errorf("cannot reach the database: %w", err)
 	}
@@ -226,8 +228,8 @@ func serve(cfg serveConfig, stderr io.Writer) error {
 		return fmt.Errorf("cannot reach the database: %w", err)
 	}
 
-	repo := item.NewMySQLRepository(db)
-	svc := item.NewService(repo, images)
+	repo := store.NewMySQLRepository(db)
+	svc := items.NewService(repo, images)
 	remote := ogp.NewFetcher(netguard.NewClient(netguard.Options{}))
 	// 裏の更新はシグナルの ctx で動かし、終了時に止めて待つ(リクエストの ctx は使わない)。
 	est := refresh.New(refresh.Deps{

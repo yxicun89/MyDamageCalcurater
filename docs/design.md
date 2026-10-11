@@ -287,6 +287,14 @@ UI のような、見て押せば分かる画面(ユーザーの言葉では「�
 | アイコン | SF Symbols を `PopSymbol` に割り当てる。技の分類の印は SF Symbols に同じ意味の形が無ければ自作のシンボルにする(iOS レーンが決める) |
 | タイプの丸 | `Circle().fill(typeColor)` + タイプ名の `accessibilityLabel` |
 
+#### iOS の画面の行き来(ADR-0531。ナビゲーション案 B)
+
+- 下部タブ 4 つ(ダメージ・構築・素早さ・記録)。`TabView` + `Tab`、ラベルは短い日本語、アイコンは `PopSymbol.forTab`。起動直後はダメージタブの計算(ホームは無い)
+- ダメージタブの上部に 計算 / 逆算 / 調整 の区切り(`TabSegmentsView`)。常に見えるボタンの並びで、選択中は `PopChipStyle` の塗り。高さ 36pt 以上。
+  横に収まらない大きい文字では縦に積む(上の表の `Picker(.segmented)` は文字を縮めて詰めるため、画面の切り替えには使わない)
+- 「このアプリについて」は各タブの右上のアイコン。タブ・区切りを移っても入力と積んだ画面は残る
+- Web の下部固定ナビ(狭い幅)は Web レーンが決める(このファイルのタブの行は Web レーンが改める)
+
 ### 参考(G-05 の調査)
 
 - NN/g「Icon Usability」— 広く通じるアイコンは少なく、ラベルを添える: https://www.nngroup.com/articles/icon-usability/
