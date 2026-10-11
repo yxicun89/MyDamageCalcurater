@@ -73,3 +73,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-11(G-02 構築 3 体保存で画面が消える報告の調査。ブランチ fix/ios-g02-team-save。ADR-0501「G-02」章): Web の原因(team-svc が技 0 個の moveIds を省く)は iOS の端末内保存には無関係。1・3・5 体目だけ・技 0 個の構築の保存→一覧→開き直し→再保存→構築ピッカー→タイプバランス読込/分析を実物の `LocalTeamStore` で通す回帰テスト `TeamSparseSaveTests`(6 件)を追加。再現せず・実装変更なし。
 
 2026-10-11(G-01 技の行とタイプ順。ブランチ feat/ios-g01-move-rows。ADR-0527): 技の行をタイプ丸アイコン+技名+分類アイコン+威力の 1 行にし(読み上げは全情報)、並びをタイプ順だけにした(`MoveSortOrder`・`MoveSortStore`・チップを廃止。`MoveSort.byType`)。計算画面のみ群見出しつき。Web の ADR-0335 は Web レーンが更新する。
+
+2026-10-11(ナビゲーション案 B。ブランチ feat/ios-nav-tabs。ADR-0531): ホームを廃止し下部タブ 4 つ(ダメージ・構築・素早さ・記録)に。ダメージは上部の区切り(計算/逆算/調整。`TabSegmentsView`)。選択と訪れた画面は `AppNavigationModel`(PokeCalcCore)を `RootView` が持ち、画面ごとに `NavigationStack` を分けて破棄しない(入力・積んだ画面が残る)。`FeatureEntry` は `.tab`/`.link(in:)`/`.toolbarIcon`。タイプバランスは構築一覧の行から(ADR-0421 の統合で外す)。UI テストの移り方は `UITestNavigation.openScreen` に集約(変更表は ADR-0501「ナビゲーション案 B」章)。Web は Web レーン。後続: 記録→計算の受け渡し(今は記録タブに計算画面を積む)。

@@ -4893,3 +4893,31 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `CalcMoveSortUITests` 切り替え 2 件 | 並び・見出し・切り替え無し・選択・AX5 の行の 3 件に置換 | チップを廃止 |
 
 検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。
+
+## ナビゲーション案 B: 下部タブ 4 つとダメージの区切り(ADR-0531。2026-10-11)
+
+受け入れ条件: (1) 起動直後はホームではなくダメージタブの計算。下部タブは ダメージ・構築・素早さ・記録 の 4 つ(識別子 `tab-<タブ>`)。
+(2) ダメージタブの上部に 計算 / 逆算 / 調整 の区切りが常に見え(36pt 以上・AX5 で画面からはみ出さない)、区切りのボタンは旧ホームのピルの ID を持つ。
+(3) タブを移っても、区切りを切り替えても、各画面の入力と画面の中で積んだ状態(構築の編集・下書き)が残る。
+(4) 「このアプリについて」は各タブの右上のアイコンから開ける。(5) タイプバランスは構築タブの一覧の行から開ける(ADR-0421 の統合まで)。
+(6) 判定は既定で非表示(出すとダメージタブの区切りに並ぶ)。起動時に開く環境変数・モック・`IOS_SCREEN` は維持。
+
+新しいテスト: `AppNavigationModelTests`(PokeCalcKit。タブ・区切りの並び・選択の保持・訪れた画面)、`AppNavigationUITests`(上の (1)〜(5)、
+`Tab` の識別子がタブバーのボタンとして引けることの検証、AX5 の区切り)。
+
+### 既存テストの変更(画面への移り方だけ。各画面の検査・期待値は弱めていない)
+
+画面への移り方は `PokeCalcUITests/UITestNavigation.swift` の `app.openScreen("<入口 ID>")` に集約した(タブを選ぶ → 区切り/行を押す。
+右上のアイコンはそのまま押す)。下部タブの組み立てが変わったらこのファイルだけを直す。
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| 入口を開く 38 か所(`app.buttons["open…Screen"]` を待って押す 3 行。24 ファイル)・`JudgeScreenUITests` の手書きの 2 か所・`tap(app, "openAdjustScreen")` 3 か所・`FrequentOpponentsUITests`・`UnsupportedMarksUITests` の起動ヘルパ | `app.openScreen("open…Screen")` に置換 | 入口がホームのピルからタブ/区切りに変わった。存在の待ちはヘルパの中で同じ時間だけ行う |
+| `CalcScreenUITests`・`ReverseScreenUITests`・`JudgeScreenUITests` の「ルートへ戻ってから構築を作る/構築一覧からルートへ戻る」戻るボタンの押下(計 7 か所) | 削除(構築タブへ移って作り、元のタブへ移る) | 計算・逆算・判定・構築一覧はタブの根で戻る先が無い(押すと右上のアイコンに当たる)。構築を作った後に呼び出せることの検査はそのまま |
+| `CalcHistoryUITests`・`FavoriteCalcRestoreUITests`・`FavoritesScreenUITests`・`SpeedScreenUITests`・`JudgeScreenUITests` の「戻ってから計算/お気に入りを開く」 | 戻るを外し `openScreen` でタブを移る(未使用になった `goBack` を削除) | 同上。「計算は成功する」「一覧に 1 件」などの検査は不変 |
+| `DeviceDataDeletionUITests` の戻る | 残す | 「このアプリについて」はタブに積まれるので、戻るは今も意味を持つ |
+| `PokeCalcUITests.testBackendModeBadgeIsVisibleAtLaunch` | ホームの `backendModeBadge` → 起動直後の計算画面の `calcBackendModeBadge`(「モック」を含むことも検査に追加) | ホームを廃止。起動直後にモックで動いている表示が見えること自体は同じ強さ以上で確かめる |
+| `JudgeHiddenUITests` の「素早さの入口は出る」 | `app.buttons["openSpeedScreen"]` → 素早さのタブ(`tab-speed`) | 素早さはタブになった |
+
+実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
+以前は画面を開き直すたびに `load()` で読み直していた挙動を保つため(`CalcScreenUITests` の構築の呼び出しの検査がこれに依存する)。
