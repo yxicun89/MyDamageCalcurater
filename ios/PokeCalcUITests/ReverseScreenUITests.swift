@@ -275,12 +275,19 @@ final class ReverseScreenUITests: XCTestCase {
         // ラベルの文字列だけで探すと、シートの裏の自分側カードのヘッダー(既定の自分 = 2番目の種族。
         // ラベルが同じ文字列)を誤って拾う(`CalcScreenUITests` と同じ理由)。検索結果一覧に限定した
         // identifier で確かめる。
-        XCTAssertFalse(
-            element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").exists, "絞り込まれて一致しない種族は消える"
+        // 絞り込み・シートを閉じる・ラベルの更新は非同期なので、即時判定ではなく終わるまで待つ(17 Pro・並列実行で
+        // 即時判定が揺れた。ADR-0501「iPhone 17 Pro のゲート」)。期待する状態そのものは変えない。
+        XCTAssertTrue(
+            element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").waitForNonExistence(timeout: Self.existenceTimeout),
+            "絞り込まれて一致しない種族は消える"
         )
         result.tap()
 
-        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
+        XCTAssertTrue(
+            element(app, "speciesSearchSheet").waitForNonExistence(timeout: Self.existenceTimeout), "選ぶとシートが閉じる")
+        let labelUpdated = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", Self.thirdMockSpeciesName), object: opponentPicker)
+        XCTAssertEqual(XCTWaiter().wait(for: [labelUpdated], timeout: Self.existenceTimeout), .completed)
         XCTAssertEqual(opponentPicker.label, Self.thirdMockSpeciesName)
     }
 }

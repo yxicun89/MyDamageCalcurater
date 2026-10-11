@@ -79,7 +79,9 @@ final class AppNavigationUITests: XCTestCase {
             XCTAssertTrue(button.isHittable, "\(entry) が押せる")
         }
         for tabID in Self.allTabs {
-            XCTAssertTrue(app.tabButton(tabID).exists, "AX5 でもタブ \(tabID) が出る")
+            // タブバーのボタンは画面より後に支援技術へ出ることがある(17 Pro・並列実行で実測)ので、存在を待つ。
+            XCTAssertTrue(
+                app.tabButton(tabID).waitForExistence(timeout: Self.existenceTimeout), "AX5 でもタブ \(tabID) が出る")
         }
         app.openScreen("openAdjustScreen")
         XCTAssertTrue(element(app, "adjustScreen").waitForExistence(timeout: Self.existenceTimeout), "AX5 でも区切りで移れる")

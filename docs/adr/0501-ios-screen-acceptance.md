@@ -4929,6 +4929,18 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | 追加: `RetainedScreenWorkTests`(3 件)・`AdjustViewModelSubmitTests.testSubmitInFlightCompletesWhenLeavingRetainedScreen` | 取り消さないときも完了し、最新の入力の結果だけが残る | |
 | 追加: `AppNavigationUITests.testInputChangedJustBeforeTabSwitchShowsResultAfterReturning` | 入力直後にタブを移って戻ると、新しい入力で結果が出ている | |
 
+### iPhone 17 Pro のゲート(#724)で落ちた 7 件(2026-10-12)
+
+17 Pro(既定機種)・2 並列で 223 件中 7 件が失敗。main を取り込んだうえで 17 Pro で 1 件ずつ流して切り分けた。
+
+| テスト | 単独 | 原因 | 対処 |
+|---|---|---|---|
+| `SpeciesImageUITests.testSpeedTable…`(2 件) | (修正後)成功 | main から入った新しいテストが旧ホームの `app.buttons["openSpeedScreen"]` を押していた(取り込み時の食い違い) | `app.openScreen("openSpeedScreen")` に置換 |
+| `JudgeHiddenUITests.testJudgeEntryIsHiddenByDefault` | 失敗(再現) | 計算画面が出た直後に素早さタブを `exists` で即時に見ており、17 Pro ではタブバーのボタンが支援技術へ出るのが遅れる | `waitForExistence` で待つ(期待値は不変)。5 回反復で全件成功 |
+| `AppNavigationUITests.testSegmentsFitAtAX5` | 成功(並列で 1 回再現) | 同じく末尾のタブの確認が `exists` の即時判定 | `waitForExistence` で待つ |
+| `ReverseScreenUITests.testOpponentSpeciesSearchSheetFiltersAndSelects` | 成功(並列で 1 回再現) | 絞り込み後の「消える」・シートが閉じる・ラベルの更新を即時判定していた(非同期の完了を待たない) | それぞれ `waitForNonExistence`・述語の待ちにした(期待する状態は不変) |
+| `AdjustGoalsUITests.testOutspeedAndKo…`・`LargeTextLayoutUITests.testReverseScreenWithCandidate…AX5` | 成功 | 単独・並列の再実行(各 3 回)で再現せず(並列実行時の揺れ) | 変更なし |
+
 実装の判断: 画面を破棄しなくなったため、計算・逆算・判定は 2 回目以降の表示で構築の選択肢を、記録はお気に入り・計算履歴を読み直す(`onReappear`)。
 以前は画面を開き直すたびに `load()` で読み直していた挙動を保つため(`CalcScreenUITests` の構築の呼び出しの検査がこれに依存する)。
 

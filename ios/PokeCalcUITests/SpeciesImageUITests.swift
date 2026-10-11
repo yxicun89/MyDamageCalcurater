@@ -103,9 +103,7 @@ final class SpeciesImageUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if images { app.launchEnvironment["POKECALC_MOCK_IMAGES"] = "1" }
         app.launch()
-        let open = app.buttons["openSpeedScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

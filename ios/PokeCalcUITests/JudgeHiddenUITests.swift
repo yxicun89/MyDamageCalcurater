@@ -22,7 +22,9 @@ final class JudgeHiddenUITests: XCTestCase {
     func testJudgeEntryIsHiddenByDefault() {
         let app = launchRoot(showJudge: false)
         XCTAssertTrue(app.buttons["openCalcScreen"].waitForExistence(timeout: Self.existenceTimeout), "計算の入口は出る")
-        XCTAssertTrue(app.tabButton(UITestNavigation.TabID.speed).exists, "素早さの入口(タブ)は出る")
+        // タブバーのボタンは計算画面より後に支援技術へ出ることがある(17 Pro で実測)ので、存在を待つ。
+        XCTAssertTrue(
+            app.tabButton(UITestNavigation.TabID.speed).waitForExistence(timeout: Self.existenceTimeout), "素早さの入口(タブ)は出る")
         XCTAssertFalse(app.buttons["openJudgeScreen"].exists, "判定の入口は既定で出さない")
     }
 

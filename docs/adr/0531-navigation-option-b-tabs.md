@@ -77,6 +77,8 @@ iOS は起動するとホームに全機能のピルが並び、機能を移る�
 - `Tab` に付けた `accessibilityIdentifier` は XCUITest からタブバーのボタンとして引ける(決定記録の懸念。`AppNavigationUITests` で検証)。
   初回の実行で 2 件だけ識別子で見つからないことがあった(その後の実行では再現せず)ため、UI テストの移り方の補助(`selectTab`)は
   識別子で見つからないときだけラベルで引き直し、要素の一覧を添付する。識別子そのものの検査は `AppNavigationUITests` に残す。
+  iPhone 17 Pro では、タブバーのボタンが画面の中身より後に支援技術へ出ることがある(#724 のゲートで実測)。タブの存在は
+  `exists` の即時判定ではなく `waitForExistence` で待つ(ADR-0501「iPhone 17 Pro のゲート」)。
 
 ### 5. Web(Web レーン)
 
