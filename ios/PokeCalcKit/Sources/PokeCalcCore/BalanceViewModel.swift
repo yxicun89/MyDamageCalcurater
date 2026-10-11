@@ -64,6 +64,8 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
     /// 一度でも見た技(先頭ページ・検索結果・構築の技の解決)。技名の表示に使う。
     private var moveDictionary: [String: Move] = [:]
     private var learnsetIdsByMember: [String: [String]] = [:]
+    /// `setParty` の呼び出しごとの世代(追い越された呼び出しを捨てる)。
+    private var partyGeneration = 0
 
     // MARK: - メンバー
 
@@ -272,8 +274,32 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
     /// 保存済みの構築のメンバーで入れ替える。1体でもマスタを引けなければ入れ替えず `masterError` を立てる。
     public func loadTeam(_ team: Team) async {
+        guard let loaded = await resolveParty(team.members) else { return }
+        await applyParty(loaded)
+    }
+
+    /// 構築編集の下書きのメンバーを入力にする(ADR-0421)。空の枠は呼び出し側が除いて渡す(空配列なら結果を消し、要求を出さない)。
+    /// 今のメンバーと種族・特性・技が同じなら何もしない(送り直さない)。マスタを引けなければ今の結果を残し `masterError` を立てる。
+    /// 連続して呼ばれたときは最後の呼び出しだけを反映する(待っている間に追い越された呼び出しは捨てる)。
+    public func setParty(_ teamMembers: [TeamMember]) async {
+        let wanted = Array(teamMembers.prefix(TeamLimits.maxMembers))
+        partyGeneration += 1
+        let token = partyGeneration
+        let sameAsCurrent =
+            wanted.count == members.count
+            && zip(wanted, members).allSatisfy {
+                $0.speciesKey == $1.speciesKey && $0.abilityId == $1.abilityId && $0.moveIds == $1.moveIds
+            }
+        guard !sameAsCurrent else { return }
+        guard let loaded = await resolveParty(wanted) else { return }
+        guard token == partyGeneration else { return }
+        await applyParty(loaded)
+    }
+
+    /// 構築のメンバーを順にマスタから引く。1体でも引けなければ `masterError` を立てて nil。
+    private func resolveParty(_ teamMembers: [TeamMember]) async -> [(member: BalanceMember, detail: SpeciesDetail)]? {
         var loaded: [(member: BalanceMember, detail: SpeciesDetail)] = []
-        for teamMember in team.members.prefix(TeamLimits.maxMembers) {
+        for teamMember in teamMembers.prefix(TeamLimits.maxMembers) {
             do {
                 let detail = try await master.species(key: teamMember.speciesKey)
                 let member = BalanceMember(
@@ -283,9 +309,13 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
                 loaded.append((member, detail))
             } catch {
                 if !(error is CancellationError) { masterError = BalanceScreenError(error) }
-                return
+                return nil
             }
         }
+        return loaded
+    }
+
+    private func applyParty(_ loaded: [(member: BalanceMember, detail: SpeciesDetail)]) async {
         await resolveUnknownMoves(loaded.flatMap(\.member.moveIds))
         members = loaded.map(\.member)
         abilityOptionsByMember = [:]
