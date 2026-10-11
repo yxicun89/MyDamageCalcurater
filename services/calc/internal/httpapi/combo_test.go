@@ -428,6 +428,12 @@ func TestCalcComboHTTPErrors(t *testing.T) {
 		{"多段の回数が範囲外", with(func(b map[string]any) {
 			b["steps"] = []any{map[string]any{"moveId": moveBulletMulti, "hits": 6}}
 		}), http.StatusBadRequest, "invalid_input"},
+		{"多段の回数 0(既定として通さない)", with(func(b map[string]any) {
+			b["steps"] = []any{map[string]any{"moveId": moveBulletMulti, "hits": 0}}
+		}), http.StatusBadRequest, "invalid_input"},
+		{"多段の回数 -1", with(func(b map[string]any) {
+			b["steps"] = []any{map[string]any{"moveId": moveBulletMulti, "hits": -1}}
+		}), http.StatusBadRequest, "invalid_input"},
 		{"SP の欠落", with(func(b map[string]any) { delete(b["attacker"].(map[string]any), "sp") }), http.StatusBadRequest, "invalid_input"},
 		{"未知の技(手)", with(func(b map[string]any) { b["steps"] = stepsOf(movePhysical, "test-nothing") }),
 			http.StatusBadRequest, "unknown_move"},

@@ -267,7 +267,7 @@ iOS は Web と同じ案(計算の画面 `CalcScreenView` の結果の下)。
 | AC-13 | 各手のダメージは、その手の開始時のランクを入れた `POST /api/calc` の応答の `rolls`・`ko` と一致する(新しい式を持たない) |
 | AC-14 | 倒せる確率は、各手の 16 段階(多段技は 1 発ごと)を独立とした総当たりの数え上げと一致する(手 3・多段技を含む性質テスト) |
 | AC-15 | こだわり系の持ち物で手ごとに技が違うと `choice_locked` の印が付き、計算結果は返る |
-| AC-16 | 入力の検査: 手 0 件・上限超えは 400(ID の解決より前)、ランク変化の無い変化技の手は 400、未知の技は 422。エラーの形は `/api/calc` と同じ |
+| AC-16 | 入力の検査: 手 0 件・上限超えは 400(ID の解決より前)、ランク変化の無い変化技の手は 400、多段の回数 0 以下は 400、未知の技は 400 `unknown_move`(HTTP の語彙。ADR-0252。当初案の 422 は契約に無い)。エラーの形は `/api/calc` と同じ |
 | AC-17 | record・team・NATS が止まっていても `POST /api/calc/combo` は成功する(絶対ルール 5) |
 | AC-18 | WASM(オフライン)の結果は API の結果と一致する(`engine/cmd/wasmexpect` の期待値に連続技を足す) |
 | AC-19 | Web: 計算の結果から「+ 次の技」で 2 手目・3 手目を足せる。ダメージ計算の防御側の振り方を変えると、連続技の結果も変わる(UC-5)。相手の素早さが分からないとき、ラインと素早さ表の例が出る |
@@ -289,6 +289,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 | CB-6 | Web: 案 A(§4-3)。素早さ表の例は `POST /api/speed/v1/position` の raw を呼ぶ | Web | CB-4(オフラインは CB-5) | 中〜大(結果の表示と入力で 2 つに分けてよい) | 0356 |
 | CB-7 | 判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |
 | CB-8 | iOS: 案 A を `CalcScreenView` に | iOS | CB-4 | 中 | 0531 |
+| CB-4b | 後続: CB-5 が main に入ったら、同じ入力を `POST /api/calc/combo` と `wasmapi` の `calcCombo` に通して値を突き合わせるテスト(AC-18。parity_test.go の流儀)と、公開 `Move.effect`(PascalCase)をそのまま WASM の技の `effect` に渡して受け付けるテストを足す | API / データ(engine) | CB-4・CB-5 | 小 | 0252 に追記 |
 
 順序: CB-1 と CB-2 は並行できる → CB-3 → CB-4 と CB-5 は並行 → CB-6・CB-8 → CB-7。
 CB-7 で CI のワークフロー(`.github/workflows/`)を変えるなら、その PR は人間がマージする(CLAUDE.md「人間の確認が必要なこと」)。

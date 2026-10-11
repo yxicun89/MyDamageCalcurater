@@ -3,8 +3,8 @@ package httpapi
 // POST /api/calc/combo(連続技。ADR-0252・ADR-0179 追記 CB-3)。
 //
 // 流れは /api/calc と同じ(パッケージ doc): 厳格デコード → 手の件数(ID の解決より前。ADR-0208 §3)
-// → 列挙(format・opponentSpeed・status・teraType・天候・フィールド)→ ID 解決 → 個体の検証 → engine.CalcCombo → 写し。
-// ランク変化の無い変化技の手・変化技の相手の技・多段の回数は engine の sentinel(invalid_input)に任せる。
+// → 各手の hits の下限(指定したら 1 以上。battleStateFrom と同じ規則。0 を engine の「既定」として通さない)→ 列挙(format・opponentSpeed・status・teraType・天候・フィールド)→ ID 解決 → 個体の検証 → engine.CalcCombo → 写し。
+// ランク変化の無い変化技の手・変化技の相手の技・多段の回数の上限と技との対応は engine の sentinel(invalid_input)に任せる。
 // 独自の式・丸めを持たない(表示%は engine の tenths を 10 で割るだけ)。計算イベントは発行しない(絶対ルール5。ADR-0252 §4)。
 
 import (
@@ -27,6 +27,11 @@ func (s *Server) CalcCombo(ctx *echo.Context, params api.CalcComboParams) error 
 	}
 	if n := len(req.Steps); n < 1 || n > engine.MaxComboSteps {
 		return newError(api.InvalidInput, "steps は 1..%d 件でなければならない: %d 件", engine.MaxComboSteps, n)
+	}
+	for i, st := range req.Steps {
+		if st.Hits != nil && *st.Hits < 1 {
+			return newError(api.InvalidInput, "steps[%d].hits は 1 以上でなければならない: %d", i, *st.Hits)
+		}
 	}
 	format, err := parseFormat(req.Format)
 	if err != nil {
