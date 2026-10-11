@@ -24,3 +24,7 @@
 
 - `api/`・`services/`・`web/` は不変。実画像・実データはコミットしない。
 - 既存テストの期待値は変えていない。`.webp` 以外の相対パスを画像なしにしたのは新規の規則(`ImageURLWebpOnlyTests`)。
+
+## 追記: VoiceOver の扱い(critic 指摘)
+
+画像の枠は `accessibilityHidden` にすると XCUITest から見えなくなるため使わず、`.accessibilityElement(children: .ignore)` に `.accessibilityRemoveTraits(.isImage)` を足して「画像」と読まれないようにした(名前は隣のテキストが読む)。行が `Button` の中にあるときは子が結合されるので、無名の要素は残らない前提。

@@ -58,6 +58,7 @@ struct SpeciesImageView<Fallback: View>: View {
                         .clipShape(Circle())
                         // 装飾(名前は隣のテキストが読む)。label は付けず、identifier だけで枠を公開する。
                         .accessibilityElement(children: .ignore)
+                        .accessibilityRemoveTraits(.isImage)
                         .accessibilityIdentifier("speciesImage-\(key)")
                 case .empty, .failure:
                     fallback
