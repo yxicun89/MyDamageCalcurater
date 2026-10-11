@@ -55,7 +55,7 @@ describe("価格の推移: 取得", () => {
     expect(within(dialog).queryByRole("img", { name: /^価格の推移/ })).not.toBeInTheDocument();
   });
 
-  it("AC-HIS-01 開くと GET price-history を 1 回(Bearer 付き・days を付けない)。閉じて開き直しても取り直さない", async () => {
+  it("AC-HIS-01 開くと GET price-history を 1 回(Authorization は付けない・days を付けない。認証を外した: ユーザー決定 2026-10-11 / phase5-spec 5-1a)。閉じて開き直しても取り直さない", async () => {
     const { api, dialog, user } = await openSheet((a) => {
       a.priceHistory = () => history();
     });
@@ -63,7 +63,7 @@ describe("価格の推移: 取得", () => {
     await chart(dialog);
     expect(historyCalls(api)).toHaveLength(1);
     expect(historyCalls(api)[0]?.search).toBe("");
-    expect(historyCalls(api)[0]?.headers.get("Authorization")).toBe("Bearer test-token");
+    expect(historyCalls(api)[0]?.headers.has("Authorization")).toBe(false);
     await user.click(await toggle(dialog));
     await user.click(await toggle(dialog));
     await chart(dialog);

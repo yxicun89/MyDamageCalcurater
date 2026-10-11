@@ -53,7 +53,8 @@ spec:
                   cpu: 10m
                   memory: 256Mi
                 limits:
-                  cpu: 200m
+                  # Chromium で検索ページを描く。200m では描画が間に合わなかった(2026-10-11)。夜間に 1 回だけ動く
+                  cpu: "1"
                   # Chromium を含む。/dev/shm(emptyDir Memory)もここに数えられる。
                   memory: 1Gi
               securityContext:

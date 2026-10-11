@@ -7,6 +7,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  // stubClipboard(test/clipboard.ts)が足した navigator.clipboard を戻す。
+  Reflect.deleteProperty(navigator, "clipboard");
   try {
     localStorage.clear();
   } catch {

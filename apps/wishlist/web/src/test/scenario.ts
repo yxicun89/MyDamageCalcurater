@@ -22,6 +22,8 @@ export function scenario() {
       query_template: "{name} {option}",
       sort_order: 2,
       site_ids: [1, 2],
+      color: "#e0393e",
+      icon: "card",
     }),
     makeGenre({
       id: 2,
@@ -29,6 +31,8 @@ export function scenario() {
       query_template: "S.H.Figuarts {name}",
       sort_order: 1,
       site_ids: [2, 1, 3],
+      color: "#7c4dff",
+      icon: "figure",
     }),
   ];
   const items = [

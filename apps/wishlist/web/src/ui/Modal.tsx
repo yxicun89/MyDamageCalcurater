@@ -4,12 +4,14 @@ interface Props {
   /** アクセシブルネーム(「詳細」「登録」など) */
   label: string;
   role?: "dialog" | "alertdialog";
+  /** パネルに足す class(詳細・編集など、広げたいシート用) */
+  className?: string;
   onClose: () => void;
   children: ReactNode;
 }
 
 /** 下から出るシート。背景(オーバーレイ)のタップと Escape で閉じる。 */
-export function Modal({ label, role = "dialog", onClose, children }: Props) {
+export function Modal({ label, role = "dialog", className, onClose, children }: Props) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -23,7 +25,7 @@ export function Modal({ label, role = "dialog", onClose, children }: Props) {
   return (
     <div className="overlay" onClick={onClose}>
       <div
-        className="panel"
+        className={className ? `panel ${className}` : "panel"}
         role={role}
         aria-modal="true"
         aria-label={label}
@@ -31,6 +33,7 @@ export function Modal({ label, role = "dialog", onClose, children }: Props) {
           e.stopPropagation();
         }}
       >
+        <div className="grabber" aria-hidden="true" />
         {children}
       </div>
     </div>

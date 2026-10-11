@@ -81,6 +81,8 @@
 - fixture: amiami.fixture.html
 
 ### 駿河屋(scrape。ユーザー決定 2026-10-04: 30 秒間隔で夜間のみ取得)
+
+- 0 件のときは、本文に「検索結果は０件です。」を出した検索ページを **HTTP 404** で返す(2026-10-11 確認。fixture `testdata/surugaya_zero.html`)。この 404 は出品なしとして扱う
 - フォーム項目: `category`(空可)、`search_word`、`adult_s`。
 - 並び替えは select `rankBy`: `price:ascending`(値段が安い順)/ `price:descending` / `modificationTime:descending` / `release_date(int):descending` / `relavancy(int)`(関連順)。在庫ありは `inStock=On`(ページ内リンクの href より)。
 - ただし `rankBy=price:ascending&inStock=On` を付けた 2 回目の取得でも品切れ表示が並んだため、**パラメータが効いているかは未確認**(検索語「グリス」では在庫のある商品自体が少なかった可能性もある)。
