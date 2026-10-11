@@ -7,7 +7,9 @@ import Synchronization
 
 enum T {
     static let baseURLString = "https://wishlist.example/wishlist/"
-    static var configured: WishlistSettings { WishlistSettings(apiBaseURL: baseURLString, token: "test-token") }
+    static var configured: WishlistSettings { WishlistSettings(apiBaseURL: baseURLString) }
+    /// 接続先が無い(ビルド設定が空)。キャッシュだけで動く(ユーザー決定 2026-10-11 / phase5-spec 5-3)
+    static var localOnly: WishlistSettings { WishlistSettings() }
 
     static func uuid(_ n: Int) -> String { "00000000-0000-4000-8000-" + String(format: "%012d", n) }
 
@@ -50,27 +52,7 @@ enum T {
     }
 }
 
-/// テスト用の設定ストア(メモリ)。
-final class InMemorySettingsStore: WishlistSettingsStore {
-    private let state: Mutex<(settings: WishlistSettings, saves: Int, canSave: Bool)>
-
-    init(_ settings: WishlistSettings = WishlistSettings(), canSave: Bool = true) {
-        state = Mutex((settings, 0, canSave))
-    }
-
-    var saves: Int { state.withLock { $0.saves } }
-    var stored: WishlistSettings { state.withLock { $0.settings } }
-
-    func load() -> WishlistSettings { state.withLock { $0.settings } }
-    func save(_ settings: WishlistSettings) -> Bool {
-        state.withLock { s in
-            guard s.canSave else { return false }
-            s.settings = settings
-            s.saves += 1
-            return true
-        }
-    }
-}
+// 5-3: InMemorySettingsStore は WishlistSettingsStore(トークンと接続設定の保存。ユーザー決定 2026-10-11 で廃止)と一緒に消した。
 
 func makeTempDirectory(_ name: String = #function) throws -> URL {
     let url = FileManager.default.temporaryDirectory

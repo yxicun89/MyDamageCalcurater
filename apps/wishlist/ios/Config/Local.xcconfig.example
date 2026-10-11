@@ -1,0 +1,6 @@
+// このファイルを Local.xcconfig という名前でコピーして、<ホスト> を自分のものに書き換える。
+// Local.xcconfig は git に入れない(ios/.gitignore)。実在のホストをここ(.example)に書かない。
+//
+// xcconfig は `//` をコメントとして読むので、`https://` は `https:/$()/` と書く(`$()` は空文字に展開される)。
+// 末尾は `/wishlist/` のように、API を公開しているパスで終える。
+WISHLIST_API_BASE_URL = https:/$()/<ホスト>/wishlist/

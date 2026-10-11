@@ -27,8 +27,17 @@ public final class HomeViewModel {
         self.settings = settings
     }
 
-    /// トークン・URL が未設定なら true(設定画面から始め、API を呼ばない)
-    public var needsSettings: Bool { !settings.isConfigured }
+    /// 接続先(ビルド設定)が無く、保存済みのキャッシュだけで動いているとき true(API を呼ばない)。
+    public var isLocalOnly: Bool { !settings.isConfigured }
+
+    /// 「オフライン」の札を出すか。保存済みを使った(`isStale`)か、接続先が無い(`isLocalOnly`)とき true。出ている間は価格の札を出さない。
+    public var showsOfflineBadge: Bool { isStale || isLocalOnly }
+
+    /// `visibleItems` のタイル(ジャンルの色・絵柄・価格の札つき)。`showsOfflineBadge` の間は価格の札を出さない。
+    public var tiles: [HomeTile] {
+        let offline = showsOfflineBadge
+        return visibleItems.map { HomeTile.make(item: $0, genres: genres, isOffline: offline) }
+    }
 
     /// 選択中のジャンルで絞った商品。sortOrder 昇順、同順は id 降順(API の並びと同じ)。「すべて」は全件。
     public var visibleItems: [Item] {
@@ -54,10 +63,10 @@ public final class HomeViewModel {
     }
 
     /// 一覧・ジャンル・サイトを取得する(3 つは独立。`WishlistRepository` で、取れたものだけ置き換え、取れなかったものはキャッシュを使う)。
-    /// 成功した分はキャッシュへ保存する。`needsSettings` のときは何もしない(API を呼ばない)。
+    /// 成功した分はキャッシュへ保存する。`isLocalOnly` のときは何もしない(API を呼ばない)。
     /// 1 つでもキャッシュで代用したら `isStale = true`。取れず保存済みも無い種類があれば `loadError` を立てる。
     public func refresh() async {
-        guard !needsSettings else { return }
+        guard !isLocalOnly else { return }
         let repository = WishlistRepository(service: service, cache: cache)
         var stale = false
         var failure: String?

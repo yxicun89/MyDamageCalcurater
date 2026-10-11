@@ -4,6 +4,9 @@
 <dict>
 	<key>CFBundleDisplayName</key>
 	<string>欲しいもの</string>
+	<!-- 接続先。本体と同じキー・同じビルド設定(拡張は本体とデータを共有しない) -->
+	<key>WishlistAPIBaseURL</key>
+	<string>$(WISHLIST_API_BASE_URL)</string>
 	<!-- 拡張から API へ直接 POST する(本体とデータを共有しない。仕様 §9.5)。ATS は本体と同じ -->
 	<key>NSAppTransportSecurity</key>
 	<dict>
@@ -14,8 +17,13 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
+			<!-- Safari で開いたページの og:image・og:title を JavaScript で読む(WishlistShare/ExtensionPreprocessing.js) -->
+			<key>NSExtensionJavaScriptPreprocessingFile</key>
+			<string>ExtensionPreprocessing</string>
 			<key>NSExtensionActivationRule</key>
 			<dict>
+				<key>NSExtensionActivationSupportsWebPageWithMaxCount</key>
+				<integer>1</integer>
 				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
 				<integer>1</integer>
 				<key>NSExtensionActivationSupportsText</key>

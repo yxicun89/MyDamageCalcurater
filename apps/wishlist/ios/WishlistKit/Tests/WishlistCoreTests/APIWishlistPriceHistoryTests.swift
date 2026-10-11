@@ -9,7 +9,7 @@ final class APIWishlistPriceHistoryTests: XCTestCase {
     private let base = URL(string: "https://wishlist.example/wishlist/")!
 
     private func service(_ transport: RecordingTransport) -> APIWishlistService {
-        APIWishlistService(baseURL: base, token: "secret-token", transport: transport)
+        APIWishlistService(baseURL: base, transport: transport)
     }
 
     private let json = """
@@ -24,7 +24,8 @@ final class APIWishlistPriceHistoryTests: XCTestCase {
         let request = try XCTUnwrap(transport.last).request
         XCTAssertEqual(request.method, .get)
         XCTAssertEqual(request.path, "/api/items/12/price-history")
-        XCTAssertEqual(request.headerFields[.authorization], "Bearer secret-token")
+        // 【5-3 で置換】ユーザー決定 2026-10-11 / phase5-spec 5-3: トークン廃止。Authorization は付けない
+        XCTAssertNil(request.headerFields[.authorization])
         XCTAssertEqual(
             result,
             PriceHistory(

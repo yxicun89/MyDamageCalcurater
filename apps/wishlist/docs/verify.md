@@ -188,22 +188,25 @@ tailscale serve off
 
 ## 8. iOS アプリを確認する(実機)
 
-iPhone に Tailscale の iOS アプリを入れ、Mac と同じ tailnet にログインしておく。
+iPhone に Tailscale の iOS アプリを入れ、Mac と同じ tailnet にログインしておく。接続先(API の URL)はビルド設定で渡し、アプリにトークンや URL の入力欄は無い(認証なし。フェーズ5-3)。
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
 tailscale serve https / http://localhost:8080
 tailscale serve status
-open apps/wishlist/ios/Wishlist.xcodeproj
+cp apps/wishlist/ios/Config/Local.xcconfig.example apps/wishlist/ios/Config/Local.xcconfig
+open apps/wishlist/ios/Config/Local.xcconfig apps/wishlist/ios/Wishlist.xcodeproj
 ```
-→ HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る(この URL を控える)。Xcode が開く。
+→ HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る(この URL を控える)。`Local.xcconfig`(git に入らない)と Xcode が開く。
 
-1. target `Wishlist` と `WishlistShare` の Signing & Capabilities で、Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
-2. iPhone をつないで Run → アプリが起動する。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
-3. アプリの設定画面に、API のベース URL `<控えた URL>/wishlist/` と、トークン(任意の文字。サーバーは見ない)を入れて保存 → ホームに一覧が出る。
-4. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → 拡張の設定画面で同じ URL と任意のトークンを入れて保存 → プレビュー(名前と画像)が出る。ジャンルを選んで保存 → アプリのホームに画像が増える。
-5. 画像をタップ → 詳細シートが出る。メルカリの行をタップ → メルカリ(アプリかブラウザ)の検索結果が開く。
-6. 機内モードにしてアプリを開き直す → 一覧と画像が出る。詳細シートのサマリが「オフライン」。
-7. 機内モードを戻し、確認用の商品を長押し → 「削除」 → 「削除する」で消す。
+1. `Local.xcconfig` の `<ホスト>` を、控えた URL のホスト名(`https://` を除いた部分)に書き換え、末尾は `/wishlist/` のままにして保存する。
+2. target `Wishlist` と `WishlistShare` の Signing & Capabilities で、Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
+3. iPhone をつないで Run → アプリが起動し、設定画面を挟まずホームに一覧が出る(上に「オフライン」の札は出ない)。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
+4. ホームの設定(右上の歯車)を開く → 「接続」の欄が無く、ジャンルの行に絵柄・名前・件数が出る。ジャンルの行をタップ → 色(12 色)と絵柄を替えられる。
+5. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → ページの画像と名前のプレビューが出て、推定したジャンルの絵柄が選ばれている。「追加」を押す → アプリのホームに画像が増える。
+6. ホームの「+」→ 「コピーした URL を追加」(先に Safari で URL をコピーしておく)→ 確認の画面で「追加」。
+7. 画像をタップ → 詳細シートが出る。価格の帯とサイトのタイルが並び、メルカリのタイルをタップ → メルカリ(アプリかブラウザ)の検索結果が開く。
+8. 機内モードにしてアプリを開き直す → 一覧と画像が出て、上に「オフライン」の札が出る(価格の札は消える)。
+9. 機内モードを戻し、確認用の商品を長押し → 背景がぼけてメニューが出る → 「削除」 → 「削除する」で消す。
 
-署名は 7 日で切れる。切れたら Xcode から Run し直す。
+署名は 7 日で切れる。切れたら Xcode から Run し直す。接続先を替えたら `Local.xcconfig` を直してビルドし直す。

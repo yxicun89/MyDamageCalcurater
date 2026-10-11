@@ -23,7 +23,12 @@ public protocol APIProtocol: Sendable {
     /// - Remark: HTTP `POST /api/items`.
     /// - Remark: Generated from `#/paths//api/items/post(createItem)`.
     func createItem(_ input: Operations.CreateItem.Input) async throws -> Operations.CreateItem.Output
-    /// URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。
+    /// URL から下書き(名前・画像・ジャンルの推定)を返す。保存はしない(確定は POST /api/items)。規則は docs/phase5-spec.md 5-1c。
+    /// - ページの取得は netguard 経由で 1 回だけ。`title` を渡したとき・駿河屋の商品ページ(`www.suruga-ya.jp/product/detail/<番号>`)のときは取りに行かない
+    /// - 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名の部分を除いたもの
+    /// - ジャンルは `genre_id` があればそれ。無ければ Genre の `match_keywords`(名前に含む語。最も長い語、同じ長さなら sort_order が小さいもの)、
+    ///   次に `match_hosts`(URL のホスト。複数なら sort_order が小さいもの)で推定し、決まらなければ null
+    ///
     ///
     /// - Remark: HTTP `POST /api/items/from-url`.
     /// - Remark: Generated from `#/paths//api/items/from-url/post(draftItemFromURL)`.
@@ -124,7 +129,12 @@ extension APIProtocol {
             body: body
         ))
     }
-    /// URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。
+    /// URL から下書き(名前・画像・ジャンルの推定)を返す。保存はしない(確定は POST /api/items)。規則は docs/phase5-spec.md 5-1c。
+    /// - ページの取得は netguard 経由で 1 回だけ。`title` を渡したとき・駿河屋の商品ページ(`www.suruga-ya.jp/product/detail/<番号>`)のときは取りに行かない
+    /// - 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名の部分を除いたもの
+    /// - ジャンルは `genre_id` があればそれ。無ければ Genre の `match_keywords`(名前に含む語。最も長い語、同じ長さなら sort_order が小さいもの)、
+    ///   次に `match_hosts`(URL のホスト。複数なら sort_order が小さいもの)で推定し、決まらなければ null
+    ///
     ///
     /// - Remark: HTTP `POST /api/items/from-url`.
     /// - Remark: Generated from `#/paths//api/items/from-url/post(draftItemFromURL)`.

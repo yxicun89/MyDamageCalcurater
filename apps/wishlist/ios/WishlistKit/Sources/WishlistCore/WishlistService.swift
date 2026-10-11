@@ -10,6 +10,9 @@ public protocol WishlistService: Sendable {
     /// JSON(`image_url` をサーバーが取得して保存)で登録
     func createItem(_ fields: ItemFields, imageURL: String) async throws -> Item
     func draftFromURL(_ url: String, genreID: Int?) async throws -> ItemDraft
+    /// 共有拡張が JavaScript で読んだ title・image_url を渡して下書きを作る(`POST /api/items/from-url` に `url`・`title`・`image_url`。
+    /// サーバーはページを取りに行かない。ユーザー決定 2026-10-11 / docs/phase5-spec.md 5-3)。`genre_id` は送らない(サーバーが推定する)
+    func draftFromPage(url: String, title: String?, imageURL: String?) async throws -> ItemDraft
     func updateItem(id: Int, patch: ItemPatch) async throws -> Item
     func deleteItem(id: Int) async throws
     func replaceItemImage(id: Int, image: ImageUpload) async throws -> Item

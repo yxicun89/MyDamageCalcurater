@@ -111,6 +111,27 @@ describe("詳細: 価格の帯と各サイトの点", () => {
     for (const d of dots(dialog)) expect(within(dialog).getByTestId("price-band")).toContainElement(d);
   });
 
+  it("AC-5-3-web 全部同額なら点は帯の中央に置き、安い〜中央の太線は描かない(data-position は 0 のまま)", async () => {
+    const { dialog } = await openDetail(() =>
+      est({ sites: [siteEst(2, { low: 3000 }), siteEst(1, { low: 3000 })] }),
+    );
+    await within(dialog).findByTestId("price-band");
+    expect(dotPositions(dialog)).toEqual({ Amazon: "0", メルカリ: "0" });
+    for (const d of dots(dialog)) expect(d.style.left).toBe("50%");
+    expect(within(dialog).queryByTestId("band-range")).not.toBeInTheDocument();
+  });
+
+  it("AC-5-3-web 価格が違えば太線を描き、点は両端に余白を取って置く", async () => {
+    const { dialog } = await openDetail(() =>
+      est({ sites: [siteEst(2, { low: 3000 }), siteEst(1, { low: 5000 })] }),
+    );
+    await within(dialog).findByTestId("price-band");
+    expect(within(dialog).getByTestId("band-range")).toBeInTheDocument();
+    const left: Record<string, string> = {};
+    for (const d of dots(dialog)) left[d.getAttribute("aria-label") ?? ""] = d.style.left;
+    expect(left).toEqual({ Amazon: "6%", メルカリ: "94%" });
+  });
+
   it("AC-5-2h-3 点が 1 つだけ(最安と最高が同じ)なら位置は 0。価格の無いサイト(no_result・失敗で前回値なし・目安なし)は点にしない", async () => {
     const { dialog } = await openDetail(() =>
       est({

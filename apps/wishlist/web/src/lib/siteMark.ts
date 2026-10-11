@@ -3,6 +3,7 @@ const SITE_COLORS: Record<string, string> = {
   メルカリ: "#ff4d6d",
   駿河屋: "#e17055",
   "Yahoo!フリマ": "#ef233c",
+  "Yahoo!ショッピング": "#2f9e44",
   あみあみ: "#00a884",
   Amazon: "#ff9f1c",
   魂ウェブ: "#5b4bd6",
@@ -10,5 +11,13 @@ const SITE_COLORS: Record<string, string> = {
 
 export const siteColor = (name: string): string => SITE_COLORS[name] ?? "var(--muted)";
 
-/** サイト名の先頭 1 文字 */
-export const siteMark = (name: string): string => Array.from(name)[0] ?? "";
+const YAHOO_PREFIX = "Yahoo!";
+
+/**
+ * マークの 1 文字。通常はサイト名の先頭 1 文字。`Yahoo!` で始まる名前は、その後ろの最初の 1 文字
+ * (Yahoo!フリマ → 「フ」・Yahoo!ショッピング → 「シ」。同じ「Y」が並ばないため。iOS の SiteMark と同じ)。
+ */
+export const siteMark = (name: string): string => {
+  const rest = name.startsWith(YAHOO_PREFIX) ? name.slice(YAHOO_PREFIX.length) : "";
+  return Array.from(rest || name)[0] ?? "";
+};

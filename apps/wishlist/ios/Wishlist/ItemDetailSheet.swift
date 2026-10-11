@@ -2,55 +2,39 @@ import Charts
 import SwiftUI
 import WishlistCore
 
-/// 詳細シート(画像タップで下から出る)。画像・検索ワード(その場編集)・サマリ・サイト行。
+/// 詳細シート(画像タップで下から出る)。画像・ジャンルの点と名前と取得日・検索ワード(その場編集)・価格の帯・サイトのタイル・あやしい出品。
 struct ItemDetailSheet: View {
     @State private var viewModel: ItemDetailViewModel
+    let genre: Genre?
     let onSaved: (Item) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @FocusState private var queryFocused: Bool
-    @State private var suspiciousExpanded = false
+    @State private var showsSuspicious = false
     @State private var historyExpanded = false
+
+    private var genreColor: String { genre?.color ?? GenreIcon.defaultColor }
 
     init(item: Item, genre: Genre?, sites: [Site], service: any WishlistService, onSaved: @escaping (Item) -> Void) {
         _viewModel = State(initialValue: ItemDetailViewModel(item: item, genre: genre, sites: sites, service: service))
+        self.genre = genre
         self.onSaved = onSaved
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                ItemImageView(item: viewModel.item, cornerRadius: 20)
-                    .frame(maxHeight: 320)
-                    .frame(maxWidth: .infinity)
-
-                queryRow(viewModel: viewModel)
-
-                Text(viewModel.summaryText)
-                    .font(.headline)
-                    .accessibilityIdentifier("summaryText")
-                    .accessibilityLabel(viewModel.summaryText)
-
-                if let notice = viewModel.noticeText {
-                    Text(notice).font(.footnote).foregroundStyle(.secondary)
+        ZStack {
+            Palette.bg.ignoresSafeArea()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    if showsSuspicious {
+                        suspiciousList
+                    } else {
+                        main
+                    }
                 }
-
-                if let official = viewModel.official { officialSection(official) }
-
-                Button("更新") { Task { await viewModel.refresh() } }
-                    .buttonStyle(.bordered)
-                    .disabled(!viewModel.canRefresh)
-                    .accessibilityIdentifier("refreshButton")
-
-                siteRows
-
-                if let title = viewModel.suspiciousTitle {
-                    suspiciousSection(title: title)
-                }
-
-                historySection
+                .padding(20)
+                .padding(.top, 8)
             }
-            .padding(20)
         }
         .accessibilityIdentifier("detailSheet")
         .overlay(alignment: .topTrailing) {
@@ -58,9 +42,246 @@ struct ItemDetailSheet: View {
                 .accessibilityIdentifier("closeSheet")
                 .padding(16)
         }
-        .presentationDetents([.medium, .large])
+        .presentationDetents([.large])
         .task { await viewModel.loadEstimates() }
         .onDisappear { viewModel.stopPolling() }
+    }
+
+    private var main: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            ItemImageView(item: viewModel.item, genreColor: genreColor, fit: true)
+                .padding(10)
+                .frame(width: 300, height: 300)
+                .background(Palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .genreRing(genreColor, radius: 24)
+                .frame(maxWidth: .infinity)
+
+            titleRow
+            queryRow(viewModel: viewModel)
+            priceCard
+            statusLine
+
+            siteTiles
+
+            if let official = viewModel.official { officialSection(official) }
+
+            Button("更新") { Task { await viewModel.refresh() } }
+                .buttonStyle(OutlineButtonStyle(height: 44))
+                .disabled(!viewModel.canRefresh)
+                .accessibilityIdentifier("refreshButton")
+
+            if viewModel.suspiciousTotal > 0 { suspiciousButton }
+
+            historySection
+        }
+    }
+
+    /// ジャンル色の点・名前・取得日(`summaryFetchedAt` の JST `M/D`。無ければ出さない)
+    private var titleRow: some View {
+        HStack(spacing: 8) {
+            Circle().fill(Color(hex: genreColor)).frame(width: 10, height: 10).accessibilityHidden(true)
+                .accessibilityIdentifier("genreDot")
+            Text(viewModel.item.name).font(.wl(15, .heavy)).foregroundStyle(Palette.fg).lineLimit(1)
+            Spacer(minLength: 0)
+            if let date = viewModel.estimates?.summaryFetchedAt {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock").font(.system(size: 11, weight: .semibold))
+                    Text(PriceFormat.jstDate(date)).font(.wl(12))
+                }
+                .foregroundStyle(Palette.muted)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("取得日 \(PriceFormat.jstDate(date))")
+                .accessibilityIdentifier("fetchedAt")
+            }
+        }
+    }
+
+    /// 価格の帯 / 「出品ないかも」/ 空の枠(文は出さない。状態は `summaryText` のラベルで伝える)
+    @ViewBuilder
+    private var priceCard: some View {
+        switch viewModel.summary {
+        case .priced(let low, let mid, _):
+            let band = PriceBand.make(sites: viewModel.links.map(\.site), estimates: viewModel.estimates?.sites ?? [])
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(PriceFormat.yen(low)).font(.wl(30, .heavy)).foregroundStyle(Palette.fg)
+                    Text(mid.map { "〜 \(PriceFormat.yen($0))" } ?? "〜").font(.wl(16, .heavy)).foregroundStyle(Palette.muted)
+                }
+                PriceBandView(band: band, sites: viewModel.links.map(\.site))
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .card(radius: 20)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(viewModel.summaryText)
+            .accessibilityIdentifier("summaryText")
+        case .noListings:
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass").font(.system(size: 18, weight: .semibold)).foregroundStyle(Palette.muted)
+                Text(WishlistText.noListings).font(.wl(17, .heavy)).foregroundStyle(Palette.fg)
+            }
+            .frame(maxWidth: .infinity, minHeight: 84)
+            .card(radius: 20)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(viewModel.summaryText)
+            .accessibilityIdentifier("summaryText")
+        case .loading, .noPriceInfo, .offline:
+            // 薄い灰色の空の枠(動かない・小さな時計のアイコンだけ)
+            Image(systemName: "clock").font(.system(size: 14)).foregroundStyle(Palette.muted.opacity(0.6))
+                .frame(maxWidth: .infinity, minHeight: 84)
+                .background(Palette.lineSoft.opacity(0.6), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(viewModel.summaryText)
+                .accessibilityIdentifier("summaryText")
+        }
+    }
+
+    /// 更新中・失敗の短い文(成功して更新中でもないときは出さない)
+    @ViewBuilder
+    private var statusLine: some View {
+        if let notice = viewModel.noticeText {
+            Text(notice).font(.wl(12)).foregroundStyle(Palette.muted)
+        } else if viewModel.isRefreshing {
+            Text(WishlistText.refreshing).font(.wl(12)).foregroundStyle(Palette.muted)
+        }
+    }
+
+    // MARK: - サイトのタイル
+
+    private var siteTiles: some View {
+        let tiles = SiteTile.make(rows: viewModel.siteRows, estimates: viewModel.estimates, now: Date())
+        // 3 列。サイトは数個なので、遅延させず全部を組む(画面の外のタイルも支援技術・UI テストから見える)
+        let rows = stride(from: 0, to: tiles.count, by: 3).map { Array(tiles[$0..<min($0 + 3, tiles.count)]) }
+        return VStack(spacing: 10) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
+                HStack(spacing: 10) {
+                    ForEach(row) { tile in siteTile(tile) }
+                    ForEach(0..<(3 - row.count), id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, minHeight: 76) }
+                }
+            }
+        }
+    }
+
+    private func siteTile(_ tile: SiteTile) -> some View {
+        Button {
+            // http(s) 以外は開かない(SiteLinks.resolve でも除いているが、開く直前にも確認する)
+            if Deeplink.isHTTPURL(tile.url.absoluteString) { UIApplication.shared.open(tile.url) }
+        } label: {
+            VStack(spacing: 6) {
+                SiteMarkView(name: tile.name, dim: tile.isDim)
+                Text(tile.priceText ?? " ")
+                    .font(.wl(13, .heavy))
+                    .foregroundStyle(tile.isBest ? Palette.accent : (tile.isDim ? Palette.muted.opacity(0.7) : Palette.fg))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, minHeight: 76)
+            .card(radius: 16)
+            .overlay {
+                if tile.isBest {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.accent, lineWidth: 2)
+                }
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tile.accessibilityLabel)
+        .accessibilityAddTraits(tile.isBest ? .isSelected : [])
+        .accessibilityIdentifier("siteRow-\(tile.id)")
+    }
+
+    // MARK: - あやしい出品
+
+    private var suspiciousButton: some View {
+        let title = "あやしい出品 \(viewModel.suspiciousTotal)"
+        return Button {
+            showsSuspicious = true
+            if viewModel.suspicious == .notLoaded { Task { await viewModel.loadSuspiciousListings() } }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle").font(.system(size: 14, weight: .semibold))
+                Text(title).font(.wl(14, .heavy))
+                Spacer()
+                Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold))
+            }
+            .foregroundStyle(Palette.warn)
+            .padding(.horizontal, 14)
+            .frame(height: 44)
+            .card(radius: Metrics.buttonRadius)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue("閉じています")
+        .accessibilityIdentifier("suspiciousDisclosure")
+    }
+
+    /// 「戻る」と見出し「あやしい出品 N」+ 出品の一覧(同じシートの中身が替わる)
+    private var suspiciousList: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Button {
+                    showsSuspicious = false
+                } label: {
+                    Label("戻る", systemImage: "chevron.left").font(.wl(15, .heavy))
+                }
+                .accessibilityIdentifier("suspiciousBack")
+                Spacer()
+            }
+            .frame(minHeight: 44)
+            Text("あやしい出品 \(viewModel.suspiciousTotal)").font(.wl(20, .heavy)).foregroundStyle(Palette.fg)
+                .accessibilityAddTraits(.isHeader)
+            switch viewModel.suspicious {
+            case .notLoaded, .loading:
+                Text("読み込み中").font(.wl(13)).foregroundStyle(Palette.muted)
+            case .failed(let message):
+                Text(message).font(.wl(13)).foregroundStyle(Palette.muted)
+            case .loaded(let rows):
+                VStack(spacing: 10) {
+                    ForEach(rows) { row in suspiciousRow(row) }
+                }
+            }
+        }
+    }
+
+    private func suspiciousRow(_ row: SuspiciousListingRow) -> some View {
+        let content = HStack(alignment: .center, spacing: 12) {
+            Group {
+                if let imageURL = row.imageURL {
+                    AsyncImage(url: imageURL) { $0.resizable().scaledToFill() } placeholder: { Palette.lineSoft }
+                } else {
+                    Palette.lineSoft
+                }
+            }
+            .frame(width: 64, height: 64)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(row.priceText).font(.wl(18, .heavy)).foregroundStyle(Palette.fg)
+                WrappingHStack(spacing: 6) {
+                    ForEach(row.reasonTexts, id: \.self) { reason in
+                        Text(reason).font(.wl(12, .heavy)).foregroundStyle(Palette.warn)
+                            .padding(.horizontal, 8).frame(height: 24)
+                            .background(Color(hex: "#fff1e6"), in: Capsule())
+                    }
+                }
+            }
+            Spacer(minLength: 0)
+            if let name = viewModel.links.first(where: { $0.site.id == row.siteID })?.site.name {
+                SiteMarkView(name: name, size: 32)
+            }
+        }
+        .padding(10)
+        .card(radius: Metrics.cardRadius)
+        return Group {
+            if let url = row.linkURL {
+                Button { UIApplication.shared.open(url) } label: { content }.buttonStyle(.plain)
+            } else {
+                content
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(([row.title, row.priceText] + row.reasonTexts).joined(separator: " "))
+        .accessibilityIdentifier("suspiciousListing-\(row.id)")
     }
 
     /// 公式ページの販売状況(監視中の商品だけ。文字だけで、アニメーションは使わない)
@@ -107,6 +328,8 @@ struct ItemDetailSheet: View {
                     viewModel.beginEditingQuery()
                 } label: {
                     Label(viewModel.displayQuery, systemImage: "magnifyingglass")
+                        .font(.wl(13))
+                        .foregroundStyle(Palette.muted)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.plain)
@@ -114,99 +337,9 @@ struct ItemDetailSheet: View {
                 .accessibilityIdentifier("queryEditButton")
             }
             if let message = viewModel.errorMessage {
-                Text(message).font(.footnote).foregroundStyle(.red)
+                Text(message).font(.footnote).foregroundStyle(Palette.danger)
             }
         }
-    }
-
-    private var siteRows: some View {
-        VStack(spacing: 8) {
-            ForEach(viewModel.siteRows) { row in
-                Button {
-                    // http(s) 以外は開かない(SiteLinks.resolve でも除いているが、開く直前にも確認する)
-                    if Deeplink.isHTTPURL(row.link.url.absoluteString) { UIApplication.shared.open(row.link.url) }
-                } label: {
-                    HStack(alignment: .top) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(row.link.site.name).font(.body.weight(.medium))
-                            // 更新中の表示は文字だけ(スピナーは使わない)
-                            if let estimate = row.estimateText {
-                                Text([estimate, row.countText, row.stockText].compactMap { $0 }.joined(separator: "  "))
-                                    .font(.footnote).foregroundStyle(.secondary)
-                            }
-                            if let note = row.noteText {
-                                Text(note).font(.footnote).foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                        Image(systemName: "arrow.up.right.square").foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .accessibilityLabel(row.accessibilityLabel)
-                .accessibilityIdentifier("siteRow-\(row.id)")
-            }
-        }
-    }
-
-    /// 参考外の折りたたみ(ボタンで開閉する自前の折りたたみ。DisclosureGroup は識別子が子要素と重なるため使わない)。開いたときに出品を取る。
-    private func suspiciousSection(title: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                suspiciousExpanded.toggle()
-                if suspiciousExpanded, viewModel.suspicious == .notLoaded {
-                    Task { await viewModel.loadSuspiciousListings() }
-                }
-            } label: {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    Image(systemName: suspiciousExpanded ? "chevron.up" : "chevron.down")
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(title)
-            .accessibilityValue(suspiciousExpanded ? "開いています" : "閉じています")
-            .accessibilityIdentifier("suspiciousDisclosure")
-
-            if suspiciousExpanded {
-                switch viewModel.suspicious {
-                case .notLoaded, .loading:
-                    Text("読み込み中").font(.footnote).foregroundStyle(.secondary)
-                case .failed(let message):
-                    Text(message).font(.footnote).foregroundStyle(.secondary)
-                case .loaded(let rows):
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(rows) { row in suspiciousRow(row) }
-                    }
-                }
-            }
-        }
-    }
-
-    private func suspiciousRow(_ row: SuspiciousListingRow) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            if let imageURL = row.imageURL {
-                AsyncImage(url: imageURL) { $0.resizable().scaledToFill() } placeholder: { Color.gray.opacity(0.2) }
-                    .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(row.title).font(.subheadline)
-                Text(([row.priceText] + row.reasonTexts).joined(separator: "  ")).font(.footnote).foregroundStyle(.secondary)
-                if let url = row.linkURL {
-                    Button("開く") { UIApplication.shared.open(url) }.font(.footnote)
-                }
-            }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(([row.title, row.priceText] + row.reasonTexts).joined(separator: " "))
-        .accessibilityIdentifier("suspiciousListing-\(row.id)")
     }
 
     /// 価格の推移の折りたたみ(参考外と同じ自前の作り)。開いたときに推移を取る。常時動くアニメーション・スピナーは使わない。

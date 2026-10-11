@@ -2,6 +2,9 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- 接続先。ビルド設定 WISHLIST_API_BASE_URL(git に入れない Config/Local.xcconfig)を通す。空・未展開なら保存済みだけで動く -->
+	<key>WishlistAPIBaseURL</key>
+	<string>$(WISHLIST_API_BASE_URL)</string>
 	<!-- API は Tailscale 内の http(s)。IP アドレス・ローカル名の http は許す(ダメ計 PokeCalc-Info.plist と同じ) -->
 	<key>NSAppTransportSecurity</key>
 	<dict>

@@ -1,34 +1,36 @@
 import SwiftUI
 import WishlistCore
 
-/// 商品の画像(正方形に切り抜く)。ファイルキャッシュ経由で出し、取れなければ色付きのプレースホルダー(画像が無くても成立する)。
+/// 商品の画像。与えられた枠いっぱいに出す(`fit` なら全体が収まるように)。ファイルキャッシュ経由で出し、
+/// 取れなければジャンル色のプレースホルダー(画像が無くても成立する)。
 struct ItemImageView: View {
     let item: Item
-    var cornerRadius: CGFloat = 14
+    /// ジャンルの色 `#rrggbb`(プレースホルダーの色)
+    var genreColor: String = GenreIcon.defaultColor
+    /// true: 画像全体を収める(詳細)。false: 枠いっぱいに切り抜く(ホーム)
+    var fit = false
 
     @Environment(AppModel.self) private var model
     @State private var image: UIImage?
 
     var body: some View {
         Color.clear
-            .aspectRatio(1, contentMode: .fit)
             .overlay {
                 if let image {
-                    Image(uiImage: image).resizable().scaledToFill()
+                    Image(uiImage: image).resizable().aspectRatio(contentMode: fit ? .fit : .fill)
                 } else {
                     placeholder
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .clipped()
             .task(id: "\(item.imageURLPath)|\(model.settings.apiBaseURL ?? "")") { await load() }
     }
 
     private var placeholder: some View {
-        // id から決まる色(タイプ色エンブレムの代わり。常時動かない)
-        let hue = Double((item.id * 47) % 360) / 360
+        let color = Color(hex: genreColor)
         return ZStack {
-            Color(hue: hue, saturation: 0.35, brightness: 0.85)
-            Image(systemName: "gift").font(.title).foregroundStyle(.white.opacity(0.8))
+            color.opacity(0.14)
+            Image(systemName: "gift").font(.system(size: 34)).foregroundStyle(color.opacity(0.8))
         }
     }
 

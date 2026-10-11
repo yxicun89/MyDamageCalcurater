@@ -17,8 +17,8 @@ public enum WishlistURLs {
 
 /// UI の定数(spec で決めた値。View と XCUITest が同じ値を使う)。
 public enum HomeLayout {
-    /// ホームの画像グリッドの列数(仕様 §3: 2〜3列。iPhone は 3)
-    public static let gridColumnCount = 3
+    /// ホームのタイルの列数(docs/phase5-spec.md 5-2「ホーム」の 2 列)
+    public static let tileColumnCount = 2
     /// 長押しで編集・削除メニューを出すまでの秒数(PWA と同じ 0.5 秒)
     public static let longPressSeconds = 0.5
 }

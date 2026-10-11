@@ -36,9 +36,9 @@ AI は署名とシミュレータの目視をしない。実装後に人が次�
 
 1. `open apps/wishlist/ios/Wishlist.xcodeproj` → target `Wishlist` と `WishlistShare` の Signing で Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
 2. iPhone を接続して Run。初回は 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。署名は 7 日で切れるので、切れたら Xcode から入れ直す(同時に入れられるアプリ数に上限があり、ダメ計と枠を分け合う)。
-3. 設定画面で API のベース URL(例 `https://<Tailscale のホスト名>/wishlist/`)とトークンを入れる。iPhone には Tailscale の iOS アプリが要る。
+3. 接続先は `ios/Config/Local.xcconfig`(git に入らない。`Config/Local.xcconfig.example` をコピーして `<ホスト>` を書き換える)の `WISHLIST_API_BASE_URL` で渡す。アプリにトークンや URL の入力欄は無い。iPhone には Tailscale の iOS アプリが要る。
 4. 「S.H.Figuarts グリス」を登録し、詳細シートからメルカリと Amazon を開く(メルカリ・Amazon のアプリが入っていればアプリ側の検索結果が開く)。
-5. Safari で S.H.Figuarts の公式ページを開き、共有シートの「欲しいもの」から登録する(拡張にも接続設定が要る。初回は拡張の設定画面で入力)。
+5. Safari で S.H.Figuarts の公式ページを開き、共有シートの「欲しいもの」から登録する(拡張も同じビルド設定の接続先を使う。ページの画像と名前は拡張の JavaScript が読む)。
 6. 機内モードにして起動し、一覧と画像が出て、サイト行が動く(遷移先はオンラインのときだけ)。サマリは「オフライン」。
 
 詳しい項目は [../docs/phase2-ios-spec.md](../docs/phase2-ios-spec.md) の「Xcode が要る未検証項目」。

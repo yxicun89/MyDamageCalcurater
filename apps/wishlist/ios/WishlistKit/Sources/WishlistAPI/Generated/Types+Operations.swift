@@ -252,29 +252,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/get(listItems)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// サーバー内部のエラー(DB に届かない等)
             ///
             /// - Remark: Generated from `#/paths//api/items/get(listItems)/responses/500`.
@@ -445,29 +422,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/post(createItem)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 値が規則に合わない(存在しないジャンル・重複した名前・大きすぎる画像・対応外の画像形式など)
             ///
             /// - Remark: Generated from `#/paths//api/items/post(createItem)/responses/422`.
@@ -568,7 +522,12 @@ public enum Operations {
             }
         }
     }
-    /// URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。
+    /// URL から下書き(名前・画像・ジャンルの推定)を返す。保存はしない(確定は POST /api/items)。規則は docs/phase5-spec.md 5-1c。
+    /// - ページの取得は netguard 経由で 1 回だけ。`title` を渡したとき・駿河屋の商品ページ(`www.suruga-ya.jp/product/detail/<番号>`)のときは取りに行かない
+    /// - 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名の部分を除いたもの
+    /// - ジャンルは `genre_id` があればそれ。無ければ Genre の `match_keywords`(名前に含む語。最も長い語、同じ長さなら sort_order が小さいもの)、
+    ///   次に `match_hosts`(URL のホスト。複数なら sort_order が小さいもの)で推定し、決まらなければ null
+    ///
     ///
     /// - Remark: HTTP `POST /api/items/from-url`.
     /// - Remark: Generated from `#/paths//api/items/from-url/post(draftItemFromURL)`.
@@ -676,29 +635,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "badRequest",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/from-url/post(draftItemFromURL)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -894,29 +830,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "ok",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/get(getItem)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -1131,29 +1044,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/patch(updateItem)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/patch(updateItem)/responses/404`.
@@ -1328,29 +1218,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "noContent",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/delete(deleteItem)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -1576,29 +1443,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/image/put(replaceItemImage)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/image/put(replaceItemImage)/responses/404`.
@@ -1800,29 +1644,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/estimates/get(getItemEstimates)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/estimates/get(getItemEstimates)/responses/404`.
@@ -1992,29 +1813,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "accepted",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/estimates/refresh/post(refreshItemEstimates)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -2246,29 +2044,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/listings/get(listItemListings)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/listings/get(listItemListings)/responses/404`.
@@ -2486,29 +2261,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/items/{id}/price-history/get(getItemPriceHistory)/responses/404`.
@@ -2678,29 +2430,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/genres/get(listGenres)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// サーバー内部のエラー(DB に届かない等)
             ///
             /// - Remark: Generated from `#/paths//api/genres/get(listGenres)/responses/500`.
@@ -2861,29 +2590,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "badRequest",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/genres/post(createGenre)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -3093,29 +2799,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/genres/{id}/patch(updateGenre)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// 見つからない
             ///
             /// - Remark: Generated from `#/paths//api/genres/{id}/patch(updateGenre)/responses/404`.
@@ -3308,29 +2991,6 @@ public enum Operations {
                     }
                 }
             }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/sites/get(listSites)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
-                            response: self
-                        )
-                    }
-                }
-            }
             /// サーバー内部のエラー(DB に届かない等)
             ///
             /// - Remark: Generated from `#/paths//api/sites/get(listSites)/responses/500`.
@@ -3491,29 +3151,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "badRequest",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/sites/post(createSite)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }
@@ -3718,29 +3355,6 @@ public enum Operations {
                     default:
                         try throwUnexpectedResponseStatus(
                             expectedStatus: "badRequest",
-                            response: self
-                        )
-                    }
-                }
-            }
-            /// トークンが無い・違う
-            ///
-            /// - Remark: Generated from `#/paths//api/sites/{id}/patch(updateSite)/responses/401`.
-            ///
-            /// HTTP response code: `401 unauthorized`.
-            case unauthorized(Components.Responses.Unauthorized)
-            /// The associated value of the enum case if `self` is `.unauthorized`.
-            ///
-            /// - Throws: An error if `self` is not `.unauthorized`.
-            /// - SeeAlso: `.unauthorized`.
-            public var unauthorized: Components.Responses.Unauthorized {
-                get throws {
-                    switch self {
-                    case let .unauthorized(response):
-                        return response
-                    default:
-                        try throwUnexpectedResponseStatus(
-                            expectedStatus: "unauthorized",
                             response: self
                         )
                     }

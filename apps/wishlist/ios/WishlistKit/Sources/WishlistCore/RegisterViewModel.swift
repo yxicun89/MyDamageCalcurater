@@ -14,18 +14,26 @@ public final class RegisterViewModel {
     public private(set) var isBusy = false
     public private(set) var errorMessage: String?
 
-    /// - Parameter initialGenreID: ホームのチップで選んでいるジャンル(あれば初期値)。無い・`genres` に無いときは、sortOrder 昇順(同順は id 昇順)の先頭のジャンル。
     private let service: any WishlistService
     private let genres: [Genre]
 
+    /// - Parameter initialGenreID: ホームで絞っているジャンル(あれば初期値)。無い・`genres` に無いときは未選択(選ぶまで追加できない)。
     public init(service: any WishlistService, genres: [Genre], initialGenreID: Int?) {
         self.service = service
         self.genres = genres
         if let initialGenreID, genres.contains(where: { $0.id == initialGenreID }) {
             genreID = initialGenreID
-        } else {
-            genreID = genres.min { $0.sortOrder != $1.sortOrder ? $0.sortOrder < $1.sortOrder : $0.id < $1.id }?.id
         }
+    }
+
+    /// 「コピーした URL を追加」。`copied`(クリップボードの文字。読めなければ nil)が前後の空白を除いて
+    /// http(s) の絶対 URL なら `urlText` にして `fetchDraft()` を呼び true。そうでなければ何も呼ばず false(画面は URL の入力欄を出す)。
+    public func pasteURL(_ copied: String?) async -> Bool {
+        let text = (copied ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Deeplink.isHTTPURL(text) else { return false }
+        urlText = text
+        await fetchDraft()
+        return true
     }
 
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
@@ -38,7 +46,7 @@ public final class RegisterViewModel {
     public func setPhoto(_ photo: ImageUpload) { self.photo = photo }
     public func clearPhoto() { photo = nil }
 
-    /// 「取得」。`urlText`(前後の空白を除く)が空なら何もしない。`draftFromURL(url, genreID: 選択中)` を呼び、
+    /// 「取得」。`urlText`(前後の空白を除く)が空なら何もしない。`draftFromURL(url, genreID: nil)` を呼び(ジャンルはサーバーが推定する)、
     /// 成功したら `draft` を持ち、`name` を下書きの名前にし、下書きの genreID が `genres` にあれば `genreID` にする。
     /// 失敗したら `errorMessage` を立てる(`urlText`・`name` はそのまま)。
     public func fetchDraft() async {
@@ -47,7 +55,7 @@ public final class RegisterViewModel {
         isBusy = true
         defer { isBusy = false }
         do {
-            let fetched = try await service.draftFromURL(url, genreID: genreID)
+            let fetched = try await service.draftFromURL(url, genreID: nil)
             draft = fetched
             name = fetched.name
             if let id = fetched.genreID, genres.contains(where: { $0.id == id }) { genreID = id }

@@ -9,7 +9,7 @@ final class APIWishlistEstimatesTests: XCTestCase {
     private let base = URL(string: "https://wishlist.example/wishlist/")!
 
     private func service(_ transport: RecordingTransport) -> APIWishlistService {
-        APIWishlistService(baseURL: base, token: "secret-token", transport: transport)
+        APIWishlistService(baseURL: base, transport: transport)
     }
 
     private let estimatesJSON = """
@@ -44,14 +44,15 @@ final class APIWishlistEstimatesTests: XCTestCase {
         XCTAssertEqual(result, expectedEstimates())
     }
 
-    /// POST は 202 で本文を返す(GET と同じ形)。Bearer を付ける。
+    /// POST は 202 で本文を返す(GET と同じ形)。Authorization は付けない。
     func testRefreshEstimatesPostsAndReadsThe202Body() async throws {
         let transport = RecordingTransport(reply: .json(202, estimatesJSON))
         let result = try await service(transport).refreshEstimates(itemID: 12)
         let request = try XCTUnwrap(transport.last).request
         XCTAssertEqual(request.method, .post)
         XCTAssertEqual(request.path, "/api/items/12/estimates/refresh")
-        XCTAssertEqual(request.headerFields[.authorization], "Bearer secret-token")
+        // 【5-3 で置換】ユーザー決定 2026-10-11 / phase5-spec 5-3: トークン廃止。Authorization は付けない
+        XCTAssertNil(request.headerFields[.authorization])
         XCTAssertEqual(result, expectedEstimates())
     }
 
@@ -86,7 +87,8 @@ final class APIWishlistEstimatesTests: XCTestCase {
         let request = try XCTUnwrap(transport.last).request
         XCTAssertEqual(request.method, .get)
         XCTAssertEqual(request.path, "/api/items/12/listings", "site_id なしならクエリを付けない")
-        XCTAssertEqual(request.headerFields[.authorization], "Bearer secret-token")
+        // 【5-3 で置換】ユーザー決定 2026-10-11 / phase5-spec 5-3: トークン廃止。Authorization は付けない
+        XCTAssertNil(request.headerFields[.authorization])
         let at = Date(timeIntervalSince1970: 1_790_987_400)
         XCTAssertEqual(
             result,

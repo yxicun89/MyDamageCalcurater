@@ -34,7 +34,8 @@ final class WishlistURLsTests: XCTestCase {
 
     // AC-IOS-UI-01/02 の数値: 3 列グリッド・長押し 0.5 秒・サマリ文言(PWA と同じ)
     func testUIConstants() {
-        XCTAssertEqual(HomeLayout.gridColumnCount, 3)
+        // 【5-3 で置換】旧 gridColumnCount == 3。ホームは 2 列(phase5-spec 5-2/5-3)で、定数は tileColumnCount に一本化
+        XCTAssertEqual(HomeLayout.tileColumnCount, 2)
         XCTAssertEqual(HomeLayout.longPressSeconds, 0.5)
         XCTAssertEqual(WishlistText.noPriceInfo, "まだ価格情報はありません")
         XCTAssertEqual(WishlistText.offline, "オフライン")

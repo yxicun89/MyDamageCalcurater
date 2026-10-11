@@ -49,6 +49,7 @@
 		WL0000000000000000000009 /* WishlistUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = WishlistUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		WL000000000000000000000A /* Wishlist-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "Wishlist-Info.plist"; sourceTree = "<group>"; };
 		WL000000000000000000000B /* WishlistShare-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = "WishlistShare-Info.plist"; sourceTree = "<group>"; };
+		WL000000000000000000003C /* Base.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/Base.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -60,6 +61,11 @@
 		WL0000000000000000000005 /* WishlistShare */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = WishlistShare;
+			sourceTree = "<group>";
+		};
+		WL000000000000000000003D /* Shared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = Shared;
 			sourceTree = "<group>";
 		};
 		WL0000000000000000000006 /* WishlistUITests */ = {
@@ -93,10 +99,12 @@
 		WL0000000000000000000002 = {
 			isa = PBXGroup;
 			children = (
+				WL000000000000000000003C /* Base.xcconfig */,
 				WL000000000000000000000A /* Wishlist-Info.plist */,
 				WL000000000000000000000B /* WishlistShare-Info.plist */,
 				WL0000000000000000000004 /* Wishlist */,
 				WL0000000000000000000005 /* WishlistShare */,
+				WL000000000000000000003D /* Shared */,
 				WL0000000000000000000006 /* WishlistUITests */,
 				WL0000000000000000000003 /* Products */,
 			);
@@ -131,6 +139,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				WL0000000000000000000004 /* Wishlist */,
+				WL000000000000000000003D /* Shared */,
 			);
 			name = Wishlist;
 			packageProductDependencies = (
@@ -154,6 +163,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				WL0000000000000000000005 /* WishlistShare */,
+				WL000000000000000000003D /* Shared */,
 			);
 			name = WishlistShare;
 			packageProductDependencies = (
@@ -282,6 +292,7 @@
 /* Begin XCBuildConfiguration section */
 		WL0000000000000000000031 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = WL000000000000000000003C /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -348,6 +359,7 @@
 		};
 		WL0000000000000000000032 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = WL000000000000000000003C /* Base.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
