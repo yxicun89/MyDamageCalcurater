@@ -14,7 +14,7 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 	"example.com/pokecalc/services/gateway/deploytest"
 )
 

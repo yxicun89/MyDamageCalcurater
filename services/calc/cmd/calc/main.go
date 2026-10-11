@@ -29,9 +29,9 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/pokecalc/services/calc/internal/events"
-	"example.com/pokecalc/services/calc/internal/httpapi"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/events"
+	"example.com/pokecalc/services/calc/internal/adapters/httpapi"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 	"example.com/pokecalc/services/internal/reqlog"
 	"example.com/pokecalc/services/internal/version"
 )

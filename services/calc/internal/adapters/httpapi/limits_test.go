@@ -23,7 +23,7 @@ import (
 	"github.com/getkin/kin-openapi/openapi3filter"
 
 	"example.com/pokecalc/engine"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 	"example.com/pokecalc/services/internal/api"
 )
 

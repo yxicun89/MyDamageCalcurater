@@ -18,10 +18,10 @@ import (
 	"testing"
 
 	"example.com/pokecalc/engine"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 )
 
-const sharedTypeChartPath = "../../../../testdata/golden/typechart.json"
+const sharedTypeChartPath = "../../../../../testdata/golden/typechart.json"
 
 // 架空マスタの ID。
 const (

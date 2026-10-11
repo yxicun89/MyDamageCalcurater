@@ -1,6 +1,6 @@
 package httpapi
 
-// エラーの共通の形(calc-svc/services/calc/internal/httpapi/errors.go と同じ流儀)。record-svc の
+// エラーの共通の形(calc-svc/services/calc/internal/adapters/httpapi/errors.go と同じ流儀)。record-svc の
 // 失敗はすべて httpError に写し、echo の HTTPErrorHandler で {"code","message"} の Error 本文に変換する。
 
 import (

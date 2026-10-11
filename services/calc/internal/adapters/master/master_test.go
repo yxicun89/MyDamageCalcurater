@@ -22,8 +22,8 @@ import (
 )
 
 const (
-	sharedTypeChartPath = "../../../../testdata/golden/typechart.json"
-	exampleMasterPath   = "../../testdata/master.example.json"
+	sharedTypeChartPath = "../../../../../testdata/golden/typechart.json"
+	exampleMasterPath   = "../../../testdata/master.example.json"
 )
 
 func typePtr(t api.PokeType) *api.PokeType { return &t }

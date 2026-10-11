@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"testing"
 
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 )
 
 // calcMetricsHandlers は calc-svc の本番の組み立て方2つ(マスタ読み込み済み・マスタ未準備)。

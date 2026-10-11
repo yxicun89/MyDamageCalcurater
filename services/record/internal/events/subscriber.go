@@ -1,7 +1,7 @@
 // NATS JetStream への配線(pull consumer)。Handler(consumer.go。NATS に依存しない)を、
 // 実際の JetStream の durable consumer に繋ぐ。record-svc の障害は自分の中に収め、NATS に
 // 接続できない・consumer を作れなくてもプロセスの起動を妨げない(CLAUDE.md 絶対ルール5。
-// services/calc/internal/events/events.go の Publisher と同じ流儀)。
+// services/calc/internal/adapters/events/events.go の Publisher と同じ流儀)。
 package events
 
 import (

@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 	"example.com/pokecalc/services/internal/calcevents"
 	"example.com/pokecalc/services/internal/httpguard"
 )

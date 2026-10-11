@@ -1,6 +1,6 @@
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: なし(2026-10-04 時点で、このレーンの実装・issue 対応・M2 の k3d 実適用・P5-3c は main 統合済み。次のセッションは下の Next から続ける)
+Active: ARCH S3a(calc のヘキサゴナル移行の前半〈計算・一括・逆算〉。ブランチ refactor/api-s3-calc-hexagonal。PR 作成済み・CI 待ち。2026-10-12)
 Branch: なし(作業ディレクトリ ~/MyDamageCalcurater-api。直近の PR: #463・#468・#469・#483・#488・#490・#506・#510・#536・#539・#542 はすべて main 統合済み)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記): issue #148のAPIレーン担当分(ADR-0210。私設サービスの境界)完了・critic PASS・**main 統合済み(PR #157)**。`deploy/k8s/overlays/cloud` から gateway の Ingress を削除 patch で除去し、public Ingress/LoadBalancer/NodePort/externalIPs/hostNetwork/hostPort が無いことを構造検査+`kubectl kustomize`実描画検査の2層で固定。端末ID/CORSを認証・到達制御として扱わない回帰テストも追加。
@@ -92,3 +92,7 @@ Status(追記): 2026-10-03 P5-3c を record-svc に実装(ブランチ feat/api-
 Status(追記): 2026-10-04 usability-round2 の F-09・F-08 の API 側を spec(ブランチ feat/api-favorite-calc-team-name。ADR-0228・ADR-0229)。契約: `FavoriteInput`・`Favorite` に省略可の `calc`(`CalcRequest` への `$ref`)、`TeamInput.name` を省略可・nullable(未設定はサーバーが既定名「名称未設定」)。make gen・ios-gen 済み。失敗するテスト: record httpapi の `favorites_calc_test.go`(AC-FC1〜FC9)、team httpapi の `team_name_default_test.go`(AC-N1〜N6。team の server.go は生成型の `Name *string` 化でコンパイルが通らない状態=実装待ち)、store の `favorites_calc_tidb_test.go`(-tags tidb。store は変えない見込みで現状緑)、Web・iOS の生成型を固定するテスト(緑)。次: implementer(record の正規化・検証の共通化・4096 バイト上限、team の既定名)→ critic。Web・iOS への依頼は decisions/2026-10-04-api-favorite-calc-team-name.md。
 Status(追記): 2026-10-04 F-09・F-08 を実装(ブランチ feat/api-favorite-calc-team-name。ADR-0228・ADR-0229)。record-svc: `favorites.go` の個体の正規化を `normalizeIndividual` 1つにし(SP・レベルの上限は engine の定数を参照)、`calc` の検証・正規化・読み戻し(読めなければ 500)と 4096 バイト上限(400 `invalid_input`)を追加。store・migration は無変更。team-svc: `validateTeamInput` で省略・null・空白だけの名前を既定名「名称未設定」(定数 `unsetTeamName`)に置換(create・update とも)。既存テスト `TestCreateTeamValidatesInput` の「名前が空」「名前が空白だけ」は ADR-0229 §3 の仕様変更で既定名のテストへ移した。コミットは record(F-09)と team(F-08)の2つに分け、PR も分けてよい。次: critic → ADR の状態を「採用」へ。
 Status(追記 2026-10-09): 計算履歴の一覧 API(`GET /api/record/calc-history`。ADR-0230)を record-svc に実装(契約先行・keyset ページング・端末分離・保持期間/墓石・項目ホワイトリスト・migration 000008 の索引)。`make test-db-docker` で store と migration のテストも緑。calc/pokedex/team は 404 スタブのみ。critic PASS・ADR-0230 採用。k3d への実デプロイは未実施。
+Status(追記 2026-10-12): ARCH S3a(docs/plan/architecture-adoption.md §6・ADR-0252)。calc-svc を `internal/domain`(列挙・個体・メガ持ち物・観測・対戦の状態の検証、`Code`・`FromEngine`)/
+`internal/app`(計算・一括・逆算の手順。ポート `Master`・`EventPublisher`・`Expired`)/`internal/adapters/{httpapi,master,events}` にそろえた。
+振る舞い不変(openapi 不変・code/ステータス・失敗の順番・イベントの中身)。calc を tools/archcheck の未移行の一覧から外した。
+Next(S3b): 調整(`adapters/httpapi/adjust.go` の 5 操作)の手順を app へ移す。今は `resolveIndividual`・`parseFormat` 等の薄い関数が app・domain に委ねている。

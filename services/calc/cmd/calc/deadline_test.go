@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"example.com/pokecalc/services/calc/internal/httpapi"
+	"example.com/pokecalc/services/calc/internal/adapters/httpapi"
 	"example.com/pokecalc/services/internal/httpguard"
 )
 

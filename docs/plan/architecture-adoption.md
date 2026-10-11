@@ -1,7 +1,8 @@
 # ARCH: ソフトウェアアーキテクチャの正式採用(調査と計画)
 
 - 状態: **方式はユーザーが決定(2026-10-11): ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用する。A(このリポジトリを段階的に改造)も決定**。
-  **S0 実装済み(2026-10-11。ADR-0811・coding-rules・`tools/archcheck`・`make lint`)。コードはまだ動かしていない**。§8 は全問決定済み。次は S1(越境の解消)と S2(judge)。
+  **S0 実装済み(2026-10-11。ADR-0811・coding-rules・`tools/archcheck`・`make lint`)**。§8 は全問決定済み。
+  **S3a(calc の計算・一括・逆算)実装済み(2026-10-12。ADR-0252。calc は archcheck の未移行の一覧から外れた)**。残りは S1・S2・S3b(calc の調整)・S4 以降。
 - 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
 - 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
@@ -252,7 +253,7 @@ services/<svc>/
 | **S0 規約・ADR・検査の骨組み**(**完了 2026-10-11**) | データ(§8 Q2 決定) | ADR-0811(ヘキサゴナル採用)・`docs/coding-rules.md` に §5.1 の形と図・`tools/archcheck`(向きの検査と未移行の一覧。初版は全サービスが一覧に載る)・`make lint` に 1 行。**コードは動かさない** | `make lint` が通る。archcheck のテストで「domain → adapters の import」「app → adapters の import」「一覧に無いのに形がそろっていないサービス」がそれぞれ失敗する |
 | S1 越境の解消(G1) | データ → API | `RoleGrant`・プロビジョニングを `services/pokedex/db` から `services/internal/dbmigrate` へ。record・team の migrate の import を差し替える | record・team の `cmd/migrate` が `services/pokedex/...` を import しない。`make test`(`-tags mysql`・`tidb` を含む)が通る |
 | S2 judge | 判定 | `internal/judge`・`speedeffects` の純粋な部分 → `domain`。`outspeedAndKo` の手順 → `app`(`Pokedex`・`Calc` のポートを app で宣言)。`httpapi`・`client`・`httpguard`・`httpmetrics` → `adapters`。G3〜G5 を解消 | judge が未移行の一覧から消え、archcheck が通る。app のテストが HTTP なしで fake のポートで走る。既存の judge のテストが全件通る |
-| S3 calc | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
+| S3 calc(**前半 S3a〈計算・一括・逆算〉実装済み 2026-10-12・ADR-0252。後半 S3b〈調整 `adjust.go` → app〉は未着手**) | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
 | S4 record | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
 | S5 pokedex | データ | 検索の組み立て → `app`(正規化など純粋な部分は `domain`)。`httpapi`・`store`・`readtx`・`readmodel` の I/O → `adapters`。G7 を解消。importer は §8 Q6 | `-tags mysql` のテストが通る。storetest の import 検査(ADR-0105)を新しいパスに合わせる |
 | S6 team | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
