@@ -13,7 +13,7 @@ import { PokemonIcon } from "../images/PokemonIcon";
 import { PokemonCard } from "../ui/PokemonCard";
 import { Tile } from "../ui/Tile";
 import { TypeBadge } from "../ui/TypeBadge";
-import { ResultCell, safeLook, superEffectiveLook, TypeList } from "../screens/balanceCells";
+import { ResultCell, safeLook, superEffectiveLook, TypeList } from "./balanceCells";
 import type { SpeciesResolutions } from "../screens/speciesResolution";
 import {
   CountLine,
