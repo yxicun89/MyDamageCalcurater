@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -13,6 +14,7 @@ func envOf(m map[string]string) func(string) string {
 	return func(k string) string { return m[k] }
 }
 
+// testToken は「渡されても読まない・出力しない」ことを確かめるための値(5-1a でトークンは要らなくなった。ユーザー決定 2026-10-11)。
 const testToken = "unit-test-placeholder"
 
 const goodDSN = "wishlist:pw@tcp(mysql.pokecalc.svc.cluster.local:3306)/wishlist?parseTime=true&loc=UTC"
@@ -21,7 +23,6 @@ func fullEnv() map[string]string {
 	return map[string]string{
 		"PORT":                  "9090",
 		"WISHLIST_DATABASE_DSN": goodDSN,
-		"WISHLIST_API_TOKEN":    testToken,
 		"WISHLIST_IMAGE_DIR":    "/data/images",
 	}
 }
@@ -32,7 +33,7 @@ func TestLoadServeConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if c.Port != "9090" || c.Token != testToken || c.ImageDir != "/data/images" {
+	if c.Port != "9090" || c.ImageDir != "/data/images" {
 		t.Errorf("config = %+v", c)
 	}
 	cfg, err := mysql.ParseDSN(c.DSN)
@@ -54,9 +55,10 @@ func TestLoadServeConfig(t *testing.T) {
 	}
 }
 
-// AC-C1: 必須の値が無ければ失敗し、どの変数かを示す。トークンは表示しない。
+// AC-C1: 必須の値が無ければ失敗し、どの変数かを示す。
+// (WISHLIST_API_TOKEN は 5-1a で必須から外した。ユーザー決定 2026-10-11。無くても読めることは TestLoadServeConfig・TestLoadServeConfig_NoTokenNoAppID)
 func TestLoadServeConfig_Missing(t *testing.T) {
-	for _, k := range []string{"WISHLIST_DATABASE_DSN", "WISHLIST_API_TOKEN", "WISHLIST_IMAGE_DIR"} {
+	for _, k := range []string{"WISHLIST_DATABASE_DSN", "WISHLIST_IMAGE_DIR"} {
 		for name, v := range map[string]string{"無い": "", "空白だけ": "  "} {
 			t.Run(k+" "+name, func(t *testing.T) {
 				env := fullEnv()
@@ -161,24 +163,29 @@ func TestRun_Usage(t *testing.T) {
 	}
 }
 
-// AC-C5: WISHLIST_YAHOO_APPID は任意(無い・空白だけなら空。前後の空白を除く)。
-func TestLoadServeConfig_YahooAppID(t *testing.T) {
-	for _, c := range []struct{ name, v, want string }{
-		{"無い", "", ""},
-		{"空白だけ", "  ", ""},
-		{"あり", " unit-test-appid \n", "unit-test-appid"},
+// AC-C5 → 5-1a・5-1e で置き換え(ユーザー決定 2026-10-11)。以前は「WISHLIST_YAHOO_APPID は任意で、前後の空白を除いて読む」を確かめていたが、
+// トークン(WISHLIST_API_TOKEN)と appid(WISHLIST_YAHOO_APPID)は読まなくなった。どちらが有っても無くても serve の設定は読め、
+// 値はほかの項目に混ざらない。
+func TestLoadServeConfig_NoTokenNoAppID(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		env  map[string]string
+	}{
+		{"どちらも無い", nil},
+		{"どちらも有る(残っていても使わない)", map[string]string{"WISHLIST_API_TOKEN": testToken, "WISHLIST_YAHOO_APPID": "unit-test-appid"}},
+		{"空白だけ", map[string]string{"WISHLIST_API_TOKEN": "  ", "WISHLIST_YAHOO_APPID": "  "}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			env := fullEnv()
-			if c.v != "" {
-				env["WISHLIST_YAHOO_APPID"] = c.v
+			for k, v := range c.env {
+				env[k] = v
 			}
 			cfg, err := loadServeConfig(envOf(env))
 			if err != nil {
 				t.Fatal(err)
 			}
-			if cfg.YahooAppID != c.want {
-				t.Errorf("YahooAppID = %q, want %q", cfg.YahooAppID, c.want)
+			if s := fmt.Sprintf("%+v", cfg); strings.Contains(s, testToken) || strings.Contains(s, "unit-test-appid") {
+				t.Errorf("設定にトークン・appid が入っている: %s", s)
 			}
 		})
 	}

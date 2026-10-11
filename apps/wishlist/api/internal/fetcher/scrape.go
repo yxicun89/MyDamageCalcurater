@@ -288,3 +288,19 @@ func NewYahooFurima(client *http.Client) Fetcher { return scraper{yahooFurima, c
 
 // NewSurugaya は駿河屋の scrape Fetcher。登録表に入れる(30 秒間隔・夜間のみ。ユーザー決定 2026-10-04。docs/sites.md)。
 func NewSurugaya(client *http.Client) Fetcher { return scraper{surugaya, client} }
+
+// yahooShopping は Yahoo!ショッピングの検索ページ(https://shopping.yahoo.co.jp/search/{q}/0/?X=2。robots.txt で許可)の
+// 埋め込み JSON(script#__NEXT_DATA__ の props.initialState.bff.searchResults.items の RESULT ブロック)を読む
+// (フェーズ5 5-1e。appid の API をやめた。ユーザー決定 2026-10-11)。
+//
+// TODO(5-1e 実装者): 未実装。spec-writer が置いた空の実装(yahoo_shopping_test.go が失敗する)。
+var yahooShopping = scrapeSite{
+	name:       "yahooshopping",
+	requestURL: buildURL,
+	parse: func([]byte, *url.URL) ([]Listing, error) {
+		return nil, errors.New("fetcher: yahooshopping: not implemented")
+	},
+}
+
+// NewYahooShopping は Yahoo!ショッピング(shopping.yahoo.co.jp)の scrape Fetcher。
+func NewYahooShopping(client *http.Client) Fetcher { return scraper{yahooShopping, client} }

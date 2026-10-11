@@ -154,7 +154,7 @@ func (q *Queries) DeleteOfficialStatus(ctx context.Context, itemID int64) error 
 }
 
 const getGenre = `-- name: GetGenre :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ?
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ?
 `
 
 func (q *Queries) GetGenre(ctx context.Context, id int64) (Genre, error) {
@@ -165,12 +165,16 @@ func (q *Queries) GetGenre(ctx context.Context, id int64) (Genre, error) {
 		&i.Name,
 		&i.QueryTemplate,
 		&i.SortOrder,
+		&i.Color,
+		&i.Icon,
+		&i.MatchHosts,
+		&i.MatchKeywords,
 	)
 	return i, err
 }
 
 const getGenreForUpdate = `-- name: GetGenreForUpdate :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ? FOR UPDATE
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ? FOR UPDATE
 `
 
 func (q *Queries) GetGenreForUpdate(ctx context.Context, id int64) (Genre, error) {
@@ -181,6 +185,10 @@ func (q *Queries) GetGenreForUpdate(ctx context.Context, id int64) (Genre, error
 		&i.Name,
 		&i.QueryTemplate,
 		&i.SortOrder,
+		&i.Color,
+		&i.Icon,
+		&i.MatchHosts,
+		&i.MatchKeywords,
 	)
 	return i, err
 }
@@ -534,7 +542,7 @@ func (q *Queries) ListGenreSitesByGenre(ctx context.Context, genreID int64) ([]G
 
 const listGenres = `-- name: ListGenres :many
 
-SELECT id, name, query_template, sort_order FROM genres ORDER BY sort_order, id
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres ORDER BY sort_order, id
 `
 
 // wishlist の DB アクセス(sqlc)。商品×ジャンル×サイトの CRUD(フェーズ1)。
@@ -553,6 +561,10 @@ func (q *Queries) ListGenres(ctx context.Context) ([]Genre, error) {
 			&i.Name,
 			&i.QueryTemplate,
 			&i.SortOrder,
+			&i.Color,
+			&i.Icon,
+			&i.MatchHosts,
+			&i.MatchKeywords,
 		); err != nil {
 			return nil, err
 		}

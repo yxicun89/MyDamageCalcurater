@@ -2,13 +2,13 @@
 -- 並び: 商品は sort_order 昇順・同順は id 降順、ジャンルは sort_order 昇順・同順は id 昇順、サイトは id 昇順。
 
 -- name: ListGenres :many
-SELECT id, name, query_template, sort_order FROM genres ORDER BY sort_order, id;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres ORDER BY sort_order, id;
 
 -- name: GetGenre :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ?;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ?;
 
 -- name: GetGenreForUpdate :one
-SELECT id, name, query_template, sort_order FROM genres WHERE id = ? FOR UPDATE;
+SELECT id, name, query_template, sort_order, color, icon, match_hosts, match_keywords FROM genres WHERE id = ? FOR UPDATE;
 
 -- name: CreateGenre :execlastid
 INSERT INTO genres (name, query_template, sort_order) VALUES (?, ?, ?);

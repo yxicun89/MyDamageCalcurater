@@ -63,6 +63,32 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。テストは `make wi
 - 間隔は他の scrape と同じ 5 秒。詳細シートを開いたときにも取ってよい(headless ではない)
 - appid の環境変数・Secret のキーは読まない(残っていても使わない)。`fetch_type=api` の Fetcher は消す
 
+### 5-1 テスト一覧
+
+受け入れ条件の番号(テストのコメントの `AC-5-1x-n`)と、確かめるテスト。`make wishlist-test`(★は `make wishlist-test-mysql`)。
+
+| 番号 | 受け入れ条件 | テスト |
+|---|---|---|
+| AC-5-1a-1 | トークン無しで組み立てたサーバーが、`Authorization` 無しで全エンドポイント 2xx。付いていても無視(401・`WWW-Authenticate` を出さない) | httpapi `TestAuth`(旧 AC-H1 を置き換え)・`TestNoTokenSucceeds`・`TestPriceHistory_Errors`(末尾) |
+| AC-5-1a-2 | `WISHLIST_API_TOKEN`・`WISHLIST_YAHOO_APPID` を読まない。api の Deployment・CronJob に渡さない | cmd/api `TestLoadServeConfig`・`TestLoadServeConfig_Missing`・`TestLoadServeConfig_NoTokenNoAppID`(旧 AC-C5)/ cmd/refresher `TestLoadConfig`・`TestRefresherCronJob`・`TestAPIDeploymentYahooAppID`(旧 AC-K3) |
+| AC-5-1b-1 | `Genre` の color(小文字)・icon・match_hosts・match_keywords が作成・一覧・更新で往復する(手がかりは長さ 0 でも配列) | item `TestService_GenreStyleValid`・itemtest `GenreStyleRoundTrip`・`GenreStyleEmptyHints`(メモリ・★MySQL)・httpapi `TestGenreStyle` |
+| AC-5-1b-2 | 色は大文字も受けて小文字に。作成で省略したら `#1d5fd1`・`box`。形式違反・列挙に無い絵柄は 422(何も変えない) | item `TestService_GenreStyleDefaults`・`TestService_GenreStyleInvalid`・httpapi `TestGenreStyle_Errors`・★`TestGenreStyle000009_Constraints` |
+| AC-5-1b-3 | migration 000009 が既存の 4 ジャンルに色・絵柄を入れる(名前で引く。無ければ何もしない) | `TestGenreStyle000009Shape`・★`TestGenreStyle000009_Fresh`・★`_ExistingDB`・★`_NotAppliedTwice`・★`_Down` |
+| AC-5-1b-4 | 「METAL BUILD・ROBOT魂」(`#5b6b7f`/`robot`)を足し、表示するサイトは S.H.Figuarts と同じ。同名があれば足さず紐づけも変えない | ★`TestGenreStyle000009_Fresh`・★`_ExistingDB`・★`_Down` |
+| AC-5-1c-1 | 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名を除く | ogp `TestCleanTitle`・`TestParseAndClean_Fixtures`(実サイトの fixture 4 つ)・httpapi `TestDraftFromURL_Guess` |
+| AC-5-1c-2 | bandai-hobby.net の画像は本文 `.pg-products__sliderMain` の最初の img(無ければ null)。他のホストは og:image | ogp `TestParse_BandaiHobbyImage`・`TestParseAndClean_Fixtures` |
+| AC-5-1c-3 | 駿河屋の `/product/detail/<番号>` は取りに行かず、名前は空・画像は photo.php で 200 | ogp `TestStaticDraft`・httpapi `TestDraftFromURL_Surugaya` |
+| AC-5-1c-4 | リクエストの genre_id があればそれ(`genre_guessed: false`) | httpapi `TestDraftFromURL_Guess` |
+| AC-5-1c-5 | ジャンルの手がかりの初期値(migration 000009) | `TestGenreStyle000009Shape`・★`TestGenreStyle000009_Fresh` |
+| AC-5-1c-6 | 推定は 語(最長・同じ長さは sort_order・id)→ ホスト(sort_order)→ null。推定で決めたら `genre_guessed: true` | item `TestGuessGenre`・httpapi `TestDraftFromURL_Guess` |
+| AC-5-1c-7 | `title` を渡せば取りに行かず、整えた名前・http/https の絶対 URL の `image_url`(それ以外は null)で推定する。url の検査は今までどおり | httpapi `TestDraftFromURL_TitleHint` |
+| AC-5-1d-1 | `summary` の規則(ok・no_result・none・failed、low・fetched_at は estimates のサマリと同じ。ジャンルに無い・上書きで外したサイトは使わない) | item `TestSummarizeItem`・httpapi `TestListItems_Summary` |
+| AC-5-1d-2 | `GET /api/items` は全商品に summary を付ける(ジャンルで絞っても同じ) | itemtest `ListItemsSummary`(メモリ・★MySQL)・httpapi `TestListItems_Summary` |
+| AC-5-1d-3 | `GET /api/items` のクエリ回数は商品数に依らない(N+1 にしない) | ★item `TestMySQLListItems_NotNPlusOne` |
+| AC-5-1e-1 | Yahoo!ショッピングの検索ページの `__NEXT_DATA__` から上位 20 件(名前・整数の価格・URL・image.imageUrl・在庫 true)。壊れたページはエラー、0 件は空 | fetcher `TestYahooShopping_Fixture`・`_SkipsBrokenEntries`・`_PageStructure`・`TestYahoo_PriceRange`・`TestScrape_*`(yahooshopping) |
+| AC-5-1e-2 | 登録表で shopping.yahoo.co.jp の scrape を選ぶ(5 秒間隔・夜間だけにしない)。fetch_type=api の Fetcher は無い | fetcher `TestRegistry_YahooShopping`・`TestRegistry_ForSite`・`TestNewRegistry`・`TestUserAgent_Sent` |
+| AC-5-1e-3 | migration で Yahoo!ショッピングを scrape に(名前と URL で特定。down で api に戻す) | `TestGenreStyle000009Shape`・★`TestGenreStyle000009_Fresh`・★`_ExistingDB`・★`_Down` |
+
 ## 5-2 Web
 
 - 配色・形はデザイン案のとおり(背景 `#edf2f8`・カード白・ジャンル色の細い枠・強調の青)。丸文字(M PLUS Rounded 1c)

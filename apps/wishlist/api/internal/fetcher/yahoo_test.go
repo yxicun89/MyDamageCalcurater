@@ -2,63 +2,31 @@ package fetcher_test
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"net/netip"
-	"net/url"
 	"os"
+	"slices"
 	"strings"
-	"sync"
 	"testing"
+	"time"
 
 	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
 	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 )
 
-// テスト用の appid(架空)。エラーの文言に出ないことを確かめる。
-const testAppID = "unit-test-appid-should-not-leak"
-
-const yahooPath = "/ShoppingWebService/V3/itemSearch"
-
-var yahooSite = fetcher.Site{ID: 7, Name: "Yahoo!ショッピング", FetchType: item.FetchAPI, IsReference: true}
+// Yahoo!ショッピング(フェーズ5 5-1e。docs/phase5-spec.md)。
+//
+// 以前このファイルは Yahoo!ショッピング API(fetch_type=api・appid)の Fetcher(fetcher.Yahoo)のテストだった
+// (TestYahooEndpoint・TestYahoo_Request・TestYahoo_Parse・TestYahoo_Limit・TestYahoo_Errors・TestYahoo_NoAppID)。
+// ユーザー決定 2026-10-11 で「appid をやめ、検索ページ(robots.txt で許可された /search/<q>/0/?X=2)の __NEXT_DATA__ を読む」に変わり、
+// fetch_type=api の Fetcher は消すことになったので、検索ページの scrape Fetcher(fetcher.NewYahooShopping)のテストに置き換えた。
+// 共通の振る舞い(リクエスト・上位 20 件・0 件・失敗)は scrape_test.go の scrapeCases(yahooshopping)でも確かめる。
+// fixture は testdata/yahoo_shopping.html(2026-10-11 に保存し、使う項目だけを残したもの)。実サイトには接続しない。
 
 func allowAll() *http.Client {
 	return netguard.NewClient(netguard.Options{AllowAddr: func(netip.Addr) bool { return true }})
-}
-
-// yahooServer は fixture を返す httptest サーバー。受けたリクエストの URL を記録する。
-type yahooServer struct {
-	*httptest.Server
-	mu   sync.Mutex
-	reqs []*url.URL
-}
-
-func newYahooServer(t *testing.T, h func(w http.ResponseWriter, r *http.Request)) *yahooServer {
-	t.Helper()
-	ys := &yahooServer{}
-	ys.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ys.mu.Lock()
-		u := *r.URL
-		ys.reqs = append(ys.reqs, &u)
-		ys.mu.Unlock()
-		if r.Method != http.MethodGet || r.URL.Path != yahooPath {
-			http.Error(w, "unexpected request", http.StatusTeapot)
-			return
-		}
-		h(w, r)
-	}))
-	t.Cleanup(ys.Close)
-	return ys
-}
-
-func (ys *yahooServer) requests() []*url.URL {
-	ys.mu.Lock()
-	defer ys.mu.Unlock()
-	return append([]*url.URL(nil), ys.reqs...)
 }
 
 func serveFile(t *testing.T, path string) func(http.ResponseWriter, *http.Request) {
@@ -72,147 +40,153 @@ func serveFile(t *testing.T, path string) func(http.ResponseWriter, *http.Reques
 	}
 }
 
-func newTestYahoo(ys *yahooServer) *fetcher.Yahoo {
-	return &fetcher.Yahoo{AppID: testAppID, Endpoint: ys.URL + yahooPath, Client: allowAll()}
+// yahooShoppingWant は fixture の 18 件(サイトの並び = 価格の安い順。X=2)。
+// タイトルは name、価格は price(整数の円)、URL は url、画像は image.imageUrl、在庫は true(検索結果に在庫の項目が無い)。
+var yahooShoppingWant = []fetcher.Listing{
+	{Title: "『中古即納』{FIG} 魂ウェブ限定 S.H.Figuarts 仮面ライダーグリスパーフェクトキングダム ビルド NEW WORLD グリス フィギュア バンダイスピリッツ(20200228)", Price: 7326, URL: "https://store.shopping.yahoo.co.jp/mediaworld-plus/61289450001.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/mediaworld-plus_61289450001?resolution=2x", InStock: true},
+	{Title: "『中古即納』{FIG} 魂ウェブ限定 S.H.Figuarts 仮面ライダーグリスパーフェクトキングダム ビルド NEW WORLD グリス フィギュア バンダイスピリッツ(20200228)", Price: 7400, URL: "https://store.shopping.yahoo.co.jp/media-world/61289450001.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/media-world_61289450001?resolution=2x", InStock: true},
+	{Title: "『中古即納』{FIG} 魂ウェブ商店限定 S.H.Figuarts 仮面ライダーメタルビルド ビルド NEW WORLD 仮面ライダーグリス フィギュア バンダイスピリッツ(20200831)", Price: 8553, URL: "https://store.shopping.yahoo.co.jp/mediaworld-plus/61280683001.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/mediaworld-plus_61280683001?resolution=2x", InStock: true},
+	{Title: "『中古即納』{FIG} 魂ウェブ商店限定 S.H.Figuarts 仮面ライダーメタルビルド ビルド NEW WORLD 仮面ライダーグリス フィギュア バンダイスピリッツ(20200831)", Price: 8640, URL: "https://store.shopping.yahoo.co.jp/media-world/61280683001.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/media-world_61280683001?resolution=2x", InStock: true},
+	{Title: "BANDAI SPIRITS◆S.H.Figuarts/仮面プライムローグ/ビルド/グリス/魂ウェブ商店限定/BUILD", Price: 9460, URL: "https://store.shopping.yahoo.co.jp/ssol-shopping/2346510068283.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/ssol-shopping_2346510068283?resolution=2x", InStock: true},
+	{Title: "S.H.フィギュアーツ 仮面ライダーグリス パーフェクトキングダム", Price: 9800, URL: "https://store.shopping.yahoo.co.jp/syohoudou/shgreasekingdom.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/syohoudou_shgreasekingdom?resolution=2x", InStock: true},
+	{Title: "バンダイ(BANDAI) S.H.Figuarts 仮面ライダーグリスブリザード", Price: 14750, URL: "https://store.shopping.yahoo.co.jp/tnk-store7154/20240607224755-00882us.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/tnk-store7154_20240607224755-00882us?resolution=2x", InStock: true},
+	{Title: "バンダイ(BANDAI) S.H.フィギュアーツ 仮面ライダーグリス 『仮面ライダー (中古品)", Price: 15836, URL: "https://store.shopping.yahoo.co.jp/natsumestore/b07dk5kggn.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/natsumestore_b07dk5kggn?resolution=2x", InStock: true},
+	{Title: "フィギュアーツZERO 北都 三羽ガラスセット『仮面ライダービルド』　[魂ウェブ商店限定]", Price: 17111, URL: "https://store.shopping.yahoo.co.jp/toyskameta/4573102558091.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/toyskameta_4573102558091?resolution=2x", InStock: true},
+	{Title: "S.H.Figuarts 仮面ライダーグリスブリザード", Price: 18623, URL: "https://store.shopping.yahoo.co.jp/signallyjapan-y/b07kckl837.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/signallyjapan-y_b07kckl837?resolution=2x", InStock: true},
+	{Title: "S.H.Figuarts 仮面ライダーグリスブリザード", Price: 20186, URL: "https://store.shopping.yahoo.co.jp/jo-5butya/b07kckl837.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/jo-5butya_b07kckl837?resolution=2x", InStock: true},
+	{Title: "S.H.Figuarts 仮面ライダーグリスブリザード", Price: 20186, URL: "https://store.shopping.yahoo.co.jp/smartplus-store/b07kckl837.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/smartplus-store_b07kckl837?resolution=2x", InStock: true},
+	{Title: "BANDAI SPIRITS(バンダイ スピリッツ) S.H.フィギュアーツ 仮面ライダーグリス パーフェクトキングダム 約145mm AB", Price: 20370, URL: "https://store.shopping.yahoo.co.jp/scarlet2021/20220117160835-00070.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/scarlet2021_20220117160835-00070?resolution=2x", InStock: true},
+	{Title: "バンダイ(BANDAI) S.H.Figuarts 仮面ライダーグリスブリザード(中古品)", Price: 20703, URL: "https://store.shopping.yahoo.co.jp/natsumestore/b07kckl837.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/natsumestore_b07kckl837?resolution=2x", InStock: true},
+	{Title: "バンダイ(BANDAI) S.H.フィギュアーツ 仮面ライダーグリス 『仮面ライダービルド』(魂ウェブ商店限定)", Price: 21587, URL: "https://store.shopping.yahoo.co.jp/gs-joy/20241120221034-01122us.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/gs-joy_20241120221034-01122us?resolution=2x", InStock: true},
+	{Title: "S.H.フィギュアーツ 仮面ライダーグリス 『仮面ライダービルド』(魂ウェブ商店限定)", Price: 21945, URL: "https://store.shopping.yahoo.co.jp/scarlet2021/20220129153312-00242.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/scarlet2021_20220129153312-00242?resolution=2x", InStock: true},
+	{Title: "S.H.Figuarts 仮面ライダーグリスブリザード", Price: 24024, URL: "https://store.shopping.yahoo.co.jp/scarlet2021/20220129153312-00037.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/scarlet2021_20220129153312-00037?resolution=2x", InStock: true},
+	{Title: "フィギュアーツZERO+S.H.Figuarts 北都の猿渡ファームセット『仮面ライダービルド』　[魂ウェブ商店限定]", Price: 25259, URL: "https://store.shopping.yahoo.co.jp/toyskameta/4573102567857.html?sc_i=shopping-pc-web-result-item-rsltlst-title", ImageURL: "https://item-shopping.c.yimg.jp/i/j/toyskameta_4573102567857?resolution=2x", InStock: true},
 }
 
-// 公式ドキュメントで確認した URL であること(推測で変えない)。
-func TestYahooEndpoint(t *testing.T) {
-	if fetcher.YahooEndpoint != "https://shopping.yahooapis.jp/ShoppingWebService/V3/itemSearch" {
-		t.Errorf("YahooEndpoint = %q", fetcher.YahooEndpoint)
-	}
+// shoppingItem は検索結果の 1 件(__NEXT_DATA__ の RESULT ブロックの items の要素)。
+func shoppingItem(id, name string, price int) string {
+	return fmt.Sprintf(`{"itemId":%q,"url":"https://store.shopping.yahoo.co.jp/s/%s.html","image":{"url":"https://store.shopping.yahoo.co.jp/s/%s.html","imageUrl":"https://item-shopping.c.yimg.jp/i/j/%s"},"name":%q,"price":%d}`, id, id, id, id, name, price)
 }
 
-// AC-F3: リクエストは GET ?appid&query&sort=%2Bprice&results=20 だけ(in_stock は付けない)。
-func TestYahoo_Request(t *testing.T) {
-	ys := newYahooServer(t, serveFile(t, "testdata/yahoo-itemsearch.json"))
-	if _, err := newTestYahoo(ys).Fetch(context.Background(), yahooSite, "ボルシャック 銀トレジャー"); err != nil {
-		t.Fatal(err)
+// shoppingPage は検索ページ(PAGER・RESULT・その他のブロックを持つ)。
+func shoppingPage(items ...string) string {
+	return `<html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"initialState":{"bff":{"searchResults":{"items":{"1":[` +
+		`{"type":"PAGER","content":{"next":2}},{"type":"RESULT","content":{"isList":true,"items":[` + strings.Join(items, ",") + `]}},` +
+		`{"type":"SALE_PTAH_MODULES","content":{"html":"<div></div>"}}]}}}}}}</script></body></html>`
+}
+
+func shoppingSite(u string) fetcher.Site {
+	return fetcher.Site{ID: 4, Name: "Yahoo!ショッピング", FetchType: item.FetchScrape, IsReference: true, SearchURLTemplate: u + "/search/{q}/0/?X=2"}
+}
+
+// AC-5-1e-1: fixture の 18 件をそのまま(サイトの並びのまま)読む。
+func TestYahooShopping_Fixture(t *testing.T) {
+	srv := newHTMLServer(t, serveFixture(t, "yahoo_shopping.html"))
+	got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "S.H.Figuarts グリス")
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
 	}
-	reqs := ys.requests()
-	if len(reqs) != 1 {
-		t.Fatalf("リクエスト = %d 回, want 1", len(reqs))
+	if want := []string{"GET /search/S.H.Figuarts%20%E3%82%B0%E3%83%AA%E3%82%B9/0/?X=2"}; !slices.Equal(srv.requests(), want) {
+		t.Errorf("リクエスト = %v, want %v", srv.requests(), want)
 	}
-	u := reqs[0]
-	q := u.Query()
-	want := url.Values{
-		"appid":   {testAppID},
-		"query":   {"ボルシャック 銀トレジャー"},
-		"sort":    {"+price"},
-		"results": {"20"},
+	if len(got) != 18 {
+		t.Fatalf("件数 = %d, want 18", len(got))
 	}
-	if len(q) != len(want) {
-		t.Errorf("パラメータ = %v, want %v", q, want)
-	}
-	for k, v := range want {
-		if q.Get(k) != v[0] || len(q[k]) != 1 {
-			t.Errorf("%s = %q, want %q", k, q[k], v[0])
+	for i := range got {
+		if got[i] != yahooShoppingWant[i] {
+			t.Errorf("[%d] = %+v\nwant %+v", i, got[i], yahooShoppingWant[i])
 		}
 	}
-	if !strings.Contains(u.RawQuery, "sort=%2Bprice") {
-		t.Errorf("sort の + がエンコードされていない(空白と解釈される): %s", u.RawQuery)
-	}
 }
 
-// AC-F3: 応答の hits[] を Listing にする。画像は image.small、無ければ exImage.url、どちらも無ければ空。
-// price が 1 未満・name が空の hit は除く。順序は応答のまま。
-func TestYahoo_Parse(t *testing.T) {
-	ys := newYahooServer(t, serveFile(t, "testdata/yahoo-itemsearch.json"))
-	got, err := newTestYahoo(ys).Fetch(context.Background(), yahooSite, "q")
+// AC-5-1e-1: 価格・名前・URL のどれかが読めない出品は除く(価格は 1〜MaxPrice の整数)。RESULT 以外のブロックは読まない。
+func TestYahooShopping_SkipsBrokenEntries(t *testing.T) {
+	page := shoppingPage(
+		shoppingItem("a", "価格ゼロ", 0),
+		shoppingItem("b", "", 100),
+		`{"itemId":"c","url":"","image":{"imageUrl":"https://img.example/c"},"name":"URL なし","price":100}`,
+		`{"itemId":"d","url":"https://store.shopping.yahoo.co.jp/s/d.html","name":"画像なし","price":200}`,
+		shoppingItem("e", "上限超え", fetcher.MaxPrice+1),
+		`{"itemId":"f","url":"https://store.shopping.yahoo.co.jp/s/f.html","image":{"imageUrl":"https://img.example/f"},"name":"小数","price":1.5}`,
+		shoppingItem("g", "正常", 300),
+	)
+	srv := newHTMLServer(t, serveHTML(page))
+	got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x")
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []fetcher.Listing{
-		{Title: "架空ストア ボルシャック・ドラゴン 銀トレジャー", Price: 4800, URL: "https://store.example.com/item/1", ImageURL: "https://img.example.com/1_s.jpg", InStock: true},
-		{Title: "架空ストア 在庫なしの商品", Price: 5000, URL: "https://store.example.com/item/2", ImageURL: "https://img.example.com/2_ex.jpg", InStock: false},
-		{Title: "架空ストア 画像なしの商品", Price: 5200, URL: "https://store.example.com/item/3", ImageURL: "", InStock: true},
+		{Title: "画像なし", Price: 200, URL: "https://store.shopping.yahoo.co.jp/s/d.html", ImageURL: "", InStock: true},
+		{Title: "正常", Price: 300, URL: "https://store.shopping.yahoo.co.jp/s/g.html", ImageURL: "https://item-shopping.c.yimg.jp/i/j/g", InStock: true},
 	}
-	if len(got) != len(want) {
-		t.Fatalf("件数 = %d, want %d: %+v", len(got), len(want), got)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("[%d] = %+v, want %+v", i, got[i], want[i])
-		}
+	if !slices.Equal(got, want) {
+		t.Errorf("Listings = %+v\nwant %+v", got, want)
 	}
 }
 
-// AC-F3: 上位 20 件まで(応答に多く入っていても)。
-func TestYahoo_Limit(t *testing.T) {
-	type hit struct {
-		Name    string `json:"name"`
-		Price   int    `json:"price"`
-		URL     string `json:"url"`
-		InStock bool   `json:"inStock"`
+// AC-5-1e-1: __NEXT_DATA__ が無い・壊れている・検索結果の場所が無い(構造の変化)はエラー(0 件と区別する)。RESULT が空なら 0 件。
+func TestYahooShopping_PageStructure(t *testing.T) {
+	bad := map[string]string{
+		"no script":     `<html><body>no data</body></html>`,
+		"invalid json":  `<html><body><script id="__NEXT_DATA__" type="application/json">{not json</script></body></html>`,
+		"no items path": `<html><body><script id="__NEXT_DATA__" type="application/json">{"props":{"initialState":{}}}</script></body></html>`,
 	}
-	var hits []hit
-	for i := range 25 {
-		hits = append(hits, hit{Name: fmt.Sprintf("架空の商品 %d", i), Price: 1000 + i, URL: fmt.Sprintf("https://store.example.com/item/%d", i), InStock: true})
-	}
-	body, _ := json.Marshal(map[string]any{"hits": hits})
-	ys := newYahooServer(t, func(w http.ResponseWriter, _ *http.Request) { w.Write(body) })
-	got, err := newTestYahoo(ys).Fetch(context.Background(), yahooSite, "q")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != fetcher.MaxListings || got[0].Price != 1000 || got[19].Price != 1019 {
-		t.Errorf("件数 = %d(先頭 %v)、want 先頭から 20 件", len(got), got)
-	}
-}
-
-// AC-F4: 失敗の扱い。2xx 以外 → ErrUpstreamStatus、本文が大きすぎ → netguard.ErrTooLarge、壊れた JSON → エラー、
-// 既定のクライアントでループバック → netguard.ErrForbiddenAddress、ctx の取り消し → context.Canceled。
-// どのエラーの文言にも appid を含めない。
-func TestYahoo_Errors(t *testing.T) {
-	big := strings.Repeat(" ", fetcher.MaxResponseBytes+1)
-	cases := []struct {
-		name    string
-		handler func(http.ResponseWriter, *http.Request)
-		client  func() *http.Client
-		ctx     func() context.Context
-		want    error // nil なら「何かのエラー」
-	}{
-		{"500", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "x", http.StatusInternalServerError) }, allowAll, nil, fetcher.ErrUpstreamStatus},
-		{"403(appid 不正など)", func(w http.ResponseWriter, _ *http.Request) { http.Error(w, "x", http.StatusForbidden) }, allowAll, nil, fetcher.ErrUpstreamStatus},
-		{"本文が上限超え", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`{"hits":[]}` + big)) }, allowAll, nil, netguard.ErrTooLarge},
-		{"壊れた JSON", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`{"hits":[`)) }, allowAll, nil, nil},
-		{"既定のクライアントはループバックを拒否", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`{"hits":[]}`)) }, func() *http.Client { return nil }, nil, netguard.ErrForbiddenAddress},
-		{"取り消し", func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(`{"hits":[]}`)) }, allowAll, func() context.Context {
-			ctx, cancel := context.WithCancel(context.Background())
-			cancel()
-			return ctx
-		}, context.Canceled},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			ys := newYahooServer(t, c.handler)
-			y := &fetcher.Yahoo{AppID: testAppID, Endpoint: ys.URL + yahooPath, Client: c.client()}
-			ctx := context.Background()
-			if c.ctx != nil {
-				ctx = c.ctx()
-			}
-			got, err := y.Fetch(ctx, yahooSite, "q")
+	for name, html := range bad {
+		t.Run(name, func(t *testing.T) {
+			srv := newHTMLServer(t, serveHTML(html))
+			got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x")
 			if err == nil {
-				t.Fatalf("エラーにならない: %v", got)
-			}
-			if c.want != nil && !errors.Is(err, c.want) {
-				t.Errorf("err = %v, want %v", err, c.want)
-			}
-			if strings.Contains(err.Error(), testAppID) {
-				t.Errorf("エラーに appid が出ている: %v", err)
+				t.Errorf("Fetch = %v, nil; want エラー", got)
 			}
 		})
 	}
+	t.Run("empty result", func(t *testing.T) {
+		srv := newHTMLServer(t, serveHTML(shoppingPage()))
+		got, err := fetcher.NewYahooShopping(allowAll()).Fetch(context.Background(), shoppingSite(srv.URL), "x")
+		if err != nil || len(got) != 0 {
+			t.Errorf("Fetch = %v, %v; want 空・エラーなし", got, err)
+		}
+	})
 }
 
-// AC-F4: appid が空なら取得せず ErrUnavailable。
-func TestYahoo_NoAppID(t *testing.T) {
-	ys := newYahooServer(t, serveFile(t, "testdata/yahoo-itemsearch.json"))
-	y := &fetcher.Yahoo{Endpoint: ys.URL + yahooPath, Client: allowAll()}
-	if _, err := y.Fetch(context.Background(), yahooSite, "q"); !errors.Is(err, fetcher.ErrUnavailable) {
-		t.Errorf("err = %v, want ErrUnavailable", err)
+// AC-5-1e-2: 本番の表で Yahoo!ショッピング(shopping.yahoo.co.jp・scrape)は検索ページの Fetcher。appid は要らない。
+// 同じホストは 5 秒あける(駿河屋のような長い間隔・夜間だけにはしない。詳細シートを開いたときにも取る)。fetch_type=api は使わない。
+func TestRegistry_YahooShopping(t *testing.T) {
+	var hosts []string
+	srv := newHTMLServer(t, func(w http.ResponseWriter, r *http.Request) {
+		hosts = append(hosts, r.Host+r.RequestURI)
+		serveHTML(shoppingPage(shoppingItem("a", "架空の商品", 1200)))(w, r)
+	})
+	clock := newFakeClock()
+	r := fetcher.NewRegistry(fetcher.Config{
+		Client: &http.Client{Transport: rewriteTransport{target: srv.URL}, Timeout: 10 * time.Second},
+		Clock:  clock,
+	})
+	site := siteOf(4, item.FetchScrape, shoppingTemplate)
+	f, ok := r.ForSite(site)
+	if !ok {
+		t.Fatal("Yahoo!ショッピング(scrape)の Fetcher が無い")
 	}
-	if n := len(ys.requests()); n != 0 {
-		t.Errorf("appid が無いのにリクエストした(%d 回)", n)
+	if r.NightlyOnly(site) {
+		t.Error("Yahoo!ショッピングが夜間だけになっている")
+	}
+	for i := 0; i < 2; i++ {
+		got, err := f.Fetch(context.Background(), site, "テスト")
+		if err != nil || len(got) != 1 || got[0].Price != 1200 {
+			t.Fatalf("Fetch = %+v, %v", got, err)
+		}
+	}
+	want := "shopping.yahoo.co.jp/search/" + qTest + "/0/?X=2"
+	if len(hosts) != 2 || hosts[0] != want {
+		t.Errorf("リクエスト = %v, want [%s ×2]", hosts, want)
+	}
+	if s := clock.takeSleeps(); !eqDurations(s, []time.Duration{fetcher.MinInterval}) {
+		t.Errorf("待ち = %v, want [5s]", s)
+	}
+	if _, ok := r.ForSite(siteOf(5, item.FetchAPI, shoppingTemplate)); ok {
+		t.Error("fetch_type=api の Fetcher が残っている(5-1e で消す)")
+	}
+	if _, ok := r.For(item.FetchAPI); ok {
+		t.Error("For(api) が使える(5-1e で消す)")
 	}
 }

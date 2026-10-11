@@ -6,15 +6,13 @@ info:
     自分専用の欲しいものリスト(apps/wishlist/CLAUDE.md)。API 契約の唯一の正。
     Go のサーバー型(oapi-codegen)と Web の型(openapi-typescript)はここから生成する。
 
-    - `/api/*` は `Authorization: Bearer <token>` が必要。
-    - `/images/{name}` と `/healthz` は認証なし(docs/design.md W-04)。
+    - 認証はしない(ユーザー決定 2026-10-11。docs/phase5-spec.md 5-1a)。8080 は 127.0.0.1 だけで待ち、外からは Tailscale を通す(ADR-0810)。
+      `Authorization` ヘッダーが付いていても無視する。
     - エラーは Error スキーマで返す。
     - 検索ワードとディープリンクはクライアントが組み立てる(サーバーは返さない)。
     - クラスタでは前置 `/wishlist` の下で公開する(Ingress が外してから API に渡す。docs/design.md W-03)。
 servers:
   - url: /
-security:
-  - bearerAuth: []
 tags:
   - name: items
   - name: estimates
@@ -24,7 +22,6 @@ paths:
   /healthz:
     get:
       operationId: getHealthz
-      security: []
       responses:
         '200':
           description: 生存確認
@@ -57,7 +54,6 @@ paths:
                     items:
                       $ref: '#/components/schemas/Item'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '500': { $ref: '#/components/responses/Internal' }
     post:
       operationId: createItem
@@ -81,7 +77,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Item'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
         '502': { $ref: '#/components/responses/BadGateway' }
@@ -90,7 +85,12 @@ paths:
     post:
       operationId: draftItemFromURL
       tags: [items]
-      description: URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。
+      description: |
+        URL から下書き(名前・画像・ジャンルの推定)を返す。保存はしない(確定は POST /api/items)。規則は docs/phase5-spec.md 5-1c。
+        - ページの取得は netguard 経由で 1 回だけ。`title` を渡したとき・駿河屋の商品ページ(`www.suruga-ya.jp/product/detail/<番号>`)のときは取りに行かない
+        - 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名の部分を除いたもの
+        - ジャンルは `genre_id` があればそれ。無ければ Genre の `match_keywords`(名前に含む語。最も長い語、同じ長さなら sort_order が小さいもの)、
+          次に `match_hosts`(URL のホスト。複数なら sort_order が小さいもの)で推定し、決まらなければ null
       requestBody:
         required: true
         content:
@@ -105,7 +105,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/ItemDraft'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
         '502': { $ref: '#/components/responses/BadGateway' }
@@ -123,7 +122,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Item'
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
     patch:
@@ -147,7 +145,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Item'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -157,7 +154,6 @@ paths:
       responses:
         '204':
           description: 削除した(画像ファイルも消す)
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -186,7 +182,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Item'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -209,7 +204,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemEstimates'
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -227,7 +221,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemEstimates'
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -257,7 +250,6 @@ paths:
                     items:
                       $ref: '#/components/schemas/Listing'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -288,7 +280,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/PriceHistory'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -309,7 +300,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Genre'
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '500': { $ref: '#/components/responses/Internal' }
     post:
       operationId: createGenre
@@ -328,7 +318,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Genre'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -352,7 +341,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Genre'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -374,7 +362,6 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/Site'
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '500': { $ref: '#/components/responses/Internal' }
     post:
       operationId: createSite
@@ -393,7 +380,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Site'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
 
@@ -417,7 +403,6 @@ paths:
               schema:
                 $ref: '#/components/schemas/Site'
         '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/Unprocessable' }
         '500': { $ref: '#/components/responses/Internal' }
@@ -426,7 +411,6 @@ paths:
     get:
       operationId: getImage
       tags: [images]
-      security: []
       parameters:
         - name: name
           in: path
@@ -453,11 +437,6 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
 
 components:
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-
   parameters:
     ItemID:
       name: id
@@ -481,11 +460,6 @@ components:
   responses:
     BadRequest:
       description: 形式が不正
-      content:
-        application/json:
-          schema: { $ref: '#/components/schemas/Error' }
-    Unauthorized:
-      description: トークンが無い・違う
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -547,7 +521,7 @@ components:
 
     Genre:
       type: object
-      required: [id, name, query_template, sort_order, site_ids]
+      required: [id, name, query_template, sort_order, site_ids, color, icon, match_hosts, match_keywords]
       properties:
         id: { $ref: '#/components/schemas/ID' }
         name:
@@ -563,6 +537,41 @@ components:
           items: { $ref: '#/components/schemas/ID' }
         aliases:
           $ref: '#/components/schemas/AliasGroups'
+        color:
+          type: string
+          pattern: '^#[0-9a-f]{6}$'
+          description: ジャンルの色(`#rrggbb`。常に小文字で返す。docs/phase5-spec.md 5-1b)
+        icon: { $ref: '#/components/schemas/GenreIcon' }
+        match_hosts:
+          $ref: '#/components/schemas/MatchHosts'
+        match_keywords:
+          $ref: '#/components/schemas/MatchKeywords'
+
+    GenreColorInput:
+      type: string
+      pattern: '^#[0-9a-fA-F]{6}$'
+      description: '`#rrggbb`(大文字も受け付け、小文字に揃えて保存する)。形式違反は 422'
+
+    GenreIcon:
+      type: string
+      description: ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+      enum: [card, figure, robot, goods, star, box]
+
+    MatchHosts:
+      type: array
+      description: |
+        URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+        応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+      items:
+        type: string
+
+    MatchKeywords:
+      type: array
+      description: |
+        名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+        応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+      items:
+        type: string
 
     GenreCreate:
       type: object
@@ -585,6 +594,18 @@ components:
           items: { $ref: '#/components/schemas/ID' }
         aliases:
           $ref: '#/components/schemas/AliasGroups'
+        color:
+          allOf:
+            - $ref: '#/components/schemas/GenreColorInput'
+          description: 省略したら `#1d5fd1`(強調色の青)
+        icon:
+          allOf:
+            - $ref: '#/components/schemas/GenreIcon'
+          description: 省略したら `box`
+        match_hosts:
+          $ref: '#/components/schemas/MatchHosts'
+        match_keywords:
+          $ref: '#/components/schemas/MatchKeywords'
 
     GenreUpdate:
       type: object
@@ -605,6 +626,12 @@ components:
           items: { $ref: '#/components/schemas/ID' }
         aliases:
           $ref: '#/components/schemas/AliasGroups'
+        color: { $ref: '#/components/schemas/GenreColorInput' }
+        icon: { $ref: '#/components/schemas/GenreIcon' }
+        match_hosts:
+          $ref: '#/components/schemas/MatchHosts'
+        match_keywords:
+          $ref: '#/components/schemas/MatchKeywords'
 
     AliasGroups:
       type: array
@@ -728,6 +755,36 @@ components:
           nullable: true
           allOf:
             - $ref: '#/components/schemas/OfficialStatus'
+        summary:
+          description: |
+            目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
+            (商品数に依らない回数のクエリで作る)。それ以外の応答では null のことがある
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/ItemSummary'
+
+    ItemSummary:
+      type: object
+      description: |
+        商品の目安のまとめ。対象は「商品のジャンルの site_ids にあり、site_overrides で外していないサイト」の保存済みの目安(estimates)。
+        low・fetched_at は GET /api/items/{id}/estimates の summary_low・summary_fetched_at と同じ値
+      required: [low, status, fetched_at]
+      properties:
+        low:
+          type: integer
+          nullable: true
+          description: 対象の目安の low の最小(low を持つサイトが無ければ null)
+        status:
+          type: string
+          description: |
+            ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+            failed: それ以外(low が無く、failed のサイトがある)
+          enum: [ok, no_result, failed, none]
+        fetched_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: low を持つサイトの fetched_at のうち最も古いもの(low が無ければ null)
 
     OfficialState:
       type: string
@@ -877,25 +934,38 @@ components:
           maxLength: 1024
           description: http(s) の商品ページ URL
         genre_id: { $ref: '#/components/schemas/ID' }
+        title:
+          type: string
+          maxLength: 1024
+          description: |
+            ページから読んだタイトル(iOS の共有拡張が渡す)。渡すとサーバーはページを取りに行かず、これを名前の規則で整えて使う
+        image_url:
+          type: string
+          maxLength: 1024
+          description: ページから読んだ画像の URL(`title` と一緒に使う)。http/https の絶対 URL でなければ下書きの image_url は null
 
     ItemDraft:
       type: object
-      required: [name, source_url]
+      required: [name, source_url, genre_guessed]
       properties:
         name:
           type: string
-          description: og:title(無ければ <title>)
+          description: og:title(無ければ <title>)からサイト名の部分を除いたもの(駿河屋の商品ページは空文字)
         image_url:
           type: string
           nullable: true
-          description: og:image の絶対 URL(無ければ null)
+          description: |
+            og:image の絶対 URL(無ければ null)。bandai-hobby.net は本文の商品画像、駿河屋の商品ページは photo.php の URL
         source_url:
           type: string
         genre_id:
           type: integer
           format: int64
           nullable: true
-          description: リクエストの genre_id をそのまま返す(未指定なら null)
+          description: リクエストの genre_id(あればそのまま)。無ければ推定したジャンル(決まらなければ null)
+        genre_guessed:
+          type: boolean
+          description: genre_id を推定で決めたら true(リクエストの genre_id を使った・決まらなかったなら false)
 
     EstimateStatus:
       type: string

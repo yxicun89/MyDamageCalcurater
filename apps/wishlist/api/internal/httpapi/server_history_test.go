@@ -75,7 +75,8 @@ func TestPriceHistory_EmptyAndNullMid(t *testing.T) {
 	}
 }
 
-// AC-H12: days が 1〜180 の外・数でないなら 400 bad_request。id が 0 以下・数でないなら 400。存在しない商品は 404。トークンが無ければ 401。
+// AC-H12: days が 1〜180 の外・数でないなら 400 bad_request。id が 0 以下・数でないなら 400。存在しない商品は 404。
+// (「トークンが無ければ 401」はフェーズ5 5-1a で「トークンが無くても 200」に変わった。ユーザー決定 2026-10-11)
 func TestPriceHistory_Errors(t *testing.T) {
 	e := newEnv(t)
 	id := idOf(e.createItem(t, nil))
@@ -88,7 +89,12 @@ func TestPriceHistory_Errors(t *testing.T) {
 		expectError(t, e.do(t, req{method: http.MethodGet, path: p}), http.StatusBadRequest, "bad_request")
 	}
 	expectError(t, e.do(t, req{method: http.MethodGet, path: "/api/items/99999999/price-history"}), http.StatusNotFound, "not_found")
-	expectError(t, e.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/price-history", id), auth: "-"}), http.StatusUnauthorized, "unauthorized")
+	// 5-1a: トークン無しで組み立てたサーバーに、Authorization 無しで 200(以前は 401 を確かめていた。要件の変更)。
+	ne := newEnvWith(t, "")
+	nid := idOf(ne.createItem(t, nil))
+	if w := ne.do(t, req{method: http.MethodGet, path: fmt.Sprintf("/api/items/%d/price-history", nid), auth: "-"}); w.Code != http.StatusOK {
+		t.Errorf("トークン無し = %d %s, want 200", w.Code, w.Body.String())
+	}
 }
 
 // canonicalJSON はキーを並べ替えた JSON にする(比較用)。
