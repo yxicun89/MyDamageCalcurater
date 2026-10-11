@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { DeviceDataSection } from "./deviceData/DeviceDataSection";
 import type { DeviceDataDeleter } from "./deviceData/deleteDeviceData";
 import { aboutText } from "./i18n/ja";
+import { Icon } from "./ui/Icon";
 
 interface AboutScreenProps {
   /** 「計算に戻る」のリンク先(base 付きのパス)。 */
@@ -44,11 +45,17 @@ export function AboutScreen({
         {aboutText.pageHeading}
       </h2>
       <section className="ui-card about__section">
-        <h3>{aboutText.unofficialHeading}</h3>
+        <h3 className="about__section-heading">
+          <Icon name="alert" size={24} />
+          {aboutText.unofficialHeading}
+        </h3>
         <p>{aboutText.unofficialNotice}</p>
       </section>
       <section className="ui-card about__section">
-        <h3>{aboutText.dataSourcesHeading}</h3>
+        <h3 className="about__section-heading">
+          <Icon name="info" size={24} />
+          {aboutText.dataSourcesHeading}
+        </h3>
         <ul aria-label={aboutText.dataSourcesHeading} className="ui-rows about__sources">
           {aboutText.dataSources.map((source) => (
             <li key={source.title}>
