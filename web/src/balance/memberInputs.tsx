@@ -13,7 +13,7 @@ import { PokemonCard } from "../ui/PokemonCard";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { findAbilityName } from "./balanceParts";
 import type { BalanceInputMember } from "./types";
-import "../screens/BalanceScreen.css";
+import "./BalancePanel.css";
 
 /** 技の枠数(services/balance/api/openapi.yaml の moveIds の maxItems)。 */
 export const MOVE_SLOTS = 4;

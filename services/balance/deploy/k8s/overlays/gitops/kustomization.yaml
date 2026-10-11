@@ -10,7 +10,7 @@ images:
     newName: localhost:5000/pokecalc/balance
     digest: sha256:09a57decf42ea92f92c45cd3daa4c3d21fafa9b0ae8a846f1fc3584163ac8496
   # read model を作る initContainer 用の pokedex image(ADR-0412)。digest は make pokedex-registry-push の出力で置き換える。
-  # 2026-10-03 に make pokedex-registry-push で確定した実 digest。sync の前に NetworkPolicy(allow-mysql-ingress.yaml)の適用が要る(適用前に sync すると initContainer が MySQL に届かず Pod が起動しない)。
+  # 2026-10-12 に make pokedex-registry-push で更新した実 digest(ADR-0145 の読み込み修正入り。古い digest は効果定義の新フィールド TypeConvert を読めず Init:Error になった)。sync の前に NetworkPolicy(allow-mysql-ingress.yaml)の適用が要る(適用前に sync すると initContainer が MySQL に届かず Pod が起動しない)。
   - name: pokecalc/pokedex
     newName: localhost:5000/pokecalc/pokedex
-    digest: sha256:7f485f8cf7a45aca3ba37710b818c9b7e5af60bcc6bf0cfff0841e1aacf53b20
+    digest: sha256:f1963ac982a62d13c70e71bf5f2e8a0c7f745a63d07b9f92245f98f214da7766

@@ -23,7 +23,7 @@ import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
 import { Tile } from "../ui/Tile";
 import { useSpeciesResolutions } from "./speciesResolution";
-import "./BalanceScreen.css";
+import "../balance/BalancePanel.css";
 
 /** 画面の props(App.tsx が注入する。マスタは既存の画面と同じ MasterData。ADR-0303 §2・§3)。 */
 export interface BalanceScreenProps {

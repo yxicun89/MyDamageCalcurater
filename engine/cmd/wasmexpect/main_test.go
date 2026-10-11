@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -87,5 +88,38 @@ func TestRequestWithTypeChartSkipsAdjustIndices(t *testing.T) {
 	}
 	if _, ok := m["typeChart"]; !ok {
 		t.Errorf("adjustAllocation に typeChart を注入していない: %s", got)
+	}
+}
+
+// 連続技のベクタ(ADR-0179 追記 CB-5)を calcCombo で呼び分け、成功ベクタは成功封筒、エラーベクタはエラー封筒になる。
+func TestRunHandlesCalcComboVectors(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "expected.json")
+	if err := run(repoVectors, out); err != nil {
+		t.Fatalf("run(ベクタ) = %v(calcCombo を知らない?)", err)
+	}
+	b, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var expected map[string]string
+	if err := json.Unmarshal(b, &expected); err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for name, resp := range expected {
+		if !strings.HasPrefix(name, "calcCombo/") {
+			continue
+		}
+		n++
+		want := `{"result":`
+		if strings.Contains(name, "error") {
+			want = `{"error":`
+		}
+		if !strings.HasPrefix(resp, want) {
+			t.Errorf("%s: 期待値の封筒が違う(want 接頭辞 %s): %.80s", name, want, resp)
+		}
+	}
+	if n < 3 {
+		t.Errorf("calcCombo の期待値が %d 件しかない", n)
 	}
 }

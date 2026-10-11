@@ -9,7 +9,7 @@ import { balanceErrorMessage } from "./balanceParts";
 import { RecommendationsSection, ThreatSection } from "./balanceSections";
 import { CoverageTable, DefenseTable, TeamSummaryTable } from "./balanceTables";
 import type { TeamBalanceState } from "./types";
-import "../screens/BalanceScreen.css";
+import "./BalancePanel.css";
 
 export interface BalancePanelProps {
   readonly state: TeamBalanceState;

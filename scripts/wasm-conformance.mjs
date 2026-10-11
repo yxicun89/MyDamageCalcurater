@@ -149,6 +149,7 @@ for (const fn of [
   'calc',
   'calcBulk',
   'calcReverse',
+  'calcCombo',
   'adjustIndices',
   'adjustMinSpToKo',
   'adjustMinSpToSurvive',
