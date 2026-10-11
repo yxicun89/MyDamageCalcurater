@@ -9,10 +9,9 @@ import XCTest
 // 実ネットワークは使わず、送られたリクエストを RecordingTransport で検査する。URL の連結だけは本物の URLSessionTransport + URLProtocol。
 final class APIWishlistServiceTests: XCTestCase {
     private let base = URL(string: "https://wishlist.example/wishlist/")!
-    private let token = "secret-token"
 
     private func service(_ transport: RecordingTransport, baseURL: URL? = nil) -> APIWishlistService {
-        APIWishlistService(baseURL: baseURL ?? base, token: token, transport: transport)
+        APIWishlistService(baseURL: baseURL ?? base, transport: transport)
     }
 
     private func itemJSON(id: Int = 12, extra: String = "") -> String {
@@ -26,14 +25,15 @@ final class APIWishlistServiceTests: XCTestCase {
 
     // MARK: - 認証・パス・写像
 
-    func testListItemsSendsBearerTokenAndMapsFields() async throws {
+    func testListItemsSendsNoAuthorizationAndMapsFields() async throws {
         let transport = RecordingTransport(reply: .json(#"{"items":[\#(itemJSON())]}"#))
         let items = try await service(transport).listItems()
 
         let request = try XCTUnwrap(transport.last).request
         XCTAssertEqual(request.method, .get)
         XCTAssertEqual(request.path, "/api/items")
-        XCTAssertEqual(request.headerFields[.authorization], "Bearer secret-token")
+        // 【5-3 で置換】ユーザー決定 2026-10-11 / phase5-spec 5-3: トークン廃止。Authorization は付けない
+        XCTAssertNil(request.headerFields[.authorization])
 
         let item = try XCTUnwrap(items.first)
         XCTAssertEqual(items.count, 1)
@@ -52,7 +52,7 @@ final class APIWishlistServiceTests: XCTestCase {
         StubURLProtocol.install { _ in (200, Data(#"{"items":[]}"#.utf8)) }
         let transport = URLSessionTransport(configuration: .init(session: StubURLProtocol.makeSession()))
         for baseString in ["https://wishlist.example/wishlist", "https://wishlist.example/wishlist/"] {
-            let api = APIWishlistService(baseURL: try XCTUnwrap(URL(string: baseString)), token: token, transport: transport)
+            let api = APIWishlistService(baseURL: try XCTUnwrap(URL(string: baseString)), transport: transport)
             _ = try await api.listItems()
         }
         XCTAssertEqual(
@@ -71,7 +71,7 @@ final class APIWishlistServiceTests: XCTestCase {
     }
 
     func testListGenresKeepsSiteIDOrder() async throws {
-        let transport = RecordingTransport(reply: .json(#"{"genres":[{"id":1,"name":"S.H.Figuarts","query_template":"S.H.Figuarts {name}","sort_order":1,"site_ids":[2,1,3]}]}"#))
+        let transport = RecordingTransport(reply: .json(##"{"genres":[{"id":1,"name":"S.H.Figuarts","query_template":"S.H.Figuarts {name}","sort_order":1,"site_ids":[2,1,3],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[]}]}"##))
         let genres = try await service(transport).listGenres()
         XCTAssertEqual(transport.last?.request.path, "/api/genres")
         XCTAssertEqual(genres, [Genre(id: 1, name: "S.H.Figuarts", queryTemplate: "S.H.Figuarts {name}", sortOrder: 1, siteIDs: [2, 1, 3])])
@@ -92,7 +92,8 @@ final class APIWishlistServiceTests: XCTestCase {
         let sent = try XCTUnwrap(transport.last)
         XCTAssertEqual(sent.request.method, .patch)
         XCTAssertEqual(sent.request.path, "/api/items/12")
-        XCTAssertEqual(sent.request.headerFields[.authorization], "Bearer secret-token")
+        // 【5-3 で置換】ユーザー決定 2026-10-11 / phase5-spec 5-3: トークン廃止。Authorization は付けない
+        XCTAssertNil(sent.request.headerFields[.authorization])
         XCTAssertEqual(sent.request.headerFields[.contentType], "application/json")
         XCTAssertEqual(sent.json, ["name": "グリス 改"] as NSDictionary)
     }
@@ -119,7 +120,7 @@ final class APIWishlistServiceTests: XCTestCase {
     }
 
     func testUpdateGenreSendsSiteIDsAsFullReplacement() async throws {
-        let transport = RecordingTransport(reply: .json(#"{"id":2,"name":"S.H.Figuarts","query_template":"x","sort_order":0,"site_ids":[1,2]}"#))
+        let transport = RecordingTransport(reply: .json(##"{"id":2,"name":"S.H.Figuarts","query_template":"x","sort_order":0,"site_ids":[1,2],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[]}"##))
         _ = try await service(transport).updateGenre(id: 2, patch: GenreUpdate(siteIDs: [1, 2]))
         let sent = try XCTUnwrap(transport.last)
         XCTAssertEqual(sent.request.method, .patch)
@@ -182,7 +183,7 @@ final class APIWishlistServiceTests: XCTestCase {
     }
 
     func testDraftFromURLSendsURLAndGenre() async throws {
-        let transport = RecordingTransport(reply: .json(#"{"name":"OGP のタイトル","image_url":null,"source_url":"https://shop.example/p/1","genre_id":1}"#))
+        let transport = RecordingTransport(reply: .json(#"{"name":"OGP のタイトル","image_url":null,"source_url":"https://shop.example/p/1","genre_id":1,"genre_guessed":false}"#))
         let draft = try await service(transport).draftFromURL("https://shop.example/p/1", genreID: 1)
         let sent = try XCTUnwrap(transport.last)
         XCTAssertEqual(sent.request.method, .post)
@@ -205,7 +206,7 @@ final class APIWishlistServiceTests: XCTestCase {
     }
 
     func testCreateGenreOmitsNilFields() async throws {
-        let transport = RecordingTransport(reply: .json(201, #"{"id":5,"name":"新ジャンル","query_template":"{name} {option}","sort_order":0,"site_ids":[]}"#))
+        let transport = RecordingTransport(reply: .json(201, ##"{"id":5,"name":"新ジャンル","query_template":"{name} {option}","sort_order":0,"site_ids":[],"color":"#1d5fd1","icon":"box","match_hosts":[],"match_keywords":[]}"##))
         _ = try await service(transport).createGenre(GenreCreate(name: "新ジャンル"))
         XCTAssertEqual(try XCTUnwrap(transport.last).json, ["name": "新ジャンル"] as NSDictionary)
     }

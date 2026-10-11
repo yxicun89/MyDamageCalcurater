@@ -131,6 +131,31 @@ public final class SettingsListViewModel {
         }
     }
 
+    // MARK: - フェーズ5-3 ジャンルの編集(色・絵柄・URL の手がかり。docs/phase5-spec.md 5-2「ジャンルの編集」)
+
+    /// 「URL の手がかり」の欄の文字を項目にする。区切りは `,`・`、`・改行。前後の空白と空の項目は除く(重複は残す)。
+    /// 【spec-writer の仮置き】
+    public static func parseClues(_ text: String) -> [String] {
+        []
+    }
+
+    /// 商品数(ジャンル ID → 件数)。設定の行の「件数」。商品が無いジャンルは含めない。【spec-writer の仮置き】
+    public static func itemCounts(_ items: [Item]) -> [Int: Int] {
+        [:]
+    }
+
+    /// 【spec-writer の仮置き】色・絵柄・手がかりを含むジャンルの追加。名前が空白のみなら API を呼ばず nil。
+    /// `color`・`icon`・`matchHosts`・`matchKeywords` を常に送る(`parseClues` を通す)。それ以外の規則は `addGenre(name:queryTemplate:siteIDs:aliasLines:)` と同じ。
+    public func addGenre(_ edit: GenreEdit) async -> Genre? {
+        nil
+    }
+
+    /// 【spec-writer の仮置き】色・絵柄・手がかりを含むジャンルの編集。変えた項目だけ PATCH(何も変えていなければ API を呼ばず元のジャンルを返す)。
+    /// 手がかりは `parseClues` の結果が元と違うときだけ送る。それ以外の規則は `updateGenre(_:name:queryTemplate:siteIDs:aliasLines:)` と同じ。
+    public func updateGenre(_ genre: Genre, edit: GenreEdit) async -> Genre? {
+        nil
+    }
+
     // MARK: - フェーズ4-1 表記揺れの辞書(docs/phase4-spec.md AC-IOS-ALI-02〜05)
 
     /// 編集画面に出す行(1 グループ = 1 行。`AliasLines.format`)。辞書が無ければ空
@@ -160,5 +185,33 @@ public final class SettingsListViewModel {
             return nil
         }
         return await updateGenre(genre, name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: parsed.groups)
+    }
+}
+
+/// ジャンル編集シートの入力(完成品。ロジックなし)。
+public struct GenreEdit: Equatable, Sendable {
+    public var name: String
+    public var queryTemplate: String
+    public var siteIDs: [Int]
+    public var aliasLines: [String]
+    public var color: String
+    public var icon: GenreIcon
+    /// 「手がかりのホスト」の欄の文字(`,`・`、`・改行区切り)
+    public var hostsText: String
+    /// 「手がかりの語」の欄の文字
+    public var keywordsText: String
+
+    public init(
+        name: String, queryTemplate: String = "{name} {option}", siteIDs: [Int] = [], aliasLines: [String] = [],
+        color: String = GenreIcon.defaultColor, icon: GenreIcon = .box, hostsText: String = "", keywordsText: String = ""
+    ) {
+        self.name = name
+        self.queryTemplate = queryTemplate
+        self.siteIDs = siteIDs
+        self.aliasLines = aliasLines
+        self.color = color
+        self.icon = icon
+        self.hostsText = hostsText
+        self.keywordsText = keywordsText
     }
 }

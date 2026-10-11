@@ -14,6 +14,28 @@ public enum SharedURL {
     }
 }
 
+/// 共有拡張の JavaScript(`ExtensionPreprocessing.js`。`NSExtensionJavaScriptPreprocessingFile`)がページから読んだ値。
+/// 辞書のキーは `url`・`title`・`imageURL`(`ExtensionPreprocessingJS.run` の `completionFunction` に渡す形)。
+public struct SharedPage: Equatable, Sendable {
+    public var url: URL?
+    /// og:title(無ければ document.title)。空文字は nil
+    public var title: String?
+    /// og:image(無ければページで最も大きい `<img>`)の絶対 URL。空文字は nil
+    public var imageURL: String?
+
+    public init(url: URL?, title: String? = nil, imageURL: String? = nil) {
+        self.url = url
+        self.title = title
+        self.imageURL = imageURL
+    }
+
+    /// 【spec-writer の仮置き】JavaScript の結果の辞書から作る。`url` が http(s) でなければ `url = nil`。
+    /// `title`・`imageURL` は前後の空白を除き、空なら nil。文字列でない値は無視する。辞書が nil でも作れる(url も nil)。
+    public static func parse(_ results: [String: Any]?) -> SharedPage {
+        SharedPage(url: nil)
+    }
+}
+
 /// Share Extension の状態(共有シートから登録)。本体とデータは共有しない(仕様 §9.5)ので、拡張自身の設定(WishlistSettings)で API を呼ぶ。
 @MainActor
 @Observable
@@ -45,6 +67,13 @@ public final class ShareViewModel {
         self.sharedURL = sharedURL
         self.settings = settings
         self.service = service
+    }
+
+    /// 【spec-writer の仮置き】JavaScript が読んだ title・image_url を持つ版(ユーザー決定 2026-10-11 / phase5-spec 5-3)。
+    /// 実装者は `sharedURL` 版を消してこちらを本体にする。`load()` は `sharedPage.title`・`imageURL` があれば `draftFromPage(url:title:imageURL:)`
+    /// で下書きを作り(ページを取りに行かない)、ジャンルは下書きの genreID(`genres` にあれば)、無ければ未選択(`genreID = nil`)。
+    public convenience init(sharedPage: SharedPage, settings: WishlistSettings, service: any WishlistService) {
+        self.init(sharedURL: sharedPage.url, settings: settings, service: service)
     }
 
     /// プレビューに出す画像の URL(下書きの imageURL が http(s) のときだけ)

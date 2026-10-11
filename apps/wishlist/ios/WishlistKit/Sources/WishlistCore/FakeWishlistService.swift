@@ -16,6 +16,7 @@ public final class FakeWishlistService: WishlistService {
         case createItemMultipart(ItemFields, filename: String)
         case createItemFromURL(ItemFields, imageURL: String)
         case draftFromURL(String, genreID: Int?)
+        case draftFromPage(String, title: String?, imageURL: String?)
         case updateItem(id: Int, patch: ItemPatch)
         case deleteItem(id: Int)
         case replaceItemImage(id: Int, filename: String)
@@ -164,6 +165,14 @@ public final class FakeWishlistService: WishlistService {
         return draft
     }
 
+    public func draftFromPage(url: String, title: String?, imageURL: String?) async throws -> ItemDraft {
+        try enter(.draftFromPage(url, title: title, imageURL: imageURL))
+        guard let draft = state.withLock({ $0.draft }) else {
+            throw WishlistError(code: .unprocessable, status: 422, message: "no draft (fake)")
+        }
+        return draft
+    }
+
     public func updateItem(id: Int, patch: ItemPatch) async throws -> Item {
         try enter(.updateItem(id: id, patch: patch))
         return try state.withLock { s in
@@ -253,7 +262,9 @@ public final class FakeWishlistService: WishlistService {
         return state.withLock { s in
             let genre = Genre(
                 id: s.nextGenreID, name: body.name, queryTemplate: body.queryTemplate ?? "{name} {option}",
-                sortOrder: body.sortOrder ?? 0, siteIDs: body.siteIDs ?? [], aliases: body.aliases ?? [])
+                sortOrder: body.sortOrder ?? 0, siteIDs: body.siteIDs ?? [], aliases: body.aliases ?? [],
+                color: body.color ?? GenreIcon.defaultColor, icon: body.icon ?? .box,
+                matchHosts: body.matchHosts ?? [], matchKeywords: body.matchKeywords ?? [])
             s.nextGenreID += 1
             s.genres.append(genre)
             return genre
@@ -269,6 +280,10 @@ public final class FakeWishlistService: WishlistService {
             if let v = patch.sortOrder { s.genres[index].sortOrder = v }
             if let v = patch.siteIDs { s.genres[index].siteIDs = v }
             if let v = patch.aliases { s.genres[index].aliases = v }
+            if let v = patch.color { s.genres[index].color = v }
+            if let v = patch.icon { s.genres[index].icon = v }
+            if let v = patch.matchHosts { s.genres[index].matchHosts = v }
+            if let v = patch.matchKeywords { s.genres[index].matchKeywords = v }
             return s.genres[index]
         }
     }

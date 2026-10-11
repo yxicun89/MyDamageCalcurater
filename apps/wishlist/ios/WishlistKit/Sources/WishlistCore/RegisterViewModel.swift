@@ -28,6 +28,12 @@ public final class RegisterViewModel {
         }
     }
 
+    /// 【spec-writer の仮置き】「コピーした URL を追加」。`copied`(クリップボードの文字。読めなければ nil)が前後の空白を除いて
+    /// http(s) の絶対 URL なら `urlText` にして `fetchDraft()` を呼び true。そうでなければ何も呼ばず false(画面は URL の入力欄を出す)。
+    public func pasteURL(_ copied: String?) async -> Bool {
+        false
+    }
+
     private var trimmedName: String { name.trimmingCharacters(in: .whitespacesAndNewlines) }
 
     /// 名前(空白のみは不可)・ジャンル・画像(写真か、下書きの画像 URL)が揃っているとき true

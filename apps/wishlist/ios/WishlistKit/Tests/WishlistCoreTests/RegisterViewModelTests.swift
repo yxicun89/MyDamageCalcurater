@@ -16,16 +16,18 @@ final class RegisterViewModelTests: XCTestCase {
 
     // MARK: - 初期値と登録できる条件
 
-    func testInitialGenreIsTheChipGenreOtherwiseTheFirstBySortOrder() {
+    // 【5-3 で置換】旧: ホームで絞っていなければ sortOrder 先頭のジャンル。ユーザー決定 2026-10-11 / phase5-spec 5-2「追加」:
+    // 下書きの genre_id → 無ければホームで絞っているジャンル → 無ければ未選択(選ぶまで「追加」を押せない)。
+    func testInitialGenreIsTheChipGenreOtherwiseNone() {
         XCTAssertEqual(makeViewModel(initialGenreID: 2).0.genreID, 2)
-        XCTAssertEqual(makeViewModel(initialGenreID: nil).0.genreID, 1)
-        XCTAssertEqual(makeViewModel(initialGenreID: 99).0.genreID, 1, "ジャンルに無い ID は使わない")
+        XCTAssertNil(makeViewModel(initialGenreID: nil).0.genreID)
+        XCTAssertNil(makeViewModel(initialGenreID: 99).0.genreID, "ジャンルに無い ID は使わない")
         let reversed = [Genre(id: 5, name: "後", sortOrder: 9), Genre(id: 6, name: "先", sortOrder: 1)]
-        XCTAssertEqual(RegisterViewModel(service: T.fake(), genres: reversed, initialGenreID: nil).genreID, 6)
+        XCTAssertNil(RegisterViewModel(service: T.fake(), genres: reversed, initialGenreID: nil).genreID)
     }
 
     func testCanRegisterNeedsNameGenreAndImage() {
-        let (viewModel, _) = makeViewModel()
+        let (viewModel, _) = makeViewModel(initialGenreID: 1)  // 5-3: 既定では未選択なので、絞り込み中のジャンルを渡す
         XCTAssertFalse(viewModel.canRegister)
         viewModel.name = "名前だけ"
         XCTAssertFalse(viewModel.canRegister)
@@ -69,7 +71,7 @@ final class RegisterViewModelTests: XCTestCase {
         service.draft = draft
         viewModel.urlText = "  https://shop.example/p/1 "
         await viewModel.fetchDraft()
-        XCTAssertEqual(service.calls, [.draftFromURL("https://shop.example/p/1", genreID: 2)])
+        XCTAssertEqual(service.calls, [.draftFromURL("https://shop.example/p/1", genreID: nil)])  // 【5-3 で置換】旧 genreID: 2。from-url に genre_id は渡さない(サーバーが推定する)
         XCTAssertEqual(viewModel.draft, draft)
         XCTAssertEqual(viewModel.name, "OGP のタイトル")
         XCTAssertEqual(viewModel.genreID, 1, "下書きの genre_id が選択に反映される")

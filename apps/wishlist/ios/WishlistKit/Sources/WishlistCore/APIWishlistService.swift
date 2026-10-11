@@ -26,6 +26,12 @@ public struct APIWishlistService: WishlistService {
             middlewares: [WishlistMiddleware(token: token, baseURL: baseURL)])
     }
 
+    /// 【spec-writer の仮置き】トークンを持たない初期化子(ユーザー決定 2026-10-11 / phase5-spec 5-3)。
+    /// 実装者は `token:` 付きの初期化子と `WishlistMiddleware` の Authorization・`AuthPolicy` を消し、これを本体にする。
+    public init(baseURL: URL, transport: any ClientTransport = URLSessionTransport()) {
+        self.init(baseURL: baseURL, token: "", transport: transport)
+    }
+
     // MARK: - 共通
 
     /// 生成クライアントの呼び出しを包み、失敗を `WishlistError` にする。

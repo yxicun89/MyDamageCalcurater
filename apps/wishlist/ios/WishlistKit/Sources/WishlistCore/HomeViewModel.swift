@@ -28,7 +28,17 @@ public final class HomeViewModel {
     }
 
     /// トークン・URL が未設定なら true(設定画面から始め、API を呼ばない)
+    /// 【5-3 で置き換え】ユーザー決定 2026-10-11: 設定画面を無くす。実装者は `needsSettings` を消し、`isLocalOnly` を使う。
     public var needsSettings: Bool { !settings.isConfigured }
+
+    /// 【spec-writer の仮置き】接続先(ビルド設定)が無く、保存済みのキャッシュだけで動いているとき true(API を呼ばない)。
+    public var isLocalOnly: Bool { false }
+
+    /// 【spec-writer の仮置き】上の「オフライン」の札を出すか。`isStale`(保存済みを使った)か `isLocalOnly` のとき true。
+    public var showsOfflineBadge: Bool { false }
+
+    /// 【spec-writer の仮置き】`visibleItems` のタイル(ジャンルの色・絵柄・価格の札つき)。`showsOfflineBadge` の間は価格の札を出さない。
+    public var tiles: [HomeTile] { [] }
 
     /// 選択中のジャンルで絞った商品。sortOrder 昇順、同順は id 降順(API の並びと同じ)。「すべて」は全件。
     public var visibleItems: [Item] {

@@ -24,6 +24,18 @@ public enum AuthPolicy {
 
 /// 画像を取る関数(`ImageFileCache` の loader)。ベース URL の配下にだけ Bearer を付け、外部 URL にはヘッダーを付けない。
 public enum ImageLoader {
+    /// 【spec-writer の仮置き】トークンを使わない画像取得(ユーザー決定 2026-10-11 / phase5-spec 5-3)。
+    /// 実装者は `baseURL:token:` 版と `AuthPolicy` ごと消し、どの URL にも Authorization を付けないこれを本体にする。
+    public static func make(session: URLSession = .shared) -> @Sendable (URL) async throws -> Data {
+        { url in
+            var request = URLRequest(url: url)
+            request.setValue("Bearer stub", forHTTPHeaderField: "Authorization")
+            let (data, response) = try await session.data(for: request)
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else { throw URLError(.badServerResponse) }
+            return data
+        }
+    }
+
     public static func make(
         baseURL: URL, token: String, session: URLSession = .shared
     ) -> @Sendable (URL) async throws -> Data {

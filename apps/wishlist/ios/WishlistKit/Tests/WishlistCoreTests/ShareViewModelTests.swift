@@ -53,15 +53,9 @@ final class ShareViewModelTests: XCTestCase {
 
     // MARK: - 設定・入力が無いとき
 
-    func testNeedsSettingsWhenTokenIsMissingAndCallsNoAPI() async {
-        let (viewModel, service) = makeViewModel(settings: WishlistSettings(apiBaseURL: T.baseURLString, token: ""))
-        await viewModel.load()
-        XCTAssertEqual(viewModel.phase, .needsSettings)
-        XCTAssertEqual(service.calls, [])
-    }
-
-    func testNeedsSettingsWhenURLIsMissing() async {
-        let (viewModel, service) = makeViewModel(settings: WishlistSettings(apiBaseURL: nil, token: "t"))
+    // 【5-3 で置換】旧 testNeedsSettingsWhenTokenIsMissingAndCallsNoAPI(トークン未設定)。トークンを廃止したので URL の有無だけを見る。
+    func testNeedsSettingsWhenBaseURLIsMissingAndCallsNoAPI() async {
+        let (viewModel, service) = makeViewModel(settings: T.localOnly)
         await viewModel.load()
         XCTAssertEqual(viewModel.phase, .needsSettings)
         XCTAssertEqual(service.calls, [])
@@ -93,8 +87,9 @@ final class ShareViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.genres, T.genres)
         XCTAssertEqual(viewModel.name, "S.H.Figuarts 仮面ライダーグリス")
         XCTAssertEqual(viewModel.previewImageURL?.absoluteString, "https://img.example/og.png")
-        XCTAssertEqual(viewModel.genreID, 1, "下書きにジャンルが無ければ sortOrder 昇順の先頭")
-        XCTAssertTrue(viewModel.canSave)
+        // 【5-3 で置換】旧: 下書きにジャンルが無ければ sortOrder 昇順の先頭。ユーザー決定 2026-10-11: 未選択にして、選ぶまで「追加」を押せない
+        XCTAssertNil(viewModel.genreID)
+        XCTAssertFalse(viewModel.canSave)
     }
 
     func testDraftGenreIsPreselectedWhenItExists() async {
@@ -108,7 +103,7 @@ final class ShareViewModelTests: XCTestCase {
         unknown.genreID = 99
         let (other, _) = makeViewModel(draft: unknown)
         await other.load()
-        XCTAssertEqual(other.genreID, 1)
+        XCTAssertNil(other.genreID, "【5-3 で置換】旧: 先頭のジャンル。ジャンルに無い ID は未選択")
     }
 
     func testDraftFetchFailureIsReported() async {
@@ -131,6 +126,7 @@ final class ShareViewModelTests: XCTestCase {
     func testSaveCreatesTheItemFromTheDraftImageURL() async {
         let (viewModel, service) = makeViewModel()
         await viewModel.load()
+        viewModel.genreID = 1  // 5-3: 既定では未選択
         await viewModel.save()
         XCTAssertEqual(
             service.calls.last,
@@ -170,6 +166,7 @@ final class ShareViewModelTests: XCTestCase {
     func testBlankNameCannotBeSaved() async {
         let (viewModel, _) = makeViewModel()
         await viewModel.load()
+        viewModel.genreID = 1  // 5-3: 既定では未選択
         viewModel.name = "  "
         XCTAssertFalse(viewModel.canSave)
     }
@@ -184,6 +181,7 @@ final class ShareViewModelTests: XCTestCase {
     func testSaveFailureKeepsInputAndCanBeRetried() async {
         let (viewModel, service) = makeViewModel()
         await viewModel.load()
+        viewModel.genreID = 1  // 5-3: 既定では未選択
         viewModel.name = "直した名前"
         service.offline = true
         await viewModel.save()

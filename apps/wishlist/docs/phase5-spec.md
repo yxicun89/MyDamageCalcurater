@@ -225,3 +225,76 @@ API 契約は [../api/openapi.yaml](../api/openapi.yaml)。テストは `make wi
 - Share Extension:Safari から共有したとき、拡張の JavaScript(`NSExtensionJavaScriptPreprocessingFile`)でページの og:image・og:title(無ければ最初の大きな画像・document.title)を読み、
   `POST /api/items/from-url` に `url`・`title`・`image_url` を渡して下書きを作る(サーバーはページを取りに行かない。駿河屋のようにサーバーから読めないページでも登録できる)
 - トークンを保存・送信しない
+
+### 5-3 決めたこと(iOS。ユーザー決定 2026-10-11)
+
+上の 5-3 の箇条書きで決まっていなかった点を、次のとおり決める。実装者はこれを正とする。
+
+**接続先(ビルド設定)**
+
+- 接続先は ビルド設定 `WISHLIST_API_BASE_URL`(例 `https://<ホスト>/wishlist/`)。git に入れない `ios/Config/Local.xcconfig` に書く。コミットするのは見本の `ios/Config/Local.xcconfig.example` だけ(実在のホストは書かない)。`ios/.gitignore` に `Config/Local.xcconfig` を足す
+  - xcconfig は `//` をコメントとして読むので、見本は `WISHLIST_API_BASE_URL = https:/$()/<ホスト>/wishlist/` の形で書く
+  - Xcode プロジェクトの本体・拡張の両ターゲットのビルド構成に `Local.xcconfig` を `#include? "Local.xcconfig"`(無くても失敗しない)で読む
+- 値は Info.plist の `WishlistAPIBaseURL` = `$(WISHLIST_API_BASE_URL)` を通す。本体(`Wishlist-Info.plist`)と拡張(`WishlistShare-Info.plist`)のどちらも同じキー。読むのは `WishlistSettings.fromInfo(Bundle.main.infoDictionary)`(WishlistKit。純粋なので swift test で見る)
+- 空・無い・展開されていない `$(WISHLIST_API_BASE_URL)`・http(s) でない → 未設定。未設定のときアプリは **保存済み(キャッシュ)だけで動く**: API を呼ばない・価格の札は出さない・リンク(ディープリンク)は使える・ホームに小さな「オフライン」の札(Web の `offline-badge` と同じ見た目)。**接続設定の画面は作らない**(設定画面から「接続」の区画を消す)。拡張は未設定なら「接続先が未設定です(ビルド設定)」と出して閉じられる
+- **トークンはどこにも無い**: `WishlistSettings.token`・`UserDefaultsSettingsStore`・`ConnectionSettingsViewModel`・`WishlistSettingsStore`・`AuthPolicy`・`ImageLoader.make(baseURL:token:)`・`WishlistMiddleware` の Authorization・`APIWishlistService.init(baseURL:token:transport:)` を消す。画像取得は `ImageLoader.make(session:)`(Authorization なし)。`UserDefaults` の旧 `wishlist.settings` は読まない
+- ホームの「オフライン」の札を出す条件(`HomeViewModel.showsOfflineBadge`): 接続先が無い(`isLocalOnly`)か、一覧のどれかを取れず保存済みを使った(`isStale`)。端末のネットワークの有無(NWPathMonitor)は 5-3 では見ない(取得の失敗で足りる)。札が出ている間は価格の札を出さない
+
+**共有拡張(Safari から共有)**
+
+- `WishlistShare/ExtensionPreprocessing.js`(新規。拡張のターゲットのリソースに入れる)。`Info.plist` の `NSExtensionAttributes` に `NSExtensionJavaScriptPreprocessingFile` = `ExtensionPreprocessing` と、ページ(Web ページ)の共有を受ける `NSExtensionActivationSupportsWebPageWithMaxCount` = 1 を足す(既存の URL・テキストの規則は残す)
+- JS は `var ExtensionPreprocessingJS = { run: function (arguments) { ... arguments.completionFunction({ url, title, imageURL }) }, finalize: function (arguments) {} }`。
+  - `url` = `document.URL`
+  - `title` = `<meta property="og:title">` の content。無ければ `document.title`
+  - `imageURL` = `<meta property="og:image">`(無ければ `twitter:image`)の content を絶対 URL にしたもの。無ければ **ページで描画サイズ(`naturalWidth × naturalHeight`)がいちばん大きい `<img>`** の `currentSrc || src`。それも無ければ空
+- Swift 側(`ShareViewController`): `NSItemProvider` の `com.apple.property-list` から `NSExtensionJavaScriptPreprocessingResultsKey` の辞書を取り、`SharedPage.parse` で `SharedPage`(url・title・imageURL)にする。JS の結果が無い(Safari 以外・JS 失敗)ときは、今までどおり URL / テキストから `SharedURL.extract` した URL だけで `SharedPage(url:)` を作る
+- `ShareViewModel(sharedPage:settings:service:)`: `draftFromPage(url:title:imageURL:)`(= `POST /api/items/from-url` に `url`・`title`・`image_url`。`genre_id` は送らない)で下書きを作り、サーバーはページを取りに行かない。title・imageURL が無ければ url だけを送る(サーバーが取りに行く)。駿河屋のようにサーバーから読めないページも、JS が読んだ値で登録できる
+- 画面: 画像(プレビュー)・名前(編集できる)・ジャンルの絵柄のボタン(`GenreIcon` の絵・ジャンル色。サーバーが推定した `genre_id` が最初から選ばれ、推定できなければ未選択)・「追加」(名前・ジャンル・画像がそろうまで押せない)。「追加」は `POST /api/items`(`image_url`・`source_url`)。`genre_guessed` は表示の出し分けに使わない。API の URL とトークンの欄は拡張に出さない
+- ホームの「追加」シートも同じ(URL を貼る → 下書き → 推定ジャンルが選ばれ、1 タップで「追加」)。ジャンルの初期値は 下書きの `genre_id` → ホームで絞っているジャンル → 未選択(以前の「先頭のジャンル」はやめる)。`RegisterViewModel.pasteURL(_:)` が「コピーした URL を追加」(クリップボードは押した瞬間にだけ読む。`http(s)` の URL でなければ false を返し、画面は URL の入力欄を出す)
+
+**画面・配色(Web と同じ。5-2 のトークンを Swift に写す)**
+
+- 色・角丸・ジャンルの絵柄の線画・価格の札・価格の帯・サイトのタイル・長押しメニュー・設定・ジャンル編集は 5-2 の規則のとおり(値は `Color` / `GlassStyle` に集める。ハードコードしない)。絵柄の線画は 5-2 の SVG パスを `Path` に写す(`stroke` 2・`fill` なし)
+- 価格の帯の描画(`PriceBand`): 点の位置は `position`(0〜100。Web の `data-position` と同じ契約)だが、帯の線の上では `fraction`(通常 `position / 100`、両端に 6% の余白)に置く。**全部同額(点が 1 つ、または min == max)のときは中央(0.5)に置き、「安い〜中央」の太線は描かない**(`rangeBar == nil`)。Web は全部同額でも左端に点を置き太線を伸ばしていたので、Web のフォローアップで同じ扱いに揃える(下の「Web に反映する点」)
+- ホーム: 2 列・タイル高 220・価格の札は `HomeTile.priceTag`(`.price("¥880〜")` / `.noListing` は「出品なし」/ nil は出さない)。枠の色は `HomeTile.genreColor`、ジャンルの絵柄のボタンは `Genre.icon`・`Genre.color`
+- 設定: ジャンルの行に絵柄の四角・名前・件数(`SettingsListViewModel.itemCounts`)・「<名前>を編集」。ジャンル編集は `GenreEdit` を `updateGenre(_:edit:)` / `addGenre(_:)` に渡す(色 12 色 = `GenrePalette.swatches`、絵柄 6 つ = `GenreIcon.allCases`、手がかりは `parseClues`)
+- Liquid Glass はシートとツールバーだけ。本文のカード・タイルには使わない(Web の「白いカード + 1px の線」に合わせる)。常時動くアニメーションは入れない
+
+**サイトのマーク**
+
+- `SiteMark.mark(for:)` は、通常はサイト名の先頭 1 文字。**`Yahoo!` で始まる名前は、その後ろの最初の 1 文字**(Yahoo!フリマ → 「フ」、Yahoo!ショッピング → 「シ」)。同じ「Y」が並ばないため
+- `SiteMark.colorHex(for:)` の表: メルカリ `#ff4d6d`・駿河屋 `#e17055`・Yahoo!フリマ `#ef233c`・Yahoo!ショッピング `#2f9e44`(新規)・あみあみ `#00a884`・Amazon `#ff9f1c`・魂ウェブ `#5b4bd6`。無い名前は `#56677d`(muted)
+
+**Web に反映する点(別タスク。今回の iOS では変えない)**
+
+- `web/src/lib/siteMark.ts`: `siteMark` を上の `Yahoo!` の規則にする(フリマ「フ」・ショッピング「シ」)。`SITE_COLORS` に `"Yahoo!ショッピング": "#2f9e44"` を足す。`siteMark.test.ts` と、マークの文字を見ているテスト(`App.detail.test.tsx` の `site-mark`)を合わせる
+- `web/src/lib/band.ts` と詳細の帯: 全部同額のとき点を中央に置き、太線を描かない(いまは `position = 0` で左端 + 太線が全幅)。`data-position` の契約(整数 0〜100・全部同額は 0)は変えない
+
+**実装者への注意(5-3)**
+
+- 新しい型は WishlistCore に置く(View に計算を書かない)。仮置きの実装(「spec-writer の仮置き」とコメントがある関数)を本物にする: `WishlistSettings.fromInfo`・`HomeTile.make`・`HomeViewModel.tiles/isLocalOnly/showsOfflineBadge`・`PriceBand.make`・`SiteMark`・`RegisterViewModel.pasteURL`・`SharedPage.parse`・`ShareViewModel.init(sharedPage:…)`・`SettingsListViewModel.parseClues/itemCounts/addGenre(_:)/updateGenre(_:edit:)`・`APIWishlistService` の `draftFromPage`/ジャンル・商品・下書きの写像(color・icon・match_hosts・match_keywords・summary・genre_guessed)/ジャンルの追加・更新の本文
+- 仮置きの削除: `APIWishlistService.init(baseURL:transport:)` を本体にして `token:` 版を消す、`ImageLoader.make(session:)` を本体にする、`WishlistService` 拡張の既定の `draftFromPage` を消して API 実装で上書きする、`HomeViewModel.needsSettings` と `WishlistSettings.token` を消す
+- `ShareViewModel` の `.needsSettings` は「接続先が未設定」の意味で残す(名前は変えてよい。変えたらテストも合わせる)
+- 既存テストの置換には、各テストの上に「ユーザー決定 2026-10-11 / phase5-spec 5-3」のコメントが付いている。`ConnectionSettingsViewModel`・`UserDefaultsSettingsStore` の旧テスト(SettingsTests.swift)と `AuthPolicyTests.swift` は、型を消すので置き換え済み(`NoAuthTests.swift`・`SettingsTests.swift`)
+- `BuildConfigTests` は実ファイルを読む: `WishlistShare/ExtensionPreprocessing.js`・`WishlistShare-Info.plist`・`Wishlist-Info.plist`・`.gitignore`・`Config/Local.xcconfig.example` を作る・直す。ソースに `Bearer`・`AuthPolicy`・`ConnectionSettingsViewModel`・`WishlistSettingsStore`・`UserDefaultsSettingsStore` の語が残らないこと(コメントの語も含む。言い換える)
+- `make wishlist-ios-gen` は実行済み(生成物は更新済み)。Xcode プロジェクト(`project.pbxproj`)に新しいファイルとビルド構成を足すのは実装者(`make wishlist-ios-xcode-test` で確認)
+
+### 5-3 テスト一覧
+
+`make wishlist-ios-test`(WishlistKit の swift test)。UI の見た目と XCUITest は 5-3 の実装時に足す(下の「UI で見る点」)。「置換」は旧テストの趣旨を新しい仕様で置き換えたもの(各テストの上にコメントあり)。
+
+| 番号             | 受け入れ条件                                                                                                          | テスト                                                                                                                                                                                                      |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| AC-IOS-5-3a-1,2  | どのリクエストにも Authorization を付けない(API・画像)。設定にトークンの項目が無い                                    | `NoAuthTests.swift` / `APIWishlist*Tests`(Bearer の assert を `XCTAssertNil` に置換)/ `APIPhase53Tests` AC-5-3h-1                                                                                           |
+| AC-IOS-5-3b-1〜3 | 接続先は Info.plist(ビルド設定)から。空・未展開・http(s) でない → 未設定                                              | `SettingsTests.swift`(旧 AC-IOS-SET-01〜03 の置換)                                                                                                                                                          |
+| AC-IOS-5-3c-1〜8 | ホームのタイル: ジャンルの色・絵柄、価格の札(ok → ¥A〜 / no_result → 出品なし / それ以外は無し)、オフラインの札と接続先なし | `HomeTileTests.swift` / `HomeViewModelTests` の `testLocalOnly…`・`testRefreshDoesNotCallTheServiceWhenLocalOnly`(旧 needsSettings・AC-SET-01 の置換)/ `OfflineScenarioTests`(維持)                          |
+| AC-IOS-5-3d-1〜6 | 価格の帯: 点の位置 0〜100・最安・同額は中央で太線なし                                                                 | `PriceBandTests.swift`                                                                                                                                                                                      |
+| AC-IOS-5-3e-1〜3 | サイトのマーク: 先頭 1 文字、Yahoo!フリマ「フ」と Yahoo!ショッピング「シ」は別、色の表と fallback                      | `SiteMarkTests.swift`                                                                                                                                                                                       |
+| AC-IOS-5-3f-1〜9 | 追加の流れ: 推定ジャンルが選ばれ 1 タップ、ジャンル null は選ぶまで押せない、画像なしは写真、コピーした URL            | `RegisterFlowTests.swift` / `RegisterViewModelTests`(初期ジャンル・from-url に genre_id を渡さない を置換)                                                                                                  |
+| AC-IOS-5-3g-1〜9 | 共有拡張: JS の結果を読む・title/image_url を from-url に渡す・推定ジャンル・未設定                                    | `ShareFlowTests.swift`(`SharedPageTests`・`ShareFlowTests`)/ `ShareViewModelTests`(トークン未設定・先頭ジャンルの選択を置換)                                                                                |
+| AC-IOS-5-3h-1〜7 | API の写像: from-url の本文(url・title・image_url、genre_id なし)・genre_guessed・ジャンルの色/絵柄/手がかり・summary | `APIPhase53Tests.swift`(既存の API テストの応答 JSON に color・icon・match_*・genre_guessed を足した)                                                                                                       |
+| AC-IOS-5-3i-1〜11 | ジャンル編集: 12 色・6 絵柄・手がかりの区切り・変えた項目だけ PATCH・追加は常に送る・件数・古いキャッシュの読み込み  | `GenreSettingsTests.swift`(`GenrePaletteTests`・`GenreEditTests`・`GenreCacheCompatibilityTests`)                                                                                                           |
+| AC-IOS-5-3j-1〜5 | 共有拡張の JS(`ExtensionPreprocessingJS` の run / finalize、og:image / og:title / document.title / `<img>`)・Info.plist のキー・Local.xcconfig の扱い・トークンの語が残らない | `BuildConfigTests.swift`                                                                                                                                                                                    |
+| (維持)           | 検索ワード・ディープリンク・キャッシュ・価格の推移・公式の販売状況・別名辞書・オフラインの起動                        | 既存の `*Tests.swift`(上記以外は変更なし)                                                                                                                                                                   |
+
+**UI で見る点(実装者が XCUITest か目視で確認。swift test の対象外)**: ホームの 2 列・枠の色・価格の札、オフラインの札、詳細の帯と 3 列のタイル(最安の縁)、「あやしい出品 N」、長押しメニューのぼかし、追加シート(コピーした URL / URL を入力 / 写真)、設定に「接続」の区画が無いこと、共有拡張(JS の結果でプレビューが出る・推定ジャンルが選ばれる・「追加」)。

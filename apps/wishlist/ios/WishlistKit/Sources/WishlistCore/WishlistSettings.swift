@@ -13,6 +13,15 @@ public struct WishlistSettings: Equatable, Sendable {
         self.token = token
     }
 
+    /// 【spec-writer の仮置き】Info.plist のキー(`WISHLIST_API_BASE_URL` ビルド設定を通す。docs/phase5-spec.md 5-3「決めたこと」)。
+    public static let infoKey = "WishlistAPIBaseURL"
+
+    /// 【spec-writer の仮置き】Info.plist(`Bundle.main.infoDictionary`)から接続先を読む。実装者が本体を書く。
+    /// 値が無い・空白だけ・展開されていない `$(WISHLIST_API_BASE_URL)`・http(s) でない → `apiBaseURL = nil`(キャッシュだけで動く)。
+    public static func fromInfo(_ info: [String: Any]?) -> WishlistSettings {
+        WishlistSettings()
+    }
+
     /// http(s) で解釈できるときだけ URL。それ以外は nil。
     public var baseURL: URL? {
         guard let text = apiBaseURL, Deeplink.isHTTPURL(text) else { return nil }
@@ -20,8 +29,9 @@ public struct WishlistSettings: Equatable, Sendable {
     }
 
     /// URL が使えて、トークンが(空白だけでなく)入っているとき true。false なら API を呼ばず設定画面から始める。
+    /// 【spec-writer の仮置き】トークンを見ない（ユーザー決定 2026-10-11）。実装者は `token` ごと消す。
     public var isConfigured: Bool {
-        baseURL != nil && !token.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        baseURL != nil
     }
 }
 

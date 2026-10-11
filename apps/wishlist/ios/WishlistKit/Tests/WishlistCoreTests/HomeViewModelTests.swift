@@ -92,21 +92,22 @@ final class HomeViewModelTests: XCTestCase {
 
     // MARK: - 設定が無いとき
 
-    func testNeedsSettingsWhenTokenOrURLIsMissing() {
-        XCTAssertTrue(makeViewModel(settings: WishlistSettings(apiBaseURL: T.baseURLString, token: "")).0.needsSettings)
-        XCTAssertTrue(makeViewModel(settings: WishlistSettings(apiBaseURL: nil, token: "t")).0.needsSettings)
-        XCTAssertFalse(makeViewModel().0.needsSettings)
+    // 【5-3 で置換】旧 testNeedsSettingsWhenTokenOrURLIsMissing / AC-SET-01(設定が無いと設定画面から始める)。
+    // ユーザー決定 2026-10-11 / phase5-spec 5-3: 設定画面を無くし、接続先が無いときは「保存済みだけで動き、オフラインの札を出す」。
+    func testLocalOnlyWhenThereIsNoBaseURL() {
+        XCTAssertTrue(makeViewModel(settings: T.localOnly).0.isLocalOnly)
+        XCTAssertFalse(makeViewModel().0.isLocalOnly)
     }
 
-    /// AC-SET-01: 設定が無いときは API を呼ばない(キャッシュは出せる)。
-    func testRefreshDoesNotCallTheServiceWhenNotConfigured() async {
+    /// 接続先が無いときは API を呼ばない(キャッシュは出せる)。オフラインの札を出す。
+    func testRefreshDoesNotCallTheServiceWhenLocalOnly() async {
         let (viewModel, service, _) = makeViewModel(
-            cache: InMemoryWishlistCache(items: T.items, genres: T.genres, sites: T.sites),
-            settings: WishlistSettings(apiBaseURL: nil, token: ""))
+            cache: InMemoryWishlistCache(items: T.items, genres: T.genres, sites: T.sites), settings: T.localOnly)
         await viewModel.loadCached()
         await viewModel.refresh()
         XCTAssertEqual(service.calls, [])
         XCTAssertEqual(viewModel.items, T.items)
+        XCTAssertTrue(viewModel.showsOfflineBadge)
     }
 
     // MARK: - 絞り込みと並び

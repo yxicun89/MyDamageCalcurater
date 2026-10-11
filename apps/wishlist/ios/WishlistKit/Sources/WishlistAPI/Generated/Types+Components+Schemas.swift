@@ -38,7 +38,6 @@ extension Components {
             /// - Remark: Generated from `#/components/schemas/Error/code`.
             @frozen public enum CodePayload: String, Codable, Hashable, Sendable, CaseIterable {
                 case badRequest = "bad_request"
-                case unauthorized = "unauthorized"
                 case notFound = "not_found"
                 case unprocessable = "unprocessable"
                 case badGateway = "bad_gateway"
@@ -91,6 +90,16 @@ extension Components {
             public var siteIds: [Components.Schemas.Id]
             /// - Remark: Generated from `#/components/schemas/Genre/aliases`.
             public var aliases: Components.Schemas.AliasGroups?
+            /// ジャンルの色(`#rrggbb`。常に小文字で返す。docs/phase5-spec.md 5-1b)
+            ///
+            /// - Remark: Generated from `#/components/schemas/Genre/color`.
+            public var color: Swift.String
+            /// - Remark: Generated from `#/components/schemas/Genre/icon`.
+            public var icon: Components.Schemas.GenreIcon
+            /// - Remark: Generated from `#/components/schemas/Genre/match_hosts`.
+            public var matchHosts: Components.Schemas.MatchHosts
+            /// - Remark: Generated from `#/components/schemas/Genre/match_keywords`.
+            public var matchKeywords: Components.Schemas.MatchKeywords
             /// Creates a new `Genre`.
             ///
             /// - Parameters:
@@ -100,13 +109,21 @@ extension Components {
             ///   - sortOrder:
             ///   - siteIds: 表示するサイト(表示順)
             ///   - aliases:
+            ///   - color: ジャンルの色(`#rrggbb`。常に小文字で返す。docs/phase5-spec.md 5-1b)
+            ///   - icon:
+            ///   - matchHosts:
+            ///   - matchKeywords:
             public init(
                 id: Components.Schemas.Id,
                 name: Swift.String,
                 queryTemplate: Swift.String,
                 sortOrder: Swift.Int,
                 siteIds: [Components.Schemas.Id],
-                aliases: Components.Schemas.AliasGroups? = nil
+                aliases: Components.Schemas.AliasGroups? = nil,
+                color: Swift.String,
+                icon: Components.Schemas.GenreIcon,
+                matchHosts: Components.Schemas.MatchHosts,
+                matchKeywords: Components.Schemas.MatchKeywords
             ) {
                 self.id = id
                 self.name = name
@@ -114,6 +131,10 @@ extension Components {
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
                 self.aliases = aliases
+                self.color = color
+                self.icon = icon
+                self.matchHosts = matchHosts
+                self.matchKeywords = matchKeywords
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -122,8 +143,39 @@ extension Components {
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
                 case aliases
+                case color
+                case icon
+                case matchHosts = "match_hosts"
+                case matchKeywords = "match_keywords"
             }
         }
+        /// `#rrggbb`(大文字も受け付け、小文字に揃えて保存する)。形式違反は 422
+        ///
+        /// - Remark: Generated from `#/components/schemas/GenreColorInput`.
+        public typealias GenreColorInput = Swift.String
+        /// ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+        ///
+        /// - Remark: Generated from `#/components/schemas/GenreIcon`.
+        @frozen public enum GenreIcon: String, Codable, Hashable, Sendable, CaseIterable {
+            case card = "card"
+            case figure = "figure"
+            case robot = "robot"
+            case goods = "goods"
+            case star = "star"
+            case box = "box"
+        }
+        /// URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+        /// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MatchHosts`.
+        public typealias MatchHosts = [Swift.String]
+        /// 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+        /// 応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/MatchKeywords`.
+        public typealias MatchKeywords = [Swift.String]
         /// - Remark: Generated from `#/components/schemas/GenreCreate`.
         public struct GenreCreate: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/GenreCreate/name`.
@@ -136,6 +188,58 @@ extension Components {
             public var siteIds: [Components.Schemas.Id]?
             /// - Remark: Generated from `#/components/schemas/GenreCreate/aliases`.
             public var aliases: Components.Schemas.AliasGroups?
+            /// 省略したら `#1d5fd1`(強調色の青)
+            ///
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/color`.
+            public struct ColorPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/GenreCreate/color/value1`.
+                public var value1: Components.Schemas.GenreColorInput
+                /// Creates a new `ColorPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.GenreColorInput) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 省略したら `#1d5fd1`(強調色の青)
+            ///
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/color`.
+            public var color: Components.Schemas.GenreCreate.ColorPayload?
+            /// 省略したら `box`
+            ///
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/icon`.
+            public struct IconPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/GenreCreate/icon/value1`.
+                public var value1: Components.Schemas.GenreIcon
+                /// Creates a new `IconPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.GenreIcon) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try decoder.decodeFromSingleValueContainer()
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try encoder.encodeToSingleValueContainer(self.value1)
+                }
+            }
+            /// 省略したら `box`
+            ///
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/icon`.
+            public var icon: Components.Schemas.GenreCreate.IconPayload?
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/match_hosts`.
+            public var matchHosts: Components.Schemas.MatchHosts?
+            /// - Remark: Generated from `#/components/schemas/GenreCreate/match_keywords`.
+            public var matchKeywords: Components.Schemas.MatchKeywords?
             /// Creates a new `GenreCreate`.
             ///
             /// - Parameters:
@@ -144,18 +248,30 @@ extension Components {
             ///   - sortOrder:
             ///   - siteIds:
             ///   - aliases:
+            ///   - color: 省略したら `#1d5fd1`(強調色の青)
+            ///   - icon: 省略したら `box`
+            ///   - matchHosts:
+            ///   - matchKeywords:
             public init(
                 name: Swift.String,
                 queryTemplate: Swift.String? = nil,
                 sortOrder: Swift.Int? = nil,
                 siteIds: [Components.Schemas.Id]? = nil,
-                aliases: Components.Schemas.AliasGroups? = nil
+                aliases: Components.Schemas.AliasGroups? = nil,
+                color: Components.Schemas.GenreCreate.ColorPayload? = nil,
+                icon: Components.Schemas.GenreCreate.IconPayload? = nil,
+                matchHosts: Components.Schemas.MatchHosts? = nil,
+                matchKeywords: Components.Schemas.MatchKeywords? = nil
             ) {
                 self.name = name
                 self.queryTemplate = queryTemplate
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
                 self.aliases = aliases
+                self.color = color
+                self.icon = icon
+                self.matchHosts = matchHosts
+                self.matchKeywords = matchKeywords
             }
             public enum CodingKeys: String, CodingKey {
                 case name
@@ -163,6 +279,10 @@ extension Components {
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
                 case aliases
+                case color
+                case icon
+                case matchHosts = "match_hosts"
+                case matchKeywords = "match_keywords"
             }
         }
         /// - Remark: Generated from `#/components/schemas/GenreUpdate`.
@@ -179,6 +299,14 @@ extension Components {
             public var siteIds: [Components.Schemas.Id]?
             /// - Remark: Generated from `#/components/schemas/GenreUpdate/aliases`.
             public var aliases: Components.Schemas.AliasGroups?
+            /// - Remark: Generated from `#/components/schemas/GenreUpdate/color`.
+            public var color: Components.Schemas.GenreColorInput?
+            /// - Remark: Generated from `#/components/schemas/GenreUpdate/icon`.
+            public var icon: Components.Schemas.GenreIcon?
+            /// - Remark: Generated from `#/components/schemas/GenreUpdate/match_hosts`.
+            public var matchHosts: Components.Schemas.MatchHosts?
+            /// - Remark: Generated from `#/components/schemas/GenreUpdate/match_keywords`.
+            public var matchKeywords: Components.Schemas.MatchKeywords?
             /// Creates a new `GenreUpdate`.
             ///
             /// - Parameters:
@@ -187,18 +315,30 @@ extension Components {
             ///   - sortOrder:
             ///   - siteIds: 渡すと表示するサイトと順序を全件置き換える
             ///   - aliases:
+            ///   - color:
+            ///   - icon:
+            ///   - matchHosts:
+            ///   - matchKeywords:
             public init(
                 name: Swift.String? = nil,
                 queryTemplate: Swift.String? = nil,
                 sortOrder: Swift.Int? = nil,
                 siteIds: [Components.Schemas.Id]? = nil,
-                aliases: Components.Schemas.AliasGroups? = nil
+                aliases: Components.Schemas.AliasGroups? = nil,
+                color: Components.Schemas.GenreColorInput? = nil,
+                icon: Components.Schemas.GenreIcon? = nil,
+                matchHosts: Components.Schemas.MatchHosts? = nil,
+                matchKeywords: Components.Schemas.MatchKeywords? = nil
             ) {
                 self.name = name
                 self.queryTemplate = queryTemplate
                 self.sortOrder = sortOrder
                 self.siteIds = siteIds
                 self.aliases = aliases
+                self.color = color
+                self.icon = icon
+                self.matchHosts = matchHosts
+                self.matchKeywords = matchKeywords
             }
             public enum CodingKeys: String, CodingKey {
                 case name
@@ -206,6 +346,10 @@ extension Components {
                 case sortOrder = "sort_order"
                 case siteIds = "site_ids"
                 case aliases
+                case color
+                case icon
+                case matchHosts = "match_hosts"
+                case matchKeywords = "match_keywords"
             }
         }
         /// 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
@@ -442,6 +586,34 @@ extension Components {
             ///
             /// - Remark: Generated from `#/components/schemas/Item/official_status`.
             public var officialStatus: Components.Schemas.Item.OfficialStatusPayload?
+            /// 目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
+            /// (商品数に依らない回数のクエリで作る)。それ以外の応答では null のことがある
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/summary`.
+            public struct SummaryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/Item/summary/value1`.
+                public var value1: Components.Schemas.ItemSummary
+                /// Creates a new `SummaryPayload`.
+                ///
+                /// - Parameters:
+                ///   - value1:
+                public init(value1: Components.Schemas.ItemSummary) {
+                    self.value1 = value1
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    self.value1 = try .init(from: decoder)
+                }
+                public func encode(to encoder: any Swift.Encoder) throws {
+                    try self.value1.encode(to: encoder)
+                }
+            }
+            /// 目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
+            /// (商品数に依らない回数のクエリで作る)。それ以外の応答では null のことがある
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/Item/summary`.
+            public var summary: Components.Schemas.Item.SummaryPayload?
             /// Creates a new `Item`.
             ///
             /// - Parameters:
@@ -459,6 +631,7 @@ extension Components {
             ///   - updatedAt:
             ///   - watchOfficial: 公式ページ(source_url)の販売状況を夜間に監視するか(フェーズ4-3。docs/phase4-spec.md)。
             ///   - officialStatus: 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す
+            ///   - summary: 目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
             public init(
                 id: Components.Schemas.Id,
                 genreId: Components.Schemas.Id,
@@ -473,7 +646,8 @@ extension Components {
                 createdAt: Foundation.Date,
                 updatedAt: Foundation.Date,
                 watchOfficial: Swift.Bool? = nil,
-                officialStatus: Components.Schemas.Item.OfficialStatusPayload? = nil
+                officialStatus: Components.Schemas.Item.OfficialStatusPayload? = nil,
+                summary: Components.Schemas.Item.SummaryPayload? = nil
             ) {
                 self.id = id
                 self.genreId = genreId
@@ -489,6 +663,7 @@ extension Components {
                 self.updatedAt = updatedAt
                 self.watchOfficial = watchOfficial
                 self.officialStatus = officialStatus
+                self.summary = summary
             }
             public enum CodingKeys: String, CodingKey {
                 case id
@@ -505,6 +680,59 @@ extension Components {
                 case updatedAt = "updated_at"
                 case watchOfficial = "watch_official"
                 case officialStatus = "official_status"
+                case summary
+            }
+        }
+        /// 商品の目安のまとめ。対象は「商品のジャンルの site_ids にあり、site_overrides で外していないサイト」の保存済みの目安(estimates)。
+        /// low・fetched_at は GET /api/items/{id}/estimates の summary_low・summary_fetched_at と同じ値
+        ///
+        ///
+        /// - Remark: Generated from `#/components/schemas/ItemSummary`.
+        public struct ItemSummary: Codable, Hashable, Sendable {
+            /// 対象の目安の low の最小(low を持つサイトが無ければ null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSummary/low`.
+            public var low: Swift.Int?
+            /// ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+            /// failed: それ以外(low が無く、failed のサイトがある)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSummary/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case ok = "ok"
+                case noResult = "no_result"
+                case failed = "failed"
+                case none = "none"
+            }
+            /// ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+            /// failed: それ以外(low が無く、failed のサイトがある)
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSummary/status`.
+            public var status: Components.Schemas.ItemSummary.StatusPayload
+            /// low を持つサイトの fetched_at のうち最も古いもの(low が無ければ null)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemSummary/fetched_at`.
+            public var fetchedAt: Foundation.Date?
+            /// Creates a new `ItemSummary`.
+            ///
+            /// - Parameters:
+            ///   - low: 対象の目安の low の最小(low を持つサイトが無ければ null)
+            ///   - status: ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+            ///   - fetchedAt: low を持つサイトの fetched_at のうち最も古いもの(low が無ければ null)
+            public init(
+                low: Swift.Int? = nil,
+                status: Components.Schemas.ItemSummary.StatusPayload,
+                fetchedAt: Foundation.Date? = nil
+            ) {
+                self.low = low
+                self.status = status
+                self.fetchedAt = fetchedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case low
+                case status
+                case fetchedAt = "fetched_at"
             }
         }
         /// 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
@@ -897,62 +1125,88 @@ extension Components {
             public var url: Swift.String
             /// - Remark: Generated from `#/components/schemas/FromURLRequest/genre_id`.
             public var genreId: Components.Schemas.Id?
+            /// ページから読んだタイトル(iOS の共有拡張が渡す)。渡すとサーバーはページを取りに行かず、これを名前の規則で整えて使う
+            ///
+            ///
+            /// - Remark: Generated from `#/components/schemas/FromURLRequest/title`.
+            public var title: Swift.String?
+            /// ページから読んだ画像の URL(`title` と一緒に使う)。http/https の絶対 URL でなければ下書きの image_url は null
+            ///
+            /// - Remark: Generated from `#/components/schemas/FromURLRequest/image_url`.
+            public var imageUrl: Swift.String?
             /// Creates a new `FromURLRequest`.
             ///
             /// - Parameters:
             ///   - url: http(s) の商品ページ URL
             ///   - genreId:
+            ///   - title: ページから読んだタイトル(iOS の共有拡張が渡す)。渡すとサーバーはページを取りに行かず、これを名前の規則で整えて使う
+            ///   - imageUrl: ページから読んだ画像の URL(`title` と一緒に使う)。http/https の絶対 URL でなければ下書きの image_url は null
             public init(
                 url: Swift.String,
-                genreId: Components.Schemas.Id? = nil
+                genreId: Components.Schemas.Id? = nil,
+                title: Swift.String? = nil,
+                imageUrl: Swift.String? = nil
             ) {
                 self.url = url
                 self.genreId = genreId
+                self.title = title
+                self.imageUrl = imageUrl
             }
             public enum CodingKeys: String, CodingKey {
                 case url
                 case genreId = "genre_id"
+                case title
+                case imageUrl = "image_url"
             }
         }
         /// - Remark: Generated from `#/components/schemas/ItemDraft`.
         public struct ItemDraft: Codable, Hashable, Sendable {
-            /// og:title(無ければ <title>)
+            /// og:title(無ければ <title>)からサイト名の部分を除いたもの(駿河屋の商品ページは空文字)
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDraft/name`.
             public var name: Swift.String
-            /// og:image の絶対 URL(無ければ null)
+            /// og:image の絶対 URL(無ければ null)。bandai-hobby.net は本文の商品画像、駿河屋の商品ページは photo.php の URL
+            ///
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDraft/image_url`.
             public var imageUrl: Swift.String?
             /// - Remark: Generated from `#/components/schemas/ItemDraft/source_url`.
             public var sourceUrl: Swift.String
-            /// リクエストの genre_id をそのまま返す(未指定なら null)
+            /// リクエストの genre_id(あればそのまま)。無ければ推定したジャンル(決まらなければ null)
             ///
             /// - Remark: Generated from `#/components/schemas/ItemDraft/genre_id`.
             public var genreId: Swift.Int64?
+            /// genre_id を推定で決めたら true(リクエストの genre_id を使った・決まらなかったなら false)
+            ///
+            /// - Remark: Generated from `#/components/schemas/ItemDraft/genre_guessed`.
+            public var genreGuessed: Swift.Bool
             /// Creates a new `ItemDraft`.
             ///
             /// - Parameters:
-            ///   - name: og:title(無ければ <title>)
-            ///   - imageUrl: og:image の絶対 URL(無ければ null)
+            ///   - name: og:title(無ければ <title>)からサイト名の部分を除いたもの(駿河屋の商品ページは空文字)
+            ///   - imageUrl: og:image の絶対 URL(無ければ null)。bandai-hobby.net は本文の商品画像、駿河屋の商品ページは photo.php の URL
             ///   - sourceUrl:
-            ///   - genreId: リクエストの genre_id をそのまま返す(未指定なら null)
+            ///   - genreId: リクエストの genre_id(あればそのまま)。無ければ推定したジャンル(決まらなければ null)
+            ///   - genreGuessed: genre_id を推定で決めたら true(リクエストの genre_id を使った・決まらなかったなら false)
             public init(
                 name: Swift.String,
                 imageUrl: Swift.String? = nil,
                 sourceUrl: Swift.String,
-                genreId: Swift.Int64? = nil
+                genreId: Swift.Int64? = nil,
+                genreGuessed: Swift.Bool
             ) {
                 self.name = name
                 self.imageUrl = imageUrl
                 self.sourceUrl = sourceUrl
                 self.genreId = genreId
+                self.genreGuessed = genreGuessed
             }
             public enum CodingKeys: String, CodingKey {
                 case name
                 case imageUrl = "image_url"
                 case sourceUrl = "source_url"
                 case genreId = "genre_id"
+                case genreGuessed = "genre_guessed"
             }
         }
         /// - Remark: Generated from `#/components/schemas/EstimateStatus`.
