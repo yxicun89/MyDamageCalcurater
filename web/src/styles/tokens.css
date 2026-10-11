@@ -105,6 +105,8 @@
   --duration-narrow: 0.3s;
   /* ボタン・タブ・チップの押下・選択の演出の秒数(design.md「動き」: 押下)。 */
   --duration-press: 0.15s;
+  /* シートの出入りの秒数(docs/design.md「動きの決まり(G-05)」: 0.25 秒以内)。 */
+  --duration-sheet: 0.25s;
 
   /* ポップ配色(docs/design.md「ポップ配色」、ADR-0334)。iOS と同じ名前・同じ値。 */
   --brand-primary: #1f5fd6;
@@ -212,6 +214,7 @@
   :root {
     --duration-swap: 0s;
     --duration-press: 0s;
+    --duration-sheet: 0s;
   }
 }
 

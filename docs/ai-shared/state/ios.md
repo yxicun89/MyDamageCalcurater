@@ -70,4 +70,6 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 
 2026-10-11(G-03 Showdown 廃止。ブランチ feat/ios-g03-no-showdown。ADR-0528): 構築の Showdown 形式の取り込み(一覧)・書き出し(編集)を入口ごと廃止。`ShowdownText`・`ShowdownTransfer`・`TeamTextSections` の折りたたみ・関係テスト(Kit 52 件・UITest 10 件)と `TeamLabels` の Showdown 文言を削除。`TeamTextControls.buttonLabel`・`createTeam(members:)` は他で使うので残した。削除テストの一覧は ADR-0501「G-03」。
 
+2026-10-11(G-02 構築 3 体保存で画面が消える報告の調査。ブランチ fix/ios-g02-team-save。ADR-0501「G-02」章): Web の原因(team-svc が技 0 個の moveIds を省く)は iOS の端末内保存には無関係。1・3・5 体目だけ・技 0 個の構築の保存→一覧→開き直し→再保存→構築ピッカー→タイプバランス読込/分析を実物の `LocalTeamStore` で通す回帰テスト `TeamSparseSaveTests`(6 件)を追加。再現せず・実装変更なし。
+
 2026-10-11(G-01 技の行とタイプ順。ブランチ feat/ios-g01-move-rows。ADR-0527): 技の行をタイプ丸アイコン+技名+分類アイコン+威力の 1 行にし(読み上げは全情報)、並びをタイプ順だけにした(`MoveSortOrder`・`MoveSortStore`・チップを廃止。`MoveSort.byType`)。計算画面のみ群見出しつき。Web の ADR-0335 は Web レーンが更新する。
