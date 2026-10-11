@@ -46,7 +46,13 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description URL の OGP から下書きを返す。保存はしない(確定は POST /api/items)。 */
+        /**
+         * @description URL から下書き(名前・画像・ジャンルの推定)を返す。保存はしない(確定は POST /api/items)。規則は docs/phase5-spec.md 5-1c。
+         *     - ページの取得は netguard 経由で 1 回だけ。`title` を渡したとき・駿河屋の商品ページ(`www.suruga-ya.jp/product/detail/<番号>`)のときは取りに行かない
+         *     - 名前は og:title(無ければ `<title>`)からホストごとの規則でサイト名の部分を除いたもの
+         *     - ジャンルは `genre_id` があればそれ。無ければ Genre の `match_keywords`(名前に含む語。最も長い語、同じ長さなら sort_order が小さいもの)、
+         *       次に `match_hosts`(URL のホスト。複数なら sort_order が小さいもの)で推定し、決まらなければ null
+         */
         post: operations["draftItemFromURL"];
         delete?: never;
         options?: never;
@@ -274,7 +280,7 @@ export interface components {
         };
         Error: {
             /** @enum {string} */
-            code: "bad_request" | "unauthorized" | "not_found" | "unprocessable" | "bad_gateway" | "not_implemented" | "internal";
+            code: "bad_request" | "not_found" | "unprocessable" | "bad_gateway" | "not_implemented" | "internal";
             message: string;
         };
         /** @enum {string} */
@@ -288,7 +294,29 @@ export interface components {
             /** @description 表示するサイト(表示順) */
             site_ids: components["schemas"]["ID"][];
             aliases?: components["schemas"]["AliasGroups"];
+            /** @description ジャンルの色(`#rrggbb`。常に小文字で返す。docs/phase5-spec.md 5-1b) */
+            color: string;
+            icon: components["schemas"]["GenreIcon"];
+            match_hosts: components["schemas"]["MatchHosts"];
+            match_keywords: components["schemas"]["MatchKeywords"];
         };
+        /** @description `#rrggbb`(大文字も受け付け、小文字に揃えて保存する)。形式違反は 422 */
+        GenreColorInput: string;
+        /**
+         * @description ジャンルの絵柄(docs/phase5-spec.md 5-1b)。列挙に無い値は 422
+         * @enum {string}
+         */
+        GenreIcon: "card" | "figure" | "robot" | "goods" | "star" | "box";
+        /**
+         * @description URL からジャンルを推定する手がかり(ホスト名。例 `dm.takaratomy.co.jp`)。URL のホストと完全一致(大文字小文字は区別しない)で当たる。
+         *     応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+         */
+        MatchHosts: string[];
+        /**
+         * @description 名前からジャンルを推定する手がかり(語。例 `S.H.Figuarts`)。名前と語をそれぞれ query.Normalize で正規化し、名前が語を含めば当たる。
+         *     応答では常に返す(無ければ `[]`)。作成・更新で渡すと全件置き換え(更新で省略すれば変えない)
+         */
+        MatchKeywords: string[];
         GenreCreate: {
             name: string;
             /** @default {name} {option} */
@@ -297,6 +325,12 @@ export interface components {
             sort_order: number;
             site_ids?: components["schemas"]["ID"][];
             aliases?: components["schemas"]["AliasGroups"];
+            /** @description 省略したら `#1d5fd1`(強調色の青) */
+            color?: components["schemas"]["GenreColorInput"];
+            /** @description 省略したら `box` */
+            icon?: components["schemas"]["GenreIcon"];
+            match_hosts?: components["schemas"]["MatchHosts"];
+            match_keywords?: components["schemas"]["MatchKeywords"];
         };
         GenreUpdate: {
             name?: string;
@@ -305,6 +339,10 @@ export interface components {
             /** @description 渡すと表示するサイトと順序を全件置き換える */
             site_ids?: components["schemas"]["ID"][];
             aliases?: components["schemas"]["AliasGroups"];
+            color?: components["schemas"]["GenreColorInput"];
+            icon?: components["schemas"]["GenreIcon"];
+            match_hosts?: components["schemas"]["MatchHosts"];
+            match_keywords?: components["schemas"]["MatchKeywords"];
         };
         /**
          * @description 表記揺れの辞書(フェーズ4-1。docs/phase4-spec.md)。1 グループは同じものを指す語の集合(例 `["S.H.Figuarts", "SHフィギュアーツ", "フィギュアーツ"]`)。
@@ -369,6 +407,30 @@ export interface components {
             watch_official?: boolean;
             /** @description 公式ページの販売状況(フェーズ4-3)。まだ確かめていなければ null。サーバーは常に返す */
             official_status?: components["schemas"]["OfficialStatus"] | null;
+            /**
+             * @description 目安価格のまとめ(docs/phase5-spec.md 5-1d。ホームの価格の札に使う)。GET /api/items では常に値を返す
+             *     (商品数に依らない回数のクエリで作る)。それ以外の応答では null のことがある
+             */
+            summary?: components["schemas"]["ItemSummary"] | null;
+        };
+        /**
+         * @description 商品の目安のまとめ。対象は「商品のジャンルの site_ids にあり、site_overrides で外していないサイト」の保存済みの目安(estimates)。
+         *     low・fetched_at は GET /api/items/{id}/estimates の summary_low・summary_fetched_at と同じ値
+         */
+        ItemSummary: {
+            /** @description 対象の目安の low の最小(low を持つサイトが無ければ null) */
+            low: number | null;
+            /**
+             * @description ok: low がある / no_result: 取得済みのサイトがすべて no_result / none: 取得済みのサイトが 1 つも無い /
+             *     failed: それ以外(low が無く、failed のサイトがある)
+             * @enum {string}
+             */
+            status: "ok" | "no_result" | "failed" | "none";
+            /**
+             * Format: date-time
+             * @description low を持つサイトの fetched_at のうち最も古いもの(low が無ければ null)
+             */
+            fetched_at: string | null;
         };
         /**
          * @description 公式ページの販売状況。available 販売中 / preorder 予約受付中 / soldout 在庫切れ / ended 販売終了 /
@@ -454,18 +516,24 @@ export interface components {
             /** @description http(s) の商品ページ URL */
             url: string;
             genre_id?: components["schemas"]["ID"];
+            /** @description ページから読んだタイトル(iOS の共有拡張が渡す)。渡すとサーバーはページを取りに行かず、これを名前の規則で整えて使う */
+            title?: string;
+            /** @description ページから読んだ画像の URL(`title` と一緒に使う)。http/https の絶対 URL でなければ下書きの image_url は null */
+            image_url?: string;
         };
         ItemDraft: {
-            /** @description og:title(無ければ <title>) */
+            /** @description og:title(無ければ <title>)からサイト名の部分を除いたもの(駿河屋の商品ページは空文字) */
             name: string;
-            /** @description og:image の絶対 URL(無ければ null) */
+            /** @description og:image の絶対 URL(無ければ null)。bandai-hobby.net は本文の商品画像、駿河屋の商品ページは photo.php の URL */
             image_url?: string | null;
             source_url: string;
             /**
              * Format: int64
-             * @description リクエストの genre_id をそのまま返す(未指定なら null)
+             * @description リクエストの genre_id(あればそのまま)。無ければ推定したジャンル(決まらなければ null)
              */
             genre_id?: number | null;
+            /** @description genre_id を推定で決めたら true(リクエストの genre_id を使った・決まらなかったなら false) */
+            genre_guessed: boolean;
         };
         /** @enum {string} */
         EstimateStatus: "ok" | "failed" | "no_result";
@@ -553,15 +621,6 @@ export interface components {
     responses: {
         /** @description 形式が不正 */
         BadRequest: {
-            headers: {
-                [name: string]: unknown;
-            };
-            content: {
-                "application/json": components["schemas"]["Error"];
-            };
-        };
-        /** @description トークンが無い・違う */
-        Unauthorized: {
             headers: {
                 [name: string]: unknown;
             };
@@ -660,7 +719,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             500: components["responses"]["Internal"];
         };
     };
@@ -688,7 +746,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
             502: components["responses"]["BadGateway"];
@@ -717,7 +774,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
             502: components["responses"]["BadGateway"];
@@ -743,7 +799,6 @@ export interface operations {
                     "application/json": components["schemas"]["Item"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -766,7 +821,6 @@ export interface operations {
                 };
                 content?: never;
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -796,7 +850,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
@@ -830,7 +883,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
@@ -856,7 +908,6 @@ export interface operations {
                     "application/json": components["schemas"]["ItemEstimates"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -881,7 +932,6 @@ export interface operations {
                     "application/json": components["schemas"]["ItemEstimates"];
                 };
             };
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -911,7 +961,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -940,7 +989,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             500: components["responses"]["Internal"];
         };
@@ -965,7 +1013,6 @@ export interface operations {
                     };
                 };
             };
-            401: components["responses"]["Unauthorized"];
             500: components["responses"]["Internal"];
         };
     };
@@ -992,7 +1039,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
         };
@@ -1022,7 +1068,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
@@ -1048,7 +1093,6 @@ export interface operations {
                     };
                 };
             };
-            401: components["responses"]["Unauthorized"];
             500: components["responses"]["Internal"];
         };
     };
@@ -1075,7 +1119,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];
         };
@@ -1105,7 +1148,6 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
-            401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
             422: components["responses"]["Unprocessable"];
             500: components["responses"]["Internal"];

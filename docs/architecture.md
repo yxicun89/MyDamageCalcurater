@@ -62,6 +62,7 @@ flowchart LR
 | Web | 画面(API とオフライン WASM を切り替え)。計算・逆算・タイプバランス・素早さの画面を持つ | Web | [web/](../web/README.md) |
 | iOS | iPhoneアプリ。ダメージ計算・逆算・構築のみ(タイプバランス・素早さ・判定は未着手) | iOS | [ios/](../ios/README.md) |
 | record-svc(計画中) | 計算履歴・お気に入り(TiDB record DB)。calc-svc の計算イベントを NATS JetStream 経由で非同期に受ける | 未定(M2) | — |
+| wishlist(別アプリ) | 欲しいものリストの API・Web(PWA)・夜間の価格取得 CronJob・iOS。namespace `wishlist`、Ingress は `/wishlist`、MySQL は同じインスタンスの DB `wishlist`。ダメ計とは呼び合わない | Wishlist | [apps/wishlist/](../apps/wishlist/README.md) |
 | team-svc(計画中) | 構築 CRUD(TiDB team DB。Showdown 形式入出力) | 未定(M2) | — |
 
 ## データの流れ(マスタ)

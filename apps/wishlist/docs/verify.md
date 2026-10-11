@@ -85,13 +85,11 @@ kubectl -n wishlist rollout status deploy/wishlist-web --timeout=120s
 
 ```sh
 cd "$(git rev-parse --show-toplevel)"
-TOKEN=$(kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d)
 curl -s -o /dev/null -w "web %{http_code}\n" http://localhost:8080/wishlist/
-curl -s -o /dev/null -w "noauth %{http_code}\n" http://localhost:8080/wishlist/api/genres
-curl -s -o /dev/null -w "genres %{http_code}\n" -H "Authorization: Bearer $TOKEN" http://localhost:8080/wishlist/api/genres
+curl -s -o /dev/null -w "genres %{http_code}\n" http://localhost:8080/wishlist/api/genres
 curl -s -o /dev/null -w "calc %{http_code}\n" http://localhost:8080/
 ```
-→ `web 200`、`noauth 401`、`genres 200`、`calc 200`(最後はダメ計の画面。同居しても動いている)。
+→ `web 200`、`genres 200`、`calc 200`(最後はダメ計の画面。同居しても動いている)。
 
 夜間の更新(CronJob)を 1 回だけ手で動かす。商品が登録されていると、実サイトへ取得に行く(1 サイトにつき数回)。
 
@@ -104,19 +102,33 @@ kubectl -n wishlist delete job wishlist-refresher-manual
 ```
 → `refresher: items=<商品数> failed=0 official=<監視数> official_failed=0`(商品が 0 件なら `items=0 failed=0 official=0 official_failed=0`)。
 
+ジャンルの色と絵柄を確認する。
+
+```sh
+curl -s http://localhost:8080/wishlist/api/genres
+```
+→ 各ジャンルに `color`(`#` と 6 桁の小文字)と `icon`、`match_hosts`、`match_keywords` がある。
+
+URL からの下書きを確認する(取得先の実サイトへ 1 回アクセスする)。
+
+```sh
+curl -s -X POST -H "Content-Type: application/json" -d '{"url":"https://dm.takaratomy.co.jp/card/detail?id=dm26rp3-077"}' http://localhost:8080/wishlist/api/items/from-url
+curl -s http://localhost:8080/wishlist/api/genres
+```
+→ 1 つ目は `"genre_guessed":true`、`name` にサイト名と型番が付かない。`genre_id` が、2 つ目の「デュエル・マスターズ」の `id` と同じ。
+
+Yahoo!ショッピングの行を確認する(商品を登録済みで、上の手動 Job のあと)。
+
+```sh
+curl -s "http://localhost:8080/wishlist/api/items/<商品の id>/estimates"
+```
+→ Yahoo!ショッピングの `site_id` の行が、`low` に価格を持つか `status` が `no_result`(`failed` ではない)。
+
 ## 6. ブラウザで確認する(Chrome と Safari)
 
 `http://localhost:8080/wishlist/` を開く。開発者ツールの Network タブを開いておく(赤い行 = 失敗した通信)。
 
-トークンを表示する(画面に入れるため)。
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d; echo
-```
-→ 16 進の文字列が 1 行出る。
-
-1. 初回は設定画面が開く。「APIのURL」は空のまま、「トークン」に上の値を入れて「保存」→「戻る」 → ホームに戻る(画像のグリッドは空、上にジャンルのチップ)。
+1. 初回は設定画面が開く。「APIのURL」は空のまま、「トークン」に任意の文字(`x` など。サーバーは見ない)を入れて「保存」→「戻る」 → ホームに戻る(画像のグリッドは空、上にジャンルのチップ)。
 2. 右下の「+」 → 「写真」で手元の画像を選び、「名前」に `グリス`、「ジャンル」に `S.H.Figuarts` を選んで「登録」 → グリッドに画像が 1 枚出る(文字は出ない)。
 3. 画像をタップ → 下から詳細シートが出る。検索ワードが `S.H.Figuarts グリス`。
 4. 「メルカリ」の行をタップ → 新しいタブでメルカリの検索結果(`S.H.Figuarts グリス`)が開く。「Amazon」の行も同じ。
@@ -152,16 +164,8 @@ tailscale serve status
 ```
 → Tailscale が発行した HTTPS の URL が `http://127.0.0.1:8080` へ転送されていると出る。この URL を控える(tailnet 固有の値なので、この手順書には書かない)。
 
-トークンを表示する(iPhone に入れるため)。
-
-```sh
-cd "$(git rev-parse --show-toplevel)"
-kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d; echo
-```
-→ 16 進の文字列が 1 行出る。
-
 1. iPhone の Safari で `<控えた URL>/wishlist/` を開く → 設定画面が出る。
-2. 「トークン」に上の値を入れて「保存」→「戻る」 → ホームが出る。
+2. 「トークン」に任意の文字(`x` など。サーバーは見ない)を入れて「保存」→「戻る」 → ホームが出る。
 3. 共有 → 「ホーム画面に追加」 → ホーム画面に「欲しいもの」が出る。そこから開くとアドレスバーが無い。
 4. 「+」 → 「写真」で画像を選び、「名前」に `グリス`、「ジャンル」に `S.H.Figuarts` を選んで「登録」 → グリッドに画像が出る。
 5. 画像をタップ → 「メルカリ」の行をタップ → メルカリの検索結果が開く(アプリが入っていればアプリ側)。「Amazon」の行も同じ。
@@ -191,8 +195,8 @@ open apps/wishlist/ios/Wishlist.xcodeproj
 
 1. target `Wishlist` と `WishlistShare` の Signing & Capabilities で、Team に Personal Team を選ぶ(Bundle ID が衝突したら末尾を変える)。
 2. iPhone をつないで Run → アプリが起動する。初回は iPhone の 設定 → 一般 → VPN とデバイス管理 で開発元を信頼する。
-3. アプリの設定画面に、API のベース URL `<控えた URL>/wishlist/` と、トークン(Mac で `kubectl -n wishlist get secret wishlist-api -o jsonpath='{.data.api-token}' | base64 -d` の出力)を入れて保存 → ホームに一覧が出る。
-4. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → 拡張の設定画面で同じ URL とトークンを入れて保存 → プレビュー(名前と画像)が出る。ジャンルを選んで保存 → アプリのホームに画像が増える。
+3. アプリの設定画面に、API のベース URL `<控えた URL>/wishlist/` と、トークン(任意の文字。サーバーは見ない)を入れて保存 → ホームに一覧が出る。
+4. Safari で商品の公式ページを開き、共有 → 「欲しいもの」 → 拡張の設定画面で同じ URL と任意のトークンを入れて保存 → プレビュー(名前と画像)が出る。ジャンルを選んで保存 → アプリのホームに画像が増える。
 5. 画像をタップ → 詳細シートが出る。メルカリの行をタップ → メルカリ(アプリかブラウザ)の検索結果が開く。
 6. 機内モードにしてアプリを開き直す → 一覧と画像が出る。詳細シートのサマリが「オフライン」。
 7. 機内モードを戻し、確認用の商品を長押し → 「削除」 → 「削除する」で消す。

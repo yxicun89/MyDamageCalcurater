@@ -637,11 +637,41 @@ func TestRecommendTypesAgreesWithOracleOnDataChart(t *testing.T) {
 			combatant("9005-000", types(balance.TypeIce), nil, status("move-9012", balance.TypePsychic)),
 		},
 		"normal move only": {combatant("9004-000", types(balance.TypeNormal), nil, physical("move-9005", balance.TypeNormal))},
+		// ADR-0422: three grass members are lopsided against fire, ice, poison, flying and bug.
+		"three grass members are skewed": {
+			combatant("9002-000", types(balance.TypeGrass), nil),
+			combatant("9006-000", types(balance.TypeGrass), nil),
+			combatant("9007-000", types(balance.TypeGrass), nil),
+		},
 	}
 	for name, members := range teams {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			got := recommend(t, chart, members, nil, nil, balance.MaxRecommendationLimit)
+
+			// Skewed attack types (ADR-0422 §1), counted independently from the per-member effectiveness.
+			var skewed []balance.TypeID
+			for _, a := range balance.AllTypes() {
+				weak, resistOrImmune := 0, 0
+				for _, m := range members {
+					r, err := balance.CalculateDefenseWithAbility(chart, a, m.Types, m.Ability)
+					if err != nil {
+						t.Fatal(err)
+					}
+					switch {
+					case r.Effectiveness.Cmp(balance.Effectiveness{Num: 2, Den: 1}) >= 0:
+						weak++
+					case r.Effectiveness.Cmp(balance.Effectiveness{Num: 1, Den: 1}) < 0:
+						resistOrImmune++
+					}
+				}
+				if weak-resistOrImmune >= 2 {
+					skewed = append(skewed, a)
+				}
+			}
+			if typeLabel(got.SkewedAttackTypes) != typeLabel(skewed) {
+				t.Fatalf("SkewedAttackTypes = %v, want %v", got.SkewedAttackTypes, skewed)
+			}
 
 			// Holes.
 			var defenseHoles, offenseHoles []balance.TypeID
@@ -695,6 +725,19 @@ func TestRecommendTypesAgreesWithOracleOnDataChart(t *testing.T) {
 			// Candidates.
 			var oracle []oracleCandidate
 			for _, combo := range allDefenseTypeCombos() {
+				weakToSkewed := false
+				for _, a := range skewed {
+					r, err := balance.CalculateDefense(chart, a, combo)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if r.Multiplier >= balance.MultiplierDouble {
+						weakToSkewed = true
+					}
+				}
+				if weakToSkewed {
+					continue
+				}
 				var defense, offense []balance.TypeID
 				for _, a := range defenseHoles {
 					r, err := balance.CalculateDefense(chart, a, combo)
@@ -806,5 +849,57 @@ func TestRecommendTypesBrokenChartIsAlwaysAnError(t *testing.T) {
 	}
 	if _, err := balance.RecommendTypes(chart, members, nil, nil, balance.MaxRecommendationLimit); err == nil {
 		t.Fatal("err = nil, want the chart failure")
+	}
+}
+
+// ADR-0422 §1: an attack type is skewed when weak - (resist + immune) >= 2. A candidate that takes
+// any skewed attack type at x2 or more is left out (it would add a weakness to an already skewed one).
+//
+// chartSkewedFire: a normal member resists everything but fire and ice; fire hits normal x2 and
+// rock takes fire at x1/2. Only grass takes ice below x1 (and fire x2), so with rock in the party the
+// only defense hole is ice and every candidate (grass and its duals) is weak to fire.
+func chartSkewedFire() recChart {
+	return recChart{}.resistAllExcept(balance.TypeNormal, balance.TypeFire, balance.TypeIce).
+		set(balance.TypeFire, balance.TypeNormal, dbl).
+		set(balance.TypeFire, balance.TypeRock, half).
+		set(balance.TypeIce, balance.TypeGrass, half).
+		set(balance.TypeFire, balance.TypeGrass, dbl)
+}
+
+func normalsAndRock(normals int) []balance.Combatant {
+	members := []balance.Combatant{combatant("9100-000", types(balance.TypeRock), nil)}
+	for i := 0; i < normals; i++ {
+		members = append(members, combatant(fmt.Sprintf("910%d-000", i+1), types(balance.TypeNormal), nil))
+	}
+	return members
+}
+
+func TestRecommendTypesLeavesOutCandidatesWeakToSkewedAttackType(t *testing.T) {
+	t.Parallel()
+
+	// 3 normals weak to fire, 1 rock resists it: 3 - 1 = 2 -> fire is skewed.
+	got := recommend(t, chartSkewedFire(), normalsAndRock(3), nil, nil, balance.MaxRecommendationLimit)
+	if typeLabel(got.SkewedAttackTypes) != "fire" {
+		t.Fatalf("SkewedAttackTypes = %v, want [fire]", got.SkewedAttackTypes)
+	}
+	if typeLabel(got.DefenseHoles) != "ice" {
+		t.Fatalf("DefenseHoles = %v, want [ice]", got.DefenseHoles)
+	}
+	// grass and its duals are weak to fire, except grass/rock where rock halves fire back to x1.
+	if fmt.Sprint(candidateLabels(got.Candidates)) != "[grass/rock]" {
+		t.Fatalf("candidates = %v, want only [grass/rock]", candidateLabels(got.Candidates))
+	}
+}
+
+func TestRecommendTypesKeepsWeakCandidatesWhenResistanceBalancesWeakness(t *testing.T) {
+	t.Parallel()
+
+	// 2 normals weak to fire, 1 rock resists it: 2 - 1 = 1 < 2 -> not skewed, grass stays.
+	got := recommend(t, chartSkewedFire(), normalsAndRock(2), nil, nil, balance.MaxRecommendationLimit)
+	if len(got.SkewedAttackTypes) != 0 {
+		t.Fatalf("SkewedAttackTypes = %v, want none (2 weak - 1 resist)", got.SkewedAttackTypes)
+	}
+	if typeLabel(findCandidate(t, got, "grass").DefenseCovered) != "ice" {
+		t.Errorf("grass should be a candidate while nothing is skewed")
 	}
 }

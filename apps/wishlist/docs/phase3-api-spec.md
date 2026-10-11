@@ -1,5 +1,7 @@
 # wishlist フェーズ3(目安価格)API の受け入れ条件
 
+> フェーズ5で、認証(5-1a)と Yahoo!ショッピング API の Fetcher(5-1e。検索ページの scrape に替えた)は [phase5-spec.md](phase5-spec.md) が置き換える。以下の該当する条件は履歴。
+
 仕様の正は [../CLAUDE.md](../CLAUDE.md)(§6 目安価格・§7 DB・§8 API・§11 k8s・§12 フェーズ3・§13 開発ルール)、設計は [design.md](design.md)、
 API 契約は [../api/openapi.yaml](../api/openapi.yaml)。書き方はフェーズ1の [phase1-api-spec.md](phase1-api-spec.md) に合わせる。
 テストは `apps/wishlist/api` 配下(`make wishlist-test`。MySQL 実装は `make wishlist-test-mysql`)。

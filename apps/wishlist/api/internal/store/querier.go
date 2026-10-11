@@ -30,7 +30,8 @@ type Querier interface {
 	InsertGenreSite(ctx context.Context, arg InsertGenreSiteParams) error
 	InsertItemSiteOverride(ctx context.Context, arg InsertItemSiteOverrideParams) error
 	InsertListing(ctx context.Context, arg InsertListingParams) error
-	ListEstimatesByItem(ctx context.Context, itemID int64) ([]ListEstimatesByItemRow, error)
+	ListEstimates(ctx context.Context) ([]Estimate, error)
+	ListEstimatesByItem(ctx context.Context, itemID int64) ([]Estimate, error)
 	ListGenreAliases(ctx context.Context) ([]GenreAlias, error)
 	ListGenreAliasesByGenre(ctx context.Context, genreID int64) ([]GenreAlias, error)
 	ListGenreSites(ctx context.Context) ([]GenreSite, error)

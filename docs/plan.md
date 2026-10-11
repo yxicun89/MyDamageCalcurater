@@ -4,12 +4,14 @@
 作業する AI は、タスク開始時に `[~]`、完了時に `[x]` へ更新してからコミットする。
 完了したタスクの経過(critic の往復・テスト件数・実装の詳細)と解決済みのブロッカーは [plan-archive.md](plan-archive.md) に移す。plan.md と区画のファイル(`docs/plan/`)には、各タスクの1行の状態と未完了の受け入れ条件だけを置く。issue にした軽微指摘は issue を正とし、ここには書かない(二重管理しない)。
 
+別アプリ「欲しいものリスト」(Wishlist レーン)の計画と進み具合は、このファイルではなく `apps/wishlist/CLAUDE.md`(§12 フェーズ)と `docs/ai-shared/state/wishlist.md` にある。
+
 ## 区画(docs/plan/)
 
 タスクの行は区画ごとのファイルにある(ADR-0172。レーンの PR が同じファイルで衝突しないため)。このファイルにはタスクの行を置かない。
 
 - 自分のレーンが担当する区画のファイルの、自分のレーンの行だけを編集する(他レーンの行は整形・並べ替えしない)。新しいタスクは区画の末尾にまとめて足さず、自分のレーンの行の近くに足す。
-- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。`<レーン>` は `docs/ai-shared/state/` のファイル名と同じ(data〈ダメージ計算・データ〉・api・web・ios・type-balance・speed・judge・ops。無ければ同じ形で新規作成する)(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
+- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。`<レーン>` は `docs/ai-shared/state/` のファイル名と同じ(data〈ダメージ計算・データ〉・api・web・ios・type-balance・speed・judge・ops・wishlist。無ければ同じ形で新規作成する)(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
 - 見出しは分割前の plan.md のまま。「docs/plan.md「SP: 素早さ比較」」「plan.md AJ4」のような既存の参照は、この表から区画のファイルを引く。
 - 「最初の未完了タスク」は、この表の上から順に区画のファイルを見て探す。整合は `scripts/check-plan.sh`(`make lint`)で検査する。
 
@@ -22,8 +24,10 @@
 | SP: 素早さ比較 | [docs/plan/speed.md](plan/speed.md) |
 | JD: 判定 | [docs/plan/judge.md](plan/judge.md) |
 | AJ: 調整 | [docs/plan/adjust.md](plan/adjust.md) |
+| CB: 連続技の計算(仕様の提案。判定の作り直し) | [docs/plan/combo-calc.md](plan/combo-calc.md) |
 | DOC: 文書 | [docs/plan/doc.md](plan/doc.md) |
 | M4: 運用 | [docs/plan/m4.md](plan/m4.md) |
+| ARCH: アーキテクチャの採用(ヘキサゴナル。段階計画) | [docs/plan/architecture-adoption.md](plan/architecture-adoption.md) |
 | 後続: 要件との対応 | [docs/plan/followups.md](plan/followups.md) |
 | ブロッカー | [docs/plan/blockers.md](plan/blockers.md)(既存分)・[docs/plan/blockers/](plan/blockers/)(新規分。レーン別) |
 | 改善要望 | [docs/plan/improvements.md](plan/improvements.md)(既存分)・[docs/plan/improvements/](plan/improvements/)(新規分。レーン別) |

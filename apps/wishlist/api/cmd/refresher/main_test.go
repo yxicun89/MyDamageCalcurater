@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -18,7 +19,9 @@ func envOf(m map[string]string) func(string) string {
 
 const goodDSN = "wishlist:pw@tcp(mysql.pokecalc.svc.cluster.local:3306)/wishlist?multiStatements=true&loc=UTC"
 
-// AC-C6: 設定。WISHLIST_DATABASE_DSN は必須(parseTime を付け multiStatements を外す)。WISHLIST_YAHOO_APPID は任意。
+// AC-C6: 設定。WISHLIST_DATABASE_DSN は必須(parseTime を付け multiStatements を外す)。
+// WISHLIST_YAHOO_APPID は 5-1e で読まなくなった(ユーザー決定 2026-10-11。以前は「任意で、前後の空白を除いて読む」を確かめていた)。
+// 残っていても設定に入らない。
 func TestLoadConfig(t *testing.T) {
 	c, err := loadConfig(envOf(map[string]string{"WISHLIST_DATABASE_DSN": goodDSN, "WISHLIST_YAHOO_APPID": " unit-test-appid "}))
 	if err != nil {
@@ -31,13 +34,12 @@ func TestLoadConfig(t *testing.T) {
 	if !cfg.ParseTime || cfg.MultiStatements || cfg.DBName != "wishlist" || cfg.Loc.String() != "UTC" {
 		t.Errorf("DSN = %+v", cfg)
 	}
-	if c.YahooAppID != "unit-test-appid" {
-		t.Errorf("YahooAppID = %q", c.YahooAppID)
+	if strings.Contains(fmt.Sprintf("%+v", c), "unit-test-appid") {
+		t.Errorf("設定に appid が入っている: %+v", c)
 	}
 
-	c, err = loadConfig(envOf(map[string]string{"WISHLIST_DATABASE_DSN": goodDSN}))
-	if err != nil || c.YahooAppID != "" {
-		t.Errorf("appid なし = %+v, %v", c, err)
+	if _, err = loadConfig(envOf(map[string]string{"WISHLIST_DATABASE_DSN": goodDSN})); err != nil {
+		t.Errorf("appid なし = %v", err)
 	}
 
 	for name, v := range map[string]string{"無い": "", "空白だけ": "  "} {

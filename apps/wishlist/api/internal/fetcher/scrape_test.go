@@ -119,6 +119,25 @@ var scrapeCases = []scrapeFetcher{
 	},
 }
 
+// yahooShoppingCase は Yahoo!ショッピングの検索ページ(5-1e)。init で scrapeCases に足す(fixture の 18 件は yahoo_test.go)。
+func init() {
+	scrapeCases = append(scrapeCases, scrapeFetcher{
+		name: "yahooshopping", newF: fetcher.NewYahooShopping, fixture: "yahoo_shopping.html",
+		template: base + "/search/{q}/0/?X=2",
+		wantURI:  "/search/" + qTest + "/0/?X=2",
+		want:     yahooShoppingWant,
+		empty:    shoppingPage(),
+		// サイトが価格の安い順(X=2)で返すので、サイトの並びのまま上位 20 件。
+		gen: func(n int) string {
+			var items []string
+			for i := 1; i <= n; i++ {
+				items = append(items, shoppingItem(fmt.Sprintf("id%d", i), fmt.Sprintf("商品 %d", i), i*100))
+			}
+			return shoppingPage(items...)
+		},
+	})
+}
+
 func furimaItem(id, title string, price int, status string) string {
 	return fmt.Sprintf(`{"id":%q,"title":%q,"price":%d,"thumbnailImageUrl":"https://img.example/%s.jpg","itemStatus":%q,"condition":"new"}`, id, title, price, id, status)
 }
@@ -517,7 +536,8 @@ func siteOf(id int64, ft item.FetchType, tmpl string) fetcher.Site {
 //   - scrape は www.cardrush-dm.jp・slist.amiami.jp・paypayfleamarket.yahoo.co.jp・www.suruga-ya.jp だけ(大文字小文字は区別しない・ポートは無視)
 //   - 未対応のホストの scrape は取得しない(未実装)
 //   - headless・link_only は、ホストが対応済みでも取得しない
-//   - api は fetch_type だけ(appid があるときだけ)
+//   - Yahoo!ショッピング(shopping.yahoo.co.jp)は scrape(5-1e。以前の api・appid の Fetcher は消した。ユーザー決定 2026-10-11)
+//   - api は使わない(appid の有無に依らない)
 //   - テンプレートが読めない scrape は取得しない
 func TestRegistry_ForSite(t *testing.T) {
 	cases := []struct {
@@ -541,12 +561,14 @@ func TestRegistry_ForSite(t *testing.T) {
 		{"headless でホストが Yahoo!フリマ", siteOf(13, item.FetchHeadless, furimaTemplate), "", false},
 		{"link_only でホストがカードラッシュ", siteOf(14, item.FetchLinkOnly, cardrushTemplate), "", false},
 		{"link_only の Amazon", siteOf(15, item.FetchLinkOnly, amazonTemplate), "", false},
-		{"api は appid なしだと使えない", siteOf(16, item.FetchAPI, shoppingTemplate), "", false},
-		{"api は appid ありで使える(ホストは見ない)", siteOf(17, item.FetchAPI, shoppingTemplate), "unit-test-appid", true},
+		{"api は使えない(5-1e)", siteOf(16, item.FetchAPI, shoppingTemplate), "", false},
+		{"Yahoo!ショッピングは scrape(5-1e)", siteOf(17, item.FetchScrape, shoppingTemplate), "", true},
+		{"Yahoo!ショッピングでも headless は取得しない", siteOf(18, item.FetchHeadless, shoppingTemplate), "", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			r := fetcher.NewRegistry(fetcher.Config{YahooAppID: c.appid})
+			_ = c.appid // 5-1e で appid を読まなくなった(列は残しているが使わない)
+			r := fetcher.NewRegistry(fetcher.Config{})
 			f, ok := r.ForSite(c.site)
 			if ok != c.want || (ok && f == nil) {
 				t.Errorf("ForSite = %v, %v; want ok=%v", f, ok, c.want)
@@ -557,7 +579,7 @@ func TestRegistry_ForSite(t *testing.T) {
 
 // AC-S11: For(fetch_type) は従来どおり(scrape・headless はホストが分からないので使えない)。
 func TestRegistry_ForTypeUnchangedForScrape(t *testing.T) {
-	r := fetcher.NewRegistry(fetcher.Config{YahooAppID: "unit-test-appid"})
+	r := fetcher.NewRegistry(fetcher.Config{})
 	for _, ft := range []item.FetchType{item.FetchScrape, item.FetchHeadless, item.FetchLinkOnly} {
 		if _, ok := r.For(ft); ok {
 			t.Errorf("For(%s) が使える", ft)

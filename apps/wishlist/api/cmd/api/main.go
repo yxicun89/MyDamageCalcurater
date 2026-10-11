@@ -1,6 +1,6 @@
 // Command api は wishlist の API サーバーと DB マイグレーション。
 //
-//	api serve        HTTP サーバー(PORT・WISHLIST_DATABASE_DSN・WISHLIST_API_TOKEN・WISHLIST_IMAGE_DIR・任意で WISHLIST_YAHOO_APPID)
+//	api serve        HTTP サーバー(PORT・WISHLIST_DATABASE_DSN・WISHLIST_IMAGE_DIR)
 //	api migrate up   migrations を適用(WISHLIST_DATABASE_DSN。DSN に multiStatements=true を足す。docs/design.md W-09)
 package main
 
@@ -50,10 +50,7 @@ var errMissingEnv = errors.New("missing required environment variable")
 type serveConfig struct {
 	Port     string
 	DSN      string // serveDSN を通した後の DSN
-	Token    string
 	ImageDir string
-	// YahooAppID は Yahoo!ショッピング API の appid(WISHLIST_YAHOO_APPID。任意。前後の空白を除く。空なら api 型のサイトは取得しない)。
-	YahooAppID string
 }
 
 // migrateConfig は migrate の設定。
@@ -96,15 +93,11 @@ func run(args []string, getenv func(string) string, stdout, stderr io.Writer) in
 	return 2
 }
 
-// loadServeConfig は serve の設定を環境変数から読む。WISHLIST_DATABASE_DSN・WISHLIST_API_TOKEN・WISHLIST_IMAGE_DIR は必須
+// loadServeConfig は serve の設定を環境変数から読む。WISHLIST_DATABASE_DSN・WISHLIST_IMAGE_DIR は必須
 // (空白だけも無いとみなす。errMissingEnv を包み、どの変数かをメッセージに含める)。PORT は省略時 DefaultPort、
 // 数字でない・1〜65535 の外ならエラー。
 func loadServeConfig(getenv func(string) string) (serveConfig, error) {
 	dsn, err := requireEnv(getenv, "WISHLIST_DATABASE_DSN")
-	if err != nil {
-		return serveConfig{}, err
-	}
-	token, err := requireEnv(getenv, "WISHLIST_API_TOKEN")
 	if err != nil {
 		return serveConfig{}, err
 	}
@@ -124,7 +117,7 @@ func loadServeConfig(getenv func(string) string) (serveConfig, error) {
 	if err != nil {
 		return serveConfig{}, err
 	}
-	return serveConfig{Port: port, DSN: sdsn, Token: token, ImageDir: dir, YahooAppID: strings.TrimSpace(getenv("WISHLIST_YAHOO_APPID"))}, nil
+	return serveConfig{Port: port, DSN: sdsn, ImageDir: dir}, nil
 }
 
 // loadMigrateConfig は migrate の設定を読む。WISHLIST_DATABASE_DSN だけが必須。
@@ -238,14 +231,14 @@ func serve(cfg serveConfig, stderr io.Writer) error {
 	remote := ogp.NewFetcher(netguard.NewClient(netguard.Options{}))
 	// 裏の更新はシグナルの ctx で動かし、終了時に止めて待つ(リクエストの ctx は使わない)。
 	est := refresh.New(refresh.Deps{
-		Items: repo, Prices: repo, Fetchers: fetcher.NewRegistry(fetcher.Config{YahooAppID: cfg.YahooAppID}),
+		Items: repo, Prices: repo, Fetchers: fetcher.NewRegistry(fetcher.Config{}),
 		Logger: log, BaseContext: ctx,
 	})
 	defer func() {
 		stop()
 		est.Wait()
 	}()
-	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: cfg.Token, Logger: log})
+	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Logger: log})
 
 	srv := &http.Server{
 		Addr:              net.JoinHostPort("", cfg.Port),

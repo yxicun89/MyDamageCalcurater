@@ -71,6 +71,10 @@ const REQUIRED_POP_TOKENS = [
   "info.soft",
   "danger.soft",
   "on.danger",
+  "matchup.resist",
+  "matchup.resist.soft",
+  "matchup.immune",
+  "matchup.immune.soft",
   "surface.card",
   "bg.gradient-start",
   "bg.gradient-end",
@@ -159,6 +163,13 @@ const CONTRAST_PAIRS: readonly (readonly [string, string, number, string])[] = [
   ["danger", "surface.card", WCAG_NORMAL_TEXT_MIN_CONTRAST, "エラーの文字(カードの上)"],
   ["danger", "danger.soft", WCAG_NORMAL_TEXT_MIN_CONTRAST, "エラーの案内(淡い塗りの上)"],
   ["on.danger", "danger", WCAG_NORMAL_TEXT_MIN_CONTRAST, "危険ボタンの文字"],
+  // ADR-0422 §3: 相性の色(耐性 = 水色系、無効 = 灰。弱点は danger)。
+  ["matchup.resist", "matchup.resist.soft", WCAG_NORMAL_TEXT_MIN_CONTRAST, "耐性の文字(淡い塗りの上)"],
+  ["matchup.resist", "surface.card", WCAG_NORMAL_TEXT_MIN_CONTRAST, "耐性の文字(カードの上)"],
+  ["matchup.resist", "bg.base", WCAG_NORMAL_TEXT_MIN_CONTRAST, "耐性の文字(ページの背景)"],
+  ["matchup.immune", "matchup.immune.soft", WCAG_NORMAL_TEXT_MIN_CONTRAST, "無効の文字(淡い塗りの上)"],
+  ["matchup.immune", "surface.card", WCAG_NORMAL_TEXT_MIN_CONTRAST, "無効の文字(カードの上)"],
+  ["matchup.immune", "bg.base", WCAG_NORMAL_TEXT_MIN_CONTRAST, "無効の文字(ページの背景)"],
   ...(
     [
       "bg.gradient-start",

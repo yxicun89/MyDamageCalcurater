@@ -304,4 +304,6 @@ func RunPriceRepositoryContract(t *testing.T, newRepo func(t *testing.T) FullRep
 	})
 
 	runPriceHistoryContract(t, newRepo)
+	// フェーズ5 5-1d: 一覧に載せる目安のまとめ(docs/phase5-spec.md)。
+	runListSummaryContract(t, newRepo)
 }
