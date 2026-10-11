@@ -6,7 +6,7 @@ import { balanceErrorText, balanceScreenText } from "../i18n/ja";
 import type { MasterData } from "../master/types";
 import { Icon, type IconName } from "../ui/Icon";
 import { PokemonIcon } from "../images/PokemonIcon";
-import { TypeList } from "../screens/balanceCells";
+import { TypeList } from "./balanceCells";
 import type { SpeciesResolutions } from "../screens/speciesResolution";
 import type { Schemas } from "./types";
 
