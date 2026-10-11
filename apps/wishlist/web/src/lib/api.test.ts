@@ -126,13 +126,23 @@ describe("画像・ベース URL の解決", () => {
     expect(normalizeBaseUrl("https://h.example/wishlist")).toBe("https://h.example/wishlist/");
     expect(normalizeBaseUrl("https://h.example/wishlist/")).toBe("https://h.example/wishlist/");
   });
-  it("defaultBaseUrl は baseURI のディレクトリ(クエリ・ハッシュ・ファイル名を除く)", () => {
-    expect(defaultBaseUrl("https://h.example/wishlist/")).toBe("https://h.example/wishlist/");
-    expect(defaultBaseUrl("https://h.example/wishlist/?a=1#b")).toBe("https://h.example/wishlist/");
-    expect(defaultBaseUrl("https://h.example/wishlist/index.html")).toBe("https://h.example/wishlist/");
+  it("defaultBaseUrl は base が ./ なら baseURI のディレクトリ(クエリ・ハッシュ・ファイル名を除く)", () => {
+    expect(defaultBaseUrl("https://h.example/wishlist/", "./")).toBe("https://h.example/wishlist/");
+    expect(defaultBaseUrl("https://h.example/wishlist/?a=1#b", "./")).toBe("https://h.example/wishlist/");
+    expect(defaultBaseUrl("https://h.example/wishlist/index.html", "./")).toBe("https://h.example/wishlist/");
   });
-  it("defaultBaseUrl は引数なしで document.baseURI を使う", () => {
-    expect(defaultBaseUrl()).toBe(new URL("./", document.baseURI).href);
+  it("defaultBaseUrl は引数なしで document.baseURI とビルドの base(/wishlist/)を使う", () => {
+    expect(defaultBaseUrl()).toBe(new URL(import.meta.env.BASE_URL, document.baseURI).href);
+  });
+  // 末尾の / なしの /wishlist で開くと、./ は / に解決され、API がダメ計の gateway に行って「ルートが無い」になった(2026-10-11)。
+  it("defaultBaseUrl は末尾の / なし(/wishlist)で開いても /wishlist/ を返す", () => {
+    expect(defaultBaseUrl("https://h.example/wishlist", "/wishlist/")).toBe("https://h.example/wishlist/");
+    expect(defaultBaseUrl("https://h.example/wishlist?a=1", "/wishlist/")).toBe(
+      "https://h.example/wishlist/",
+    );
+  });
+  it("defaultBaseUrl は base が相対(./)なら baseURI のディレクトリ", () => {
+    expect(defaultBaseUrl("https://h.example/x/index.html", "./")).toBe("https://h.example/x/");
   });
 });
 
