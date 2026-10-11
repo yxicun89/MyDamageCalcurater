@@ -9,7 +9,8 @@ import { statLetterJa } from "./common";
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
  */
 export const judgeClientText = {
-  unavailable: "判定の API に接続できません",
+  unavailable:
+    "判定の API に接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
 } as const;
 
 /**
@@ -26,10 +27,12 @@ export const judgeErrorText = {
   unknown_move: "この技の ID はマスタにありません",
   unknown_nature: "この性格はマスタにありません",
   request_too_large: "入力が大きすぎます",
-  upstream_unavailable: "判定に必要なサービスに接続できません",
+  upstream_unavailable:
+    "判定に必要なサービスが起動中か、一時的に使えません。しばらくしてからもう一度お試しください",
   internal_error: "判定に失敗しました",
   /** Web 側のコード(judgeClient.ts。通信できない・応答が読めない)。 */
-  judge_unavailable: "判定の API に接続できません",
+  judge_unavailable:
+    "判定の API に接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
 } as const;
 
 /**

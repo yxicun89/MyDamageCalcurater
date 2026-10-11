@@ -713,7 +713,8 @@ describe("A8 エラーでも表示が壊れない", () => {
       });
     });
     const alert = within(tableRegion()).getByRole("alert");
-    expect(alert).toHaveTextContent("素早さのサーバーに接続できません");
+    // 原因が分かる文言(起動中か一時的に使えない)に更新。「計算に失敗」ではない点は従来どおり。
+    expect(alert).toHaveTextContent("素早さのサーバーが起動中か、一時的に使えません");
     expect(alert).not.toHaveTextContent("計算に失敗");
   });
 
