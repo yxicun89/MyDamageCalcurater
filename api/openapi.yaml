@@ -689,6 +689,51 @@ paths:
         default:
           $ref: '#/components/responses/Error'
 
+  /api/calc/combo:
+    post:
+      tags: [calc]
+      operationId: calcCombo
+      summary: 連続技(技を 2〜3 手続けて使う)の計算
+      description: |
+        ダメージ計算と同じ攻撃側・防御側・場で、技を最大 3 手続けて使ったときの手ごとのランク・ダメージ・行動順と、
+        合計ダメージ・倒せる確率・相手の攻撃を耐える確率を返す(ADR-0252・ADR-0179 追記 CB-3・docs/plan/combo-calc.md)。
+        - 各手は、その手の開始時のランク(前の手までの確率 100% のランク変化を足し、-6..+6 に収めた値)で計算する。
+          各手の `damage` は、そのランクを入れた `POST /api/calc` の応答と同じ値(新しい式を持たない)。
+        - 確率 100% 未満の追加効果は計算にも印にも出さない(combo-calc.md §7 Q4 (b))。
+        - 場(天候・フィールド・壁)は全手で同じ。相手は満タンとして各手を計算する(残り HP で変わるものには印)。
+        - 検査の順(ADR-0208 §3・ADR-0250 §5 と同じ考え方): `steps` の件数(1〜3)の範囲外は ID の解決より前に 400 `invalid_input`
+          → 列挙(format・opponentSpeed・天候・フィールド・状態異常)は 400 `invalid_enum` → ID の解決(400 `unknown_species` /
+          `unknown_move` 等)→ 入力の検証(ランク変化の無い変化技の手・変化技の相手の技・多段の回数は 400 `invalid_input`)。
+          エラーの形は `/api/calc` と同じ。
+        - ステートレスで、計算イベント(record)は発行しない(CLAUDE.md 絶対ルール5。record・team・NATS が止まっていても成功する)。
+      parameters:
+        - $ref: '#/components/parameters/DeviceId'
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ComboRequest' }
+      responses:
+        '200':
+          description: 連続技の結果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ComboResult' }
+        '400':
+          $ref: '#/components/responses/Error'
+        '500':
+          $ref: '#/components/responses/Error'
+        '503':
+          description: |
+            下流が使えない。calc-svc がマスタを参照できない(`master_unavailable`)、または
+            gateway から calc-svc に届かない、または calc-svc 自身の過負荷・締め切り超過(`upstream_unavailable`。ADR-0202・ADR-0801)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        default:
+          $ref: '#/components/responses/Error'
+
   /api/record/frequent-opponents:
     get:
       tags: [record]
@@ -1226,7 +1271,7 @@ components:
         | invalid_json | JSON として壊れている / 型が合わない(整数のフィールドに小数を含む) | 400 |
         | unknown_field | 契約にないフィールド | 400 |
         | invalid_enum | 列挙(形式・タイプ・天候・フィールド・状態異常)の値が未知 | 400 |
-        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
+        | invalid_input | 入力検証(SP の範囲・合計、ランク、レベル、性格が HP など)。候補・観測の件数上限(`maxItems`)超過、持ち物候補の重複(`uniqueItems`)、`maxCandidates` の範囲外を含む(ADR-0208)。calc-svc では `sp` と StatBlock の6キー(null 値を含む)の欠落も含む(ADR-0200 §4)。`getMovesByIds` の `ids` の件数超過・欠落も含む。調整(`/api/calc/adjust/*`)の発数・しきい値・補正・上限(ceiling)の範囲外、変化技での探索、下限が上限を超える配分(ADR-0250)も含む。連続技(`/api/calc/combo`)の手の件数の範囲外・ランク変化の無い変化技の手・変化技の相手の技(ADR-0252)も含む。team では構築名の長さ・メンバー数・技の重複・SP の範囲と合計・1端末が持てる構築の上限(ADR-0213 §2)も含む。record のお気に入りではラベルの長さ・個体の範囲・speciesKey の形式・1端末が持てるお気に入りの上限(ADR-0227 §3)も含む | 400 |
         | unknown_preset | 未知の防御側プリセット | 400 |
         | duplicate_preset | 防御側プリセットの重複 | 400 |
         | invalid_preset | 防御側プリセットの定義が不正 | 400 |
@@ -1448,6 +1493,14 @@ components:
             技の機構の中身(多段の回数・固定ダメージ・一撃必殺・攻撃/防御に使う能力値。ADR-0142・ADR-0143 §6)。値と形は内部 API の
             `MasterMove.mechanismParams` と同じ。中身の無い技は**キーごと省く**(null を返さない)。古いサーバーも返さない。
             WASM の技の `mechanismParams` にそのまま渡せる(渡さないと、中身の要る機構に未対応の印が付く)。
+        effect:
+          allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
+          description: |
+            技の追加効果のうち**確率 100%** のランク変化(move_effects の JSON。`Chance`・`Target`〈self / target〉・`Stages`。
+            値と形は内部 API の `MasterMove.effect` と同じ。ADR-0107・ADR-0252)。確率 100% 未満の効果・効果の無い技は**キーごと省く**
+            (連続技は確率 100% の効果だけを扱う。combo-calc.md §7 Q4 (b))。Web の技の候補で「ランクが変わる技」を示すために使う。
+            pokedex-svc は返す前に共通マスタ(`services/internal/master.DecodeMoveEffect`)で厳格に検証し、検証を通らない効果を
+            含む応答は返さない(503 `master_unavailable`)。古いサーバーは返さない。
         rule:
           allOf: [ { $ref: '#/components/schemas/MasterEffect' } ]
           description: |
@@ -2388,6 +2441,231 @@ components:
         unsupported:
           type: array
           description: 目標の計算に付いた「未対応」の印(ADR-0123・ADR-0215)。SP によらず同じ。印なしは空配列
+          items: { $ref: '#/components/schemas/UnsupportedMark' }
+
+    ComboStepInput:
+      type: object
+      description: 連続技の 1 手(ADR-0252)
+      required: [moveId]
+      properties:
+        moveId:
+          type: string
+          description: |
+            使う技。変化技は確率 100% のランク変化を持つもの(りゅうのまい等)だけ置ける(持たない変化技は 400 `invalid_input`)
+        critical: { type: boolean, default: false, description: 急所 }
+        hits:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: 多段の回数(`CalcBattleState.hits` と同じ意味・同じ検査)。省略は既定の回数
+
+    ComboOpponentSpeed:
+      type: string
+      description: |
+        相手の素早さの扱い。`unknown` は相手の素早さを使わない(優先度が同じ手の行動順は `depends_on_opponent_speed` とし、
+        `line` を見る)。`from_defender` は防御側の個体(SP・性格・持ち物・特性・ランク)から相手の素早さを求める
+      enum: [unknown, from_defender]
+      x-enum-varnames: [ComboOpponentSpeedUnknown, ComboOpponentSpeedFromDefender]
+
+    ComboSpeedField:
+      type: object
+      description: 行動順に効く場の効果(判定 ADR-0702 と同じ意味)。全手で同じ
+      properties:
+        trickRoom: { type: boolean, default: false }
+        selfTailwind: { type: boolean, default: false, description: 自分(攻撃側)の側の追い風 }
+        opponentTailwind: { type: boolean, default: false, description: 相手(防御側)の側の追い風 }
+
+    ComboRequest:
+      type: object
+      description: |
+        連続技の入力(ADR-0252)。`format`・`attacker`・`defender`・`field` は `CalcRequest` と同じ形。
+        `attacker.ranks` は 1 手目の開始時のランク
+      required: [format, attacker, defender, steps]
+      properties:
+        format: { $ref: '#/components/schemas/Format' }
+        attacker: { $ref: '#/components/schemas/Individual' }
+        defender: { $ref: '#/components/schemas/Individual' }
+        field: { $ref: '#/components/schemas/FieldState' }
+        steps:
+          type: array
+          description: 手の並び。1〜3 手(engine の MaxComboSteps)。範囲外は ID の解決より前に 400 `invalid_input`
+          minItems: 1
+          maxItems: 3
+          items: { $ref: '#/components/schemas/ComboStepInput' }
+        opponentMoveId:
+          type: string
+          description: |
+            相手の技(任意。攻撃技だけ。変化技は 400 `invalid_input`)。相手が行動する手ごとに同じ技を使うとする。
+            省略は相手の攻撃を計算しない(`opponentAttack` が null。行動順は相手の優先度 0 として出す)
+        opponentSpeed:
+          allOf: [ { $ref: '#/components/schemas/ComboOpponentSpeed' } ]
+          description: 省略は `unknown`
+        speedField: { $ref: '#/components/schemas/ComboSpeedField' }
+
+    ComboRanks:
+      type: object
+      description: ランク(-6..+6)。応答なので 5 つのキーを常に返す
+      required: [atk, def, spa, spd, spe]
+      properties:
+        atk: { type: integer, minimum: -6, maximum: 6 }
+        def: { type: integer, minimum: -6, maximum: 6 }
+        spa: { type: integer, minimum: -6, maximum: 6 }
+        spd: { type: integer, minimum: -6, maximum: 6 }
+        spe: { type: integer, minimum: -6, maximum: 6 }
+
+    ComboTurnOrder:
+      type: string
+      description: |
+        行動順。優先度が違えば高い方が先(素早さ・トリックルームを見ない)。同じなら素早さ(トリックルーム中は遅い方が先)。
+        `speed_tie` は同速、`depends_on_opponent_speed` は相手の素早さが分からない(`opponentSpeed: unknown`)
+      enum: [self_first, opponent_first, speed_tie, depends_on_opponent_speed]
+      x-enum-varnames: [ComboTurnOrderSelfFirst, ComboTurnOrderOpponentFirst, ComboTurnOrderSpeedTie, ComboTurnOrderDependsOnOpponentSpeed]
+
+    ComboSpeedRange:
+      type: object
+      description: 素早さの範囲(両端を含む)。min > max は空
+      required: [min, max]
+      properties:
+        min: { type: integer }
+        max: { type: integer }
+
+    ComboSpeedLine:
+      type: object
+      description: |
+        相手の素早さがどの範囲なら自分が先か(combo-calc.md §2-3)。`selfSpeed` と同じなら同速。トリックルーム中は向きが逆
+      required: [selfSpeed, selfFirst, opponentFirst]
+      properties:
+        selfSpeed: { type: integer }
+        selfFirst: { $ref: '#/components/schemas/ComboSpeedRange' }
+        opponentFirst: { $ref: '#/components/schemas/ComboSpeedRange' }
+
+    ComboStepResult:
+      type: object
+      description: 1 手の結果
+      required: [moveId, selfStartRanks, selfEndRanks, opponentStartRanks, opponentEndRanks, damage, selfSpeed, opponentSpeed,
+                 selfPriority, opponentPriority, order, line]
+      properties:
+        moveId: { type: string }
+        selfStartRanks: { $ref: '#/components/schemas/ComboRanks' }
+        selfEndRanks: { $ref: '#/components/schemas/ComboRanks' }
+        opponentStartRanks: { $ref: '#/components/schemas/ComboRanks' }
+        opponentEndRanks: { $ref: '#/components/schemas/ComboRanks' }
+        damage:
+          allOf: [ { $ref: '#/components/schemas/CalcResult' } ]
+          nullable: true
+          description: |
+            この手のダメージ。その手の開始時のランクを入れた `POST /api/calc` の応答と同じ値。変化技は null(キーは省かない)
+        selfSpeed: { type: integer, description: この手の開始時の自分の素早さ(実数値にランク・補正・まひを掛けた値) }
+        opponentSpeed:
+          type: integer
+          nullable: true
+          description: この手の開始時の相手の素早さ。リクエストの opponentSpeed が from_defender のときだけ(unknown は null)
+        selfPriority: { type: integer }
+        opponentPriority: { type: integer, description: 相手の技の優先度(相手の技なしは 0) }
+        order: { $ref: '#/components/schemas/ComboTurnOrder' }
+        line: { $ref: '#/components/schemas/ComboSpeedLine' }
+
+    ComboKOChance:
+      type: object
+      description: 倒せる確率(各手の 16 段階を独立とした厳密な数え上げ)
+      required: [chancePercent, guaranteed, displayChancePercent]
+      properties:
+        chancePercent:
+          type: number
+          format: double
+          description: engine の生値(0..100)。guaranteed のときは 100。**画面に出す値ではない**
+        guaranteed: { type: boolean, description: 合計の最小でも倒せる(確定) }
+        displayChancePercent:
+          type: number
+          format: double
+          description: 画面に出す値。`KOChance.displayChancePercent` と同じ規則(0・100.0 は不可能・確定に予約し、他は 0.1..99.9)
+
+    ComboTotal:
+      type: object
+      description: 全手の合計
+      required: [minDamage, maxDamage, minPercent, maxPercent, defenderHP, ko, koByStep]
+      properties:
+        minDamage: { type: integer }
+        maxDamage: { type: integer }
+        minPercent: { type: number, format: double, description: 合計の最小の表示%(切り捨て。CalcResult.minPercent と同じ規則) }
+        maxPercent: { type: number, format: double, description: 合計の最大の表示%(四捨五入。CalcResult.maxPercent と同じ規則) }
+        defenderHP: { type: integer }
+        ko: { $ref: '#/components/schemas/ComboKOChance' }
+        koByStep:
+          type: array
+          description: i 手目までで倒せる確率(累積。長さ = 手の数。最後 = ko)
+          items: { $ref: '#/components/schemas/ComboKOChance' }
+
+    ComboSpeed:
+      type: object
+      description: 素早さの要約
+      required: [firstSelfSpeed, lastSelfSpeed, opponentSpeed]
+      properties:
+        firstSelfSpeed: { type: integer, description: 1 手目の開始時の自分の素早さ }
+        lastSelfSpeed: { type: integer, description: 最後の手の開始時の自分の素早さ }
+        opponentSpeed:
+          type: integer
+          nullable: true
+          description: 1 手目の開始時の相手の素早さ。`from_defender` のときだけ(`unknown` は null)
+
+    ComboOpponentTiming:
+      type: string
+      enum: [before_self, after_self]
+      x-enum-varnames: [ComboOpponentTimingBeforeSelf, ComboOpponentTimingAfterSelf]
+
+    ComboOpponentAction:
+      type: object
+      description: 相手の 1 回の行動
+      required: [step, timing, damage, surviveChancePercent]
+      properties:
+        step: { type: integer, description: 何手目の前後か(0 始まり) }
+        timing: { $ref: '#/components/schemas/ComboOpponentTiming' }
+        damage:
+          allOf: [ { $ref: '#/components/schemas/CalcResult' } ]
+          description: その時点の両側のランクでの相手の技のダメージ(急所なし・多段は既定の回数)
+        surviveChancePercent: { type: number, format: double, description: ここまでの全行動を耐える確率(%。engine の生値) }
+
+    ComboOpponentScenario:
+      type: object
+      required: [actions, surviveChancePercent]
+      properties:
+        actions:
+          type: array
+          items: { $ref: '#/components/schemas/ComboOpponentAction' }
+        surviveChancePercent: { type: number, format: double, description: 全行動を耐える確率(%。行動なしは 100) }
+
+    ComboOpponentAttack:
+      type: object
+      description: |
+        連続技を撃ち終わるまでに受ける相手の攻撃。行動順の決まらない手(`speed_tie`・`depends_on_opponent_speed`)を
+        相手が先とした場合が `fast`(行動回数 = maxActions。画面はこちらを主に出す)、自分が先とした場合が `slow`(= minActions)
+      required: [selfHP, minActions, maxActions, fast, slow]
+      properties:
+        selfHP: { type: integer, description: 自分(攻撃側)の最大 HP }
+        minActions: { type: integer }
+        maxActions: { type: integer }
+        fast: { $ref: '#/components/schemas/ComboOpponentScenario' }
+        slow: { $ref: '#/components/schemas/ComboOpponentScenario' }
+
+    ComboResult:
+      type: object
+      description: 連続技の結果(engine の ComboResult の写し。ADR-0252)
+      required: [steps, total, speed, opponentAttack, unsupported]
+      properties:
+        steps:
+          type: array
+          items: { $ref: '#/components/schemas/ComboStepResult' }
+        total: { $ref: '#/components/schemas/ComboTotal' }
+        speed: { $ref: '#/components/schemas/ComboSpeed' }
+        opponentAttack:
+          allOf: [ { $ref: '#/components/schemas/ComboOpponentAttack' } ]
+          nullable: true
+          description: 相手の技(`opponentMoveId`)があるときだけ。無ければ null(キーは省かない)
+        unsupported:
+          type: array
+          description: |
+            「未対応」の印(ADR-0123)。各手の `damage.unsupported` を手の順に連結して重複を除き、連続技の印
+            (reason `speed_undetermined`・`choice_locked`・`defender_full_hp_assumed`)を足したもの。印なしは空配列
           items: { $ref: '#/components/schemas/UnsupportedMark' }
 
     MasterExport:
