@@ -14,6 +14,8 @@ interface ToggleChipProps {
   readonly name?: string;
   readonly disabled?: boolean;
   readonly describedBy?: string;
+  /** 押しても変わらない(だが到達はできる)状態。素早さの絞り込みの「最後の 1 つ」用。 */
+  readonly ariaDisabled?: boolean;
   /** 画面側の追加クラス(画面ごとの余白・既存のクラス名の維持用)。 */
   readonly className?: string;
 }
@@ -26,6 +28,7 @@ export function ToggleChip({
   name,
   disabled = false,
   describedBy,
+  ariaDisabled,
   className,
 }: ToggleChipProps): ReactElement {
   return (
@@ -39,6 +42,7 @@ export function ToggleChip({
         checked={checked}
         disabled={disabled}
         aria-describedby={describedBy}
+        aria-disabled={ariaDisabled === true ? true : undefined}
         onChange={(event) => {
           onChange(event.target.checked);
         }}

@@ -1,5 +1,5 @@
 // F-12(I-web-6、ADR-0334 §3): 素早さ画面への共通部品の適用。
-// 2つの領域はカード(ui-card)、絞り込み・入力方法の選択はチップ(ui-chip。選択中は ui-chip--selected)、
+// 2つの領域はカード(ui-card)、絞り込みはチップ(ui-chip。選択中は ui-chip--selected)、入力方法の選択は区切りボタン(ui-segmented。I-web-13e で付け替え)、
 // 速い順の一覧は表のような行(ui-rows)、読み込み中・失敗は案内(ui-notice)。
 // アクセシブルな名前・役割(region・group・radiogroup・alert)と既存のクラスは変えない。
 
@@ -87,13 +87,15 @@ describe("素早さ画面の見た目の部品", () => {
     );
   });
 
-  test("入力の方法(ラジオ)は ui-chip。選択中だけ ui-chip--selected", () => {
+  test("入力の方法(ラジオ)は区切りボタン(G-05。I-web-13e で ui-chip から移した)。選択中だけ --selected", () => {
     render(<SpeedScreen speedClient={createClient().client} />);
     const group = within(selfRegion()).getByRole("radiogroup", { name: speedScreenText.modeGroupLabel });
+    expect(group).toHaveClass("ui-segmented");
     for (const radio of within(group).getAllByRole("radio")) {
-      const option = radio.closest("label");
-      expect(option).toHaveClass("ui-chip");
-      expect(option?.classList.contains("ui-chip--selected")).toBe((radio as HTMLInputElement).checked);
+      expect(radio).toHaveClass("ui-segmented__option");
+      expect(radio.classList.contains("ui-segmented__option--selected")).toBe(
+        radio.getAttribute("aria-checked") === "true",
+      );
     }
   });
 

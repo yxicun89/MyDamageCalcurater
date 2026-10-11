@@ -15,6 +15,33 @@
   padding: var(--space-4);
 }
 
+/* 領域の見出し(G-05): アイコン + 短い名前。 */
+.speed-heading {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-3);
+  font-family: var(--font-family);
+  font-size: var(--font-size-heading);
+  color: var(--text-primary);
+}
+
+/* 「自分」のバッジ(表の自分の段・自分の周りのカード)。アイコン + 文字。 */
+.speed-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  font-size: var(--font-size-caption);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.speed-badge--self {
+  background: var(--brand-primary);
+  color: var(--on-primary);
+}
+
 /* 左: 速い順の全体の表。 */
 .speed-table {
   flex: 2 1 320px;
@@ -34,9 +61,7 @@
 }
 
 .speed-table__filter-option {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
+  font-size: var(--font-size-caption);
 }
 
 /* F-06: 左の表の仮想スクロール。段の高さは speedWindow.ts の定数で決まる(同速の1行 = 24px。折り返さない)ので、
@@ -74,6 +99,7 @@
   color: var(--text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
+  min-height: 44px;
   padding: var(--space-1) var(--space-3);
   cursor: pointer;
 }
@@ -87,12 +113,12 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  border: 2px solid var(--text-secondary);
+  border: 2px solid var(--brand-primary);
   border-radius: var(--radius-card);
-  background: var(--bg-glass);
+  background: var(--brand-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
-  color: var(--text-primary);
+  color: var(--on-primary);
   white-space: nowrap;
 }
 
@@ -118,7 +144,7 @@
 /* 自分と同じ段(position の tie)。控えめな枠線と背景でだけ示す(ADR-0604 §4)。 */
 .speed-tier--self {
   border-width: 2px;
-  border-color: var(--text-secondary);
+  border-color: var(--brand-primary);
 }
 
 .speed-tier__head {
@@ -133,11 +159,12 @@
 }
 
 .speed-tier__tie {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
+  border: 1px solid var(--text-secondary);
   padding: 0 var(--space-2);
   font-size: var(--font-size-caption);
+  line-height: 1.4;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
 .speed-tier__entries {
@@ -196,10 +223,10 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  border-top: 2px solid var(--text-secondary);
+  border-top: 2px solid var(--brand-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-caption);
-  color: var(--text-secondary);
+  color: var(--text-primary);
 }
 
 /* 右: 自分のポケモン。 */
@@ -212,22 +239,9 @@
   padding: var(--space-4);
 }
 
-.speed-self__modes {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.speed-self__mode {
-  border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  padding: var(--space-1) var(--space-3);
-  font-family: var(--font-family);
-  font-size: var(--font-size-body);
-  color: var(--text-primary);
-}
-
-.speed-self__mode--selected {
-  border-color: var(--text-secondary);
+/* 入力の方法・調整・性格補正は区切りボタン(.ui-segmented。components.css)。チップは ToggleChip(.ui-chip)。 */
+.speed-self__card {
+  align-self: flex-start;
 }
 
 .speed-self__field {
@@ -241,7 +255,13 @@
 }
 
 .speed-self__field select,
-.speed-self__field input[type="number"] {
+.speed-self__raw {
+  min-height: 44px;
+  box-sizing: border-box;
+}
+
+.speed-self__field select,
+.speed-self__raw {
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
@@ -260,7 +280,17 @@
 }
 
 .speed-self__speed {
+  margin: 0 0 var(--space-2);
   font-size: var(--font-size-result);
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-self__count {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-1);
 }
 
 .speed-self__result-label {
@@ -309,26 +339,35 @@
   list-style: none;
 }
 
-.speed-neighbor__tier,
-.speed-neighbor__self {
+/* 近傍の段・自分は小さなカード(G-05)。画像かエンブレム + 実数値の大きい数字 + 名前。 */
+.speed-neighbor__card {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: var(--space-3);
-  padding: var(--space-1) var(--space-2);
-}
-
-.speed-neighbor__self {
-  border: 2px solid var(--text-secondary);
-  border-radius: var(--radius-card);
-  background: var(--bg-glass);
-  font-weight: 600;
-}
-
-.speed-neighbor__badge {
+  margin-bottom: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  min-height: 44px;
+  box-sizing: border-box;
   border: 1px solid var(--border-hairline);
-  border-radius: var(--radius-pill);
-  padding: 0 var(--space-2);
-  font-size: var(--font-size-caption);
+  border-radius: var(--radius-input);
+  background: var(--surface-card);
+}
+
+.speed-neighbor__speed {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+.speed-neighbor__names {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.speed-neighbor__card--self {
+  border: 2px solid var(--brand-primary);
+  background: var(--bg-glass);
+  font-weight: var(--font-weight-strong);
 }
 
 .speed-neighbor__total,
@@ -337,4 +376,36 @@
   margin: var(--space-1) 0;
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
+}
+
+/* 自分の入力のチップは中身の幅(縦に積んでも横いっぱいに伸ばさない)。区切りボタンは折り返さず幅いっぱいに分ける。 */
+.speed-self__chip {
+  align-self: flex-start;
+}
+
+.speed-self .ui-segmented {
+  display: flex;
+}
+
+.speed-self .ui-segmented__option {
+  flex: 1 1 auto;
+  padding-inline: var(--space-2);
+  white-space: nowrap;
+}
+
+/* 狭い幅: 右の位置マーカーの列を細くし、自分の段の「自分」「同速」のバッジを切らない(行の高さは変えない。ADR-0608)。 */
+@media (max-width: 480px) {
+  .speed-table__track {
+    flex-basis: 5rem;
+  }
+
+  /* 表の自分の段のバッジはアイコンだけにする(文字は読み上げ用の selfTierLabel が担う。aria-hidden のバッジの文字は見た目だけ)。 */
+  .speed-tier .speed-badge__text {
+    display: none;
+  }
+
+  .speed-tier {
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
 }
