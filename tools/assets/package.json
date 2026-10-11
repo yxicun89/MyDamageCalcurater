@@ -8,7 +8,8 @@
     "node": "26.10.0"
   },
   "scripts": {
-    "convert": "node convert.mjs"
+    "convert": "node convert.mjs",
+    "fetch": "node fetch.mjs"
   },
   "dependencies": {
     "sharp": "0.35.5"

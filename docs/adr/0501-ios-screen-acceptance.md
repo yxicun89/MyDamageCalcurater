@@ -4828,3 +4828,68 @@ XCUITest の期待値の変更はなし。検証: `swift test` 1602 件成功。
 `AdjustChoiceButton`・`AdjustPillButton` に最小の高さ 36pt を足した(タップ範囲。見た目の変化は縦に数 pt)。
 
 検証: `swift test` 1687 件成功。XCUITest は Adjust 系(AdjustGoalsUITests 9・AdjustGoalsLargeTextUITests 2・AdjustScreenUITests 8・AdjustLargeTextLayoutUITests 3 = 22 件)を `run-xcode-tests.sh` 経由で実行し全件成功。
+
+## G-03 Showdown 形式の書き出し・取り込みの廃止(ADR-0528。2026-10-11)
+
+受け入れ条件: (1) 構築一覧・構築編集に Showdown の入口(折りたたみ・ボタン・入力欄)が無い。(2) ほかのテスト・画面(カード・保存・削除・未保存の確認・AX5 の横はみ出し)は不変。
+(3) 消したコードを参照するテストが残っていない(`GlossaryTests` 含む)。
+
+### 削除したテスト(理由: 機能廃止 = ユーザー決定 G-03。検査を弱めたのではなく対象ごと無くなった)
+
+| テスト | 件数 | 内容 |
+|---|---|---|
+| `ShowdownTextParserTests` | 10 | 取り込みテキストのパース |
+| `ShowdownTextSerializerTests` | 7 | 書き出しテキストの組み立て |
+| `ShowdownTextLabelsTests` | 4 | 取り込み/書き出しの文言 |
+| `ShowdownNamingTests` | 1 | 日本語名の解決 |
+| `ShowdownTransferServiceTests` | 16 | 通信を伴う取り込み・書き出し |
+| `ShowdownMockEndToEndTests` | 2 | モックでの一連の取り込み/書き出し |
+| `TeamTextTransferViewModelTests` | 12 | 取り込み・書き出しの状態 |
+| `TeamTextTransferUITests`(UI) | 6 | 取り込み・書き出しの操作 |
+| `TeamNamingTests`: `testImportHelpMatchesDecision`・`testImportExampleIsOneMemberTemplateInTheAppFormat`・`testImportExampleParsesWithoutRejections` | 3 | 取り込みの説明・入力例 |
+| `TeamScreenUITests`: `testImportFoldIsClosedAndShowsHelpAndExampleWhenOpened`・`testExportFoldIsClosedAndOpensInTheEditor` | 2 | 折りたたみの開閉 |
+| `LargeTextLayoutUITests`: `testShowdownImportFoldNoHorizontalOverflowAtAX5`・`testShowdownExportFoldNoHorizontalOverflowAtAX5` | 2 | 折りたたみの AX5 検査 |
+
+### 既存テストの変更(対象の入口が無くなった分だけ)
+
+- `TeamLabelsTests.testSlotLabelsUseSameWordsAsWeb`: `importFold`・`exportFold` の 2 行の期待値を削除(ほかの行は不変)。
+- `GlossaryTests`: `ShowdownText` の文字列群の登録 1 行を削除(型が無くなったため。禁止語の検査自体は不変)。
+- `LargeTextLayoutUITests` の `teamListIdentifiers`・`teamEditIdentifiers`・`teamEditFilledIdentifiers` から折りたたみのトグルの識別子を削除(ほかの識別子の検査は不変)。
+
+## G-02 構築を 3 体だけ保存すると画面が消える報告の調査(2026-10-11。再現せず)
+
+ユーザー報告(タイプバランスレーン経由)「構築に 3 匹だけ入れて保存したら画面が全部消えた」。Web の原因は
+team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須扱いだったこと(Web で修正済み)。iOS の構築は
+端末内保存(`LocalTeamStore`)で team-svc を使わないため同じ原因は無い。そこで iOS で同じ操作が壊れないかを調べた。
+
+**結論: 再現しなかった。** 実装は変更していない。調べた経路と回帰テスト(`TeamSparseSaveTests`。実物の
+`LocalTeamStore`〈専用 UserDefaults suite〉を使い、F-08〈ADR-0522〉の 6 体・0 体・旧 JSON の往復テストと重ならない観点):
+
+- 1・3・5 体目だけ埋めた(枠の途中が空)・全員技 0 個の構築を保存 → `list`/`get` で 3 体のまま返る
+- 保存後の `TeamListViewModel.load()` で一覧に 1 件・3 体で出る
+- 保存した構築を開き直すと 3 体が先頭から詰まって 6 枠に並び、未保存の印は付かず、再保存しても 3 体のまま
+- 同じ下書きからの 2 回目の保存は追加でなく更新(構築が増えない)
+- 他画面の構築ピッカー(`TeamIndividualOptions.groups`)に 3 体で出る
+- タイプバランスの `loadTeam` → analyze 要求は 3 体分(`moveIds` は空配列)で出て、分析結果が得られる
+  (balance の `CoverageRequestMember.moveIds` は「0〜4 個」で空配列を送れる)
+
+保存・読込の `Team`/`TeamMember` は iOS が書いた JSON のみを読む(`moveIds` は常に書く)ので、「技 0 個で
+キーが省かれる」入力は iOS には来ない。保存後に画面が残る挙動(保存で閉じない)は F-08 の仕様どおり。
+実機で再現する場合は、保存直前の手順(どの画面で何を押したか)を添えて新しい課題として扱う。
+
+## G-01 技の行を縦に短くし、並びをタイプ順だけにする(ADR-0527。2026-10-11)
+
+受け入れ条件: (1) 技の行は「タイプの丸アイコン + 技名」を主、分類の小さなアイコンと威力を副にした 1 行(36pt 以上)。読み上げはタイプ・分類・威力を含む。
+(2) 計算画面の技ピッカーはタイプ順(群の中は五十音順、見出しはタイプ名)だけ。切り替え・保存は無い。(3) 選択中の技・要求・結果は変わらず、既定の技は learnset の先頭のまま。
+
+### 既存テストの変更(廃止した機能の分だけ。残る規則は弱めていない)
+
+| テスト | 扱い | 理由 |
+|---|---|---|
+| `MoveSortTests` 種類・既定・ラベル / 習得順 | 削除 | `MoveSortOrder`・`MoveSortLabels`・習得順を廃止 |
+| `MoveSortTests` 五十音 5 件・タイプ順 3 件 | `MoveSort.byType` へ付け替え(入力・期待値は同じ) | 群の中の並びとして残る |
+| `MoveSortStoreTests` | 削除 | `MoveSortStore` を廃止 |
+| `CalcViewModelMoveSortTests` | `CalcViewModelMoveTypeOrderTests` に置換 | 保存・切り替えを廃止。既定の技・再計算しないは維持 |
+| `CalcMoveSortUITests` 切り替え 2 件 | 並び・見出し・切り替え無し・選択・AX5 の行の 3 件に置換 | チップを廃止 |
+
+検証: `swift test` 全件成功、`CalcMoveSortUITests` 3 件成功(`run-xcode-tests.sh`)。

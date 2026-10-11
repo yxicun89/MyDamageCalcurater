@@ -28,6 +28,7 @@
 |---|---|
 | [overview.md](overview.md) | プロジェクト概要 |
 | [architecture.md](architecture.md) | アーキテクチャ全体図 |
+| [architecture-comparison.md](architecture-comparison.md) | ソフトウェアアーキテクチャの比較(ヘキサゴナル・クリーン・レイヤード等のこのプロジェクトでの利点と欠点) |
 | [requirements.md](requirements.md) | 要件の正 |
 | [plan.md](plan.md) | 進行状況とタスクの索引(作業の起点)。タスクの行は区画ごとのファイル [plan/](plan/)(ADR-0172) |
 | [plan-archive.md](plan-archive.md) | 完了したタスクの経過・解決済みのブロッカー(plan.md から移した記録) |
@@ -35,11 +36,7 @@
 | [design.md](design.md) | 画面・ビジュアルのデザインガイド |
 | [coding-rules.md](coding-rules.md) | コーディング規約(公開できる状態・ハードコード禁止・読みやすさ) |
 | [development-workflow.md](development-workflow.md) | Claude Code / Codex の開発ワークフロー対応 |
-| [verify-all.md](verify-all.md) | M1〜M4 の動作確認の索引と完了判定 |
-| [verify-m1.md](verify-m1.md) | M1 の動作確認手順(上から順に実行) |
-| [verify-m2.md](verify-m2.md) | M2(保存・構築)の動作確認手順 |
-| [verify-m3.md](verify-m3.md) | M3(iOS・タイプバランス画面)の動作確認手順 |
-| [verify-m4.md](verify-m4.md) | M4(監視・SLO・GitOps)の動作確認手順 |
+| [verify.md](verify.md) | 動作確認の手順(k3d 起動・Web・iOS・失敗時の見方) |
 | [type-balance-design.md](type-balance-design.md) | タイプバランスチェッカーの設計 |
 | [type-balance-test-strategy.md](type-balance-test-strategy.md) | タイプバランスのテスト戦略 |
 | [speed-design.md](speed-design.md) | 素早さ比較サービスの設計 |
@@ -56,6 +53,16 @@
 | [runbooks/speed.md](runbooks/speed.md) | speed(ローカル k3d) |
 | [runbooks/ios.md](runbooks/ios.md) | iOS(シミュレータ・モック) |
 | [runbooks/ios-device-install.md](runbooks/ios-device-install.md) | iOS 実機インストール(Tailscale serve。人間の作業) |
+
+## 別アプリ「欲しいものリスト」(apps/wishlist/)
+
+ダメージ計算とは別のアプリ。文書はアプリの中に置いている。
+
+| 文書 | 内容 |
+|---|---|
+| [../apps/wishlist/README.md](../apps/wishlist/README.md) | 何をするアプリか・構成・文書の入口 |
+| [../apps/wishlist/CLAUDE.md](../apps/wishlist/CLAUDE.md) | 仕様の正(画面・目安価格・データモデル・API・フェーズ) |
+| [../apps/wishlist/docs/verify.md](../apps/wishlist/docs/verify.md) | 動作確認の手順 |
 
 ## Claude Code / Codex 共有(ai-shared/)
 

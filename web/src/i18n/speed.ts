@@ -106,4 +106,28 @@ export const speedScreenText = {
   /** トリックルーム中の行動順の読み替え(速い = 後に動く、遅い = 先に動く。ADR-0607 §4)。 */
   movesBeforeLabel: (rows: number): string => `自分より先に動く ${String(rows)}行`,
   movesAfterLabel: (rows: number): string => `自分より後に動く ${String(rows)}行`,
+  // ---- G-04: 自分の周りパネル(ADR-0609。スクロールなしで自分の上下が見える) ----
+  neighborhoodRegionLabel: "自分の周り",
+  neighborhoodHeading: "自分の周り",
+  neighborhoodEmpty: "自分のポケモンを選ぶと、ここに前後のポケモンが出ます",
+  /** 通常の場: 上 = 速い側。 */
+  neighborhoodFasterListLabel: "自分より速い側",
+  neighborhoodSlowerListLabel: "自分より遅い側",
+  /** トリックルーム: 速さの並びが逆なので、速い・遅いではなく先に動く・後に動くで言う(ADR-0607)。 */
+  neighborhoodBeforeListLabel: "先に動く側",
+  neighborhoodAfterListLabel: "後に動く側",
+  neighborhoodSelfBadge: "自分",
+  neighborhoodTieLabel: "同速",
+  neighborhoodBoundaryLabel: "ここに自分が入ります(同速なし)",
+  neighborhoodMore: (n: number): string => `ほか ${String(n)} 体`,
+  /** 端の合計行(通常の場)。 */
+  neighborhoodFasterTotal: (n: number): string => `これより速いポケモンは計 ${String(n)} 体`,
+  neighborhoodSlowerTotal: (n: number): string => `これより遅いポケモンは計 ${String(n)} 体`,
+  /** 端の合計行(トリックルーム)。 */
+  neighborhoodBeforeTotal: (n: number): string => `これより先に動くポケモンは計 ${String(n)} 体`,
+  neighborhoodAfterTotal: (n: number): string => `これより後に動くポケモンは計 ${String(n)} 体`,
+  neighborhoodNone: "いません",
+  /** 色だけに頼らない目印の文字。 */
+  neighborhoodUpArrow: "↑",
+  neighborhoodDownArrow: "↓",
 } as const;

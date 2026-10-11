@@ -9,7 +9,7 @@ requirements.md は「MinIO に置き gateway の `/assets/` から配信、`man
 Web・iOS にはタイプ色のエンブレムがすでにあり、画像が無くても全機能が動く。個人利用・学習目的で、費用はローカルのみ。
 
 ## 決定
-1. **入力はユーザーが手元に置く画像**。取得ツールは作らない(権利。ADR-0002)。既定の入力 `data/generated/images/src/{key}.{png|jpg|jpeg|webp}`、
+1. **入力はユーザーが手元に置く画像**。取得ツールは作らない(権利。ADR-0002。**ADR-0810 で改めた**: 個人利用のため取得ツール `make assets-fetch` を足した。画像を Git に入れない点は不変)。既定の入力 `data/generated/images/src/{key}.{png|jpg|jpeg|webp}`、
    出力 `data/generated/images/dist/`(どちらも `data/generated/` が .gitignore 済みで Git に載らない)。環境変数 `ASSETS_SRC`・`ASSETS_OUT` で変えられる。
    キーは `{図鑑番号4桁}-{フォルム3桁}`(openapi の `SpeciesKey` と同じ)。形式違反のファイル名・壊れた画像は警告してスキップし、残りを処理する(終了コード 0)。
    入力が空・存在しないときも成功し、空の manifest を書く。

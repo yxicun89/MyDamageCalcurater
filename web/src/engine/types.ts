@@ -213,7 +213,19 @@ export interface CalcRequest {
   readonly move: Move;
   readonly field?: Field;
   readonly critical?: boolean;
+  /** 対戦の状態(残り HP・多段の回数。ADR-0144 §3)。省略は従来と同じ。一括・逆算には付けない。 */
+  readonly battleState?: BattleState;
   readonly typeChart: TypeChart;
+}
+
+/** 対戦の状態(WASM 境界・公開 API の CalcBattleState と同じ形)。指定する値は 1 以上。 */
+export interface BattleState {
+  /** 攻撃側の残り HP(実数値。1..攻撃側の最大 HP)。 */
+  readonly attackerCurrentHp?: number;
+  /** 防御側の残り HP(実数値。1..防御側の最大 HP)。 */
+  readonly defenderCurrentHp?: number;
+  /** 多段の回数(範囲の多段技だけ。最小..最大)。 */
+  readonly hits?: number;
 }
 
 /** 一括計算リクエスト(ADR-0009)。presetKeys / presets を省くと engine の既定5行になる。 */

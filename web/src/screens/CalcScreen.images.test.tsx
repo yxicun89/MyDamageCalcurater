@@ -62,16 +62,16 @@ describe("カードのポケモン画像", () => {
       expect(img?.getAttribute("src")).toBe(`/images/thumb/${key}.aaaaaaaa.webp`);
       expect(img?.getAttribute("loading")).toBe("lazy");
       expect(img?.getAttribute("alt")).toBe("");
-      expect(within(card).queryByTestId("type-emblem")).not.toBeInTheDocument();
+      expect(within(card).queryByTestId("pokemon-icon-emblem")).not.toBeInTheDocument();
     }
   });
 
   test("manifest に無い側だけエンブレムのまま(攻撃側は画像・防御側はエンブレム)", async () => {
     await renderWith([master.species[0]?.key ?? ""]);
     expect(attackerCard().querySelector("img")).not.toBeNull();
-    expect(within(attackerCard()).queryByTestId("type-emblem")).not.toBeInTheDocument();
+    expect(within(attackerCard()).queryByTestId("pokemon-icon-emblem")).not.toBeInTheDocument();
     expect(defenderCard().querySelector("img")).toBeNull();
-    expect(within(defenderCard()).getByTestId("type-emblem")).toBeInTheDocument();
+    expect(within(defenderCard()).getByTestId("pokemon-icon-emblem")).toBeInTheDocument();
   });
 
   test("画像があっても名前の見出し・タイプ表示は変わらない(画像は読み上げ対象でない)", async () => {

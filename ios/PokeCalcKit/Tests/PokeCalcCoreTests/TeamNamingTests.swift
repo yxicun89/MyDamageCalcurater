@@ -73,33 +73,6 @@ final class TeamLabelsTests: XCTestCase {
         XCTAssertEqual(TeamLabels.leaveDiscard, "保存せずに戻る")
         XCTAssertEqual(TeamLabels.leaveCancel, "編集を続ける")
         XCTAssertEqual(TeamLabels.emptySlotHint, "ポケモンを選ぶと、技・持ち物・特性などを決められます")
-        XCTAssertEqual(TeamLabels.importFold, "Showdown 形式で取り込む")
-        XCTAssertEqual(TeamLabels.exportFold, "Showdown 形式で書き出す")
-    }
-
-    func testImportHelpMatchesDecision() {
-        XCTAssertTrue(TeamLabels.importHelp.hasPrefix("Pokémon Showdown などで作った構築のテキストを貼り付けると、新しい構築として取り込めます。"))
-        XCTAssertTrue(TeamLabels.importHelp.contains("日本語の名前"))
-        XCTAssertTrue(TeamLabels.importHelp.contains("空の行で区切ります"))
-    }
-
-    /// 入力例は日本語の 1 体分(7 行以内)のひな形で、実データ名を含まない。
-    func testImportExampleIsOneMemberTemplateInTheAppFormat() {
-        let lines = TeamLabels.importExample.split(separator: "\n", omittingEmptySubsequences: false)
-        XCTAssertLessThanOrEqual(lines.count, 7)
-        XCTAssertFalse(TeamLabels.importExample.contains("\n\n"), "1体分(空行を含まない)")
-        XCTAssertTrue(lines[0].contains(ShowdownTextLabels.itemSeparator))
-        XCTAssertTrue(TeamLabels.importExample.contains(ShowdownTextLabels.abilityKey))
-        XCTAssertTrue(TeamLabels.importExample.contains(ShowdownTextLabels.natureKey))
-        XCTAssertTrue(TeamLabels.importExample.contains(ShowdownTextLabels.spKey))
-        XCTAssertTrue(TeamLabels.importExample.contains(ShowdownTextLabels.movePrefix))
-    }
-
-    /// 入力例はアプリのパーサで解釈できる(取り込める形になっている)。
-    func testImportExampleParsesWithoutRejections() {
-        let parsed = ShowdownTextParser.parse(TeamLabels.importExample)
-        XCTAssertEqual(parsed.rejected, [])
-        XCTAssertEqual(parsed.members.count, 1)
     }
 
     func testUpdatedTextIsFallbackWhenUnknown() {

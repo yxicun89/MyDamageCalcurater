@@ -1,5 +1,5 @@
 // k3d 上で動いている全体(ブラウザ → localhost:8080 → gateway → web / calc / pokedex)を、利用者と同じ入口から
-// 実ブラウザで確かめる(docs/verify-m1.md §3)。サーバーは起動しない(`make up` と各デプロイ済みが前提)。
+// 実ブラウザで確かめる(docs/verify.md)。サーバーは起動しない(`make up` と各デプロイ済みが前提)。
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.K3D_URL ?? "http://localhost:8080";

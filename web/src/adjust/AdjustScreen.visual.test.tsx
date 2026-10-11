@@ -3,7 +3,7 @@
 // モードの選択(ラジオ)は ui-chip、ボタンは ui-button、案内は ui-notice、結果の小領域は ui-card、行の一覧は ui-rows。
 // 結果は「結論(目標を満たすか)→ 振り方(SP)→ 詳細(指数・16n)」の強弱を CSS の見た目で付ける。DOM の順は変えない。
 //   結論 = adjust-screen__verdict(要素に data-met="true"|"false"。目標ごとの行・目標を満たす/満たさない・素早さを満たす/満たさない・倒せる/耐えられるの文)/ 振り方 = adjust-screen__plan / 詳細 = adjust-screen__detail
-// 目標の「種類」は select のまま(ラジオに変えるのは構造の変更になるので、ui-field の見た目だけ。ADR-0336 §3)。
+// 目標の「種類」は ADR-0336 §3 では select のままだったが、I-web-18(ADR-0354)で区切りボタン(radiogroup)になった。
 
 import { readFileSync } from "node:fs";
 import { render, screen, within } from "@testing-library/react";
@@ -12,6 +12,7 @@ import { describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import type { Move } from "../engine/types";
 import { adjustScreenText } from "../i18n/ja";
+import { uiText } from "../i18n/ui";
 import type { MasterData, MasterNature, MasterSpecies } from "../master/types";
 import { declarationMap, parseCss, splitSelectors, topLevelRules } from "../test/cssRules";
 import { createFakeAdjustClient, lastCallOf, respond, type FakeAdjustClient } from "../test/fakeAdjustClient";
@@ -117,15 +118,15 @@ describe("領域・カード", () => {
     expect(opponent.style.getPropertyValue("--card-type")).toBe(typeVar("water"));
   });
 
-  test("目標カード(fieldset。group「目標 n」)は ui-card(adjust-screen__goal も残す)。種類は select のまま", async () => {
+  test("目標カード(fieldset。group「目標 n」)は ui-card(adjust-screen__goal も残す)。種類は区切りボタン(radiogroup)", async () => {
     const { user } = renderScreen();
     await chooseMode(user, "goals");
     await user.click(screen.getByRole("button", { name: T.addGoalLabel }));
     const card = within(region(T.goalRegionLabel)).getByRole("group", { name: T.goalCardLegend(1) });
     expect(card).toHaveClass("ui-card", "adjust-screen__goal");
     expect(
-      within(card).getByRole("combobox", { name: T.goalFieldName(1, T.goalKindFieldLabel) }),
-    ).toBeInTheDocument();
+      within(card).getByRole("radiogroup", { name: T.goalFieldName(1, T.goalKindFieldLabel) }),
+    ).toHaveClass("ui-segmented");
   });
 });
 
@@ -152,13 +153,11 @@ describe("チップ・ボタン", () => {
     expect(submitButton()).toHaveClass("ui-button", "ui-button--primary", "adjust-screen__submit");
   });
 
-  test("「目標を追加」「目標を外す」は ui-button--secondary", async () => {
+  test("「目標を追加」は空きタイル、「目標を外す」は ui-button--secondary", async () => {
     const { user } = renderScreen();
     await chooseMode(user, "goals");
-    expect(screen.getByRole("button", { name: T.addGoalLabel })).toHaveClass(
-      "ui-button",
-      "ui-button--secondary",
-    );
+    // G-05(I-web-13h): 「目標を追加」は「+」の空きタイル(ui-button--secondary から変更)。「外す」は従来どおり。
+    expect(screen.getByRole("button", { name: T.addGoalLabel })).toHaveClass("ui-tile", "ui-tile--empty");
     await user.click(screen.getByRole("button", { name: T.addGoalLabel }));
     expect(screen.getByRole("button", { name: T.removeGoalName(1) })).toHaveClass(
       "ui-button",
@@ -206,10 +205,13 @@ describe("結果の強弱(DOM の順は変えない)", () => {
   });
 
   test("指数・ステータス・16n の行は詳細(adjust-screen__detail)、16n の一覧は ui-rows", async () => {
+    const user = userEvent.setup();
     await submitIndices();
     const result = region(T.resultRegionLabel);
     expect(within(result).getByText(T.statsLine(indicesResult.stats))).toHaveClass("adjust-screen__detail");
-    expect(within(result).getByText(T.indexNote)).toHaveClass("adjust-screen__detail");
+    // 指数の注は「説明」ボタンの奥(詳細の行として並ぶ)。開くと本文が出る。
+    await user.click(within(result).getByRole("button", { name: uiText.help }));
+    expect(within(result).getByText(T.indexNote).closest(".adjust-screen__detail")).not.toBeNull();
     const lines = result.querySelector("ul.adjust-screen__lines");
     expect(lines).toHaveClass("ui-rows");
   });
@@ -224,10 +226,8 @@ describe("結果の強弱(DOM の順は変えない)", () => {
       screen.getByRole("combobox", { name: T.goalFieldName(1, T.goalOpponentSpeciesFieldLabel) }),
       FISH.key,
     );
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: T.goalFieldName(1, T.goalPresetFieldLabel) }),
-      "fastest",
-    );
+    // 振り方は 3 択なので区切りボタン(radio)。既定の最速を選び直す(select の "fastest" 選択の置き換え)。
+    await user.click(screen.getByRole("radio", { name: T.speedPresetOption.fastest }));
     await user.click(submitButton());
     const plan = {
       sp: { hp: 32, atk: 0, def: 18, spa: 0, spd: 16, spe: 0 },

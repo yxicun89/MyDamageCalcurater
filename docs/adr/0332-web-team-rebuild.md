@@ -1,5 +1,7 @@
 # ADR-0332: 構築の作り直し(構築名の廃止・6枠の編集・Showdown 形式は補助)— F-08 / I-web-7
 
+> 2026-10-11 追記: Showdown 形式の取り込み・書き出しは ADR-0342(G-03)で廃止した。画面・変換部のコードは削除済み。以下は履歴。
+
 - 状態: 採用(2026-10-04。実装済み。既定案のまま採用)
 - 関連: docs/usability-round2.md F-08(原文12・13)、docs/plan/improvements/web.md I-web-7、
   ADR-0229(TeamInput.name の省略)、ADR-0308(タブ往復で入力保持)、ADR-0309(構築の骨格)、ADR-0310(Showdown 形式)、

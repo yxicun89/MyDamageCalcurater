@@ -29,6 +29,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterNature, MasterSpecies } from "../master/types";
 import { bulkRow, createDeferredEngine, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
+import { chooseMove, moveTrigger } from "../test/movePicker";
 
 const PHYSICAL = "examplemovetackle";
 const SPECIAL = "examplemovewaterblast";
@@ -65,7 +66,6 @@ const BLOCK_NAME: Record<Stat, RegExp> = {
   spa: /^特攻(\(この技で使用\))?$/,
 };
 
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const block = (stat: Stat) => screen.getByRole("group", { name: BLOCK_NAME[stat] });
 const spBox = (stat: Stat) => within(block(stat)).getByRole("textbox", { name: `${STAT_NAME[stat]}のSP` });
 const presetGroup = (stat: Stat) =>
@@ -92,7 +92,7 @@ async function start(
   const rendered = renderScreen(engine, data);
   await rendered.user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
   await rendered.user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-  await rendered.user.selectOptions(moveSelect(), PHYSICAL);
+  await chooseMove(rendered.user, PHYSICAL);
   return rendered;
 }
 
@@ -141,7 +141,7 @@ describe("2ブロックの表示と強調(I-web-3)", () => {
 
   test("特殊技に替えると強調が特攻に移る(どちらのブロックも出たまま)", async () => {
     const { user } = await start();
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
 
     expect(block("spa")).toHaveAccessibleName(`特攻${USED_SUFFIX}`);
     expect(block("spa")).toHaveAttribute("aria-current", "true");
@@ -177,7 +177,7 @@ describe("2ブロックの表示と強調(I-web-3)", () => {
     await start();
 
     const order = [
-      moveSelect(),
+      moveTrigger(),
       block("atk"),
       block("spa"),
       screen.getByRole("checkbox", { name: "持ち物の候補も比較" }),
@@ -264,7 +264,7 @@ describe("要求への反映(I-web-1)", () => {
 
   test("特殊技では特攻の性格補正が効く(C 上昇 → +C/−A)", async () => {
     const { user, engine } = await start();
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     await user.click(natureRadio("spa", "上昇"));
 
     const request = await lastRequest(
@@ -384,7 +384,7 @@ describe("値の寿命(技・攻守入れ替え・種族の変更で消さない
     await user.click(natureRadio("atk", "上昇"));
     await setSp(user, "spa", "12");
 
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
 
     expect(spBox("atk")).toHaveValue("20");
     expect(natureRadio("atk", "上昇")).toBeChecked();
@@ -394,7 +394,7 @@ describe("値の寿命(技・攻守入れ替え・種族の変更で消さない
     // 特殊技は C を使う。C は補正なしなので、例データでは無補正の性格になる(ADR-0329 §4)
     expect(special.attacker.nature).toEqual(NEUTRAL_NATURE);
 
-    await user.selectOptions(moveSelect(), PHYSICAL);
+    await chooseMove(user, PHYSICAL);
 
     expect(spBox("atk")).toHaveValue("20");
     expect(spBox("spa")).toHaveValue("12");
@@ -575,7 +575,7 @@ describe("実データ相当(25性格)のマスタでも、特化は従来の代
     expect(physical.attacker.nature).toEqual({ plus: "atk", minus: "spa" });
 
     await user.click(presetRadio("atk", "無振り"));
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     await user.click(presetRadio("spa", "C特化"));
     const special = await lastRequest(engine, (r) => r.move.id === SPECIAL && r.attacker.sp.spa === 32);
     expect(special.attacker.nature).toEqual({ plus: "spa", minus: "atk" });

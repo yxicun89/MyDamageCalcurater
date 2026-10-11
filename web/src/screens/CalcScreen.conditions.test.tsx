@@ -16,6 +16,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { bulkRow, createDeferredEngine, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
+import { chooseMove, selectedMoveId } from "../test/movePicker";
 
 const PHYSICAL = "examplemovetackle";
 const SPECIAL = "examplemovewaterblast";
@@ -37,7 +38,6 @@ beforeAll(async () => {
 });
 
 const toggle = () => screen.getByRole("button", { name: "詳細" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 
 function renderScreen(engine: FakeEngine = createFakeEngine()): { user: UserEvent; engine: FakeEngine } {
   const user = userEvent.setup();
@@ -49,7 +49,7 @@ async function start(engine?: FakeEngine): Promise<{ user: UserEvent; engine: Fa
   const rendered = renderScreen(engine);
   await rendered.user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
   await rendered.user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-  await rendered.user.selectOptions(moveSelect(), PHYSICAL);
+  await chooseMove(rendered.user, PHYSICAL);
   return rendered;
 }
 
@@ -243,7 +243,7 @@ describe("各入力が要求に出る", () => {
   test("物理技でも ひかりのかべ をそのまま送る(無関係な補正は engine が処理する)", async () => {
     const { user, engine } = await start();
     await openDetails(user);
-    expect(moveSelect()).toHaveValue(PHYSICAL);
+    expect(selectedMoveId()).toBe(PHYSICAL);
     await user.click(screen.getByRole("checkbox", { name: "ひかりのかべ" }));
     const request = await lastRequest(engine, (r) => r.field?.defenderScreens?.lightScreen === true);
     expect(request.move.category).toBe("physical");
@@ -268,7 +268,7 @@ describe("攻撃側のランク", () => {
   test("特殊技は C を編集する(表示「C -2」)", async () => {
     const { user, engine } = await start();
     await openDetails(user);
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     expect(display().getByText("C ±0")).toBeInTheDocument();
     await user.click(down());
     await user.click(down());
@@ -281,12 +281,12 @@ describe("攻撃側のランク", () => {
     const { user, engine } = await start();
     await openDetails(user);
     await user.click(up()); // A +1
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     await user.click(up());
     await user.click(up()); // C +2
     let request = await lastRequest(engine, (r) => r.move.id === SPECIAL && r.attacker.ranks?.spa === 2);
     expect(request.attacker.ranks).toEqual({ atk: 1, def: 0, spa: 2, spd: 0, spe: 0 });
-    await user.selectOptions(moveSelect(), PHYSICAL);
+    await chooseMove(user, PHYSICAL);
     expect(display().getByText("A +1")).toBeInTheDocument();
     request = await lastRequest(engine, (r) => r.move.id === PHYSICAL);
     expect(request.attacker.ranks).toEqual({ atk: 1, def: 0, spa: 2, spd: 0, spe: 0 });
@@ -327,7 +327,7 @@ describe("条件は入れ替え・種族・技の変更で消さない", () => {
     await user.click(screen.getByRole("button", { name: "攻守入れ替え" }));
     await user.selectOptions(screen.getByRole("combobox", { name: "攻撃側のポケモン" }), attacker.key);
     await user.selectOptions(screen.getByRole("combobox", { name: "防御側のポケモン" }), defender.key);
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
 
     const request = await lastRequest(engine, (r) => r.move.id === SPECIAL);
     expect(request.critical).toBe(true);
@@ -348,7 +348,7 @@ describe("条件は入れ替え・種族・技の変更で消さない", () => {
     await user.click(screen.getByRole("checkbox", { name: "急所" }));
     await user.click(toggle());
     expect(toggle()).toHaveAttribute("aria-expanded", "false");
-    await user.selectOptions(moveSelect(), SPECIAL);
+    await chooseMove(user, SPECIAL);
     expect((await lastRequest(engine, (r) => r.move.id === SPECIAL)).critical).toBe(true);
   });
 });

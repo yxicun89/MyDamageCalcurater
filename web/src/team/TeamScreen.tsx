@@ -1,25 +1,25 @@
 // 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。一覧と編集の2つの表示を切り替える(URL は /team のまま)。
-// 一覧: 構築のカード・[新しい構築]・閉じた Showdown 取り込み。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
+// 一覧: 構築のカード・[新しい構築]。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
 //
 // 状態の作り(SpeedScreen.tsx・BalanceScreen.tsx と同じ考え方):
 //   - list() はマウント時に1回だけ呼び、cancelled フラグで古い応答を捨てる
 //   - create()/update()/remove() が成功したら、応答の Team で手元の一覧を書き換える(list を呼び直さない)
 //   - 一覧の読み込みに失敗しても、[新しい構築]は先に使える(ADR-0309 §4)
-//   - 編集中の下書き・開いている構築・取り込みの入力と折りたたみの開閉はこの画面の state に持つ(ADR-0308)
+//   - 編集中の下書き・開いている構築はこの画面の state に持つ(ADR-0308)
 
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { teamMemberText, teamScreenText } from "../i18n/ja";
-import { teamShowdownText } from "../i18n/team";
 import { PokemonImage } from "../images/PokemonImage";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
 import "./TeamScreen.css";
 import { TeamMemberEditor } from "./TeamMemberEditor";
+import type { BalanceClient } from "../api/balanceClient";
 import type { TeamClient, TeamError } from "./teamClient";
 import { teamDisplayNames } from "./teamName";
 import { TEAM_SLOT_COUNT, teamInputFromMembers } from "./teamSlots";
-import { TeamShowdownImport } from "./TeamShowdownImport";
 
 type Schemas = components["schemas"];
 
@@ -33,6 +33,8 @@ export const MAX_TEAM_MEMBERS = TEAM_SLOT_COUNT;
  */
 export interface TeamScreenProps {
   readonly teamClient: TeamClient;
+  /** タイプバランスの口(ADR-0421。編集画面の「タイプバランス」の節)。 */
+  readonly balanceClient?: BalanceClient;
   /**
    * 「この端末のデータを削除」の後に一覧を取り直す合図(P5-5d。ADR-0318 §6)。
    * マウント後に値が変わったら list() を呼び直す(最初の値ではマウント時の1回だけ)。
@@ -89,7 +91,13 @@ function removeTeamFromList(list: ListState, teamId: string): ListState {
 /**
  * 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。
  */
-export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: TeamScreenProps): ReactNode {
+export function TeamScreen({
+  teamClient,
+  balanceClient,
+  master,
+  masterSearch,
+  reloadToken,
+}: TeamScreenProps): ReactNode {
   const [list, setList] = useState<ListState>({ status: "loading" });
   // create()/update()/remove() が一度でも成功したら true にする。list() は mount 時に1回しか呼ばないが、
   // その応答が書き込みの成功より後に届くと、古いスナップショットで手元の一覧を上書きしてしまう
@@ -183,11 +191,6 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
     }
   }
 
-  // Showdown 取り込みの入力と折りたたみの開閉(一覧と編集画面を行き来しても残す。ADR-0308)。
-  const [importText, setImportText] = useState("");
-  const [importOpen, setImportOpen] = useState(false);
-  const exampleLabelId = useId();
-
   const teams = list.status === "loaded" ? list.teams : [];
   const displayNames = teamDisplayNames(teams);
   const editingTeam = editingTeamId === null ? undefined : teams.find((team) => team.id === editingTeamId);
@@ -202,6 +205,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
           master={master}
           masterSearch={masterSearch}
           teamClient={teamClient}
+          balanceClient={balanceClient}
           onSaved={(updated) => {
             hasWrittenRef.current = true;
             setList((current) => replaceTeam(current, updated));
@@ -227,6 +231,7 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
             void handleCreate();
           }}
         >
+          <Icon name="plus" size={20} />
           {teamScreenText.createLabel}
         </button>
         {createState.error !== null && (
@@ -248,7 +253,10 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
         </div>
       )}
       {list.status === "loaded" && list.teams.length === 0 && (
-        <p className="ui-notice ui-notice--empty team-screen__notice">{teamScreenText.emptyNotice}</p>
+        <p className="ui-notice ui-notice--empty team-screen__notice team-screen__empty">
+          <Icon name="team" size={48} />
+          {teamScreenText.emptyNotice}
+        </p>
       )}
       {list.status === "loaded" && list.teams.length > 0 && (
         <ul aria-label={teamScreenText.listLabel} className="team-screen__list">
@@ -276,34 +284,6 @@ export function TeamScreen({ teamClient, master, masterSearch, reloadToken }: Te
           })}
         </ul>
       )}
-
-      <details
-        className="ui-card team-fold"
-        open={importOpen}
-        onToggle={(event) => {
-          setImportOpen(event.currentTarget.open);
-        }}
-      >
-        <summary>{teamShowdownText.importFoldLabel}</summary>
-        <p className="team-fold__help">{teamShowdownText.importHelp}</p>
-        <p id={exampleLabelId} className="team-fold__help">
-          {teamShowdownText.importExampleLabel}
-        </p>
-        <pre role="region" aria-labelledby={exampleLabelId} tabIndex={0} className="team-fold__example">
-          {teamShowdownText.importExample}
-        </pre>
-        <TeamShowdownImport
-          teamClient={teamClient}
-          master={master}
-          masterSearch={masterSearch}
-          text={importText}
-          onTextChange={setImportText}
-          onCreated={(team) => {
-            hasWrittenRef.current = true;
-            setList((current) => addCreatedTeam(current, team));
-          }}
-        />
-      </details>
     </section>
   );
 }
@@ -332,7 +312,7 @@ function TeamCard({
 }: TeamCardProps) {
   return (
     <li className="ui-card team-card">
-      <span className="team-card__name">{displayName}</span>
+      <h3 className="team-card__name">{displayName}</h3>
       <div
         role="group"
         aria-label={teamScreenText.memberIconsLabel(displayName)}
@@ -346,7 +326,7 @@ function TeamCard({
               key={index}
               role="img"
               aria-label={species?.nameJa ?? teamScreenText.unknownMemberIcon(index + 1)}
-              className="team-card__icon"
+              className="team-card__icon team-card__slot"
             >
               <PokemonImage
                 speciesKey={member.speciesKey}
@@ -363,6 +343,13 @@ function TeamCard({
             </span>
           );
         })}
+        {Array.from({ length: Math.max(0, MAX_TEAM_MEMBERS - team.members.length) }, (_, index) => (
+          <span
+            key={`empty-${String(index)}`}
+            aria-hidden="true"
+            className="team-card__slot team-card__slot--empty"
+          />
+        ))}
       </div>
       <span className="team-card__meta">
         {teamScreenText.memberCountLabel(team.members.length, MAX_TEAM_MEMBERS)}
@@ -377,16 +364,17 @@ function TeamCard({
           data-open-team={team.id}
           onClick={onOpen}
         >
+          <Icon name="edit" size={20} />
           {teamScreenText.openLabel}
         </button>
         {deleteState === null && (
           <button
             type="button"
-            className="ui-button ui-button--danger"
+            className="ui-button ui-button--danger team-screen__icon-button"
             aria-label={teamScreenText.deleteLabel(displayName)}
             onClick={onOpenDelete}
           >
-            {teamScreenText.deleteShortLabel}
+            <Icon name="trash" size={20} />
           </button>
         )}
       </div>

@@ -28,6 +28,7 @@ import { bulkRow, createDeferredEngine, createFakeEngine, ok, type FakeEngine } 
 import { MEGA_FIRE, MEGA_FIRE_STONE, withMegaFixture } from "../test/megaMaster";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
 import { CalcScreen } from "./CalcScreen";
+import { moveTrigger, openMovePicker, selectedMoveId } from "../test/movePicker";
 
 type Schemas = components["schemas"];
 type Favorite = Schemas["Favorite"];
@@ -99,7 +100,6 @@ function request(token: number, favorite: Favorite): FavoriteRestoreRequest {
 
 const attackerSelect = () => screen.getByRole("combobox", { name: "攻撃側のポケモン" });
 const defenderSelect = () => screen.getByRole("combobox", { name: "防御側のポケモン" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 
 function lastBulk(engine: FakeEngine): BulkRequest {
   const last = engine.bulkRequests.at(-1);
@@ -171,7 +171,7 @@ describe("R-1 mount 時の復元", () => {
 
     expect(attackerSelect()).toHaveValue("9004-000");
     expect(defenderSelect()).toHaveValue("9005-000");
-    expect(moveSelect()).toHaveValue("examplemovethunder");
+    expect(selectedMoveId()).toBe("examplemovethunder");
     expect(
       await screen.findByText(favoritesRestoreText.restoredNotice(favorite.label ?? "")),
     ).toBeInTheDocument();
@@ -260,7 +260,7 @@ describe("R-4 戻せない項目の通知", () => {
     expect(alert).toHaveTextContent("examplemovegone");
     expect(attackerSelect()).toHaveValue("9004-000");
     expect(defenderSelect()).toHaveValue("9005-000");
-    expect(moveSelect()).toHaveValue("");
+    expect(selectedMoveId()).toBe("");
     expect(engine.bulkRequests).toHaveLength(0);
   });
 
@@ -454,9 +454,13 @@ describe("R-9 技を戻せなかったときの未選択の選択肢", () => {
       />,
     );
     await screen.findByRole("alert");
+    // 技ピッカー: 何も選ばれておらず(data-value が空)、トリガーは「技を選んでください」を出し、
+    // 開くと先頭の「技を選んでください」の行は disabled(選べない)。
+    expect(selectedMoveId()).toBe("");
+    expect(moveTrigger()).toHaveTextContent(favoritesRestoreText.moveUnselectedOption);
+    await openMovePicker(userEvent.setup());
     const option = screen.getByRole("option", { name: favoritesRestoreText.moveUnselectedOption });
-    expect(option).toBeDisabled();
-    expect(option).toHaveProperty("selected", true);
+    expect(option).toHaveAttribute("aria-disabled", "true");
   });
 });
 

@@ -274,6 +274,26 @@ function rowCells(table: HTMLElement, name: string): string[] {
     .map((cell) => cell.textContent.trim());
 }
 
+/**
+ * 段落(<p>)の文字全体(textContent)で引く。タイプはバッジ、人数は大きい数字の別要素に分かれた(G-05。I-web-13f)ため、
+ * 要素ごとの自分の文字だけを見る getByText では引けない。語・並びは変えていないので、見る文字は同じ。
+ */
+function queryByParagraph(scope: HTMLElement, text: string): HTMLElement | null {
+  return (
+    within(scope)
+      .queryAllByText((_content, element) => element?.tagName === "P" && element.textContent === text)
+      .at(0) ?? null
+  );
+}
+
+function getByParagraph(scope: HTMLElement, text: string): HTMLElement {
+  const found = queryByParagraph(scope, text);
+  if (found === null) {
+    throw new Error(`段落「${text}」が無い`);
+  }
+  return found;
+}
+
 function columnHeaders(table: HTMLElement): string[] {
   return within(table)
     .getAllByRole("columnheader")
@@ -933,8 +953,9 @@ describe("threats(仮想敵の診断)", () => {
     });
 
     const region = threatRegion(1, enemy.nameJa);
-    expect(within(region).getByText("安全に受けられる 5人")).toBeInTheDocument();
-    expect(within(region).getByText("抜群を取れる 4人")).toBeInTheDocument();
+    // 数字は大きい別要素(G-05)なので、段落全体の文字(textContent)で見る。語は変えていない。
+    expect(getByParagraph(region, "安全に受けられる 5人")).toBeInTheDocument();
+    expect(getByParagraph(region, "抜群を取れる 4人")).toBeInTheDocument();
   });
 
   test("メンバーが2人なら、仮想敵の表にも2行出す(応答の順)", async () => {
@@ -1072,7 +1093,7 @@ describe("recommendations(おすすめタイプ)", () => {
 
     expect(screen.queryByText("おすすめタイプを計算中")).not.toBeInTheDocument();
     const region = recommendationsRegion();
-    expect(within(region).getByText(`防御の穴: ${typeNameJa.fire}・${typeNameJa.water}`)).toBeInTheDocument();
+    expect(getByParagraph(region, `防御の穴: ${typeNameJa.fire}・${typeNameJa.water}`)).toBeInTheDocument();
     expect(within(region).getByText("攻撃範囲の穴: なし")).toBeInTheDocument();
   });
 
@@ -1159,8 +1180,8 @@ describe("recommendations(おすすめタイプ)", () => {
     });
 
     const region = recommendationsRegion();
-    expect(within(region).getByText(`防御の穴: ${typeNameJa.water}`)).toBeInTheDocument();
-    expect(within(region).queryByText(`防御の穴: ${typeNameJa.fire}`)).not.toBeInTheDocument();
+    expect(getByParagraph(region, `防御の穴: ${typeNameJa.water}`)).toBeInTheDocument();
+    expect(queryByParagraph(region, `防御の穴: ${typeNameJa.fire}`)).not.toBeInTheDocument();
   });
 
   test("recommendations のエラーは role=alert で知らせ、仮想敵の表は出したままにする", async () => {

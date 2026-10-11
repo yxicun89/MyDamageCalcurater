@@ -5,17 +5,20 @@
 //   - 変化技だけの種族から別の種族へ変えると、技が選び直される
 // 技の分類はマスタの Move.category から導く(テストも名前・ID を直書きしない)。
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { learnsetMoves } from "../domain/moves";
 import { calcScreenText } from "../i18n/ja";
+import { orderMoves } from "../domain/moveOrder";
+import type { Move } from "../engine/types";
 import { exampleMasterSource } from "../master/exampleSource";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { createFakeEngine } from "../test/fakeEngine";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
 import { CalcScreen } from "./CalcScreen";
+import { listedOption, listedOptions, selectedMoveId } from "../test/movePicker";
 
 // 期待値はマスタの分類(Move.category)から導く(実装の関数には依存しない)。
 const damaging = (species: MasterSpecies, moves: MasterData["moves"]) =>
@@ -53,13 +56,14 @@ afterEach(() => {
 
 const attackerSpeciesSelect = () => screen.getByRole("combobox", { name: "攻撃側のポケモン" });
 const defenderSpeciesSelect = () => screen.getByRole("combobox", { name: "防御側のポケモン" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 
-function optionIds(select: HTMLElement): string[] {
-  return within(select)
-    .queryAllByRole("option")
-    .map((option) => (option as HTMLOptionElement).value)
-    .filter((value) => value !== "");
+/** 並びはタイプ順だけ(G-01、ADR-0341)。learnset の順ではなく orderMoves の順で比べる。 */
+function inTypeOrder(moves: readonly Move[]): string[] {
+  return orderMoves(moves, master.typeChart.types).map((move) => move.id);
+}
+
+function optionIds(): string[] {
+  return listedOptions().map((option) => option.getAttribute("data-move-id") ?? "");
 }
 
 describe("オフライン(MasterData.moves)", () => {
@@ -70,9 +74,9 @@ describe("オフライン(MasterData.moves)", () => {
 
     const expected = damaging(mixed, master.moves).map((move) => move.id);
     expect(expected.length).toBeGreaterThan(0);
-    expect(optionIds(moveSelect())).toEqual(expected);
+    expect(optionIds()).toEqual(inTypeOrder(damaging(mixed, master.moves)));
     for (const move of learnsetMoves(mixed, master.moves).filter((m) => m.category === "status")) {
-      expect(within(moveSelect()).queryByRole("option", { name: move.nameJa })).toBeNull();
+      expect(listedOption(move.nameJa)).toBeNull();
     }
   });
 
@@ -81,7 +85,7 @@ describe("オフライン(MasterData.moves)", () => {
     render(<CalcScreen engine={createFakeEngine()} master={master} />);
     await user.selectOptions(attackerSpeciesSelect(), mixed.key);
 
-    expect(moveSelect()).toHaveValue(damaging(mixed, master.moves)[0]?.id);
+    expect(selectedMoveId()).toBe(damaging(mixed, master.moves)[0]?.id);
   });
 
   test("変化技だけの種族: 選択肢は0件で案内が出て、計算せず、変化技の案内(status-move)も出ない", async () => {
@@ -91,7 +95,7 @@ describe("オフライン(MasterData.moves)", () => {
     await user.selectOptions(defenderSpeciesSelect(), mixed.key);
     await user.selectOptions(attackerSpeciesSelect(), statusOnly.key);
 
-    expect(optionIds(moveSelect())).toEqual([]);
+    expect(optionIds()).toEqual([]);
     expect(await screen.findByText(calcScreenText.noDamagingMovesNotice)).toBeInTheDocument();
     expect(screen.queryByText(calcScreenText.statusMoveNotice)).toBeNull();
     expect(screen.queryByRole("list", { name: "計算結果" })).toBeNull();
@@ -106,7 +110,7 @@ describe("オフライン(MasterData.moves)", () => {
     await user.selectOptions(attackerSpeciesSelect(), statusOnly.key);
     await user.selectOptions(attackerSpeciesSelect(), mixed.key);
 
-    expect(moveSelect()).toHaveValue(damaging(mixed, master.moves)[0]?.id);
+    expect(selectedMoveId()).toBe(damaging(mixed, master.moves)[0]?.id);
     expect(screen.queryByText(calcScreenText.noDamagingMovesNotice)).toBeNull();
     await waitFor(() => {
       expect(engine.bulkRequests.length).toBeGreaterThan(0);
@@ -138,8 +142,8 @@ describe("オンライン(検索で解決した種族の learnset → 技)", () 
 
     const expected = damaging(mixed, master.moves).map((move) => move.id);
     await waitFor(() => {
-      expect(optionIds(moveSelect())).toEqual(expected);
+      expect(optionIds()).toEqual(inTypeOrder(damaging(mixed, master.moves)));
     });
-    expect(moveSelect()).toHaveValue(expected[0]);
+    expect(selectedMoveId()).toBe(expected[0]);
   });
 });

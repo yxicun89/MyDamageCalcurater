@@ -550,7 +550,7 @@ test_runbooks() {
   bad=$(grep -rnF "sed -i ''" "$ROOT/docs/runbooks" "$ROOT/docs/impl/runbook-commands.md" || true)
   if [ -z "$bad" ]; then ok; else ng "sed -i '' が残っている: $bad"; fi
   begin "runbook: root の DSN(pokedex-dsn)を取り出さない"
-  bad=$(grep -rnE "\.data\.pokedex-dsn\}" "$ROOT/docs/runbooks" "$ROOT/docs/verify-m1.md" "$ROOT/docs/impl/runbook-commands.md" || true)
+  bad=$(grep -rnE "\.data\.pokedex-dsn\}" "$ROOT/docs/runbooks" "$ROOT/docs/verify.md" "$ROOT/docs/impl/runbook-commands.md" || true)
   if [ -z "$bad" ]; then ok; else ng "pokedex-dsn(root)を使っている。pokedex-reader-dsn にする: $bad"; fi
   begin "runbook: 実行中の context の namespace を書き換えない(一時 kubeconfig を使う)"
   bad=$(grep -rn "set-context" "$ROOT/docs/runbooks" | grep -v 'KUBECONFIG=' || true)

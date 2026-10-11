@@ -323,3 +323,38 @@ describe("通信・応答の失敗は team_unavailable(自動の切り替えは�
     await expect(teamClient.remove(TEAM_ID)).resolves.toMatchObject({ ok: false });
   });
 });
+
+// G-02(docs/usability-round3.md): 実サーバーは技が 0 個のメンバーの moveIds を応答から省く(契約では必須でなく既定 [])。
+// 欠けた moveIds を [] にそろえて返し、読んだ側(下書きへの変換)が undefined で落ちない。
+describe("moveIds を省いた応答(技が 0 個のメンバー)", () => {
+  const omitted = {
+    ...team,
+    members: [
+      { speciesKey: "0006-000", natureId: "adamant", sp: { hp: 0, atk: 0, def: 0, spa: 0, spd: 0, spe: 0 } },
+    ],
+  };
+
+  test.each([
+    ["list", (c: ReturnType<typeof createTeamClient>) => c.list(), [omitted]],
+    ["create", (c: ReturnType<typeof createTeamClient>) => c.create(input), omitted],
+    ["get", (c: ReturnType<typeof createTeamClient>) => c.get(TEAM_ID), omitted],
+    ["update", (c: ReturnType<typeof createTeamClient>) => c.update(TEAM_ID, input), omitted],
+  ] as const)("%s は moveIds を [] にそろえる", async (_name, call, body) => {
+    const { client: teamClient } = client(jsonResponse(200, body));
+    const result = await call(teamClient);
+    expect(result.ok).toBe(true);
+    if (!result.ok) {
+      return;
+    }
+    const value: unknown = result.value;
+    const teams = Array.isArray(value) ? (value as Schemas["Team"][]) : [value as Schemas["Team"]];
+    expect(teams[0]?.members[0]?.moveIds).toEqual([]);
+  });
+
+  test("moveIds があるメンバーは変えない", async () => {
+    const withMoves = { ...team, members: [{ ...omitted.members[0], moveIds: ["tackle", "growl"] }] };
+    const { client: teamClient } = client(jsonResponse(200, [withMoves]));
+    const result = await teamClient.list();
+    expect(result).toEqual({ ok: true, value: [withMoves] });
+  });
+});

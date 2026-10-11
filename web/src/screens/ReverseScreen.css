@@ -18,21 +18,14 @@
   gap: var(--space-3);
 }
 
-/* 側・調整・単位の選択肢は .ui-chip(components.css)。ネイティブのラジオは視覚的に隠し、ラベルのクリックで選ぶ。 */
-.reverse-side__option,
-.reverse-preset__option,
-.reverse-observation__unit-option {
-  position: relative;
-  font-size: var(--font-size-caption);
+/* ダメージの側・単位は区切りボタン(.ui-segmented。components.css)。調整はチップ(ToggleChip。.calc-chip は CalcScreen.css)。 */
+/* 側の区切りボタンは画面幅いっぱいに伸ばさない(縦並びの flex の既定 stretch を外す)。 */
+.reverse-side {
+  align-self: flex-start;
 }
 
-.reverse-side__option input,
-.reverse-observation__unit-option input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
+.reverse-preset__option {
+  font-size: var(--font-size-caption);
 }
 
 /* 幅への対応(docs/design.md「幅への対応(ブレークポイント)」): 既定(600px 未満)は1列縦積み
@@ -67,14 +60,26 @@
   color: var(--text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
 }
 
-/* 領域(カード)の見える見出し(issue 304、design.md「入力のラベル」)。 */
+/* 領域(カード)の見える見出し(issue 304、design.md「入力のラベル」)。領域名(h2)は区画のラベルなので小さく、
+   種族名(ポケモンカードの h3)を主役の大きさにする(計算画面と同じ)。 */
 .reverse-card__region {
   margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+/* 自分・相手の顔(ポケモンカード。G-05)。名前は h3 なので見出しの大きさにする。 */
+.reverse-card__face {
+  box-shadow: none;
+}
+
+.reverse-card__face .ui-pokemon-card__name {
+  margin: 0;
   font-size: var(--font-size-heading);
-  color: var(--text-primary);
 }
 
 /* 入力欄の見えるラベル(issue 304)。視覚的に隠さない(clip・width:1px 等を使わない)。 */
@@ -96,6 +101,7 @@
 .reverse-screen__move {
   width: 100%;
   min-width: 0;
+  min-height: 44px;
   border: 1px solid var(--border-hairline);
   border-radius: var(--radius-input);
   background: var(--bg-base);
@@ -109,21 +115,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-}
-
-.reverse-preset__input {
-  position: absolute;
-  opacity: 0;
-  width: 1px;
-  height: 1px;
-  pointer-events: none;
-}
-
-.reverse-side__option:has(input:focus-visible),
-.reverse-preset__option:has(.reverse-preset__input:focus-visible),
-.reverse-observation__unit-option:has(input:focus-visible) {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 .reverse-observations {
@@ -153,6 +144,7 @@
   color: var(--text-primary);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
 }
 
@@ -160,9 +152,9 @@
   border-color: var(--danger);
 }
 
+/* 単位の区切りボタンは入力欄の右に並べる(狭い幅でも 1 行に収まる大きさ)。 */
 .reverse-observation__unit {
-  display: flex;
-  gap: var(--space-2);
+  justify-self: end;
 }
 
 /* 観測欄の説明(issue 304、design.md「入力のラベル」): 単位(%/HP)と観測した側で文が変わる。
@@ -184,6 +176,7 @@
 .reverse-observation__remove {
   grid-column: 1 / -1;
   justify-self: start;
+  min-height: 44px;
   font-size: var(--font-size-caption);
 }
 
@@ -194,6 +187,7 @@
   border-radius: var(--radius-pill);
   font-family: var(--font-family);
   font-size: var(--font-size-body);
+  min-height: 44px;
 }
 
 .reverse-results {
@@ -218,6 +212,7 @@
 .reverse-results__list {
   display: flex;
   flex-direction: column;
+  gap: var(--space-2);
 }
 
 /* 観測を2件以上入れて届いた結果は「絞り込み」の動き(design.md「画面: 逆算」「観測を追加すると候補が
@@ -238,59 +233,82 @@
   }
 }
 
+/* 候補のカード(G-05)。主は「型の名前」と「予測ダメージ%の大きい数字」。バーを添え、SP の範囲・持ち物・特性は
+   下に小さく並べる。見た目の順と DOM の順は同じ(WCAG 1.3.2。order を使わない)。 */
 .reverse-results__row {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   column-gap: var(--space-3);
-  row-gap: var(--space-1);
+  row-gap: var(--space-2);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
   padding: var(--space-3);
 }
 
 .reverse-results__nature {
   font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
   color: var(--text-primary);
 }
 
-.reverse-results__ability,
-.reverse-results__item {
-  grid-column: 1 / -1;
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.reverse-results__ranges {
-  grid-column: 1 / -1;
-  font-size: var(--font-size-body);
+/* 型の名前(H振り 等)・「ほぼ合う候補」・「参考」のバッジ。塗りは持たせず枠 + 文字色(塗りは確定数など主の印だけ)。 */
+.reverse-results__badge {
+  border: 1px solid var(--text-secondary);
+  background: var(--surface-card);
   color: var(--text-primary);
-}
-
-/* issue #305: 全候補が不一致のとき、SP 範囲は厳密一致ではなく「参考」であることを添える。 */
-.reverse-results__reference-label {
-  margin-inline-start: var(--space-1);
   font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-}
-
-.reverse-results__guide {
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
+  padding: var(--space-1) var(--space-2);
 }
 
 .reverse-results__mismatch {
-  font-size: var(--font-size-caption);
+  border-color: var(--danger);
   color: var(--danger);
 }
 
 .reverse-results__percent {
-  grid-column: 1 / -1;
-  font-size: var(--font-size-result);
-  color: var(--text-primary);
+  margin-inline-start: auto;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
 }
 
 /* issue #305: %欄が「その候補で撃ったときの予測ダメージ%」であることを示すラベル。 */
 .reverse-results__percent-label {
   margin-inline-end: var(--space-1);
+}
+
+.reverse-results__percent-value {
+  font-size: var(--font-size-result);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-strong);
+  color: var(--text-primary);
+}
+
+.reverse-results__bar {
+  flex-basis: 100%;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.reverse-results__bar-fill {
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+}
+
+.reverse-results__ranges {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-body);
+  color: var(--text-primary);
+}
+
+.reverse-results__ability,
+.reverse-results__item {
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
@@ -309,7 +327,7 @@
 
 /* 候補カードの中の「未対応」の印(design.md「画面: 逆算」)。一部の候補だけにある印をここに出す。 */
 .reverse-results__unsupported {
-  grid-column: 1 / -1;
+  flex-basis: 100%;
   display: flex;
   align-items: baseline;
   gap: var(--space-1);

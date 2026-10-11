@@ -58,7 +58,14 @@
 .adjust-screen__field select,
 .adjust-screen__field input[type="number"] {
   max-width: 100%;
+  min-height: 44px;
   padding: var(--space-2) var(--space-3);
+}
+
+/* 能力ポイントの欄は − / + 付き(.ui-stepper。数値欄は .ui-stepper__input の幅と見た目を使う)。 */
+.adjust-screen__field input.ui-stepper__input {
+  max-width: none;
+  padding: var(--space-2);
 }
 
 .adjust-screen__fixed-sp {
@@ -165,4 +172,149 @@ p.adjust-screen__verdict {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+/* ---- G-05(ADR-0353): 目標のタイルとカード・結論の数字・振り方の横棒 ---- */
+.adjust-screen__add-goal {
+  display: flex;
+}
+
+.adjust-screen__add-goal .ui-tile {
+  flex: 1;
+  min-width: 0;
+}
+
+.adjust-screen__goal-kind {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: var(--space-2);
+  color: var(--brand-primary);
+}
+
+.adjust-screen__goal > .ui-pokemon-card {
+  align-self: flex-start;
+  max-width: 100%;
+}
+
+.adjust-screen__verdict {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.adjust-screen__verdict-icon {
+  flex-shrink: 0;
+}
+
+.adjust-sp-bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.adjust-sp-bars__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.adjust-sp-bars__label {
+  flex: 0 0 1.5em;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.adjust-sp-bars__track {
+  flex: 1;
+  min-width: 0;
+  height: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.adjust-sp-bars__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--brand-primary);
+}
+
+.adjust-sp-bars__value {
+  flex: 0 0 2ch;
+  min-width: 2ch;
+  text-align: right;
+  font-size: var(--font-size-title);
+  font-weight: var(--font-weight-heading);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+/* ---- I-web-18(ADR-0354): 目標カードを「見て分かる」形に。種類・振り方は区切りボタン、相手は絵のタイル、技は技ピッカー ---- */
+.adjust-screen__field--wide {
+  flex-basis: 100%;
+  align-items: stretch;
+  flex-direction: column;
+  flex-wrap: nowrap;
+}
+
+.adjust-screen__field-label {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+/* 区切りボタンは幅いっぱい。狭い画面では選択肢を等分し、文字は折り返す(アイコンは文字の上)。 */
+.adjust-screen__field--wide > .ui-segmented {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  border-radius: var(--radius-card);
+}
+
+.adjust-screen__field--wide > .ui-segmented .ui-segmented__option {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--space-2);
+  text-align: center;
+  line-height: 1.3;
+}
+
+.adjust-screen__kind .ui-segmented__option {
+  flex-direction: column;
+}
+
+/* これまでに選んだ相手の絵のタイル(横に並べ、はみ出たら折り返す)。 */
+.adjust-screen__recent {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.adjust-screen__recent-tile {
+  flex: 0 1 112px;
+  min-width: 0;
+  min-height: 44px;
+  padding: var(--space-2);
+  font-size: var(--font-size-caption);
+}
+
+.adjust-screen__picker {
+  width: 100%;
+  min-height: 44px;
+}
+
+.adjust-screen__help {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+/* 欄の aria-describedby の先。画面には出さず(説明ボタンの奥)、支援技術には今までどおり読ませる。 */
+.adjust-screen__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }

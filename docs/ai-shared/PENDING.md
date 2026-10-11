@@ -16,13 +16,14 @@
 | クラウド公開前のアクセス境界と認証方針 | issue #148 | 2026-09-23 | 全レーン |
 | リポジトリの公開状態(公開するか。LICENSE・クリーンコピー・第三者データを含まない確認。R-2-9) | docs/plan/blockers.md・issue #328 | 2026-09-21 | データ(ユーザー) |
 | Argo CD のリポジトリ認証(PAT 等の登録。非公開のままなら必要。balance・speed・judge の Application が取得できる状態) | state/type-balance.md Next ③・ADR-0605 | 2026-09-24 | データ(ユーザー) |
-| 新しいクラスタでの `docs/verify-m1.md` §3 の通し実行(Secret・DB・マスタ投入・NetworkPolicy。人間の確認つき) | docs/verify-m1.md §3・state/data.md | 2026-10-03 | データ(ユーザー) |
+| 新しいクラスタでの `docs/verify-m1.md` §3 の通し実行(Secret・DB・マスタ投入・NetworkPolicy。人間の確認つき) | docs/verify.md §1-1・state/data.md | 2026-10-03 | データ(ユーザー) |
 | P4-5 の Safari 実機確認(Chrome は確認済み。作業は止めない) | docs/plan/blockers.md | 2026-09-22 | Web(ユーザー) |
 | 失効ジョブ(record-expire・team-expire)を k3d の実データへ初めて向ける承認 | docs/plan/blockers.md・ADR-0209・ADR-0220 | 2026-09-26 | API(ユーザー) |
 | 共有クラスタへの apply(NetworkPolicy・Grafana 管理者 Secret・pokedex の実 digest 確定 → overlay の PR → Sync) | state/type-balance.md Next・issue #237 | 2026-09-24 | タイプバランス・素早さ・データ(ユーザー) |
 | iOS のシミュレータ・実機での見た目確認と `make ios-test`。Xcode の署名チーム・実機インストール | state/ios.md・state/type-balance.md Next ④ | 2026-09-26 | iOS(ユーザー) |
 | main のブランチ保護の有効化(PR 必須・CI 必須・force push と削除の禁止。AI の自動モードが CI 設定の変更として止めたため人間が実行。他の #243 の設定〈Dependabot・マージ後のブランチ削除・squash/rebase の無効化〉は 2026-10-03 に適用済み) | issue #243・decisions/2026-10-03-data-github-settings-243.md | 2026-10-03 | データ(ユーザー) |
 | リポジトリを非公開に戻すか(戻すなら先に Argo CD へ GitHub の認証〈PAT〉を登録しないと Argo CD が取得できなくなる。非公開の無料プランではブランチ保護が使えない) | issue #328・#243 | 2026-10-03 | データ(ユーザー) |
+| ソフトウェアアーキテクチャの採用の残りの判断(ヘキサゴナル採用・A は決定済み。S0 の担当レーン・検査の道具・移行の順番ほか 9 問) | docs/plan/architecture-adoption.md §8 | 2026-10-11 | 全レーン(ユーザー) |
 
 ## 既定案で進行中(ユーザー未確認)
 

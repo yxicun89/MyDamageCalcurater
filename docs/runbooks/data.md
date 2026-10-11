@@ -331,7 +331,7 @@ kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 ```
 確認: 最後の行が `job.batch/<job名> condition met`。`make up` が Secret を新しく作り、migrate が DB と用途別ユーザーを作る。
 取得はこの Job の中で行う(ネットワークが要る)。ここまでで `pokedex` が `1/1` になる。
-calc・gateway・web・balance・speed・judge は `docs/verify-m1.md` の §3・§4(`make pokedex-export` → `make deploy-latest`)で入れ直す。
+calc・gateway・web・balance・speed・judge は `docs/verify.md` の §1(`make pokedex-export` → `make deploy-latest`)で入れ直す。
 
 ### b. MySQL の PVC(`data-mysql-0`)だけ失ったとき
 
@@ -357,7 +357,7 @@ kubectl -n pokecalc wait --for=condition=complete "job/$job_name" --timeout=600s
 make deploy-latest
 ```
 確認: `wait` が `condition met` で終わり、2回目の `deploy-latest` が `全サービスを <コミット> の内容で入れ替えた` で終わる
-(balance・speed の read model が無ければ、先に `make pokedex-export`。`docs/verify-m1.md` §3)。
+(balance・speed の read model が無ければ、先に `make pokedex-export`。`docs/verify.md` §1-1)。
 
 ### c. `pokedex-import-cache` だけ失ったとき
 

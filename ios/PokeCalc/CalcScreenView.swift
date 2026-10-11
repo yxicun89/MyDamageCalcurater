@@ -40,7 +40,7 @@ struct CalcScreenView: View {
         restoringFavorite: RestoringFavorite? = nil
     ) {
         _viewModel = State(
-            initialValue: CalcViewModel(service: service, teamStore: teamStore, moveSortStore: MoveSortStore.forApp()))
+            initialValue: CalcViewModel(service: service, teamStore: teamStore))
         _frequentOpponents = State(
             initialValue: FrequentOpponentsViewModel(service: frequentOpponentsService, resolver: service))
         _favoritePin = State(initialValue: FavoritePinViewModel(service: favoritesService))
@@ -280,7 +280,7 @@ struct CalcScreenView: View {
             MoveSearchSheet(
                 viewModel: viewModel, options: viewModel.displayedMoveOptions,
                 onSelect: { move in viewModel.scheduleLatest { await $0.selectMove(id: move.id) } },
-                sortOrder: Binding(get: { viewModel.moveSortOrder }, set: { viewModel.moveSortOrder = $0 }))
+                groupsByType: true)
         }
     }
 

@@ -188,9 +188,30 @@ export const calcConditionsText = {
   rankDownLabel: "攻撃側のランクを下げる",
   defenderRankUpLabel: "防御側のランクを上げる",
   defenderRankDownLabel: "防御側のランクを下げる",
-  /** ランクの増減ボタンの見た目の記号。 */
-  rankUpSymbol: "+",
-  rankDownSymbol: "-",
+} as const;
+
+/** 計算画面の「対戦の状態」(残り HP・多段の回数。ADR-0144 §3、I-web-14)。 */
+export const battleStateText = {
+  toggleLabel: "対戦の状態",
+  /** 設定中の目印(閉じていても分かるように)。 */
+  activeMark: "(設定中)",
+  attackerHpLabel: "攻撃側の残りHP",
+  attackerHpHint: "空なら満タンで計算します",
+  defenderHpLabel: "防御側の残りHP",
+  defenderHpHint: "割合(%)で入力します。確定数は残りHPから数えます(%表示は最大HPに対する値のまま)",
+  percentUnit: "%",
+  /** 横に出す「/ 最大」と割合。 */
+  maxSuffix: (max: number): string => `/ ${max}`,
+  hpError: (max: number): string => `1〜${max}で入力してください`,
+  clamped: (max: number): string => `最大HP(${max})に合わせました`,
+  hitsLabel: "回数",
+  hitsDefault: (min: number, max: number): string => `既定(通常 ${min + 1} 回/スキルリンク等 ${max} 回)`,
+  hitsOption: (count: number): string => `${count} 回`,
+  /** 結果の近くに出す、前提にした状態。 */
+  summary: (parts: readonly string[]): string => `対戦の状態: ${parts.join("・")}`,
+  summaryAttacker: (hp: number, max: number): string => `攻撃側 HP ${hp}/${max}`,
+  summaryDefender: (percent: number): string => `防御側 HP ${percent}%`,
+  summaryHits: (count: number): string => `${count} 回`,
 } as const;
 
 /**

@@ -36,6 +36,24 @@ const REQUIRED_CLASSES = [
   ".ui-notice--loading",
   ".ui-notice--info",
   ".ui-icon",
+  // G-05(ADR-0339)
+  ".ui-segmented",
+  ".ui-segmented__option",
+  ".ui-segmented__option--selected",
+  ".ui-stepper",
+  ".ui-stepper__button",
+  ".ui-stepper__input",
+  ".ui-tile",
+  ".ui-tile--selected",
+  ".ui-tile--empty",
+  ".ui-pokemon-card",
+  ".ui-pokemon-card--small",
+  ".ui-help",
+  ".ui-help__button",
+  ".ui-help__body",
+  ".ui-sheet",
+  ".ui-sheet__scrim",
+  ".ui-sheet__close",
 ] as const;
 
 interface LocatedRule {
@@ -276,5 +294,67 @@ describe("動き(操作のときだけ)", () => {
       .filter(({ atRules }) => !atRules.some((prelude) => /\(hover:\s*hover\)/.test(prelude)))
       .map(({ rule }) => rule.selector);
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("G-05 の部品(区切りボタン・増減ボタン・タイル・ポケモンカード・シート)", () => {
+  test("選択中の区切りボタンは主色の塗りに on.primary の文字", () => {
+    const selected = declarationsFor(".ui-segmented__option--selected");
+    expect(selected.get("background")).toBe("var(--brand-primary)");
+    expect(selected.get("color")).toBe("var(--on-primary)");
+  });
+
+  test.each([".ui-segmented__option", ".ui-stepper__button", ".ui-stepper__input", ".ui-sheet__close"])(
+    "%s は主な操作なので 44px 以上",
+    (selector) => {
+      const declarations = declarationsFor(selector);
+      const size = declarations.get("min-height") ?? declarations.get("height");
+      expect(size, `${selector} の高さ`).toBe("44px");
+    },
+  );
+
+  test.each([
+    ".ui-segmented__option",
+    ".ui-stepper__button",
+    ".ui-tile",
+    ".ui-sheet__close",
+    ".ui-help__button",
+  ])("%s は :focus-visible で var(--focus-ring) の輪を出す", (className) => {
+    const rules = readComponents().filter(({ rule }) =>
+      splitSelectors(rule.selector).some(
+        (selector) => selector.startsWith(className) && selector.includes(":focus-visible"),
+      ),
+    );
+    expect(rules.length).toBeGreaterThan(0);
+    expect(rules.flatMap(({ rule }) => rule.declarations.map((d) => d.value)).join(" ")).toContain(
+      "var(--focus-ring)",
+    );
+  });
+
+  test("シートの出入りの時間は var(--duration-sheet) だけ", () => {
+    const transitions = readComponents()
+      .filter(({ rule }) => /\.ui-sheet/.test(rule.selector))
+      .flatMap(({ rule }) => rule.declarations.filter((d) => d.property === "transition"));
+    expect(transitions.length).toBeGreaterThan(0);
+    for (const transition of transitions) {
+      expect(transition.value).toContain("var(--duration-sheet)");
+    }
+  });
+
+  test("シートは広い幅(600px 以上)で右の面になる", () => {
+    const wide = readComponents().filter(
+      ({ rule, atRules }) =>
+        atRules.some((prelude) => /min-width:\s*600px/.test(prelude)) && /\.ui-sheet/.test(rule.selector),
+    );
+    expect(wide.length).toBeGreaterThan(0);
+  });
+
+  test("ポケモンカードはカードの角丸(小さいときは入力の角丸)", () => {
+    expect(declarationsFor(".ui-pokemon-card").get("border-radius")).toBe("var(--radius-card)");
+    expect(declarationsFor(".ui-pokemon-card--small").get("border-radius")).toBe("var(--radius-input)");
+  });
+
+  test("空き枠のタイルは破線で区別する(色だけに頼らない)", () => {
+    expect(declarationsFor(".ui-tile--empty").get("border-style")).toBe("dashed");
   });
 });

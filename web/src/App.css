@@ -126,6 +126,20 @@
   font-size: var(--font-size-body);
 }
 
+.about__section-heading,
+.about__dialog-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.about__points {
+  margin: 0;
+  padding: 0;
+  font-size: var(--font-size-body);
+  color: var(--text-secondary);
+}
+
 :where(.about__section) p,
 .about__sources {
   margin: 0;
@@ -143,10 +157,6 @@
 
 .about__source-title {
   color: var(--text-primary);
-}
-
-.about__data p + p {
-  margin-top: var(--space-2);
 }
 
 .about__actions {

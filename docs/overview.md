@@ -1,7 +1,7 @@
 # プロジェクト概要
 
 自分用の、ポケモンチャンピオンズ向けアプリ。ダメージ計算を中心に、タイプの穴を診断する機能・素早さを比べる機能・
-「抜けて倒せるか」を1回で判定する機能を、同じ基盤の上に積み上げている。動作確認は [verify-m1.md](verify-m1.md)、
+「抜けて倒せるか」を1回で判定する機能を、同じ基盤の上に積み上げている。動作確認は [verify.md](verify.md)、
 構成図は [architecture.md](architecture.md)、進捗は [plan.md](plan.md) を参照。
 
 ## これは何のためのアプリか
@@ -62,17 +62,24 @@
 
 ## どうやって作っているか
 
-各機能(ダメージ計算・API・画面・タイプバランス・素早さ・判定・iOS)を「レーン」という単位に分け、
+各機能(ダメージ計算・API・画面・タイプバランス・素早さ・判定・iOS・別アプリの欲しいものリスト)を「レーン」という単位に分け、
 AI(Claude Code / Codex)がレーンごとに独立した作業ディレクトリで並行して実装している。決定事項や
 引き継ぎは `docs/ai-shared/` に記録し、`main` ブランチに全レーンの成果を集約する。この運用の詳細は
 [docs/ai-shared/COORDINATION.md](ai-shared/COORDINATION.md)。
+
+## 同じリポジトリの別アプリ
+
+`apps/wishlist/` に、自分用の「欲しいものリスト」を置いている。欲しいものを画像だけで並べ、タップすると
+「だいたいいくらで買えそうか」と各サイトの検索リンクを出す。ポケモンのダメージ計算とは機能もデータも共有せず、
+同じ k3d クラスタ(namespace `wishlist`)と MySQL のインスタンスだけを共用する。説明は
+[../apps/wishlist/README.md](../apps/wishlist/README.md)。
 
 ## もっと詳しく知るには
 
 | 知りたいこと | 見る場所 |
 |---|---|
 | 今どこまで進んでいるか | [plan.md](plan.md) |
-| 動かして確かめる手順 | [verify-m1.md](verify-m1.md)、`docs/runbooks/` |
+| 動かして確かめる手順 | [verify.md](verify.md)、`docs/runbooks/` |
 | 構成図・データの流れ | [architecture.md](architecture.md) |
 | 機能ごとの詳しい仕様 | [requirements.md](requirements.md)、`docs/*-design.md` |
 | 見た目・操作感の方針 | [design.md](design.md) |

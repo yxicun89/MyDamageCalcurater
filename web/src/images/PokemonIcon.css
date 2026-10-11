@@ -1,0 +1,26 @@
+/*
+ * 小さなポケモン表示(images/PokemonIcon.tsx。G-06・ADR-0343)。画像とエンブレムを同じ寸法の枠に収める。
+ * 色は tokens.css の CSS 変数だけ。常時動くアニメーションは置かない。
+ */
+
+.pokemon-icon {
+  display: inline-block;
+  flex: none;
+  width: calc(var(--space-5) + var(--space-2));
+  height: calc(var(--space-5) + var(--space-2));
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.pokemon-icon--emblem {
+  width: var(--space-5);
+  height: var(--space-5);
+  margin: var(--space-1);
+  border-radius: var(--radius-pill);
+}
+
+/* 見出し・凡例(legend)の先頭に置くときは、文字との間をあける。 */
+h2 > .pokemon-icon,
+legend > .pokemon-icon {
+  margin-inline-end: var(--space-2);
+}

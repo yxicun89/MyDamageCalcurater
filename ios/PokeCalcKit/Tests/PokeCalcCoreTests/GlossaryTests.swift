@@ -81,7 +81,6 @@ final class GlossaryTests: XCTestCase {
             BalanceScreenText.screenTitle, BalanceScreenText.emptyNotice, BalanceScreenText.threatsRegionLabel,
             BalanceScreenText.addThreatLabel, BalanceScreenText.threatsLoadingNotice, BalanceScreenText.tooManyThreats,
         ])
-        add("ShowdownText", [ShowdownTextLabels.lookupFailure, ShowdownTextLabels.exportSkippedNotice(count: 1)])
         return out
     }
 

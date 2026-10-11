@@ -277,6 +277,28 @@ describe("AC-2 往復(状態 → calc → 状態)", () => {
   });
 });
 
+describe("AC-2b 対戦の状態(battleState。ADR-0144 §3)の往復", () => {
+  test("指定した値だけが calc に入り、戻すと同じ状態になる(省略は入れない)", () => {
+    const battleState = { defenderCurrentHp: 50, hits: 3 };
+    const calc = calcOf({ ...FULL_STATE(), battleState }, "special");
+    expect(calc.battleState).toEqual(battleState);
+    const restored = restoreFavoriteCalc(calc, lookupFor(master, calc));
+    expect(restored.state.battleState).toEqual(battleState);
+    expect(restored.issues).toEqual([]);
+  });
+
+  test("状態が無いときは calc にキーを作らず、戻した状態にも無い", () => {
+    const calc = calcOf(FULL_STATE(), "special");
+    expect(calc).not.toHaveProperty("battleState");
+    expect(restoreFavoriteCalc(calc, lookupFor(master, calc)).state).not.toHaveProperty("battleState");
+  });
+
+  test("空のオブジェクトは無いものとして戻す", () => {
+    const calc = { ...calcOf(FULL_STATE(), "special"), battleState: {} };
+    expect(restoreFavoriteCalc(calc, lookupFor(master, calc)).state).not.toHaveProperty("battleState");
+  });
+});
+
 describe("AC-3 戻せない項目は既定に戻して報告する(引けた部分は戻す)", () => {
   function restoreWith(mutate: (calc: CalcRequest) => CalcRequest, data: () => MasterData = () => master) {
     const calc = mutate(calcOf(FULL_STATE(), "special"));

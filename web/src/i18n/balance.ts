@@ -102,6 +102,10 @@ export const balanceScreenText = {
   incomingColumnLabel: "受ける倍率",
   outgoingColumnLabel: "与える倍率",
   safeColumnLabel: "安全",
+  /** 人数の行は「前の語 + 大きい数字 + 後ろの語」に分けて出す(G-05。つなげた文字は safeMembersLabel と同じ)。 */
+  safeMembersPrefix: "安全に受けられる ",
+  superEffectiveMembersPrefix: "抜群を取れる ",
+  memberCountSuffix: "人",
   safeMembersLabel: (n: number): string => `安全に受けられる ${String(n)}人`,
   superEffectiveMembersLabel: (n: number): string => `抜群を取れる ${String(n)}人`,
   threatsLoadingNotice: "仮想敵を計算中",

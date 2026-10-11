@@ -45,9 +45,9 @@ test("manifest にある種族のカードには画像(<img>)が出て、無い�
   await expect(img).toHaveAttribute("alt", "");
   // 実際に読み込めている(壊れていれば onError でエンブレムに戻る)。
   await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
-  await expect(attacker.getByTestId("type-emblem")).toHaveCount(0);
+  await expect(attacker.getByTestId("pokemon-icon-emblem")).toHaveCount(0);
   await expect(defender.locator("img")).toHaveCount(0);
-  await expect(defender.getByTestId("type-emblem")).toHaveCount(1);
+  await expect(defender.getByTestId("pokemon-icon-emblem")).toHaveCount(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
@@ -71,7 +71,7 @@ test("manifest が 404 のままでも、エンブレムで従来どおり動き
 
   for (const name of ["攻撃側", "防御側"]) {
     const card = page.getByRole("region", { name, exact: true });
-    await expect(card.getByTestId("type-emblem")).toHaveCount(1);
+    await expect(card.getByTestId("pokemon-icon-emblem")).toHaveCount(1);
     await expect(card.locator("img")).toHaveCount(0);
   }
   await expect(page.getByRole("alert")).toHaveCount(0);
@@ -94,7 +94,7 @@ test("manifest が HTML(SPA のフォールバック)でもコンソールエラ
   await openAppOffline(page);
   await selectMatchup(page, SPECIES.fire.nameJa, SPECIES.water.nameJa);
   await expect(
-    page.getByRole("region", { name: "攻撃側", exact: true }).getByTestId("type-emblem"),
+    page.getByRole("region", { name: "攻撃側", exact: true }).getByTestId("pokemon-icon-emblem"),
   ).toHaveCount(1);
   await expect(page.getByRole("alert")).toHaveCount(0);
   expect(problems).toEqual([]);

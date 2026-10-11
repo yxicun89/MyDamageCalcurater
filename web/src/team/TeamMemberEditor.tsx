@@ -3,10 +3,10 @@
 // (楽観更新しない。失敗時は下書きを残す)。画面は TeamScreen が開いている間だけ mount される(閉じると下書きは捨てる)。
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import type { BalanceClient } from "../api/balanceClient";
 import type { components } from "../api/openapi.gen";
 import { megaStoneItemIds } from "../domain/mega";
 import { megaItemText, teamMemberText } from "../i18n/ja";
-import { teamShowdownText } from "../i18n/team";
 import { itemRoleText } from "../i18n/items";
 import { megaStoneLabel } from "../domain/itemRoles";
 import { masterCapabilities } from "../master/capabilities";
@@ -18,8 +18,11 @@ import type {
 } from "../master/types";
 import { selectableAbilities } from "../domain/requests";
 import { useSpeciesResolutions } from "../screens/speciesResolution";
+import { Icon } from "../ui/Icon";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";
+import { TeamBalanceSection } from "./TeamBalanceSection";
+import { TeamSlotGrid } from "./TeamSlotGrid";
 import type { TeamClient, TeamError } from "./teamClient";
 import { changeSpecies, correctMegaItem, type MegaItemCorrection, type MemberDraft } from "./teamMember";
 import { defaultNatureId } from "./teamMemberOptions";
@@ -33,7 +36,6 @@ import {
   swapSlots,
   teamInputFromMembers,
 } from "./teamSlots";
-import { TeamShowdownExport } from "./TeamShowdownExport";
 
 type Schemas = components["schemas"];
 
@@ -44,6 +46,8 @@ export interface TeamMemberEditorProps {
   readonly master: MasterData;
   readonly masterSearch: MasterSpeciesSearch | undefined;
   readonly teamClient: TeamClient;
+  /** タイプバランスの口(ADR-0421)。無いときは「タイプバランス」の節を出さない(構築の編集・保存には関係しない)。 */
+  readonly balanceClient?: BalanceClient;
   /** update が成功したときに、応答の Team で親の一覧を書き換える。 */
   readonly onSaved: (team: Schemas["Team"]) => void;
   /** 一覧に戻る(未保存の変更があるときは、確認の後に呼ばれる)。 */
@@ -101,6 +105,7 @@ export function TeamMemberEditor({
   master,
   masterSearch,
   teamClient,
+  balanceClient,
   onSaved,
   onClose,
 }: TeamMemberEditorProps): ReactNode {
@@ -178,6 +183,16 @@ export function TeamMemberEditor({
     const slot = editorRef.current?.querySelectorAll<HTMLElement>("fieldset.team-member")[focusRequest.index];
     slot?.querySelector<HTMLElement>("select, input")?.focus();
   }, [focusRequest]);
+
+  /** 格子のタイルを押したとき: その枠の先頭の欄(空の枠では「ポケモン」欄)へ移る。 */
+  function jumpToSlot(index: number): void {
+    const slot = editorRef.current?.querySelectorAll<HTMLElement>("fieldset.team-member")[index];
+    const field = slot?.querySelector<HTMLElement>("select, input");
+    field?.focus();
+    // jsdom などには scrollIntoView が無いので、あるときだけ呼ぶ。
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    slot?.scrollIntoView?.({ block: "nearest" });
+  }
 
   function edit(update: (entries: readonly Entry[]) => readonly Entry[]): void {
     setState((current) => ({ ...current, entries: update(current.entries) }));
@@ -310,6 +325,19 @@ export function TeamMemberEditor({
         </div>
       )}
 
+      <TeamSlotGrid
+        slots={state.entries.map((entry) => {
+          const key = entry.draft.speciesKey;
+          return {
+            speciesKey: key,
+            species: key === null ? null : resolutions.speciesFor(master.species, key),
+            itemId: entry.draft.itemId,
+          };
+        })}
+        items={master.items}
+        onSelect={jumpToSlot}
+      />
+
       {state.entries.map((entry, index) => {
         const key = entry.draft.speciesKey;
         const species = key === null ? null : resolutions.speciesFor(master.species, key);
@@ -343,6 +371,16 @@ export function TeamMemberEditor({
         );
       })}
 
+      {balanceClient !== undefined && (
+        <TeamBalanceSection
+          drafts={drafts}
+          client={balanceClient}
+          master={master}
+          masterSearch={masterSearch}
+          resolutions={resolutions}
+        />
+      )}
+
       <div className="team-member-editor__actions">
         <button
           type="button"
@@ -354,11 +392,17 @@ export function TeamMemberEditor({
         >
           {teamMemberText.saveLabel}
         </button>
-        {unsaved && <span className="team-member-editor__unsaved">{teamMemberText.unsavedNotice}</span>}
+        {unsaved && (
+          <span className="team-member-editor__unsaved">
+            <Icon name="alert" size={16} />
+            {teamMemberText.unsavedNotice}
+          </span>
+        )}
       </div>
 
       {saved && (
         <p role="status" className="team-member-editor__notice">
+          <Icon name="check" size={16} />
           {teamMemberText.savedNotice}
         </p>
       )}
@@ -368,12 +412,6 @@ export function TeamMemberEditor({
           <p>{error.message}</p>
         </div>
       )}
-
-      <details className="ui-card team-fold">
-        <summary>{teamShowdownText.exportFoldLabel}</summary>
-        <p className="team-fold__help">{teamShowdownText.exportHelp}</p>
-        <TeamShowdownExport team={team} name={displayName} master={master} masterSearch={masterSearch} />
-      </details>
     </section>
   );
 }

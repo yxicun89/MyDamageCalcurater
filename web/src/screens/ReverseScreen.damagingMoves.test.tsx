@@ -8,12 +8,15 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { learnsetMoves } from "../domain/moves";
 import { calcScreenText } from "../i18n/ja";
+import { orderMoves } from "../domain/moveOrder";
+import type { Move } from "../engine/types";
 import { exampleMasterSource } from "../master/exampleSource";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { createFakeEngine } from "../test/fakeEngine";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";
 import { ReverseScreen } from "./ReverseScreen";
+import { listedOptions, selectedMoveId } from "../test/movePicker";
 
 // 期待値はマスタの分類(Move.category)から導く(実装の関数には依存しない)。
 const damaging = (species: MasterSpecies, moves: MasterData["moves"]) =>
@@ -51,14 +54,15 @@ afterEach(() => {
 
 const mySpeciesSelect = () => screen.getByRole("combobox", { name: "自分のポケモン" });
 const theirSpeciesSelect = () => screen.getByRole("combobox", { name: "相手のポケモン" });
-const moveSelect = () => screen.getByRole("combobox", { name: "技" });
 const sideGroup = () => screen.getByRole("radiogroup", { name: "どちらのダメージ" });
 
-function optionIds(select: HTMLElement): string[] {
-  return within(select)
-    .queryAllByRole("option")
-    .map((option) => (option as HTMLOptionElement).value)
-    .filter((value) => value !== "");
+/** 並びはタイプ順だけ(G-01、ADR-0341)。learnset の順ではなく orderMoves の順で比べる。 */
+function inTypeOrder(moves: readonly Move[]): string[] {
+  return orderMoves(moves, master.typeChart.types).map((move) => move.id);
+}
+
+function optionIds(): string[] {
+  return listedOptions().map((option) => option.getAttribute("data-move-id") ?? "");
 }
 
 describe("オフライン", () => {
@@ -70,8 +74,8 @@ describe("オフライン", () => {
 
     const expected = damaging(mixed, master.moves).map((move) => move.id);
     expect(expected.length).toBeGreaterThan(0);
-    expect(optionIds(moveSelect())).toEqual(expected);
-    expect(moveSelect()).toHaveValue(expected[0]);
+    expect(optionIds()).toEqual(inTypeOrder(damaging(mixed, master.moves)));
+    expect(selectedMoveId()).toBe(expected[0]);
   });
 
   test("ダメージした側を切り替えても、変化技は出ない", async () => {
@@ -82,7 +86,7 @@ describe("オフライン", () => {
     const radios = within(sideGroup()).getAllByRole("radio");
     for (const radio of radios) {
       await user.click(radio);
-      for (const id of optionIds(moveSelect())) {
+      for (const id of optionIds()) {
         expect(learnsetMoves(mixed, master.moves).find((m) => m.id === id)?.category).not.toBe("status");
       }
     }
@@ -96,7 +100,7 @@ describe("オフライン", () => {
     await user.selectOptions(mySpeciesSelect(), statusOnly.key);
     await user.selectOptions(theirSpeciesSelect(), statusOnly.key);
 
-    expect(optionIds(moveSelect())).toEqual([]);
+    expect(optionIds()).toEqual([]);
     expect(await screen.findByText(calcScreenText.noDamagingMovesNotice)).toBeInTheDocument();
     expect(screen.queryByText(calcScreenText.statusMoveNotice)).toBeNull();
     expect(engine.reverseRequests).toHaveLength(0);
@@ -127,7 +131,6 @@ describe("オンライン(検索で解決した種族)", () => {
       await user.click(await screen.findByRole("option", { name: mixed.nameJa }));
     }
 
-    const expected = damaging(mixed, master.moves).map((move) => move.id);
-    expect(optionIds(moveSelect())).toEqual(expected);
+    expect(optionIds()).toEqual(inTypeOrder(damaging(mixed, master.moves)));
   });
 });

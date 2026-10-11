@@ -26,6 +26,14 @@ const REQUIRED_ICONS: readonly IconName[] = [
   "alert",
   "info",
   "check",
+  // G-05(ADR-0339)
+  "minus",
+  "close",
+  "open",
+  "history",
+  "help",
+  "up",
+  "down",
 ];
 
 function svgOf(container: HTMLElement): SVGSVGElement {

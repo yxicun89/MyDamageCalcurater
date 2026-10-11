@@ -1,5 +1,7 @@
 # ADR-0310: Showdown 形式の変換部(web/src/team/showdownFormat.ts)
 
+> 2026-10-11 追記: Showdown 形式の取り込み・書き出しは ADR-0342(G-03)で廃止した。画面・変換部のコードは削除済み。以下は履歴。
+
 - 状態: 採用(2026-10-03。判定レーンの判断)
 - 関連: ADR-0213 §4(Showdown 入出力はクライアント担当・team-svc に置かない)、ADR-0309(構築ビルダーの骨組み)、
   requirements.md §2、CLAUDE.md ドメイン規約(SP・名前をハードコードしない)

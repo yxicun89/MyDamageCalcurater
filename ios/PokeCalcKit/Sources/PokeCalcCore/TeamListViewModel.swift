@@ -66,7 +66,7 @@ public final class TeamListViewModel {
         await createTeam(name: name, members: [])
     }
 
-    /// 取り込んだメンバーで新しい構築を作る(既定名)。7 体以上は保存せず nil(`error`)。
+    /// 指定したメンバーで新しい構築を作る(既定名。「この構築を作り直す」など)。7 体以上は保存せず nil(`error`)。
     public func createTeam(members: [TeamMember]) async -> Team? {
         await createTeam(name: TeamNaming.defaultName, members: members)
     }

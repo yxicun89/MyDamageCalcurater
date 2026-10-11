@@ -221,3 +221,34 @@ Next(F-12 PR-2 残り画面 / I-web-12): 実装済み・コミット前(ADR-0336
 Next(F-13 文言のやさしい言い換え / I-web-11): 実装済み・コミット前(ADR-0337 採用)。残りは PR 化のみ。用語集 `docs/glossary.md` を画面の言葉の正にした(判定画面 judge.ts は判定レーンの担当で例外)。iOS は `decisions/2026-10-04-web-plain-wording.md` の語に揃える。次は I-web-10(F-06 素早さ表)。
 
 Next(計算履歴の一覧 / ADR-0338): 実装済み・コミット前(ADR-0338 採用)。残りは PR 化のみ。お気に入りの画面の第2の節(`favorites/CalcHistorySection.tsx`)。種族・技は key 表示(名前の解決は要望が出たら別 ADR)。iOS は `decisions/2026-10-09-web-calc-history.md` の語・挙動に揃える。
+
+**見た目の作り直し方針(2026-10-11。ADR-0339。I-web-13 / G-05。ブランチ docs/web-visual-policy-g05)**: 方針だけ(文書のみ・コードの変更なし)。docs/design.md に「見た目の作り直し方針(G-05)」を足した。
+iOS は `decisions/2026-10-11-web-visual-policy-g05.md` の対応表で追う。Next: 実装・コミット前の方針は PR 化のみ。次は I-web-13a(共通の部品)→ 13b(計算。G-01 と同じ PR)。
+Status(追記 2026-10-11): I-web-14(ADR-0340)= 計算画面の「対戦の状態」(残りHP・多段の回数)を**データレーンが実装**(Web レーンの依頼を代行。critic・PR は後で)。`CalcScreen.tsx`・`BattleStatePanel.tsx`・`domain/battleState*.ts`・`favoriteCalc.ts`。
+Status(追記 2026-10-11): I-web-15(G-01、ADR-0341 採用)= 計算・逆算の技欄を技ピッカー(`MovePicker`)にした(タイプ順だけ・1 行・分類アイコン)。並びの切り替え(MoveSortControls・useMoveSort・moveSortStorage・i18n/moveSort・domain/moveSort とその旧テスト)は削除。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g01-move-picker.md` に揃える。
+
+Status(追記 2026-10-11): I-web-16(G-03、ADR-0342 採用)= Showdown 形式の取り込み・書き出しを廃止(入口と専用コード・文言・テストを削除。「このアプリについて」の出典表記と `showdownId` は別物なので残す)。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g03-remove-showdown.md` に揃える。
+
+Status(追記 2026-10-11): I-web-17(G-06 Web、ADR-0343 採用)= `PokemonIcon` を検索候補・お気に入り・計算履歴・逆算/構築編集/バランスの枠に追加(画像なしでもエンブレムで成立)。判定・調整・select の option は対象外。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g06-pokemon-images.md` に揃える。
+
+Status(追記 2026-10-11): I-web-13a(G-05 共通の部品、ADR-0344 採用)= `web/src/ui/` に PokemonCard・Tile・SegmentedControl・Stepper・Sheet・HelpButton・TypeBadge と新アイコン 7 つ、`--duration-sheet`。画面は変えていない。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g05-components.md` に揃える。次は I-web-13b(計算の作り直し)。
+
+Status(追記 2026-10-11): I-web-13b(G-05 計算の画面、ADR-0345)= 計算を `PokemonCard`・`SegmentedControl`・増減ボタン・チップ・確定数を主にした結果に作り直した(`CalcScreen.tsx`・`CalcConditionsPanel.tsx`・`BattleStatePanel.tsx`・`ToggleChip.tsx`・`CalcScreen.css`)。既存テストは 8 か所を最小に付け替え(decisions に一覧)。実装済み・コミット前。残りは PR 化のみ。iOS は `decisions/2026-10-11-web-g05-calc.md`。次は I-web-13c(逆算)。
+
+Status(追記 2026-10-11): I-web-13c(G-05 逆算の画面、ADR-0346)= 逆算を `PokemonCard`・`SegmentedControl`・チップ・候補のカード + バッジ・バーに作り直し、共通の `SpeciesSearchField` の補足の文を「説明」ボタンの奥へ(`ReverseScreen.tsx`・`.css`・`SpeciesSearchField.tsx`・`ToggleChip.tsx`)。既存テストの付け替えは `ReverseScreen.visual.test.tsx` の 2 件・`SpeciesSearchField.test.tsx`/`speciesSearch.test.ts` の補足の 1 件ずつ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-reverse.md`。次は I-web-13d(構築)。
+注(13c): 種族検索欄の補足の文が「説明」ボタンの奥に移ったのは共通部品 `SpeciesSearchField` の変更で、計算・タイプバランス・構築の検索欄にも効く。
+
+Status(追記 2026-10-11): I-web-13d(G-05 構築の画面、ADR-0347)= 構築を 6 枠のタイルの格子(`TeamSlotGrid.tsx`)・SP の − / +・アイコンだけのボタン・一覧のカードの 6 枠に作り直した。既存テストの付け替えは 2 件のみ(空の一覧の文を短くしたため `teamRebuildText.test.ts`・`App.deviceData.test.tsx`)。技の `MovePicker` 化は I-web-13d2 に分けた。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-team.md`。次は I-web-13e(素早さ。speed レーンと調整)。
+
+Status(追記 2026-10-11): I-web-13g(G-05 お気に入り・計算履歴、ADR-0348)= `FavoritesScreen.tsx`・`CalcHistorySection.tsx`・`.css`・`i18n/favorites.ts` を作り直した(アイコン見出し・行全体を押せる使うボタン・%の大きい数字とバー・空の状態のアイコン + 短い一言)。既存テストの付け替えは `FavoritesScreen.restore.test.tsx` の 1 件のみ(使うボタンの見える文字が「使う」に短くなったため)。「計算へ」ボタンは後続。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-favorites.md`。次は I-web-13e(素早さ。speed レーンと調整)。
+Status(追記 2026-10-11): I-web-13i(G-05 このアプリについて、ADR-0349)= `AboutScreen.tsx`・`DeviceDataSection.tsx`・App.css を作り直した(見出しのアイコン・説明の箇条化・削除ボタンのごみ箱)。文面・名前は不変で既存テストの付け替えなし。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-about.md`。
+
+Status(追記 2026-10-11): I-web-13d2(構築の技を `MovePicker` に、ADR-0350)= `TeamMemberFields.tsx` の技 4 枠を共有ピッカーへ。`MovePicker` に `noneLabel`・`disabledIds` を追加(計算・逆算は不変)、`moveOptions` は `Move` を返す。既存テストは `TeamScreen.members`・`TeamScreen.rebuild`・e2e `teamRebuild` を `test/teamMovePicker.ts` で付け替え。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-team-move-picker.md`。次は I-web-13e。
+
+Status(追記 2026-10-11): I-web-13e(G-05 素早さの画面、ADR-0351)= `SpeedScreen.tsx`・`.css`・`SpeedNeighborhoodPanel.tsx` を作り直した(`ToggleChip` に任意 prop `ariaDisabled`、`NeighborTierInput` に任意の pokemonId/types)。既存テストの付け替えは `SpeedScreen.visual.test.tsx` の 1 件(入力の方法が ui-chip から区切りボタンへ)のみ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-speed.md`。残りは 13f・13h。
+
+Status(追記 2026-10-11): I-web-13f(G-05 タイプバランスの画面、ADR-0352)= `BalanceScreen.tsx`・`.css`・新規 `balanceCells.tsx` を作り直した(メンバー/仮想敵のポケモンカード・追加の空きタイル・升目の記号 + 文字 + 淡い色・タイプバッジ見出し・大きい人数)。API・状態の流れは不変。既存テストの付け替えは 4 件(追加ボタンの class、段落の textContent での引き方 3)。技の `MovePicker` 化は見送り。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-balance.md`。残りは 13h。
+
+Status(追記 2026-10-11): I-web-13h(G-05 調整の画面、ADR-0353)= `AdjustScreen.tsx`・`.css` を見た目だけ作り直した(ec レーンと合意。ロジック・API・`adjust*.ts` 不変)。自分・相手の `PokemonCard`、固定 SP・上限の − / +、「目標を追加」の空きタイル(`Tile` に `describedBy`)、目標カードの種類アイコン + 相手の小さなカード、振り方の横棒 + 大きい数字、結論の成功/失敗アイコン。既存テストの付け替えは `AdjustScreen.visual.test.tsx` の 1 件(「目標を追加」が ui-button--secondary から空きタイルへ)のみ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-adjust.md`。G-05 の画面適用(13b〜13i)はこれで全部。
+
+Status(追記 2026-10-11): I-web-18(調整の目標カードを見て分かる形に、ADR-0354)= 種類・振り方(4 択以下)を `SegmentedControl`、技を `MovePicker`、相手を選んだ相手の絵のタイルに、補足の文を「説明」ボタンの奥へ(`AdjustScreen.tsx`・`.css`・`MovePicker` に任意 prop 2 つ)。ロジック・API・語は不変。既存テストは helper 付け替え(意味は不変)。実装済み・コミット前。iOS は decisions/2026-10-11-web-g05-adjust.md の追記に揃える。

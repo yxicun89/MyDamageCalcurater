@@ -42,6 +42,7 @@
   font-family: var(--font-family);
   font-size: var(--font-size-body);
   padding: var(--space-2) var(--space-3);
+  min-height: 44px;
 }
 
 /* 入力欄の見えるラベル(issue 304、design.md「入力のラベル」)。視覚的に隠さない。 */
@@ -133,4 +134,141 @@
   border-left-width: 3px;
   border-left-style: solid;
   border-left-color: var(--border-hairline);
+}
+
+/* ---- G-05(I-web-13f。ADR-0352): タイル・ポケモンカード・升目の記号 + 文字 ---- */
+
+/* 追加は「+」の空きタイル(幅いっぱいの低いタイル)。 */
+.balance-screen__add {
+  flex-direction: row;
+  align-self: stretch;
+  min-height: 56px;
+}
+
+.balance-member__card {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.balance-member__remove {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+/* 表の見出し: 画像かエンブレム / 記号 + 名前を横に並べる。 */
+.balance-heading {
+  display: inline-flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.balance-heading .pokemon-icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+/* 升目: 記号 + 文字(色だけに頼らない)。色は *-soft の塗り、記号は状態色、文字は text.primary。 */
+.balance-cell__inner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  white-space: nowrap;
+}
+
+.balance-cell__text {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-strong);
+}
+
+.balance-cell--good {
+  background-color: var(--success-soft);
+}
+
+.balance-cell--good .ui-icon {
+  color: var(--success);
+}
+
+.balance-cell--caution {
+  background-color: var(--warning-soft);
+}
+
+.balance-cell--caution .ui-icon {
+  color: var(--warning);
+}
+
+.balance-cell--bad {
+  background-color: var(--danger-soft);
+}
+
+.balance-cell--bad .ui-icon {
+  color: var(--danger);
+}
+
+.balance-cell--info {
+  background-color: var(--info-soft);
+}
+
+.balance-cell--info .ui-icon {
+  color: var(--info);
+}
+
+.balance-cell--plain .ui-icon {
+  color: var(--text-secondary);
+}
+
+/* 人数は大きい数字(集計の表・仮想敵の結果)。 */
+.balance-count-cell {
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-strong);
+  text-align: center;
+}
+
+.balance-screen__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.balance-screen__counts > .balance-count {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.balance-count__number {
+  font-size: var(--font-size-result);
+  font-weight: var(--font-weight-strong);
+  line-height: 1;
+}
+
+.balance-holes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.balance-types {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.balance-types__separator {
+  color: var(--text-secondary);
+}
+
+.balance-screen__threat-card {
+  align-self: flex-start;
+}
+
+/* 仮想敵の相性の表: 狭い幅でも語を 1 字ずつ折り返さず、包みの中で横にスクロールさせる。 */
+.balance-screen__threat th,
+.balance-screen__threat td {
+  white-space: nowrap;
 }

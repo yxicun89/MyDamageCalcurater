@@ -45,7 +45,7 @@ flowchart LR
 | `make web-k3d-deploy` → `make web-k3d-open` → `make web-k3d-smoke`                         | k3d に載せて開き、確かめる                                                                    |
 | `make gen-ts`                                                                              | `api/openapi.yaml` から API の型を生成                                                        |
 
-動作確認の手順は [docs/verify-m1.md](../docs/verify-m1.md)。
+動作確認の手順は [docs/verify.md](../docs/verify.md)。
 
 ## 関連 ADR
 

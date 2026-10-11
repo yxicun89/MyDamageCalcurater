@@ -379,12 +379,55 @@ describe("AC-5 ARIA の参照は宙に浮かせない(critic 指摘(5))", () => 
     expect(comboboxInput()).not.toHaveAttribute("aria-activedescendant");
   });
 
-  test("補足(hint)は今までどおり aria-describedby で結ぶ(既存の挙動の回帰ガード)", () => {
+  test("補足の文は「説明」ボタンの奥(G-05)。開くとその文が出て、開くまで出さない", async () => {
+    const user = userEvent.setup();
     renderWithCandidates(3);
 
-    const describedBy = comboboxInput().getAttribute("aria-describedby");
-    expect(describedBy).not.toBeNull();
-    expect(document.getElementById(describedBy ?? "")).toHaveTextContent(masterOnlineText.speciesSearchHint);
+    expect(screen.queryByText(masterOnlineText.speciesSearchHint)).toBeNull();
+    await user.click(screen.getByRole("button", { name: "説明" }));
+    expect(screen.getByText(masterOnlineText.speciesSearchHint)).toBeInTheDocument();
+  });
+
+  test("補足は combobox の aria-describedby では結ばず、説明ボタンの aria-expanded / aria-controls で結ぶ", async () => {
+    const user = userEvent.setup();
+    renderWithCandidates(3);
+
+    expect(comboboxInput()).not.toHaveAttribute("aria-describedby");
+    const help = screen.getByRole("button", { name: "説明" });
+    expect(help).toHaveAttribute("aria-expanded", "false");
+    expect(help).not.toHaveAttribute("aria-controls");
+    await user.click(help);
+    expect(help).toHaveAttribute("aria-expanded", "true");
+    const body = document.getElementById(help.getAttribute("aria-controls") ?? "");
+    expect(body).toHaveTextContent(masterOnlineText.speciesSearchHint);
+  });
+
+  test("Tab 順はラベル(フォーカス不可)→ 説明ボタン → 入力欄", async () => {
+    const user = userEvent.setup();
+    renderWithCandidates(3);
+
+    await user.tab();
+    expect(screen.getByRole("button", { name: "説明" })).toHaveFocus();
+    await user.tab();
+    expect(comboboxInput()).toHaveFocus();
+  });
+
+  test("説明ボタンを開閉しても、入力中の文字・候補・IME 変換中のキー(素通し)に影響しない", async () => {
+    const view = renderWithCandidates(3);
+    await view.open();
+    const before = optionElements().length;
+    const input = comboboxInput() as HTMLInputElement;
+    const typed = input.value;
+
+    await view.user.click(screen.getByRole("button", { name: "説明" }));
+    await view.user.click(screen.getByRole("button", { name: "説明" }));
+    expect(input.value).toBe(typed);
+    expect(optionElements()).toHaveLength(before);
+
+    input.focus();
+    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    expect(view.onResolved).not.toHaveBeenCalled();
+    expect(optionElements()).toHaveLength(before);
   });
 });
 

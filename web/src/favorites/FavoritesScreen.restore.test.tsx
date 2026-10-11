@@ -84,12 +84,13 @@ describe("「計算に使う」ボタン", () => {
     expect(favoritesScreenText.useLabel("HB特化")).toBe("「HB特化」を計算に使う");
   });
 
-  test("onUse を渡すと各行にボタンを出す(見える文字がそのまま名前)", async () => {
+  test("onUse を渡すと各行にボタンを出す(見える文字「使う」は名前に含まれる。WCAG 2.5.3。ADR-0348)", async () => {
     await renderLoaded([WITH_CALC, LEGACY], () => undefined);
     for (const favorite of [WITH_CALC, LEGACY]) {
       const title = favorite.label ?? favorite.individual.speciesKey;
       const button = within(rowOf(title)).getByRole("button", { name: favoritesScreenText.useLabel(title) });
-      expect(button).toHaveTextContent(favoritesScreenText.useLabel(title));
+      expect(button).toHaveTextContent(favoritesScreenText.useShort);
+      expect(favoritesScreenText.useLabel(title)).toContain(favoritesScreenText.useShort);
     }
   });
 

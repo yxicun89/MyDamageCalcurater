@@ -55,6 +55,7 @@ private struct SpeedSelfSection: View {
             case .raw: rawControls
             }
             SpeedResultView(viewModel: viewModel)
+            SpeedNeighborhoodSection(viewModel: viewModel)
         }
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
