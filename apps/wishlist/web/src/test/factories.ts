@@ -26,6 +26,11 @@ export function makeGenre(over: Partial<Genre> & { id: number }): Genre {
     query_template: "{name} {option}",
     sort_order: 0,
     site_ids: [],
+    // フェーズ5 5-1b で Genre に必須で足した項目(api/openapi.yaml)。既定値はサーバーの既定と同じ
+    color: "#1d5fd1",
+    icon: "box",
+    match_hosts: [],
+    match_keywords: [],
     ...over,
   };
 }

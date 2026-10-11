@@ -37,6 +37,9 @@ func Parse(baseURL *url.URL, r io.Reader) (Draft, error) {
 	var ogTitle, ogImage *string
 	var docTitle string
 	haveDocTitle := false
+	bandai := strings.EqualFold(baseURL.Hostname(), "bandai-hobby.net")
+	sliderDepth := 0 // >0: .pg-products__sliderMain の中
+	var sliderImage *string
 	z := html.NewTokenizer(r)
 	for {
 		tt := z.Next()
@@ -46,10 +49,28 @@ func Parse(baseURL *url.URL, r io.Reader) (Draft, error) {
 			}
 			break
 		}
+		if tt == html.EndTagToken && sliderDepth > 0 {
+			sliderDepth--
+		}
 		if tt != html.StartTagToken && tt != html.SelfClosingTagToken {
 			continue
 		}
 		tn, hasAttr := z.TagName()
+		if bandai && sliderImage == nil {
+			if tag := string(tn); tag == "img" {
+				if sliderDepth > 0 {
+					sliderImage = attrValue(z, hasAttr, "src")
+				}
+				continue
+			} else if tt == html.StartTagToken && !voidElements[tag] {
+				switch {
+				case sliderDepth > 0:
+					sliderDepth++
+				case hasClass(attrValue(z, hasAttr, "class"), "pg-products__sliderMain"):
+					sliderDepth = 1
+				}
+			}
+		}
 		switch string(tn) {
 		case "title":
 			if tt == html.StartTagToken && !haveDocTitle && z.Next() == html.TextToken {
@@ -98,6 +119,10 @@ func Parse(baseURL *url.URL, r io.Reader) (Draft, error) {
 	}
 	if d.Title == "" {
 		d.Title = collapse(docTitle)
+	}
+	if bandai {
+		// og:image がサイト共通の画像なので、本文の商品画像だけを使う。
+		ogImage = sliderImage
 	}
 	if ogImage != nil {
 		if ref := strings.TrimSpace(*ogImage); ref != "" {
@@ -172,4 +197,35 @@ func (f *Fetcher) get(ctx context.Context, rawURL string, max int64) ([]byte, *u
 // collapse は前後の空白を除き、連続する空白を半角空白 1 つに詰める。
 func collapse(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// voidElements は終了タグを持たない要素(sliderMain の深さの数え上げから除く)。
+var voidElements = map[string]bool{
+	"area": true, "base": true, "br": true, "col": true, "embed": true, "hr": true, "img": true, "input": true,
+	"link": true, "meta": true, "param": true, "source": true, "track": true, "wbr": true,
+}
+
+// attrValue は現在のタグの属性 name の値を返す(無ければ nil)。TagName の直後に呼ぶ。
+func attrValue(z *html.Tokenizer, hasAttr bool, name string) *string {
+	for hasAttr {
+		k, v, more := z.TagAttr()
+		if string(k) == name {
+			s := string(v)
+			return &s
+		}
+		hasAttr = more
+	}
+	return nil
+}
+
+func hasClass(class *string, want string) bool {
+	if class == nil {
+		return false
+	}
+	for _, c := range strings.Fields(*class) {
+		if c == want {
+			return true
+		}
+	}
+	return false
 }

@@ -3,7 +3,6 @@
 # Chromium は /headless-shell/headless-shell(実イメージで確認)。非 root・capabilities drop ALL・seccomp RuntimeDefault では
 # ユーザー名前空間のサンドボックスが使えないため、refresher が --no-sandbox を付けて起動する(コンテナが分離の境界。実サイトは夜間にこの Pod だけが開く)。
 # NetworkPolicy が制限しているのは Ingress だけで、Egress は未制限(Egress の制限は共通基盤の変更になるため、docs/phase3-api-spec.md に将来の提案として記録)。
-# Secret wishlist-api の yahoo-appid は任意(無ければ api 型のサイトは取得しない)。
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -44,12 +43,6 @@ spec:
                     secretKeyRef:
                       name: wishlist-api
                       key: database-dsn
-                - name: WISHLIST_YAHOO_APPID
-                  valueFrom:
-                    secretKeyRef:
-                      name: wishlist-api
-                      key: yahoo-appid
-                      optional: true
                 - name: WISHLIST_CHROMIUM_PATH
                   value: /headless-shell/headless-shell
                 # Go のヒープだけの目安(Chromium は別プロセス。コンテナ全体の上限は limits の 1Gi)。

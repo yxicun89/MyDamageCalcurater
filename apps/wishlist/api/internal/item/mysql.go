@@ -3,6 +3,7 @@ package item
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -134,13 +135,32 @@ func (r *MySQLRepository) ListItems(ctx context.Context, genreID *int64) ([]Item
 	if err != nil {
 		return nil, err
 	}
+	links, err := r.q.ListGenreSites(ctx) // genre_id, sort_order, site_id 順
+	if err != nil {
+		return nil, err
+	}
+	siteIDs := map[int64][]int64{}
+	for _, l := range links {
+		siteIDs[l.GenreID] = append(siteIDs[l.GenreID], l.SiteID)
+	}
+	estRows, err := r.q.ListEstimates(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ests := map[int64][]Estimate{}
+	for _, e := range estRows {
+		ests[e.ItemID] = append(ests[e.ItemID], toEstimate(e))
+	}
 	out := make([]Item, 0, len(rows))
 	for _, row := range rows {
 		var official *OfficialStatus
 		if o, ok := officials[row.ID]; ok {
 			official = &o
 		}
-		out = append(out, toItem(row, byItem[row.ID], official))
+		it := toItem(row, byItem[row.ID], official)
+		sum := SummarizeItem(it, siteIDs[row.GenreID], ests[row.ID])
+		it.Summary = &sum
+		out = append(out, it)
 	}
 	return out, nil
 }
@@ -347,9 +367,33 @@ func (r *MySQLRepository) ListGenres(ctx context.Context) ([]Genre, error) {
 		if ids == nil {
 			ids = []int64{}
 		}
-		out = append(out, Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasesByGenre[g.ID])})
+		out = append(out, Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasesByGenre[g.ID])}.withStyle(g))
 	}
 	return out, nil
+}
+
+// withStyle は g に色・絵柄・推定の手がかり(genres の列)を載せる。JSON が読めなければ長さ 0 にする(列は NOT NULL の配列)。
+func (g Genre) withStyle(row store.Genre) Genre {
+	g.Color, g.Icon = row.Color, GenreIcon(row.Icon)
+	g.MatchHosts, g.MatchKeywords = unmarshalStrings(row.MatchHosts), unmarshalStrings(row.MatchKeywords)
+	return g
+}
+
+// marshalStrings は文字列の配列を JSON にする(nil は [])。
+func marshalStrings(v []string) json.RawMessage {
+	if v == nil {
+		v = []string{}
+	}
+	b, _ := json.Marshal(v) // []string は必ず符号化できる
+	return b
+}
+
+func unmarshalStrings(raw json.RawMessage) []string {
+	out := []string{}
+	if err := json.Unmarshal(raw, &out); err != nil || out == nil {
+		return []string{}
+	}
+	return out
 }
 
 // getGenre はジャンルとその site_ids を読む。forUpdate なら行をロックする(更新の直前に読むとき)。
@@ -379,7 +423,7 @@ func (r *MySQLRepository) getGenre(ctx context.Context, q *store.Queries, id int
 	if err != nil {
 		return Genre{}, err
 	}
-	return Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasRows)}, nil
+	return Genre{ID: g.ID, Name: g.Name, QueryTemplate: g.QueryTemplate, SortOrder: int(g.SortOrder), SiteIDs: ids, Aliases: toAliasGroups(aliasRows)}.withStyle(g), nil
 }
 
 // toAliasGroups は group_no, id 順の行を、保存した順のグループにまとめる(無ければ長さ 0)。
@@ -441,9 +485,19 @@ func (r *MySQLRepository) CreateGenre(ctx context.Context, in NewGenre) (Genre, 
 	if err != nil {
 		return Genre{}, err
 	}
+	// Service を通さない呼び出しでも、省略した色・絵柄は既定値にする(DB の既定値と同じ)。
+	if in.Color == "" {
+		in.Color = DefaultGenreColor
+	}
+	if in.Icon == "" {
+		in.Icon = DefaultGenreIcon
+	}
 	var out Genre
 	err = r.inTx(ctx, func(q *store.Queries) error {
-		id, err := q.CreateGenre(ctx, store.CreateGenreParams{Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: sortOrder})
+		id, err := q.CreateGenre(ctx, store.CreateGenreParams{
+			Name: in.Name, QueryTemplate: in.QueryTemplate, SortOrder: sortOrder,
+			Color: in.Color, Icon: store.GenresIcon(in.Icon), MatchHosts: marshalStrings(in.MatchHosts), MatchKeywords: marshalStrings(in.MatchKeywords),
+		})
 		if mysqlErr(err, mysqlDuplicateEntry) {
 			return ErrDuplicateName
 		}
@@ -477,7 +531,10 @@ func (r *MySQLRepository) UpdateGenre(ctx context.Context, id int64, p GenrePatc
 		if err != nil {
 			return err
 		}
-		arg := store.UpdateGenreParams{ID: id, Name: cur.Name, QueryTemplate: cur.QueryTemplate}
+		arg := store.UpdateGenreParams{
+			ID: id, Name: cur.Name, QueryTemplate: cur.QueryTemplate,
+			Color: cur.Color, Icon: store.GenresIcon(cur.Icon), MatchHosts: marshalStrings(cur.MatchHosts), MatchKeywords: marshalStrings(cur.MatchKeywords),
+		}
 		arg.SortOrder = int32(cur.SortOrder) // 取得した値なので範囲内
 		if p.Name != nil {
 			arg.Name = *p.Name
@@ -489,6 +546,18 @@ func (r *MySQLRepository) UpdateGenre(ctx context.Context, id int64, p GenrePatc
 			if arg.SortOrder, err = toInt32(*p.SortOrder); err != nil {
 				return err
 			}
+		}
+		if p.Color != nil {
+			arg.Color = *p.Color
+		}
+		if p.Icon != nil {
+			arg.Icon = store.GenresIcon(*p.Icon)
+		}
+		if p.MatchHosts != nil {
+			arg.MatchHosts = marshalStrings(*p.MatchHosts)
+		}
+		if p.MatchKeywords != nil {
+			arg.MatchKeywords = marshalStrings(*p.MatchKeywords)
 		}
 		if _, err := q.UpdateGenre(ctx, arg); err != nil {
 			if mysqlErr(err, mysqlDuplicateEntry) {

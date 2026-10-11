@@ -3,9 +3,6 @@ package fetcher_test
 import (
 	"context"
 	"errors"
-	"net/http"
-	"net/http/httptest"
-	"net/netip"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,7 +10,6 @@ import (
 
 	"example.com/pokecalc/apps/wishlist/api/internal/fetcher"
 	"example.com/pokecalc/apps/wishlist/api/internal/item"
-	"example.com/pokecalc/apps/wishlist/api/internal/netguard"
 )
 
 // fakeClock は実際には待たない時計。Sleep は待った時間を記録して現在時刻を進める。
@@ -211,29 +207,15 @@ func TestThrottle_NoParallelSameSite(t *testing.T) {
 	}
 }
 
-// AC-F2: fetch_type から Fetcher を選ぶ。link_only は取得しない。scrape・headless は未実装なので使えない。
-// api は appid があるときだけ使える。
+// AC-F2: fetch_type から Fetcher を選ぶ(For)。link_only は取得しない。scrape・headless はホストで選ぶので For では使えない。
+// 以前は「api は appid があるときだけ使える」を確かめていたが、5-1e(ユーザー決定 2026-10-11)で fetch_type=api の Fetcher
+// (Yahoo!ショッピング API・appid)を消したので、api も常に使えないことを確かめる。
 func TestNewRegistry(t *testing.T) {
-	all := []item.FetchType{item.FetchAPI, item.FetchScrape, item.FetchHeadless, item.FetchLinkOnly}
-	cases := []struct {
-		name  string
-		appid string
-		want  map[item.FetchType]bool
-	}{
-		{"appid なし", "", map[item.FetchType]bool{}},
-		{"appid 空白だけ", "  ", map[item.FetchType]bool{}},
-		{"appid あり", "unit-test-appid", map[item.FetchType]bool{item.FetchAPI: true}},
-	}
-	for _, c := range cases {
-		t.Run(c.name, func(t *testing.T) {
-			r := fetcher.NewRegistry(fetcher.Config{YahooAppID: c.appid})
-			for _, ft := range all {
-				f, ok := r.For(ft)
-				if ok != c.want[ft] || (ok && f == nil) {
-					t.Errorf("For(%s) = %v, %v; want ok=%v", ft, f, ok, c.want[ft])
-				}
-			}
-		})
+	r := fetcher.NewRegistry(fetcher.Config{})
+	for _, ft := range []item.FetchType{item.FetchAPI, item.FetchScrape, item.FetchHeadless, item.FetchLinkOnly} {
+		if f, ok := r.For(ft); ok {
+			t.Errorf("For(%s) = %v, true; want 使えない", ft, f)
+		}
 	}
 }
 
@@ -255,32 +237,5 @@ func TestNewRegistryWith(t *testing.T) {
 	}
 }
 
-// AC-F2・AC-F1: 本番の表の Yahoo は Endpoint・Client の設定を使い、Throttle(Clock・Interval)で包まれている。
-func TestNewRegistry_YahooIsThrottled(t *testing.T) {
-	var hits atomic.Int64
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		hits.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"hits":[]}`))
-	}))
-	defer srv.Close()
-	clock := newFakeClock()
-	r := fetcher.NewRegistry(fetcher.Config{
-		YahooAppID:    "unit-test-appid",
-		YahooEndpoint: srv.URL + "/ShoppingWebService/V3/itemSearch",
-		Client:        netguard.NewClient(netguard.Options{AllowAddr: func(netip.Addr) bool { return true }}),
-		Clock:         clock,
-	})
-	f, ok := r.For(item.FetchAPI)
-	if !ok {
-		t.Fatal("For(api) が使えない")
-	}
-	mustFetch(t, f, siteA)
-	mustFetch(t, f, siteA)
-	if n := hits.Load(); n != 2 {
-		t.Errorf("サーバーへのリクエスト = %d, want 2", n)
-	}
-	if s := clock.takeSleeps(); !eqDurations(s, []time.Duration{fetcher.MinInterval}) {
-		t.Errorf("待ち = %v, want [5s]", s)
-	}
-}
+// AC-F2・AC-F1: 本番の表の Yahoo!ショッピングが Client の設定を使い、Throttle(Clock・Interval)で包まれていることは
+// yahoo_test.go の TestRegistry_YahooShopping で確かめる(5-1e で API の Fetcher から検索ページの scrape に替わった。ユーザー決定 2026-10-11)。

@@ -28,6 +28,18 @@ var dbSeq atomic.Int64
 // newMySQLRepo は使い捨ての DB を作り、migrations を up(seed を含む)してから Repository を返す。
 func newMySQLRepo(t *testing.T) item.Repository {
 	t.Helper()
+	cfg := newMySQLConfig(t)
+	db, err := sql.Open("mysql", cfg.FormatDSN())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	return item.NewMySQLRepository(db)
+}
+
+// newMySQLConfig は使い捨ての DB を作って migrations を up し、その DB に繋ぐ設定(parseTime あり・multiStatements なし)を返す。
+func newMySQLConfig(t *testing.T) *mysql.Config {
+	t.Helper()
 	raw := os.Getenv("WISHLIST_TEST_DSN")
 	if raw == "" {
 		t.Fatal("WISHLIST_TEST_DSN が無い(make wishlist-test-mysql で流す。スキップはしない)")
@@ -78,12 +90,7 @@ func newMySQLRepo(t *testing.T) item.Repository {
 	cfg.DBName = name
 	cfg.ParseTime = true
 	cfg.MultiStatements = false
-	db, err := sql.Open("mysql", cfg.FormatDSN())
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { db.Close() })
-	return item.NewMySQLRepository(db)
+	return cfg
 }
 
 func TestMySQLRepositoryContract(t *testing.T) {

@@ -74,6 +74,7 @@ type env struct {
 	repo *item.MemoryRepository
 }
 
+// newEnv は API を組み立てる(認証は無い。フェーズ5 5-1a)。
 func newEnv(t *testing.T) *env {
 	t.Helper()
 	dir := t.TempDir()
@@ -104,7 +105,15 @@ func newEnv(t *testing.T) *env {
 		Fetchers: fetcher.NewRegistryWith(map[item.FetchType]fetcher.Fetcher{item.FetchAPI: fetch}),
 	})
 	t.Cleanup(est.Wait)
-	e := httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est, Token: token})
+	var e http.Handler
+	func() {
+		defer func() {
+			if r := recover(); r != nil {
+				t.Fatalf("NewServer が panic した(5-1a: トークン無しで組み立てられること): %v", r)
+			}
+		}()
+		e = httpapi.NewServer(httpapi.Deps{Items: svc, Images: images, Remote: remote, Estimates: est})
+	}()
 	return &env{h: e, svc: svc, remote: remote, dir: dir, genre: g, site1: s1, site2: s2, est: est, fetch: fetch, now: now, repo: repo}
 }
 
@@ -239,7 +248,10 @@ func idOf(m map[string]any) int64 { return int64(m["id"].(float64)) }
 
 // ---- 認証 ----
 
-// AC-H1: /api/* はトークン必須。無い・違う・形式違いは 401(Error スキーマ)。
+// AC-H1 → フェーズ5 5-1a で置き換え(ユーザー決定 2026-10-11。docs/phase5-spec.md「トークンと接続の設定を無くす」・ADR-0810)。
+// 以前は「/api/* はトークン必須。無い・違う・形式違いは 401」を確かめていたが、要件が「認証しない・Authorization は無視する」に変わった。
+// 同じ組み合わせ(パス × Authorization の有無・形)で、トークン無しで組み立てたサーバーが 401 を返さず、
+// WWW-Authenticate を付けないことを確かめる(本文 {} は形式の検査で 400/422 になってよい。404 は存在しない id)。
 func TestAuth(t *testing.T) {
 	e := newEnv(t)
 	paths := []struct{ method, path string }{
@@ -255,8 +267,6 @@ func TestAuth(t *testing.T) {
 	auths := map[string]string{
 		"無し":        "-",
 		"違う":        "Bearer wrong-token",
-		"前方一致":      "Bearer " + token[:len(token)-1],
-		"後ろに余計":     "Bearer " + token + "x",
 		"Basic":     "Basic " + token,
 		"Bearer 無し": token,
 		"空":         "Bearer ",
@@ -265,13 +275,67 @@ func TestAuth(t *testing.T) {
 		for name, a := range auths {
 			t.Run(p.method+" "+p.path+" "+name, func(t *testing.T) {
 				w := e.do(t, req{method: p.method, path: p.path, auth: a, ctype: "application/json", body: strings.NewReader("{}")})
-				expectError(t, w, http.StatusUnauthorized, "unauthorized")
+				if w.Code == http.StatusUnauthorized {
+					t.Errorf("401 を返した(認証しない): %s", w.Body.String())
+				}
+				if h := w.Header().Get("WWW-Authenticate"); h != "" {
+					t.Errorf("WWW-Authenticate = %q(付けない)", h)
+				}
 			})
 		}
 	}
-	if len(e.remote.calls) != 0 {
-		t.Errorf("認証前に外部取得した: %v", e.remote.calls)
+}
+
+// 5-1a: トークン無し(Authorization ヘッダー無し)で、全エンドポイントが 2xx を返す。
+func TestNoTokenSucceeds(t *testing.T) {
+	e := newEnv(t)
+	noAuth := func(method, path string, body any) *httptest.ResponseRecorder {
+		t.Helper()
+		var rd io.Reader
+		ctype := ""
+		if body != nil {
+			bs, err := json.Marshal(body)
+			if err != nil {
+				t.Fatal(err)
+			}
+			rd, ctype = bytes.NewReader(bs), "application/json"
+		}
+		return e.do(t, req{method: method, path: path, body: rd, ctype: ctype, auth: "-"})
 	}
+	expect2xx := func(what string, w *httptest.ResponseRecorder) {
+		t.Helper()
+		if w.Code < 200 || w.Code > 299 {
+			t.Errorf("%s = %d %s, want 2xx", what, w.Code, w.Body.String())
+		}
+	}
+	body, ct := multipartBody(t, map[string]string{"genre_id": fmt.Sprint(e.genre.ID), "name": "グリス"}, testimg.PNG())
+	w := e.do(t, req{method: http.MethodPost, path: "/api/items", body: body, ctype: ct, auth: "-"})
+	expect2xx("POST /api/items", w)
+	if w.Code != http.StatusCreated {
+		return
+	}
+	id := idOf(decode[map[string]any](t, w))
+	item := fmt.Sprintf("/api/items/%d", id)
+	expect2xx("GET /api/items", noAuth(http.MethodGet, "/api/items", nil))
+	expect2xx("GET item", noAuth(http.MethodGet, item, nil))
+	expect2xx("PATCH item", noAuth(http.MethodPatch, item, map[string]any{"name": "グリス2"}))
+	expect2xx("GET estimates", noAuth(http.MethodGet, item+"/estimates", nil))
+	expect2xx("POST refresh", noAuth(http.MethodPost, item+"/estimates/refresh", nil))
+	expect2xx("GET listings", noAuth(http.MethodGet, item+"/listings", nil))
+	expect2xx("GET price-history", noAuth(http.MethodGet, item+"/price-history", nil))
+	expect2xx("GET genres", noAuth(http.MethodGet, "/api/genres", nil))
+	expect2xx("POST genres", noAuth(http.MethodPost, "/api/genres", map[string]any{"name": "認証なしのジャンル"}))
+	expect2xx("PATCH genre", noAuth(http.MethodPatch, fmt.Sprintf("/api/genres/%d", e.genre.ID), map[string]any{"sort_order": 3}))
+	expect2xx("GET sites", noAuth(http.MethodGet, "/api/sites", nil))
+	expect2xx("POST sites", noAuth(http.MethodPost, "/api/sites", map[string]any{"name": "認証なしのサイト", "search_url_template": "https://n.example.com/s?q={q}"}))
+	expect2xx("PATCH site", noAuth(http.MethodPatch, fmt.Sprintf("/api/sites/%d", e.site1.ID), map[string]any{"is_reference": true}))
+	img := "https://cdn.example.com/og.jpg"
+	e.remote.draft = ogp.Draft{Title: "架空フィギュア", ImageURL: &img}
+	expect2xx("POST from-url", noAuth(http.MethodPost, "/api/items/from-url", map[string]any{"url": "https://shop.example.com/p/1"}))
+	body, ct = multipartBody(t, nil, testimg.PNG())
+	expect2xx("PUT image", e.do(t, req{method: http.MethodPut, path: item + "/image", body: body, ctype: ct, auth: "-"}))
+	expect2xx("DELETE item", noAuth(http.MethodDelete, item, nil))
+	e.est.Wait()
 }
 
 // AC-H2: /healthz と /images/{name} は認証なし。
