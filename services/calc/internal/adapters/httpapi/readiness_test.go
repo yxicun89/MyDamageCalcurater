@@ -13,7 +13,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 )
 
 // switchableStore は、テストから「準備中 → 準備済み」を切り替えられる StoreFunc の供給元。

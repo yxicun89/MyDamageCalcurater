@@ -6,7 +6,7 @@
 // 写像)にそのまま委ねる。値の検証(ID の形式・範囲・組の整合・効果定義)もそちらが行う。
 // 性格(natures テーブルはまだ無い。ADR-0204 §5)だけは calc-svc 側で検証する。
 //
-// 入手元(ファイル・HTTP)は Source(export.go)。httpapi は Store インターフェースにだけ依存する。
+// 入手元(ファイル・HTTP)は Source(export.go)。httpapi は Store(= app.Master)にだけ依存する。
 package master
 
 import (
@@ -15,33 +15,13 @@ import (
 	"sort"
 
 	"example.com/pokecalc/engine"
+	"example.com/pokecalc/services/calc/internal/app"
 )
 
-// Store は calc-svc が計算に使うマスタの参照口。実装は並行に呼ばれても安全であること。
+// Store は calc-svc が計算に使うマスタの参照口。ポートは使う側(app.Master)で宣言し、ここは同じ型の別名
+// (ADR-0811。httpapi・cmd の既存の呼び名を保つため)。実装は並行に呼ばれても安全であること。
 // 返す値は呼び出し側が書き換えても Store の中身に影響しない(スライスは複製して返す)。
-type Store interface {
-	// Species は種族キー({図鑑番号4桁}-{フォルム3桁})で種族を引く。
-	Species(key string) (engine.Species, bool)
-	// Move は技 ID で技を引く。
-	Move(id string) (engine.Move, bool)
-	// Item は持ち物 ID で持ち物(効果つき)を引く。
-	Item(id string) (engine.Item, bool)
-	// Ability は特性 ID で特性(効果つき)を引く。
-	Ability(id string) (engine.Ability, bool)
-	// Nature は性格 ID で性格補正を引く。
-	Nature(id string) (engine.Nature, bool)
-	// NatureID は性格補正の構造値から性格 ID を引く(ADR-0200)。
-	//   - 無補正(n.IsNeutral())は、マスタ中の無補正性格を ID の昇順で並べた最初のもの。
-	//   - それ以外は (Plus, Minus) が一致する性格のうち ID の昇順で最初のもの。
-	//   - 該当が無ければ ("", false)。
-	NatureID(n engine.Nature) (string, bool)
-	// MegaRequiredItem はメガシンカ後の種族(isMega)の requiredItemId を返す。
-	// メガでない種族・未知の種族は ("", false)。メガで requiredItemId が無いマスタは持ち物を何も
-	// 許さない(("", true)。issue #315・ADR-0200 §4 追記)。
-	MegaRequiredItem(speciesKey string) (requiredItemID string, isMega bool)
-	// TypeChart は検証済みのタイプ相性表を返す。
-	TypeChart() engine.TypeChart
-}
+type Store = app.Master
 
 // MemoryStore はマスタ一式をメモリに持つ Store(ADR-0204 §2)。FromExport(export.go)で作る。
 type MemoryStore struct {

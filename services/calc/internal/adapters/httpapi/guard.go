@@ -4,7 +4,6 @@ package httpapi
 // (/healthz・/readyz・/metrics)は対象外にする(probe が 503 で巻き込まれて Pod が外れないように)。
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -44,17 +43,15 @@ func guardMiddleware(opts []Option) echo.MiddlewareFunc {
 	return httpguard.Middleware(cfg)
 }
 
-// checkDeadline は engine を呼ぶ前に締め切りを確かめる。過ぎていれば計算を始めず 503 にする。
-func checkDeadline(ctx context.Context) error {
-	if httpguard.Expired(ctx) {
-		return &httpError{
-			status:     http.StatusServiceUnavailable,
-			code:       api.UpstreamUnavailable,
-			message:    "処理の締め切りを過ぎた。少し待ってから再試行してほしい",
-			retryAfter: true,
-		}
+// errDeadlineExceeded は、engine を呼ぶ前に締め切りを過ぎていた(app.ErrDeadlineExceeded)ときの 503。
+// 計算を始めず、Retry-After: 1 を付ける(締め切りの確認は app が httpguard.Expired で行う)。
+func errDeadlineExceeded() error {
+	return &httpError{
+		status:     http.StatusServiceUnavailable,
+		code:       api.UpstreamUnavailable,
+		message:    "処理の締め切りを過ぎた。少し待ってから再試行してほしい",
+		retryAfter: true,
 	}
-	return nil
 }
 
 // guardCode は過負荷・締め切りの 503 の code。契約(api/openapi.yaml)に新しい code を足さず、

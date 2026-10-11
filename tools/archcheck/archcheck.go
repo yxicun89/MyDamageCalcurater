@@ -29,7 +29,6 @@ import (
 // 段階の PR(docs/plan/architecture-adoption.md §6)でサービスごとに 1 行ずつ消す。空になったら仕組みごと消す。
 var unmigrated = []string{
 	"balance",
-	"calc",
 	"gateway",
 	"judge",
 	"pokedex",

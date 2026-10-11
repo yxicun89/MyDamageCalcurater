@@ -1,14 +1,14 @@
 // `make e2e` の web-e2e-online 修復(issue #72・ADR-0306 で常時実行になった3件のうちの1件)。
 //
 // toCalcSnapshot() の出力は calc-svc がそのまま読むマスタ一式(api/openapi.yaml の MasterExport。ADR-0204)で、
-// 受け取り側(services/calc/internal/master/export.go の FromExport と、その先の services/internal/master)が
+// 受け取り側(services/calc/internal/adapters/master/export.go の FromExport と、その先の services/internal/master)が
 // 厳格に検証する。ズレると calc-svc が**起動しない**ため、オンライン E2E が丸ごと落ちる。
 //
 // このファイルは、その契約を毎回ソースから読んで突き合わせる契約テスト
 // (attackerPresets.contract.test.ts / defenderPresets.contract.test.ts と同じ発想。コーディング規約 §2:
 // 期待値を書き写さない)。読むのは次の4つ:
 //   - api/openapi.yaml            … MasterExport 以下の required・PokeType の enum・code の enum
-//   - services/calc/internal/master/export.go … masterExportRequiredFields(トップレベルの必須)
+//   - services/calc/internal/adapters/master/export.go … masterExportRequiredFields(トップレベルの必須)
 //   - services/internal/master/typechart.go   … ID の形式(codeIDPattern・speciesKeyPattern)
 //   - services/internal/master/effects.go     … 効果の既知のキー名(PascalCase)
 //
@@ -33,7 +33,7 @@ function readRepoFile(relative: string): string {
 }
 
 const openApiSource = readRepoFile("api/openapi.yaml");
-const calcExportSource = readRepoFile("services/calc/internal/master/export.go");
+const calcExportSource = readRepoFile("services/calc/internal/adapters/master/export.go");
 const typeChartSource = readRepoFile("services/internal/master/typechart.go");
 const effectsSource = readRepoFile("services/internal/master/effects.go");
 

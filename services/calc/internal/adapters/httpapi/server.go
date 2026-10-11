@@ -2,8 +2,11 @@
 //
 // 1リクエストの流れ(engine/wasmapi と同じ順。同じ失敗は同じ code にする):
 //
-//	厳格デコード(unknown_field / invalid_json)→ 列挙の検証(invalid_enum)
-//	→ ID 解決(unknown_*)→ engine の入力検証(invalid_input)→ engine 呼び出し → 生成型への写し
+//	ヘッダ・厳格デコード(unknown_field / invalid_json)・件数上限(ここ)
+//	→ 列挙の検証・ID 解決・入力の検証・engine 呼び出し・イベント発行(計算・一括・逆算は app.Service。ADR-0811)
+//	→ 生成型への写し(ここ)
+//
+// 調整(adjust.go)の手順はまだここにある(S3 の後半の PR で app へ移す)。
 //
 // 独自のダメージ式・独自の丸めを持たない(CLAUDE.md 絶対ルール2・3)。表示%は engine の
 // 0.1% 単位の整数(tenths)を 10 で割るだけ。計算はイベント保存に依存しない(絶対ルール5)。
@@ -15,14 +18,14 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v5"
 
-	"example.com/pokecalc/engine"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
+	"example.com/pokecalc/services/calc/internal/app"
+	"example.com/pokecalc/services/calc/internal/domain"
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/internal/calcevents"
+	"example.com/pokecalc/services/internal/httpguard"
 	"example.com/pokecalc/services/internal/httpmetrics"
 	"example.com/pokecalc/services/internal/reqlog"
 	"example.com/pokecalc/services/internal/version"
@@ -30,39 +33,29 @@ import (
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文。
 // Go のランタイム情報をクライアントへ出さない(ADR-0200 AC-7)。
-const messageInternal = "内部エラーが発生した"
+const messageInternal = domain.MessageInternal
 
 // maxRequestBodyBytes はリクエスト本文の上限(critic 指摘 R7)。1MiB を超える本文は
 // 読み込みを打ち切り invalid_json にする(無制限に読み込んでメモリを使い切らないため)。
 const maxRequestBodyBytes = 1 << 20 // 1MiB
 
-// EventPublisher は計算イベントの発行(ADR-0212)。*events.Publisher が実装する
-// (nil の *events.Publisher でも安全に呼べる。テストでは偽の実装に差し替える)。
-// 発行は非同期で応答を一切ブロックしない(CLAUDE.md 絶対ルール5)。
-type EventPublisher interface {
-	Publish(deviceID, sessionID, operation string, occurredAt time.Time, detail *calcevents.CalcDetail)
-}
-
-// noopPublisher は EventPublisher の何もしない実装(publisher が渡されないとき用)。
-type noopPublisher struct{}
-
-func (noopPublisher) Publish(string, string, string, time.Time, *calcevents.CalcDetail) {}
-
-// Server は api.ServerInterface を実装する。マスタは Store 経由でだけ引く。
+// Server は api.ServerInterface を実装する。計算・一括・逆算の手順は app.Service に委ね、ここは
+// 生成型 ⇄ app の型の変換と HTTP のエラー整形だけを持つ(ADR-0811)。マスタは Store 経由でだけ引く。
 type Server struct {
-	store     master.Store
-	publisher EventPublisher
+	store master.Store
+	app   *app.Service
 }
 
 var _ api.ServerInterface = (*Server)(nil)
 
 // NewServer は Store と(任意の)EventPublisher を使う Server を作る。publisher が nil なら
-// 何もしない実装に差し替える(呼び出し側で毎回 nil チェックしなくてよいように)。
+// 発行しない(呼び出し側で毎回 nil チェックしなくてよいように)。
 func NewServer(store master.Store, publisher EventPublisher) *Server {
-	if publisher == nil {
-		publisher = noopPublisher{}
+	var events app.EventPublisher
+	if publisher != nil {
+		events = eventBridge{publisher: publisher}
 	}
-	return &Server{store: store, publisher: publisher}
+	return &Server{store: store, app: app.New(store, events, httpguard.Expired)}
 }
 
 // NewHandler は calc-svc の HTTP ハンドラ全体を組み立てる。
@@ -217,7 +210,7 @@ func notFoundForPokedex() error {
 	return newError(api.NotFound, "このサービスの担当外の操作")
 }
 
-// CalcDamage は POST /api/calc。
+// CalcDamage は POST /api/calc。手順(検証 → 解決 → 計算 → イベント発行)は app.Service.Calc が持つ。
 func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
@@ -226,66 +219,14 @@ func (s *Server) CalcDamage(ctx *echo.Context, params api.CalcDamageParams) erro
 	if err := decodeStrict(limitedBody(ctx), &req, "attacker", "defender"); err != nil {
 		return err
 	}
-	format, err := parseFormat(req.Format)
+	res, err := s.app.Calc(ctx.Request().Context(), app.Meta{DeviceID: params.XDeviceId, SessionID: params.XSessionId}, calcRequestFrom(req))
 	if err != nil {
-		return err
+		return httpErrorFrom(err)
 	}
-	attacker, err := s.resolveIndividual("attacker", req.Attacker)
-	if err != nil {
-		return err
-	}
-	defender, err := s.resolveIndividual("defender", req.Defender)
-	if err != nil {
-		return err
-	}
-	move, err := s.resolveMove(req.MoveId)
-	if err != nil {
-		return err
-	}
-	field, err := parseField(req.Field)
-	if err != nil {
-		return err
-	}
-	if err := validateIndividual("攻撃側", attacker); err != nil {
-		return err
-	}
-	if err := validateIndividual("防御側", defender); err != nil {
-		return err
-	}
-	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
-		return err
-	}
-	if err := s.checkMegaItem("防御側", defender.Species, defender.Item); err != nil {
-		return err
-	}
-
-	state, err := battleStateFrom(req.BattleState)
-	if err != nil {
-		return err
-	}
-
-	if err := checkDeadline(ctx.Request().Context()); err != nil {
-		return err
-	}
-	res, err := engine.CalcDamage(engine.DamageInput{
-		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field,
-		Critical: criticalFrom(req.Options), TypeChart: s.store.TypeChart(), State: state,
-	})
-	if err != nil {
-		return errFromEngine(err)
-	}
-	result := calcResultFrom(res)
-	// イベント発行は非同期・応答をブロックしない(CLAUDE.md 絶対ルール5・ADR-0212 §6)。
-	// Publish 自体は ctx.JSON より前に呼ぶ(前後どちらでも安全。ADR-0212 §6 参照)。
-	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationCalc, time.Now().UTC(), &calcevents.CalcDetail{
-		Format: string(req.Format), Attacker: req.Attacker, Defender: req.Defender,
-		MoveID: req.MoveId, Field: req.Field, Options: req.Options, BattleState: eventBattleState(req.BattleState),
-		MinPercent: result.MinPercent, MaxPercent: result.MaxPercent,
-	})
-	return ctx.JSON(http.StatusOK, result)
+	return ctx.JSON(http.StatusOK, calcResultFrom(res))
 }
 
-// CalcBulk は POST /api/calc/bulk。
+// CalcBulk は POST /api/calc/bulk。件数上限(ADR-0208)は列挙の検証より前にここで見る。
 func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
@@ -297,75 +238,14 @@ func (s *Server) CalcBulk(ctx *echo.Context, params api.CalcBulkParams) error {
 	if err := checkBulkLimits(req); err != nil {
 		return err
 	}
-	format, err := parseFormat(req.Format)
+	out, err := s.app.Bulk(ctx.Request().Context(), app.Meta{DeviceID: params.XDeviceId, SessionID: params.XSessionId}, bulkRequestFrom(req))
 	if err != nil {
-		return err
+		return httpErrorFrom(err)
 	}
-	attacker, err := s.resolveIndividual("attacker", req.Attacker)
-	if err != nil {
-		return err
-	}
-	species, err := s.resolveSpecies("defenderSpeciesKey", req.DefenderSpeciesKey)
-	if err != nil {
-		return err
-	}
-	move, err := s.resolveMove(req.MoveId)
-	if err != nil {
-		return err
-	}
-	field, err := parseField(req.Field)
-	if err != nil {
-		return err
-	}
-	variants, err := s.resolveItems("itemVariants", req.ItemVariants)
-	if err != nil {
-		return err
-	}
-	if err := validateIndividual("攻撃側", attacker); err != nil {
-		return err
-	}
-	if err := validateIndividual("防御側の種族", engine.Individual{Species: species}); err != nil {
-		return err
-	}
-	if err := s.checkMegaItem("攻撃側", attacker.Species, attacker.Item); err != nil {
-		return err
-	}
-	if err := s.checkMegaItems("itemVariants", species, variants); err != nil {
-		return err
-	}
-	var defenderAbilityOverride *string
-	var defenderOverride engine.DefenderOverride
-	if ov := req.DefenderOverride; ov != nil {
-		defenderAbilityOverride = ov.AbilityId
-		status, err := parseStatusCondition("defenderOverride", ov.Status)
-		if err != nil {
-			return err
-		}
-		defenderOverride = engine.DefenderOverride{Ranks: ranksFromBlock(ov.Ranks), Status: status}
-	}
-	defenderAbilities, err := s.resolveAbilityCandidates("defenderOverride.abilityId", species, defenderAbilityOverride)
-	if err != nil {
-		return err
-	}
-
-	if err := checkDeadline(ctx.Request().Context()); err != nil {
-		return err
-	}
-	res, err := engine.CalcBulk(engine.BulkInput{
-		Format: format, Attacker: attacker, DefenderSpecies: species, Move: move, Field: field,
-		Critical: criticalFrom(req.Options), PresetKeys: presetKeysFrom(req.Presets), ItemVariants: variants,
-		DefenderAbilities: defenderAbilities, DefenderOverride: defenderOverride, TypeChart: s.store.TypeChart(),
-	})
-	if err != nil {
-		return errFromEngine(err)
-	}
-	// envelope だけを発行する(Detail は付けない。比較検討中の候補で「よく使う相手」の集計を
-	// 汚染しないため。ADR-0212 §7.1)。
-	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationBulk, time.Now().UTC(), nil)
-	return ctx.JSON(http.StatusOK, s.bulkResultFrom(res))
+	return ctx.JSON(http.StatusOK, bulkResultFrom(out))
 }
 
-// CalcReverse は POST /api/calc/reverse。
+// CalcReverse は POST /api/calc/reverse。件数上限(ADR-0208)は列挙の検証より前にここで見る。
 func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
 		return err
@@ -377,68 +257,11 @@ func (s *Server) CalcReverse(ctx *echo.Context, params api.CalcReverseParams) er
 	if err := checkReverseLimits(req); err != nil {
 		return err
 	}
-	format, err := parseFormat(req.Format)
+	out, err := s.app.Reverse(ctx.Request().Context(), app.Meta{DeviceID: params.XDeviceId, SessionID: params.XSessionId}, reverseRequestFrom(req))
 	if err != nil {
-		return err
+		return httpErrorFrom(err)
 	}
-	known, err := s.resolveIndividual("known", req.Known)
-	if err != nil {
-		return err
-	}
-	species, err := s.resolveSpecies("unknownSpeciesKey", req.UnknownSpeciesKey)
-	if err != nil {
-		return err
-	}
-	move, err := s.resolveMove(req.MoveId)
-	if err != nil {
-		return err
-	}
-	field, err := parseField(req.Field)
-	if err != nil {
-		return err
-	}
-	items, err := s.resolveItems("itemCandidates", req.ItemCandidates)
-	if err != nil {
-		return err
-	}
-	observations, err := convertObservations(req.Observations)
-	if err != nil {
-		return err
-	}
-	if err := validateIndividual("既知の側", known); err != nil {
-		return err
-	}
-	if err := validateIndividual("推定側の種族", engine.Individual{Species: species}); err != nil {
-		return err
-	}
-	if err := s.checkMegaItem("既知の側", known.Species, known.Item); err != nil {
-		return err
-	}
-	if err := s.checkMegaItems("itemCandidates", species, items); err != nil {
-		return err
-	}
-	maxCandidates := derefInt(req.MaxCandidates)
-	unknownAbilities, err := s.resolveAbilityCandidates("unknownAbilityId", species, req.UnknownAbilityId)
-	if err != nil {
-		return err
-	}
-
-	if err := checkDeadline(ctx.Request().Context()); err != nil {
-		return err
-	}
-	res, err := engine.CalcReverse(engine.ReverseInput{
-		Format: format, Side: engine.ReverseSide(req.Side), Known: known, UnknownSpecies: species,
-		Move: move, Field: field, Critical: criticalFrom(req.Options), ItemCandidates: items,
-		Observations: observations, MaxCandidates: maxCandidates, UnknownAbilities: unknownAbilities,
-		TypeChart: s.store.TypeChart(),
-	})
-	if err != nil {
-		return errFromEngine(err)
-	}
-	// envelope だけを発行する(総当たり探索であり calc と同じ形の CalcDetail に当てはまらない。
-	// ADR-0212 §7.1)。
-	s.publisher.Publish(params.XDeviceId, params.XSessionId, calcevents.OperationReverse, time.Now().UTC(), nil)
-	return ctx.JSON(http.StatusOK, s.reverseResultFrom(res))
+	return ctx.JSON(http.StatusOK, reverseResultFrom(out))
 }
 
 // SearchItems は pokedex の操作。calc-svc の担当外なので 404 not_found。

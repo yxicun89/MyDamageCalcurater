@@ -2,7 +2,7 @@ package httpapi
 
 // エラーの共通の形(ADR-0200 §1.6)。calc-svc の失敗はすべて httpError に写し、
 // echo の HTTPErrorHandler で {"code","message"} の Error 本文に変換する。
-// engine の sentinel → code の写像は wasmapi と同じ語彙(ADR-0011 §5)を使う。
+// engine の sentinel → code の写像は wasmapi と同じ語彙(ADR-0011 §5)で、domain.FromEngine が持つ。
 
 import (
 	"bytes"
@@ -15,7 +15,8 @@ import (
 	"strconv"
 	"strings"
 
-	"example.com/pokecalc/engine"
+	"example.com/pokecalc/services/calc/internal/app"
+	"example.com/pokecalc/services/calc/internal/domain"
 	"example.com/pokecalc/services/internal/api"
 )
 
@@ -54,83 +55,31 @@ func statusForCode(code api.ErrorCode) int {
 	}
 }
 
-// engineSentinels は engine の sentinel エラーと ErrorCode の対応(wasmapi.errorResponse と同じ語彙)。
-var engineSentinels = []struct {
-	err  error
-	code api.ErrorCode
-}{
-	{engine.ErrUnknownPreset, api.UnknownPreset},
-	{engine.ErrDuplicatePreset, api.DuplicatePreset},
-	{engine.ErrInvalidPreset, api.InvalidPreset},
-	{engine.ErrInvalidReverseSide, api.InvalidReverseSide},
-	{engine.ErrNoObservation, api.NoObservation},
-	{engine.ErrInvalidObservation, api.InvalidObservation},
-	{engine.ErrTypeChartMissing, api.TypeChartMissing},
-	{engine.ErrInvalidTypeChart, api.InvalidTypeChart},
-	{engine.ErrUnknownType, api.UnknownType},
-	// ダメージを与えられない技の逆算(issue #317)。契約に専用の code が無いので invalid_input
-	// (400)に写す。専用の code の追加は API レーンへ依頼(ADR-0117 §3)。
-	{engine.ErrMoveDealsNoDamage, api.InvalidInput},
-	// 防御側の上書きのランク範囲外・未知の status(ADR-0216。HTTP の status は先に parseStatusCondition で弾くので届かない)。
-	{engine.ErrInvalidDefenderOverride, api.InvalidInput},
-	// 特性の候補が不正(件数超過・ID重複・種族が持たない特性)。engine/wasmapi と同じく invalid_input に
-	// 写す(新しい code は足さない。ADR-0126 §5・ADR-0214)。マスタに無いIDはこれより前(resolveAbilityCandidates
-	// でのstore参照)でunknown_abilityにする。
-	{engine.ErrInvalidAbilityCandidates, api.InvalidInput},
-	// 調整の入力の不正(ADR-0250 §4。wasmapi と同じく invalid_input。新しい code は足さない)。
-	{engine.ErrInvalidAdjustInput, api.InvalidInput},
-	// 対戦の状態の値域外(最大 HP を超える残り HP・範囲の多段でない技の回数・範囲外の回数。ADR-0144 §6)。
-	{engine.ErrInvalidBattleState, api.InvalidInput},
-}
-
-// errFromEngine は engine が返したエラーを安定した code の httpError に写す。
+// errFromEngine は engine が返したエラーを安定した code の httpError に写す(写像は domain.FromEngine)。
 // sentinel に無い想定外の失敗は固定文だけをクライアントへ返し、詳細はログにだけ残す
 // (critic 指摘 O4。Go の内部情報を message に出さない ADR-0200 AC-7 と同じ理由)。
 func errFromEngine(err error) error {
-	for _, s := range engineSentinels {
-		if errors.Is(err, s.err) {
-			return newError(s.code, "%v", err)
-		}
-	}
-	slog.Error("calc-svc: engine から想定外のエラー", "error", err)
-	return newError(api.Internal, "%s", messageInternal)
+	return httpErrorFrom(domain.FromEngine(err))
 }
 
-// validateIndividual は engine.Individual.Validate の失敗を invalid_input にする(wasmapi と同じ)。
-func validateIndividual(label string, in engine.Individual) error {
-	if err := in.Validate(); err != nil {
-		return newError(api.InvalidInput, "%s の入力が不正: %v", label, err)
-	}
-	return nil
-}
-
-// checkMegaItem はメガシンカ後の種族の持ち物規則(issue #315・ADR-0200 §4 追記)を検証する。
-// メガ種族は requiredItemId の持ち物か持ち物なし(nil)だけを受け付け、別の持ち物は 400 invalid_input。
-// メガでない種族は何も検査しない。label は入力の場所(例 "攻撃側"・"itemVariants[1]")。
-func (s *Server) checkMegaItem(label string, species engine.Species, item *engine.Item) error {
-	if item == nil {
+// httpErrorFrom は app・domain の失敗を httpError に写す(nil は nil)。
+// domain.Code は契約の ErrorCode と同じ文字列(contract_test の TestDomainCodesAreContractErrorCodes が固定する)。
+func httpErrorFrom(err error) error {
+	if err == nil {
 		return nil
 	}
-	required, isMega := s.store.MegaRequiredItem(species.Key)
-	if !isMega || item.ID == required {
-		return nil
+	if errors.Is(err, app.ErrDeadlineExceeded) {
+		return errDeadlineExceeded()
 	}
-	if required == "" {
-		return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物を持たせられない(指定: %q)",
-			label, species.Key, item.ID)
-	}
-	return newError(api.InvalidInput, "%s: メガシンカ後の種族 %q には持ち物 %q を持たせられない(持てるのはメガストーン %q だけ)",
-		label, species.Key, item.ID, required)
-}
-
-// checkMegaItems は持ち物候補の各要素に checkMegaItem を当てる(bulk の itemVariants・reverse の itemCandidates)。
-func (s *Server) checkMegaItems(label string, species engine.Species, items []*engine.Item) error {
-	for i, it := range items {
-		if err := s.checkMegaItem(fmt.Sprintf("%s[%d]", label, i), species, it); err != nil {
-			return err
+	var de *domain.Error
+	if errors.As(err, &de) {
+		if de.Cause != nil {
+			// Cause を持つのは domain.FromEngine の想定外の失敗だけ。
+			slog.Error("calc-svc: engine から想定外のエラー", "error", de.Cause)
 		}
+		return newError(api.ErrorCode(de.Code), "%s", de.Message)
 	}
-	return nil
+	return err
 }
 
 // --- 厳格デコード(engine/wasmapi の decodeStrict と同じ振る舞い) --------------

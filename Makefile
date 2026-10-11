@@ -269,7 +269,7 @@ test-nats: gen-go-all ## calc-svcのイベント発行を実NATSで検査する(
 		echo "test-nats: CALC_TEST_NATS_URL が設定されていない(スキップせず失敗する)" >&2; \
 		exit 1; \
 	fi
-	@cd services && $(GO) test -tags nats -p 1 ./calc/internal/events/...
+	@cd services && $(GO) test -tags nats -p 1 ./calc/internal/adapters/events/...
 
 .PHONY: db-local-up
 db-local-up: ## make dev 用に docker で mysql:9.7.2 を 127.0.0.1:3306 に起動する(パスワードは .env)

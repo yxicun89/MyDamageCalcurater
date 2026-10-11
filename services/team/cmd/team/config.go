@@ -24,7 +24,7 @@ const (
 const defaultAddr = ":8080"
 
 // jetStreamMaxAge は calc-svc が発行する CALC_EVENTS ストリームの max_age(固定7日。
-// services/calc/internal/events/events.go の streamMaxAge と同じ値。ADR-0212 §4)。
+// services/calc/internal/adapters/events/events.go の streamMaxAge と同じ値。ADR-0212 §4)。
 // TEAM_DEVICE_ROW_EXPIRY_DAYS はこれより大きいことを起動時に検証する(ADR-0211 §7・AC-R8)。
 const jetStreamMaxAge = expire.JetStreamMaxAge
 

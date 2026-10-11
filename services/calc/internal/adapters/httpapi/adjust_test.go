@@ -22,7 +22,7 @@ import (
 
 	"example.com/pokecalc/engine"
 	"example.com/pokecalc/engine/wasmapi"
-	"example.com/pokecalc/services/calc/internal/master"
+	"example.com/pokecalc/services/calc/internal/adapters/master"
 	"example.com/pokecalc/services/internal/api"
 )
 
