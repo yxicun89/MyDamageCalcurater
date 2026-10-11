@@ -578,6 +578,9 @@ func TestVectorsCoverRequiredScenarios(t *testing.T) {
 			t.Errorf("必須タグ %q のベクタが無い", tag)
 		}
 	}
+	if fns["calcCombo"] < 3 || tags["combo"] == 0 {
+		t.Errorf("calcCombo ベクタが足りない: %d 件(成功・素早さの場・印・エラーを Go/WASM で照合する。ADR-0179 追記 CB-5)", fns["calcCombo"])
+	}
 	if fns["calc"] < 15 {
 		t.Errorf("calc ベクタが %d 件しかない(補正を1つずつ通すため 15 件以上)", fns["calc"])
 	}

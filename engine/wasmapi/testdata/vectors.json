@@ -6794,6 +6794,495 @@
           "hits": 4
         }
       }
+    },
+    {
+      "name": "calcCombo/dance-then-slam-from-defender",
+      "fn": "calcCombo",
+      "tags": [
+        "combo",
+        "ranks"
+      ],
+      "source": "手書き(ADR-0179 追記 CB-5)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "steps": [
+          {
+            "move": {
+              "id": "testdance",
+              "type": "normal",
+              "category": "status",
+              "priority": 0,
+              "effect": {
+                "chance": 100,
+                "target": "self",
+                "stages": {
+                  "atk": 1,
+                  "spe": 1
+                }
+              }
+            }
+          },
+          {
+            "move": {
+              "id": "bodyslam",
+              "type": "normal",
+              "category": "physical",
+              "power": 85,
+              "priority": 0
+            },
+            "critical": true
+          }
+        ],
+        "opponentMove": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "opponentSpeed": "from_defender",
+        "speedField": {
+          "selfTailwind": true
+        }
+      }
+    },
+    {
+      "name": "calcCombo/unknown-speed-trick-room",
+      "fn": "calcCombo",
+      "tags": [
+        "combo",
+        "speed"
+      ],
+      "source": "手書き(ADR-0179 追記 CB-5)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "steps": [
+          {
+            "move": {
+              "id": "testdance",
+              "type": "normal",
+              "category": "status",
+              "priority": 0,
+              "effect": {
+                "chance": 100,
+                "target": "self",
+                "stages": {
+                  "atk": 1,
+                  "spe": 1
+                }
+              }
+            }
+          },
+          {
+            "move": {
+              "id": "closecombat",
+              "type": "fighting",
+              "category": "physical",
+              "power": 120,
+              "priority": 0,
+              "effect": {
+                "chance": 100,
+                "target": "self",
+                "stages": {
+                  "def": -1,
+                  "spd": -1
+                }
+              }
+            }
+          },
+          {
+            "move": {
+              "id": "bodyslam",
+              "type": "normal",
+              "category": "physical",
+              "power": 85,
+              "priority": 0
+            }
+          }
+        ],
+        "opponentMove": {
+          "id": "bodyslam",
+          "type": "normal",
+          "category": "physical",
+          "power": 85,
+          "priority": 0
+        },
+        "speedField": {
+          "trickRoom": true
+        }
+      }
+    },
+    {
+      "name": "calcCombo/locks-move-mark",
+      "fn": "calcCombo",
+      "tags": [
+        "combo",
+        "unsupported"
+      ],
+      "source": "手書き(ADR-0179 追記 CB-5)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": {
+            "id": "testband",
+            "nameJa": "テストこだわり",
+            "effect": {
+              "locksMove": true
+            }
+          }
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "steps": [
+          {
+            "move": {
+              "id": "bodyslam",
+              "type": "normal",
+              "category": "physical",
+              "power": 85,
+              "priority": 0
+            }
+          },
+          {
+            "move": {
+              "id": "closecombat",
+              "type": "fighting",
+              "category": "physical",
+              "power": 120,
+              "priority": 0,
+              "effect": {
+                "chance": 100,
+                "target": "self",
+                "stages": {
+                  "def": -1,
+                  "spd": -1
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "calcCombo/error-no-steps",
+      "fn": "calcCombo",
+      "tags": [
+        "combo",
+        "error"
+      ],
+      "source": "手書き(ADR-0179 追記 CB-5)",
+      "request": {
+        "format": "single",
+        "attacker": {
+          "species": {
+            "key": "snorlax",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 160,
+              "atk": 110,
+              "def": 65,
+              "spa": 65,
+              "spd": 110,
+              "spe": 30
+            }
+          },
+          "level": 50,
+          "nature": {
+            "plus": "atk",
+            "minus": "spa"
+          },
+          "sp": {
+            "hp": 0,
+            "atk": 32,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "defender": {
+          "species": {
+            "key": "blissey",
+            "types": [
+              "normal"
+            ],
+            "baseStats": {
+              "hp": 255,
+              "atk": 10,
+              "def": 10,
+              "spa": 75,
+              "spd": 135,
+              "spe": 55
+            }
+          },
+          "level": 50,
+          "nature": {},
+          "sp": {
+            "hp": 0,
+            "atk": 0,
+            "def": 0,
+            "spa": 0,
+            "spd": 0,
+            "spe": 0
+          },
+          "ranks": {},
+          "status": "none",
+          "ability": {
+            "id": "",
+            "effect": null
+          },
+          "item": null
+        },
+        "field": {
+          "weather": "none",
+          "terrain": "none",
+          "defenderScreens": {
+            "reflect": false,
+            "lightScreen": false,
+            "auroraVeil": false
+          }
+        },
+        "steps": []
+      },
+      "expectError": "invalid_input"
     }
   ]
 }

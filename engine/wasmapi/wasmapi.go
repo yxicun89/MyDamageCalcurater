@@ -87,6 +87,12 @@ func CalcReverse(requestJSON string) string {
 	return handle(requestJSON, (*reverseRequest).run)
 }
 
+// CalcCombo は攻撃側の連続技(最大 3 手)の計算を行う。requestJSON は ADR-0179 追記 CB-5 の ComboRequest。
+// engine.CalcCombo の素通し。
+func CalcCombo(requestJSON string) string {
+	return handle(requestJSON, (*comboRequest).run)
+}
+
 // --- 封筒 -------------------------------------------------------------------
 
 type successEnvelope[T any] struct {
@@ -173,6 +179,8 @@ func errorResponse(err error) string {
 		// 技の処理の定義の不正(ADR-0143。新しいコードは足さない)。
 		{engine.ErrInvalidMoveRule, CodeInvalidInput},
 		{engine.ErrInvalidBattleState, CodeInvalidInput},
+		// 連続技の入力の不正(ADR-0179 追記 CB-5。新しいコードは足さない)。
+		{engine.ErrInvalidComboInput, CodeInvalidInput},
 		// 件数・範囲の上限(issue #110。ADR-0208 §2 と同じく新しいコードは足さず invalid_input に写す。
 		// ADR-0108)。
 		{engine.ErrTooManyPresets, CodeInvalidInput},

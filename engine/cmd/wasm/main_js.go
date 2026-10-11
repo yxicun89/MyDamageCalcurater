@@ -11,6 +11,7 @@
 //	  calc(requestJSON: string): string,         // wasmapi.Calc
 //	  calcBulk(requestJSON: string): string,     // wasmapi.CalcBulk
 //	  calcReverse(requestJSON: string): string,  // wasmapi.CalcReverse
+//	  calcCombo(requestJSON: string): string,    // wasmapi.CalcCombo(ADR-0179 追記 CB-5)
 //	  adjustIndices(requestJSON: string): string,         // wasmapi.AdjustIndices(ADR-0250)
 //	  adjustMinSpToKo(requestJSON: string): string,       // wasmapi.AdjustMinSPToKO
 //	  adjustMinSpToSurvive(requestJSON: string): string,  // wasmapi.AdjustMinSPToSurvive
@@ -67,6 +68,7 @@ func main() {
 	api.Set("calc", register(wasmapi.Calc))
 	api.Set("calcBulk", register(wasmapi.CalcBulk))
 	api.Set("calcReverse", register(wasmapi.CalcReverse))
+	api.Set("calcCombo", register(wasmapi.CalcCombo))
 	api.Set("adjustIndices", register(wasmapi.AdjustIndices))
 	api.Set("adjustMinSpToKo", register(wasmapi.AdjustMinSPToKO))
 	api.Set("adjustMinSpToSurvive", register(wasmapi.AdjustMinSPToSurvive))

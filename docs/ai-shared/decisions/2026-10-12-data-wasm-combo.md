@@ -1,0 +1,9 @@
+## 2026-10-12: WASM の連続技 `calcCombo` の DTO の形(データ実装 / ADR-0179 追記「CB-5」。Web レーン CB-6 のオフラインへ)
+Decision: `globalThis.pokecalc.calcCombo(requestJSON)` を足した。公開 API `POST /api/calc/combo`(CB-4)と同じ名前・同じ構造にそろえる。ただし技・持ち物・特性は WASM の入力境界の流儀どおり、ID ではなく解決済みの値を渡す(マスタ解決は Web 側)。
+- リクエスト: `format`・`attacker`・`defender`・`field`・`typeChart`(calc と同じ DTO)+ `steps[]`(1〜3 件。各 `{ move, critical?, hits? }`。`hits` は指定したら 1 以上)+ 任意 `opponentMove`(攻撃技のみ)+ 任意 `opponentSpeed`(`"unknown"` 既定・`"from_defender"`。`fromDefender` ではない)+ 任意 `speedField`(`trickRoom`・`selfTailwind`・`opponentTailwind`)。未知のキーは `unknown_field`。
+- 技 `move` に任意 `effect`: `{ chance, target: "self"|"target", stages: { atk|def|spa|spd|spe: -6..6 } }`(公開 API の `Move.effect` を Web が camelCase で渡す)。変化技の手はこれが無いと `invalid_input`。calc / bulk も受けるが読まない。
+- 持ち物の効果に `locksMove`、持ち物・特性の効果に `fullHPOnly`(印 choice_locked / defender_full_hp_assumed 用。calc は読まない)。
+- 結果: `{ steps[], total, speed, opponentAttack, unsupported }` を engine.ComboResult の camelCase で写す。`steps[].damage` は変化技だけ null、それ以外は calc の結果と同じ形。`total` は `minDamage`・`maxDamage`・`defenderHP`・`minPercent`・`maxPercent`(0.1% 単位の表示%)・`ko`・`koByStep[]`(`chancePercent`・`guaranteed`・`displayChancePercent`)。`opponentAttack` は `opponentMove` が無いと null(`selfHp`・`fast`/`slow`{`actions[]`{`step`・`timing`・`damage`・`surviveChancePercent`}・`surviveChancePercent`}・`minActions`・`maxActions`)。`unsupported` は印なしで `[]`。
+- エラー: 新しい code は足さない。手の数・変化技のランク変化なし・相手の技が変化技・hits の範囲 → `invalid_input`、`opponentSpeed` の語彙外・effect の target / stages のキー → `invalid_enum`。
+Reason: オフライン(WASM)の結果を API と一致させる(AC-18)。Web は同じ組み立てで API と WASM を切り替えられる。
+Impact: Web の CB-6 は `wasmapi` のオフライン経路で `calcCombo` を呼べる。**デプロイ順**: 先に新しい WASM と calc-svc・pokedex-svc を出し、その後で `locksMove`・`fullHPOnly` を含む効果を取り込む(ADR-0179 追記 CB-3 と同じ)。API 契約・DB・engine 本体は変更なし。

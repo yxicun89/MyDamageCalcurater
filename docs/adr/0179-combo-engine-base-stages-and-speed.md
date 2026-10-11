@@ -400,3 +400,44 @@ func CalcCombo(in ComboInput) (ComboResult, error)
 - **確率 100% 未満の効果を「未適用」として出す**: §7 Q4 (b)(ユーザー決定)で出さない。
 - **こだわり・タスキを持ち物 ID で判定する**: ID の直書きになる。効果データの 2 項目で表す(値はデータレーンが取り込む。Champions のマスタに
   こだわり系は無いので、v1 では実データでは立たない)。
+
+## 追記 CB-5(2026-10-12): WASM の `calcCombo`(`engine/wasmapi`)
+
+状態: 採用。範囲は WASM の境界だけ(engine 本体・API 契約・DB は変えない)。受け入れ条件は combo-calc.md §5 の AC-18。
+
+### 1. 境界関数と DTO の形
+
+`wasmapi.CalcCombo(requestJSON) string` を足し、`engine/cmd/wasm` が `globalThis.pokecalc.calcCombo` に登録する(ADR-0011 の封筒・
+厳格デコード・panic を外へ出さない・改行で終わらない、をそのまま使う)。計算は `engine.CalcCombo` の素通しで、独自の式・丸めを持たない。
+
+- リクエスト: calc の `format`・`attacker`・`defender`・`field`・`typeChart`(DTO を再利用)に、`steps[]`(`{ move, critical?, hits? }`。1〜3 件)、
+  任意 `opponentMove`(攻撃技)、任意 `opponentSpeed`(`unknown` 既定。`""` も同じ。`from_defender`)、任意 `speedField`
+  (`trickRoom`・`selfTailwind`・`opponentTailwind`)を足す。`hits` は battleState.hits と同じ規則(指定したら 1 以上、範囲は engine が見る)。
+  技・持ち物・特性は ID ではなく解決済みの値で渡す(マスタ解決は Web 側。ADR-0011)。公開 API(CB-4)の構造と名前をそろえる。
+- 結果: engine の `ComboResult` を camelCase で写す。`steps[].damage` は変化技だけ null、他は calc の結果と同じ形。パーセントは 0.1% 単位の
+  表示%(`tenthPercent`)、倒せる確率は `chancePercent`・`guaranteed`・`displayChancePercent`。`opponentAttack` は `opponentMove` が無いと null。
+  `unsupported` は印なしで空配列。
+
+### 2. 効果 DTO の互換(CB-3 の互換節の決定)
+
+- 技 DTO に任意 `effect`(`{ chance, target: self|target, stages: { atk|def|spa|spd|spe } }`)を足す。ランク変化は `Move.Effect` から
+  取るので、これが無いと変化技の手を置けない。`engine.MoveEffect.Validate` の失敗は `invalid_input`、target / stages のキーの語彙外は `invalid_enum`。
+- `ItemEffect.LocksMove`・`FullHPOnly`、`AbilityEffect.FullHPOnly` を受ける(`locksMove`・`fullHPOnly`)。受けないと印 choice_locked /
+  defender_full_hp_assumed がオフラインで出ず、API と結果が食い違う(AC-18)。calc / bulk / reverse は読まない(結果は不変)。
+  CB-3 の「WASM の DTO はこの 2 項目を持たない」を、CB-5 で持つ形に改める。
+- デプロイ順は CB-3 と同じ(先に WASM / calc-svc / pokedex-svc、後でこの 2 項目を含む効果の取り込み)。
+
+### 3. エラー
+
+新しい code は足さない。`engine.ErrInvalidComboInput` は `invalid_input`。手の数(0・4 件)・hits の範囲・変化技の相手の技・ランク変化の無い
+変化技 → `invalid_input`、`opponentSpeed` の語彙外 → `invalid_enum`、未知のキー → `unknown_field`、`typeChart` なし → `type_chart_missing`。
+
+### 4. テストと一致
+
+- `engine/wasmapi/combo_test.go`(テーブル駆動: engine との一致・省略時の既定・印・エラー code・3 手の境界・calc が effect を読まないこと・決定性)。
+- `testdata/vectors.json` に `calcCombo/*` を 4 件(成功 3・エラー 1)。`engine/cmd/wasmexpect` が期待値を生成し、`make test-wasm` で Go と WASM がバイト一致。
+
+### 却下した案(CB-5)
+
+- **WASM 用に別の入力形(ID 参照)を作る**: マスタを持たない方針(ADR-0011)に反する。Web が解決した値を渡す。
+- **効果の 2 項目を WASM では無視する**: オフラインだけ印が欠け、API と結果が違う。
