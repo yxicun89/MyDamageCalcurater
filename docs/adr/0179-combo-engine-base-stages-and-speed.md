@@ -163,3 +163,229 @@ judge のコードはこの ADR では変えない(CB-7 まで自前のまま)�
 - engine に `GuaranteedSelfStages`・`GuaranteedTargetStages`・`Ranks.AddClamped`・`FinalSpeed`・`CompareSpeed`・`CompareTurnOrder`・
   `EffectivePriority` が増える。ダメージ式は変えない(ゴールデン不変)。
 - CB-3 の `CalcCombo` はこれらを組み合わせる。CB-7 で judge を消すとき、素早さの式は engine に残る。
+
+## 追記 CB-3(2026-10-11): `CalcCombo` と合計の畳み込み
+
+- 状態: 提案(受け入れ条件と失敗するテストまで。実装は implementer)
+- 関連: docs/plan/combo-calc.md §2〜§5・§7(Q1〜Q3・Q5〜Q9 は推奨 (a)、Q4 は (b))、ADR-0142 §3(多段の 1 発ごとの 16 段階)、
+  ADR-0144(BattleState)、ADR-0123(未対応の印)、ADR-0010 §3.4(確率の表示)
+
+### 1. API(`engine/combo.go`)
+
+API(CB-4)・WASM(CB-5)の DTO にそのまま写せるよう、出力の語彙は combo-calc.md §2-2 と同じ文字列にする。
+
+```go
+const MaxComboSteps = 3 // §7 Q1
+var ErrInvalidComboInput = errors.New("連続技の入力が不正")
+
+type OpponentSpeedMode string
+const (
+	OpponentSpeedUnknown      OpponentSpeedMode = "unknown" // "" も unknown
+	OpponentSpeedFromDefender OpponentSpeedMode = "from_defender"
+)
+const TurnOrderDependsOnOpponentSpeed TurnOrder = "depends_on_opponent_speed"
+
+type ComboSpeedField struct{ TrickRoom, SelfTailwind, OpponentTailwind bool }
+type ComboStep struct {
+	Move     Move
+	Critical bool
+	Hits     int // BattleState.Hits と同じ(0 は既定。範囲の多段だけ)
+}
+type ComboInput struct {
+	Format        Format
+	Attacker      Individual // Ranks は 1 手目の開始時
+	Defender      Individual // 相手の振り方(UC-5)
+	Field         Field      // 全手で同じ(§3-5)
+	TypeChart     TypeChart
+	Steps         []ComboStep
+	OpponentMove  *Move // nil は相手の攻撃を計算しない(行動順は優先度 0 として出す)
+	OpponentSpeed OpponentSpeedMode
+	SpeedField    ComboSpeedField
+}
+
+type SpeedRange struct{ Min, Max int } // 両端を含む。Min > Max は空
+type SpeedLine struct {
+	SelfSpeed     int        // 同速の値
+	SelfFirst     SpeedRange // 相手の素早さがこの範囲なら自分が先(TR なしは 0..S-1、TR は S+1..maxSpeed)
+	OpponentFirst SpeedRange // TR なしは S+1..maxSpeed、TR は 0..S-1
+}
+type ComboStepResult struct {
+	MoveID                               string
+	SelfStartRanks, SelfEndRanks         Ranks
+	OpponentStartRanks, OpponentEndRanks Ranks
+	Damage                               *DamageResult // 変化技は nil。CalcDamage の結果そのもの(印・KO を含む)
+	SelfSpeed                            int           // 手の開始時の FinalSpeed
+	OpponentSpeed                        int           // from_defender のときだけ(unknown は 0)
+	SelfPriority, OpponentPriority       int           // EffectivePriority(相手の技なしは 0)
+	Order                                TurnOrder     // self_first / opponent_first / speed_tie / depends_on_opponent_speed
+	Line                                 SpeedLine     // 常に出す
+}
+type ComboKOChance struct {
+	ChancePercent float64 // 0..100
+	Guaranteed    bool    // Σ最小 ≥ HP(このとき ChancePercent = 100)
+}
+func (k ComboKOChance) DisplayChancePercentTenths() int // 0 → 0、Guaranteed → 1000、他は四捨五入して 1..999(KOChance と同じ規則)
+type ComboTotal struct {
+	MinDamage, MaxDamage, DefenderHP int
+	KO       ComboKOChance   // 全手
+	KOByStep []ComboKOChance // i 手目までで倒せる確率(累積。長さ = 手の数。最後 = KO)
+}
+func (t ComboTotal) DisplayPercentRangeTenths() (minTenths, maxTenths int) // 最小は切り捨て・最大は四捨五入(ADR-0010 §3.2)
+type ComboSpeed struct {
+	FirstSelfSpeed, LastSelfSpeed int // 1 手目・最後の手の開始時
+	OpponentSpeed                 int // 1 手目の開始時。from_defender のときだけ
+	OpponentSpeedKnown            bool
+}
+type OpponentTiming string // "before_self" | "after_self"
+type OpponentAction struct {
+	Step                 int // 0 始まり
+	Timing               OpponentTiming
+	Damage               DamageResult // その時点の両側のランクで
+	SurviveChancePercent float64      // ここまでの全行動を耐える確率
+}
+type OpponentScenario struct {
+	Actions              []OpponentAction
+	SurviveChancePercent float64 // 行動なしは 100
+}
+type OpponentAttack struct {
+	SelfHP                 int
+	Fast, Slow             OpponentScenario // 順番が決まらない手を「相手が先」/「自分が先」とした場合
+	MinActions, MaxActions int              // = len(Slow.Actions) / len(Fast.Actions)
+}
+type ComboResult struct {
+	Steps          []ComboStepResult
+	Total          ComboTotal
+	Speed          ComboSpeed
+	OpponentAttack *OpponentAttack // OpponentMove が nil なら nil
+	Unsupported    []UnsupportedMark
+}
+func CalcCombo(in ComboInput) (ComboResult, error)
+```
+
+効果データに 2 項目を足す(CalcDamage は読まない。ItemRoles〈ADR-0175〉も変えない):
+
+- `ItemEffect.LocksMove bool`: こだわり系(§3-3。ID を見ずに `choice_locked` を出すため)
+- `ItemEffect.FullHPOnly bool`・`AbilityEffect.FullHPOnly bool`: 満タンのときだけ効く(きあいのタスキ・ばけのかわ・マルチスケイル型。§7 Q6 は印だけ)
+
+未対応の印の理由を 3 つ足す: `choice_locked`・`defender_full_hp_assumed`・`speed_undetermined`(FinalSpeed の `*Undetermined`)。
+`chance_effect_not_applied` は作らない(§7 Q4 (b)。確率 100% 未満は計算にも印にも出さない)。
+
+### 2. 手の進め方(1 手ごと)
+
+`cur`(自分のランク)= `Attacker.Ranks`、`oppCur` = `Defender.Ranks` から始め、手 i ごとに:
+
+1. `self` / `opp` = 入力の個体のランクを `cur` / `oppCur` にしたもの(入力は書き換えない)。
+2. `SelfSpeed = FinalSpeed(self, Field, {SelfTailwind})`。from_defender なら `OpponentSpeed = FinalSpeed(opp, Field, {OpponentTailwind})`。
+3. `SelfPriority = EffectivePriority(step.Move, self, Field)`、`OpponentPriority` は相手の技があれば同じ式、無ければ 0。
+4. `bySpeed` = from_defender なら `CompareSpeed(SelfSpeed, OpponentSpeed, TrickRoom)`、unknown なら `depends_on_opponent_speed`。
+   `Order = CompareTurnOrder(SelfPriority, OpponentPriority, bySpeed)`(優先度が違えば素早さを見ない)。`Line` は `SelfSpeed` と TrickRoom から。
+5. 相手の技があれば、シナリオごとに「相手が先か」を決める: Fast は `opponent_first`・`speed_tie`・`depends_on_opponent_speed`、Slow は `opponent_first` だけ。
+   相手が先なら、ここで相手の行動を 1 つ足す(`before_self`。ランクは `cur`・`oppCur`)。
+6. 攻撃技なら `CalcDamage({Format, self, opp, Move, Field, Critical, TypeChart, State{Hits}})`。変化技は nil。
+7. 技が当たったとき(変化技、または `Effectiveness != 0` かつ `Nullified == ""`)だけ
+   `cur = cur.AddClamped(GuaranteedSelfStages(m))`・`oppCur = oppCur.AddClamped(GuaranteedTargetStages(m))`。
+8. 5. で相手が後で、かつ最後の手でなければ、相手の行動を足す(`after_self`。ランクは 7. の後の値)。最後の手の後の相手の行動は数えない
+   (連続技を撃ち終わるまでに受ける攻撃だけを見る)。
+
+相手の攻撃は `DamageInput{Attacker: opp, Defender: self, Move: *OpponentMove, Field: 壁を入れ替えた Field(AttackerScreens ↔ DefenderScreens)}`。
+急所なし・多段は既定の回数。相手のランクは相手の技の追加効果では変えない(§3-1 の 4.)。
+
+### 3. 畳み込みと計算量
+
+- **倒せる確率**: 長さ HP+1 の分布(HP 以上は 1 つのバケットに吸収)に、手の順に「発」(単発は `Rolls`、多段は `HitRolls` の各行)を
+  1 つずつ畳み込む(`koProbabilitySeq` と同じ方式を「同じ技の繰り返し」から「違う発の列」に広げた関数。既存の `koProbabilitySeq` は変えない)。
+  各手の最後の発の後の吸収バケットが `KOByStep[i]`。変化技の手は前の値のまま。
+- **耐える確率**: 同じ関数を自分の HP と相手の行動の発の列で回し、`100 − 吸収バケット`。
+- 計算量: 発の数 D(≤ 3 × 多段の最大回数)× 16 × (HP+1)。3 手・多段 10 発でも 約 30 × 16 × 700 ≈ 3.4×10^5 回。16^手数 の総当たりはしない
+  (総当たりはテストだけ)。ダメージは整数のまま、確率だけ float64 で足す(1/16 の累乗なので発 13 までは厳密)。
+- `Guaranteed` は整数で決める(Σ最小 ≥ HP)。そのとき `ChancePercent = 100`。Σ最大 < HP なら 0。
+
+### 4. 入力の検査(AC-16。この順。ID の解決は API 側)
+
+1. `len(Steps)` が 1..`MaxComboSteps` でなければ `ErrInvalidComboInput`(個体の検査より前)
+2. `OpponentSpeed` が `""`・unknown・from_defender 以外 → `ErrInvalidComboInput`
+3. 変化技の手で `GuaranteedSelfStages`・`GuaranteedTargetStages` がどちらもゼロ値 → `ErrInvalidComboInput`(確率 100% 未満だけの変化技も)
+4. 相手の技が変化技 → `ErrInvalidComboInput`
+5. `TypeChart` 未設定 → `ErrTypeChartMissing`。両側の `Individual.Validate`(変化技だけの手でも検査が抜けないように明示的に呼ぶ)
+6. 以降は `FinalSpeed`(`ErrInvalidSpeedInput`)・`CalcDamage`(`ErrInvalidBattleState` 等)のエラーをそのまま(`%w`)返す
+
+### 5. 印(`ComboResult.Unsupported`)の順
+
+1. 各手の `Damage.Unsupported` を手の順に連結し、重複を除く(各手の `Damage.Unsupported` はそのまま残す)
+2. `speed_undetermined`: 攻撃側の特性 → 攻撃側の持ち物 → (from_defender のときだけ)防御側の特性 → 防御側の持ち物。どれかの手で立てば 1 つ
+3. `choice_locked`(対象 `attacker_item`): 攻撃側の持ち物が `LocksMove` で、手の `Move.ID` が 2 種類以上
+4. `defender_full_hp_assumed`: 2 手目以降に攻撃技があるとき、防御側の持ち物の `FullHPOnly`(`defender_item`)→ 特性の `FullHPOnly`(`defender_ability`)→
+   2 手目以降の攻撃技で残り HP で威力・ダメージが変わる定義(`Rule.PowerFormula == defender_hp_ratio`・`FixedDamageFormula` が
+   `defender_current_hp_half` / `defender_minus_attacker_hp`)の技(`move`、手の順・重複なし)
+
+印が 1 つも無ければ nil。
+
+### 6. 受け入れ条件とテスト(`engine/combo_test.go`。AC は combo-calc.md §5)
+
+| AC | テスト |
+|---|---|
+| AC-1 | `TestCalcComboUC3PlayRoughShadowSneak`(16 段階・169〜201・51.5625%・表示 516・累積・合計の表示%) |
+| AC-2 | `TestCalcComboUC3BulkyDefenderCannotKO` |
+| AC-3 | `TestCalcComboDragonDanceOutrage` |
+| AC-4 | `TestCalcComboSpeedFromDefender` |
+| AC-5 | `TestCalcComboSpeedLineUnknown`(TR で逆・追い風の両側) |
+| AC-6・AC-7 | `TestCalcComboOpponentAttackSurvives`・`TestCalcComboOpponentAttackFaints`・`TestCalcComboOpponentActionCount`(最小・最大の回数) |
+| AC-8 | `TestCalcComboTurnOrderPriority`・`TestTurnOrderDependsOnOpponentSpeedValue` |
+| AC-9 | `TestCalcComboFlameChargeSpeedTiming` |
+| AC-10 | `TestCalcComboRanksClamp` |
+| AC-11 | `TestCalcComboOpponentDamageAfterSelfDefenseDrop`・`TestCalcComboOpponentAttackUsesSelfSideScreens`・`TestCalcComboTargetStagesAffectLaterDamage` |
+| AC-12(§7 Q4 (b)) | `TestCalcComboChanceEffectNotApplied` |
+| AC-13 | `TestCalcComboStepDamageMatchesCalcDamage` |
+| AC-14 | `TestCalcComboKOMatchesBruteForce`(固定の種で 60 件。3 手・多段・相手の攻撃の耐える確率も総当たり)・`TestComboKOChanceDisplay` |
+| AC-15 | `TestCalcComboChoiceLocked` |
+| AC-16(engine 側) | `TestCalcComboRejectsInvalidInput` |
+| §7 Q5 | `TestCalcComboRockTombChangesTurnOrder` |
+| §3-4・§7 Q6 | `TestCalcComboDefenderFullHPAssumed`・`TestCalcComboUnsupportedMarksConcatenated`・`TestCalcComboSpeedUndeterminedMark` |
+| §2 の 7. | `TestCalcComboNoStagesWhenMoveDoesNotHit`・`TestCalcComboDoesNotMutateInput` |
+| AC-1〜AC-4・AC-9・AC-20 | `engine/golden_combo_test.go` の `TestGoldenCombo`(`-tags golden`。`goldenChampionsFiles` に `combo.jsonl.gz` を足した) |
+
+### 7. ゴールデン `testdata/golden/combo.jsonl.gz`(tools/golden/generate.mjs の変更点)
+
+新しいファイルだけを足す(既存のファイルのバイト列・乱数列は変えない。乱数は使わない)。1 行 1 ケース:
+
+```json
+{"id":"uc3/mimikyu-adamant/garchomp-jolly",
+ "oracle":{"attacker":"Mimikyu","defender":"Garchomp","moves":["Play Rough","Shadow Sneak"]},
+ "input":{"Format":"single","Attacker":{…individual() の input…},"Defender":{…},"Field":{"Weather":"none","Terrain":"none"},
+          "Steps":[{"Move":{"ID":"playrough",…,"Effect":null},"Critical":false,"Hits":0},…],
+          "OpponentSpeed":"from_defender","SpeedField":{"TrickRoom":false,"SelfTailwind":false,"OpponentTailwind":false}},
+ "expected":{"steps":[{"boosts":{},"defenderBoosts":{},"rolls":[…16…],"selfSpeed":148,"defenderSpeed":169}, …],
+             "defenderHp":185,"total":[169,201],"koCount":132,"koDenominator":256}}
+```
+
+- 手の開始時のランクは **JS 側で独立に** 累積する(`self` / `target` の確率 100 の変化だけを足し、-6..+6 に収める。当たらない技は足さない)。
+  各手は `individual(genC, name, {..., ranks: その手の boosts})` の Pokemon で `calculate()`。変化技の手は `rolls: null`。
+- 技の追加効果(`Move.Effect`)は oracle の技データに無い(りゅうのまい・ニトロチャージは boosts を持たない)ので、generate.mjs に
+  シナリオで使う技だけの表(`comboEffects`)を置き、入力の `Move.Effect` と JS の累積の両方に使う。oracle の技データに `self.boosts`
+  がある技(インファイト等)は表と一致することを assert する。
+- 素早さは `require('@smogon/calc/dist/mechanics/util').getFinalSpeed(genC, pokemon, field, side)`(手の開始時の boosts)。
+- `koCount` / `koDenominator` は oracle の各手の 16 段階(多段は 1 発ごと)から 16^発数 通りを **総当たり**で数える(発数は 6 以下に保つ)。
+- ラベル(`goldenComboLabels`。各 1 件以上): `uc3`(AC-1。ID は `uc3/mimikyu-adamant/garchomp-jolly` を必ず含む)・`uc3-bulky`(AC-2)・
+  `uc2`(AC-3。りゅうのまい → げきりん)・`flame-charge`(AC-9)・`close-combat`(自分の防御 -1 → 次の手)・`rock-tomb`(相手の素早さ -1)・
+  `multi-hit`(タネマシンガン `Hits` 2〜3 を含む手)・`three-steps`(3 手)・`clamp`(攻撃 +6 で つるぎのまい)。
+- `save('combo.jsonl.gz', comboCases, true)`、`championsFiles` に足す。metadata の `exclusions` の moves に「combo.jsonl.gz は各手を照合し、
+  合計と確率は oracle の 16 段階の総当たり」を 1 文足す。
+
+### 7 の 2. 実装の手順(implementer)
+
+1. `engine/modifiers.go` に `LocksMove`・`FullHPOnly`(2 か所)、`engine/unsupported.go` に印の理由 3 つ、`engine/speed_order.go` に
+   `TurnOrderDependsOnOpponentSpeed`。
+2. `engine/combo.go` に §1 の型と `CalcCombo`(§2・§4・§5)。畳み込みは `engine/ko.go` に発の列を受ける関数を足す(§3。`koProbabilitySeq` は変えない)。
+3. `cd engine && go test ./...`(combo_test.go が全部通る)。
+4. tools/golden/generate.mjs を §7 のとおり変え、`make golden-generate` → `make test-golden`(既存のファイルの sha256 が変わらないこと・
+   `TestGoldenCombo` を含め全件一致)。
+5. `make lint`・`make test`。docs/plan/improvements/data.md の I-data-12 を [x]、この追記の状態を「採用」に。
+
+### 却下した案(CB-3)
+
+- **16^手数 の総当たりを本体で回す**: 多段 3 手で 16^15 を超える。畳み込みは HP に比例するだけ。
+- **相手の行動回数を 1 つの値で返す**: unknown のとき最後の手の行動順が決まらず、最小と最大が分かれる(§2-3 の 4.)。
+  ランク(インファイトの防御 -1)で 1 回ごとのダメージも変わるので、回数ではなく行動の列をシナリオごとに返す。
+- **確率 100% 未満の効果を「未適用」として出す**: §7 Q4 (b)(ユーザー決定)で出さない。
+- **こだわり・タスキを持ち物 ID で判定する**: ID の直書きになる。効果データの 2 項目で表す(値はデータレーンが取り込む。Champions のマスタに
+  こだわり系は無いので、v1 では実データでは立たない)。
