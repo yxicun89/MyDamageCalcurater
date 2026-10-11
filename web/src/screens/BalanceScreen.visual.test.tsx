@@ -75,10 +75,10 @@ describe("メンバーの枠", () => {
 });
 
 describe("ボタン", () => {
-  test("「メンバーを追加」「仮想敵を追加」は ui-button ui-button--secondary", () => {
+  test("「メンバーを追加」「仮想敵を追加」は「+」の空きタイル(ui-tile ui-tile--empty。I-web-13f)", () => {
     renderScreen();
     for (const name of [balanceScreenText.addMemberLabel, balanceScreenText.addThreatLabel]) {
-      expect(screen.getByRole("button", { name })).toHaveClass("ui-button", "ui-button--secondary");
+      expect(screen.getByRole("button", { name })).toHaveClass("ui-tile", "ui-tile--empty");
     }
   });
 

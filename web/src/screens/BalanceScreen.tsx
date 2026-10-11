@@ -21,11 +21,23 @@ import {
   superEffectiveLabel,
 } from "../domain/balanceLabels";
 import { learnsetMoves } from "../domain/moves";
-import { balanceErrorText, balanceScreenText, masterOnlineText, typeNameJa } from "../i18n/ja";
+import { balanceErrorText, balanceScreenText, masterOnlineText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
+import { Icon, type IconName } from "../ui/Icon";
+import { PokemonCard } from "../ui/PokemonCard";
+import { Tile } from "../ui/Tile";
+import { TypeBadge } from "../ui/TypeBadge";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { PokemonIcon } from "../images/PokemonIcon";
+import {
+  coverageLook,
+  defenseLook,
+  ResultCell,
+  safeLook,
+  superEffectiveLook,
+  TypeList,
+} from "./balanceCells";
 import { SpeciesSearchField } from "./SpeciesSearchField";
 import { useSpeciesResolutions, type SpeciesResolutions } from "./speciesResolution";
 import "./BalanceScreen.css";
@@ -478,14 +490,13 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
           />
         ))}
       </div>
-      <button
-        type="button"
-        className="ui-button ui-button--secondary balance-screen__add"
+      <Tile
+        empty
+        className="balance-screen__add"
+        label={balanceScreenText.addMemberLabel}
         onClick={memberActions.add}
         disabled={!balanceAvailable || members.length >= MAX_MEMBERS}
-      >
-        {balanceScreenText.addMemberLabel}
-      </button>
+      />
 
       <div className="balance-screen__members">
         {threats.map((threat, index) => (
@@ -521,14 +532,13 @@ export function BalanceScreen({ master, client, masterSearch }: BalanceScreenPro
           />
         ))}
       </div>
-      <button
-        type="button"
-        className="ui-button ui-button--secondary balance-screen__add"
+      <Tile
+        empty
+        className="balance-screen__add"
+        label={balanceScreenText.addThreatLabel}
         onClick={threatActions.add}
         disabled={!balanceAvailable || threats.length >= MAX_MEMBERS}
-      >
-        {balanceScreenText.addThreatLabel}
-      </button>
+      />
 
       {loading && (
         <p className="ui-notice ui-notice--loading balance-screen__notice">
@@ -657,10 +667,15 @@ function MemberFields({
   const abilitySelectId = useId();
   return (
     <fieldset className="ui-card ui-card--typed balance-member" style={typeAccentStyle(species?.types[0])}>
-      <legend>
-        {species !== null && <PokemonIcon speciesKey={species.key} typeId={species.types[0]} />}
-        {groupLabel}
-      </legend>
+      <legend>{groupLabel}</legend>
+      {species !== null && (
+        <PokemonCard
+          className="balance-member__card"
+          speciesKey={species.key}
+          name={species.nameJa}
+          types={species.types}
+        />
+      )}
       {speciesListAvailable ? (
         <>
           <label className="balance-member__label" htmlFor={speciesSelectId}>
@@ -734,6 +749,7 @@ function MemberFields({
           disabled={disabled}
           className="ui-button ui-button--secondary balance-member__remove"
         >
+          <Icon name="trash" size={16} />
           {removeLabel}
         </button>
       )}
@@ -811,8 +827,8 @@ function DefenseTable({ master, speciesFor, response }: DefenseTableProps) {
           <tr>
             <th scope="col">{balanceScreenText.memberColumnLabel}</th>
             {headerTypes.map((type) => (
-              <th key={type} scope="col" style={{ borderBottomColor: `var(--type-${type})` }}>
-                {typeNameJa[type]}
+              <th key={type} scope="col">
+                <TypeBadge type={type} />
               </th>
             ))}
           </tr>
@@ -820,13 +836,19 @@ function DefenseTable({ master, speciesFor, response }: DefenseTableProps) {
         <tbody>
           {response.members.map((member, index) => (
             <tr key={`${member.pokemonId}-${String(index)}`}>
-              <th scope="row">{findSpeciesName(speciesFor, master, member.pokemonId)}</th>
+              <th scope="row">
+                <MemberHeading master={master} speciesFor={speciesFor} pokemonId={member.pokemonId} />
+              </th>
               {headerTypes.map((type) => {
                 const entry = member.defense.find((candidate) => candidate.attackType === type);
-                return (
-                  <td key={type}>
-                    {entry === undefined ? "" : defenseMultiplierLabel(entry.multiplier, entry.category)}
-                  </td>
+                return entry === undefined ? (
+                  <td key={type} />
+                ) : (
+                  <ResultCell
+                    key={type}
+                    look={defenseLook(entry.category)}
+                    text={defenseMultiplierLabel(entry.multiplier, entry.category)}
+                  />
                 );
               })}
             </tr>
@@ -845,24 +867,32 @@ function TeamSummaryTable({ response }: { readonly response: Schemas["AnalyzeRes
         <thead>
           <tr>
             <th scope="col">{balanceScreenText.attackTypeColumnLabel}</th>
-            <th scope="col">{balanceScreenText.weakColumnLabel}</th>
+            <th scope="col">
+              <ColumnHeading icon="up" text={balanceScreenText.weakColumnLabel} />
+            </th>
             <th scope="col">{balanceScreenText.quadWeakColumnLabel}</th>
-            <th scope="col">{balanceScreenText.resistColumnLabel}</th>
-            <th scope="col">{balanceScreenText.immuneColumnLabel}</th>
-            <th scope="col">{balanceScreenText.neutralColumnLabel}</th>
+            <th scope="col">
+              <ColumnHeading icon="down" text={balanceScreenText.resistColumnLabel} />
+            </th>
+            <th scope="col">
+              <ColumnHeading icon="close" text={balanceScreenText.immuneColumnLabel} />
+            </th>
+            <th scope="col">
+              <ColumnHeading icon="minus" text={balanceScreenText.neutralColumnLabel} />
+            </th>
           </tr>
         </thead>
         <tbody>
           {response.teamSummary.map((entry) => (
             <tr key={entry.attackType}>
               <th scope="row" style={{ borderLeftColor: `var(--type-${entry.attackType})` }}>
-                {typeNameJa[entry.attackType]}
+                <TypeBadge type={entry.attackType} />
               </th>
-              <td>{entry.weak}</td>
-              <td>{entry.quadWeak}</td>
-              <td>{entry.resist}</td>
-              <td>{entry.immune}</td>
-              <td>{entry.neutral}</td>
+              <td className="balance-count-cell">{entry.weak}</td>
+              <td className="balance-count-cell">{entry.quadWeak}</td>
+              <td className="balance-count-cell">{entry.resist}</td>
+              <td className="balance-count-cell">{entry.immune}</td>
+              <td className="balance-count-cell">{entry.neutral}</td>
             </tr>
           ))}
         </tbody>
@@ -888,11 +918,14 @@ function CoverageTable({ response }: { readonly response: Schemas["CoverageRespo
           {response.teamCoverage.map((entry) => (
             <tr key={entry.defenseType}>
               <th scope="row" style={{ borderLeftColor: `var(--type-${entry.defenseType})` }}>
-                {typeNameJa[entry.defenseType]}
+                <TypeBadge type={entry.defenseType} />
               </th>
-              <td>{coverageMultiplierLabel(entry.bestMultiplier)}</td>
-              <td>{entry.effectiveMembers}</td>
-              <td>{entry.superEffectiveMembers}</td>
+              <ResultCell
+                look={coverageLook(entry.bestMultiplier)}
+                text={coverageMultiplierLabel(entry.bestMultiplier)}
+              />
+              <td className="balance-count-cell">{entry.effectiveMembers}</td>
+              <td className="balance-count-cell">{entry.superEffectiveMembers}</td>
             </tr>
           ))}
         </tbody>
@@ -902,13 +935,6 @@ function CoverageTable({ response }: { readonly response: Schemas["CoverageRespo
 }
 
 // ---- P4-12b: 仮想敵(threats)・おすすめタイプ(recommendations)の表示(ADR-0400・ADR-0401) ----
-
-/** タイプの一覧を表示用の文字列にする(「・」区切り、空なら「なし」。ADR-0303 §7)。 */
-function typeListText(types: readonly Schemas["TypeId"][]): string {
-  return types.length === 0
-    ? balanceScreenText.noneLabel
-    : types.map((type) => typeNameJa[type]).join(balanceScreenText.listSeparator);
-}
 
 interface ThreatSectionProps {
   readonly n: number;
@@ -922,6 +948,7 @@ interface ThreatSectionProps {
  * safe/superEffective は応答の真偽値をそのまま語にする(倍率から判定し直さない)。
  */
 function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
+  const species = speciesFor(master.species, threat.pokemonId);
   return (
     <section
       className="ui-card balance-screen__threat"
@@ -930,6 +957,13 @@ function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
         findSpeciesName(speciesFor, master, threat.pokemonId),
       )}
     >
+      <PokemonCard
+        small
+        className="balance-screen__threat-card"
+        speciesKey={species?.key ?? threat.pokemonId}
+        name={findSpeciesName(speciesFor, master, threat.pokemonId)}
+        types={species?.types ?? []}
+      />
       <TableScroll label={balanceScreenText.threatMatchupTableLabel}>
         <table className="ui-table" aria-label={balanceScreenText.threatMatchupTableLabel}>
           <thead>
@@ -944,18 +978,29 @@ function ThreatSection({ n, master, speciesFor, threat }: ThreatSectionProps) {
           <tbody>
             {threat.matchups.map((matchup, index) => (
               <tr key={`${matchup.pokemonId}-${String(index)}`}>
-                <th scope="row">{findSpeciesName(speciesFor, master, matchup.pokemonId)}</th>
+                <th scope="row">
+                  <MemberHeading master={master} speciesFor={speciesFor} pokemonId={matchup.pokemonId} />
+                </th>
                 <td>{matchupMultiplierLabel(matchup.incoming)}</td>
                 <td>{matchupMultiplierLabel(matchup.outgoing)}</td>
-                <td>{safeLabel(matchup.safe)}</td>
-                <td>{superEffectiveLabel(matchup.superEffective)}</td>
+                <ResultCell look={safeLook(matchup.safe)} text={safeLabel(matchup.safe)} />
+                <ResultCell
+                  look={superEffectiveLook(matchup.superEffective)}
+                  text={superEffectiveLabel(matchup.superEffective)}
+                />
               </tr>
             ))}
           </tbody>
         </table>
       </TableScroll>
-      <p>{balanceScreenText.safeMembersLabel(threat.safeMembers)}</p>
-      <p>{balanceScreenText.superEffectiveMembersLabel(threat.superEffectiveMembers)}</p>
+      <div className="balance-screen__counts">
+        <CountLine icon="check" prefix={balanceScreenText.safeMembersPrefix} count={threat.safeMembers} />
+        <CountLine
+          icon="up"
+          prefix={balanceScreenText.superEffectiveMembersPrefix}
+          count={threat.superEffectiveMembers}
+        />
+      </div>
     </section>
   );
 }
@@ -973,8 +1018,8 @@ function RecommendationsSection({ master, abilitiesFor, response }: Recommendati
       className="ui-card balance-screen__recommendations"
       aria-label={balanceScreenText.recommendationsRegionLabel}
     >
-      <p>{balanceScreenText.defenseHolesLabel(typeListText(response.defenseHoles))}</p>
-      <p>{balanceScreenText.offenseHolesLabel(typeListText(response.offenseHoles))}</p>
+      <HolesLine label={balanceScreenText.defenseHolesLabel} types={response.defenseHoles} />
+      <HolesLine label={balanceScreenText.offenseHolesLabel} types={response.offenseHoles} />
       <CandidatesTable candidates={response.candidates} />
       <AbilityOptionsTable
         master={master}
@@ -1008,9 +1053,15 @@ function CandidatesTable({ candidates }: { readonly candidates: readonly Schemas
                     .join(balanceScreenText.listSeparator);
             return (
               <tr key={`${candidate.types.join("-")}-${String(index)}`}>
-                <th scope="row">{typeListText(candidate.types)}</th>
-                <td>{typeListText(candidate.defenseCovered)}</td>
-                <td>{typeListText(candidate.offenseCovered)}</td>
+                <th scope="row">
+                  <TypeList types={candidate.types} />
+                </th>
+                <td>
+                  <TypeList types={candidate.defenseCovered} />
+                </td>
+                <td>
+                  <TypeList types={candidate.offenseCovered} />
+                </td>
                 <td>{pokemonText}</td>
               </tr>
             );
@@ -1054,7 +1105,9 @@ function AbilityOptionsTable({ master, abilitiesFor, abilityOptions }: AbilityOp
                     .join(balanceScreenText.listSeparator);
             return (
               <tr key={option.attackType}>
-                <th scope="row">{typeNameJa[option.attackType]}</th>
+                <th scope="row">
+                  <TypeBadge type={option.attackType} />
+                </th>
                 <td>{pokemonText}</td>
               </tr>
             );
@@ -1062,5 +1115,74 @@ function AbilityOptionsTable({ master, abilitiesFor, abilityOptions }: AbilityOp
         </tbody>
       </table>
     </TableScroll>
+  );
+}
+
+/** 表の行見出し: ポケモンの画像かエンブレム + 名前(読み上げ名は名前だけ。画像は装飾)。 */
+function MemberHeading({
+  master,
+  speciesFor,
+  pokemonId,
+}: {
+  readonly master: MasterData;
+  readonly speciesFor: SpeciesResolutions["speciesFor"];
+  readonly pokemonId: string;
+}) {
+  const species = speciesFor(master.species, pokemonId);
+  return (
+    <span className="balance-heading">
+      <PokemonIcon speciesKey={species?.key ?? pokemonId} typeId={species?.types[0]} />
+      {findSpeciesName(speciesFor, master, pokemonId)}
+    </span>
+  );
+}
+
+/** 集計の列見出し: 記号 + 語(語は列の名前のまま。記号は装飾)。 */
+function ColumnHeading({ icon, text }: { readonly icon: IconName; readonly text: string }) {
+  return (
+    <span className="balance-heading">
+      <Icon name={icon} size={16} />
+      {text}
+    </span>
+  );
+}
+
+/** 仮想敵の人数の行: 記号 + 前の語 + 大きい数字 + 「人」(つなげた文字は balanceScreenText.*MembersLabel と同じ)。 */
+function CountLine({
+  icon,
+  prefix,
+  count,
+}: {
+  readonly icon: IconName;
+  readonly prefix: string;
+  readonly count: number;
+}) {
+  return (
+    <p className="balance-count">
+      <Icon name={icon} size={20} />
+      {prefix}
+      <strong className="balance-count__number">{count}</strong>
+      {balanceScreenText.memberCountSuffix}
+    </p>
+  );
+}
+
+/** 穴の行: 「防御の穴: 」+ タイプのバッジ(無ければ「なし」の文字)。 */
+function HolesLine({
+  label,
+  types,
+}: {
+  readonly label: (list: string) => string;
+  readonly types: readonly Schemas["TypeId"][];
+}) {
+  // label は「見出し: 一覧」の形。一覧の位置で前後に分け、一覧のところだけバッジにする。
+  const marker = "\u0000";
+  const [head = "", tail = ""] = label(marker).split(marker);
+  return (
+    <p className="balance-holes">
+      {head}
+      <TypeList types={types} />
+      {tail}
+    </p>
   );
 }
