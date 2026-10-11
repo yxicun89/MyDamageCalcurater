@@ -16,6 +16,8 @@ final class PopPaletteTests: XCTestCase {
         ("onAccent", "14161A", "14161A"),
         ("success", "17743A", "5FD38A"),
         ("successSoft", "E2F5E8", "12301F"),
+        ("resist", "0A7080", "5CD3E3"),
+        ("resistSoft", "DDF4F8", "0C2E36"),
         ("warning", "9A5B00", "FFB547"),
         ("warningSoft", "FFF1D6", "33240B"),
         ("info", "0B6BA8", "5EC2F2"),
@@ -87,10 +89,11 @@ final class PopPaletteTests: XCTestCase {
             ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"), ("brandPrimary", "tableZebra"),
             ("danger", "bgGradientStart"), ("danger", "bgGradientEnd"), ("danger", "tableZebra"),
             ("success", "bgBase"), ("success", "surfaceCard"), ("success", "successSoft"),
+            ("resist", "bgBase"), ("resist", "surfaceCard"), ("resist", "resistSoft"),
             ("warning", "bgBase"), ("warning", "surfaceCard"), ("warning", "warningSoft"),
             ("info", "bgBase"), ("info", "surfaceCard"), ("info", "infoSoft"),
             ("danger", "surfaceCard"), ("danger", "dangerSoft"), ("onDanger", "danger"),
-            ("textPrimary", "successSoft"), ("textPrimary", "warningSoft"),
+            ("textPrimary", "successSoft"), ("textPrimary", "resistSoft"), ("textPrimary", "warningSoft"),
             ("textPrimary", "infoSoft"), ("textPrimary", "dangerSoft"),
         ]
         for background in ["bgGradientStart", "bgGradientEnd", "surfaceCard", "tableHeader", "tableZebra", "tableHover"] {
@@ -101,6 +104,7 @@ final class PopPaletteTests: XCTestCase {
     }()
 
     private static let nonTextPairs: [(String, String)] = [
+        ("resist", "surfaceCard"), ("resist", "resistSoft"), ("resist", "bgBase"),
         ("focusRing", "bgBase"), ("focusRing", "surfaceCard"),
         ("focusRing", "bgGradientStart"), ("focusRing", "bgGradientEnd"),
         ("brandPrimary", "bgGradientStart"), ("brandPrimary", "bgGradientEnd"),

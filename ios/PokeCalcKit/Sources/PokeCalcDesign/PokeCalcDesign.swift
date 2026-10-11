@@ -115,6 +115,10 @@ extension ColorToken {
     public static let success = solid(0x17743A, 0x5FD38A)
     /// 成功の案内の塗り。
     public static let successSoft = solid(0xE2F5E8, 0x12301F)
+    /// 耐性(×1/2 以下)の文字・枠・アイコン。緑でなく水色〜シアン系(弱点の `danger` の赤・主色の青と区別。色だけで示さず文字/アイコンも併用する)。
+    public static let resist = solid(0x0A7080, 0x5CD3E3)
+    /// 耐性の案内・背景の塗り。
+    public static let resistSoft = solid(0xDDF4F8, 0x0C2E36)
     /// 注意の文字・アイコン。
     public static let warning = solid(0x9A5B00, 0xFFB547)
     /// 注意の案内の塗り。
@@ -151,6 +155,7 @@ extension ColorToken {
     public static let popPalette: [(name: String, pair: ColorPair)] = [
         ("brandPrimary", brandPrimary), ("onPrimary", onPrimary), ("brandAccent", brandAccent),
         ("onAccent", onAccent), ("success", success), ("successSoft", successSoft),
+        ("resist", resist), ("resistSoft", resistSoft),
         ("warning", warning), ("warningSoft", warningSoft), ("info", info), ("infoSoft", infoSoft),
         ("dangerSoft", dangerSoft), ("onDanger", onDanger), ("surfaceCard", surfaceCard),
         ("bgGradientStart", bgGradientStart), ("bgGradientEnd", bgGradientEnd),
