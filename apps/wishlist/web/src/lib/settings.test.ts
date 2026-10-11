@@ -1,3 +1,5 @@
+// 注意(フェーズ5 5-2): トークンと API の URL の設定を無くす(ユーザー決定 2026-10-11)ので、src/lib/settings.ts と
+// このテストは実装者が一緒に削除する(App は localStorage の wishlist.settings を読まない。App.noauth.test.tsx の AC-5-2a-2)。
 import { describe, expect, it, vi } from "vitest";
 import { SETTINGS_KEY, loadSettings, saveSettings } from "./settings";
 

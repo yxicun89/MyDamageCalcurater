@@ -55,15 +55,23 @@ async function openSheet(prepare: (api: FakeApi) => void, opts: { now?: string; 
   const dialog = screen.getByRole("dialog", { name: "詳細" });
   return { ...r, clock, dialog };
 }
+// 5-2(ユーザー決定 2026-10-11 / phase5-spec 5-2)で、サマリの文「だいたい ¥A〜¥B で買えそう(日付 時点)」を
+// 価格の帯(price-band / band-low / band-high)と取得日(fetched-at)に置き換えた。status は読み込み中・更新中・失敗などの短い文だけを持つ。
 const status = (d: HTMLElement) => within(d).getByRole("status");
+const bandLow = (d: HTMLElement) => within(d).getByTestId("band-low");
+const hasBand = (d: HTMLElement) => {
+  expect(within(d).getByTestId("price-band")).toBeInTheDocument();
+};
 const siteRows = (d: HTMLElement) =>
   within(within(d).getByRole("list", { name: "サイト" })).getAllByRole("link");
+const sitePrice = (d: HTMLElement, site: string) =>
+  within(within(d).getByRole("link", { name: site })).queryByTestId("site-price");
 const gets = (api: FakeApi, id = FIGUARTS_ITEM.id) =>
   api.callsTo("GET", `/api/items/${String(id)}/estimates`);
 
 // AC-EST-01: 詳細を開いたら estimates を 1 回取る
 describe("目安価格: 取得", () => {
-  it("AC-EST-01 シートを開くと GET estimates を 1 回呼ぶ(Bearer 付き)。サイト行のリンクは出る", async () => {
+  it("AC-EST-01 シートを開くと GET estimates を 1 回呼ぶ(Authorization は付けない)。サイトのリンクは出る", async () => {
     const { api, dialog } = await openSheet((a) => {
       a.estimates = () => est({ sites: [] });
     });
@@ -71,30 +79,32 @@ describe("目安価格: 取得", () => {
       expect(status(dialog)).toHaveTextContent("まだ価格情報はありません");
     });
     expect(gets(api)).toHaveLength(1);
-    expect(gets(api)[0]?.headers.get("Authorization")).toBe("Bearer test-token");
+    expect(gets(api)[0]?.headers.has("Authorization")).toBe(false);
     expect(siteRows(dialog)).toHaveLength(3);
   });
 });
 
 // AC-EST-02: サマリ
 describe("目安価格: サマリ", () => {
-  it("AC-EST-02 「だいたい ¥3,000〜¥4,500 で買えそう(10/3 時点)」(日付は summary_fetched_at の JST)", async () => {
+  it("AC-EST-02 帯に ¥3,000 と ¥4,500、取得日 10/3(日付は summary_fetched_at の JST)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () => est({ summary_fetched_at: "2026-10-02T15:30:00Z" }); // UTC 10/2、JST 10/3
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい ¥3,000〜¥4,500 で買えそう(10/3 時点)");
+      expect(bandLow(dialog)).toHaveTextContent("¥3,000");
     });
+    expect(within(dialog).getByTestId("band-high")).toHaveTextContent("¥4,500");
+    expect(within(dialog).getByTestId("fetched-at")).toHaveTextContent("10/3");
   });
 
-  it("AC-EST-02 summary_mid が null なら「¥3,000〜 で買えそう」", async () => {
+  it("AC-EST-02 summary_mid が null なら上限の金額を出さない(¥3,000 と「〜」だけ)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () => est({ summary_mid: null, sites: [siteEst(2, { mid: null, count: 1 })] });
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい ¥3,000〜 で買えそう(10/3 時点)");
+      expect(bandLow(dialog)).toHaveTextContent("¥3,000");
     });
-    expect(status(dialog)).not.toHaveTextContent("〜¥");
+    expect(within(dialog).getByTestId("band-high")).not.toHaveTextContent("¥");
   });
 
   it("AC-EST-02 目安が無く estimates が空なら「まだ価格情報はありません」", async () => {
@@ -116,10 +126,9 @@ describe("目安価格: サマリ", () => {
           summary_fetched_at: null,
         });
     });
-    await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("出品ないかも");
-    });
-    expect(status(dialog)).not.toHaveTextContent("時点");
+    expect(await within(dialog).findByTestId("no-listing")).toHaveTextContent("出品ないかも");
+    expect(within(dialog).queryByTestId("price-band")).not.toBeInTheDocument();
+    expect(within(dialog).queryByTestId("fetched-at")).not.toBeInTheDocument();
   });
 
   it("AC-EST-02 refreshing:true なら「更新中…」を添える(値が無くても出す)。更新中は文字だけ", async () => {
@@ -129,14 +138,15 @@ describe("目安価格: サマリ", () => {
     await waitFor(() => {
       expect(status(dialog)).toHaveTextContent("更新中…");
     });
-    expect(status(dialog)).toHaveTextContent("だいたい ¥3,000〜¥4,500 で買えそう");
+    hasBand(dialog);
+    expect(bandLow(dialog)).toHaveTextContent("¥3,000");
     expect(within(dialog).queryByRole("progressbar")).not.toBeInTheDocument();
   });
 });
 
-// AC-EST-03: サイト行
-describe("目安価格: サイト行", () => {
-  it("AC-EST-03 ジャンルの順に、サイト名・目安価格(low〜mid)・件数・在庫を出す。行全体が <a target=_blank rel=noopener>", async () => {
+// AC-EST-03: サイトのタイル(旧: 行にサイト名・low〜mid・件数・在庫・状態の文。5-2 で形に置き換え。詳しくは App.detail.test.tsx の AC-5-2i-*)
+describe("目安価格: サイトのタイル", () => {
+  it("AC-EST-03 ジャンルの順に、low のあるサイトだけ価格(¥low)を出す。ジャンルに無いサイトは出さない。タイル全体が <a target=_blank rel=noopener>", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () =>
         est({
@@ -148,22 +158,12 @@ describe("目安価格: サイト行", () => {
         });
     });
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("¥3,000〜¥4,500");
+      expect(sitePrice(dialog, "Amazon")).toHaveTextContent("¥3,000");
     });
     const rows = siteRows(dialog);
-    expect(rows.map((r) => r.textContent)).toEqual([
-      expect.stringContaining("Amazon"),
-      expect.stringContaining("メルカリ"),
-      expect.stringContaining("その他"),
-    ]);
-    expect(rows[0]).toHaveTextContent("5件");
-    expect(rows[0]).toHaveTextContent("在庫あり");
-    expect(rows[0]).not.toHaveTextContent("在庫なし");
-    // mid が null: 「¥low〜」。in_stock_count が 0: 在庫なし
-    expect(rows[1]).toHaveTextContent("¥800〜");
-    expect(rows[1]).not.toHaveTextContent("〜¥");
-    expect(rows[1]).toHaveTextContent("1件");
-    expect(rows[1]).toHaveTextContent("在庫なし");
+    expect(rows.map((r) => r.getAttribute("aria-label"))).toEqual(["Amazon", "メルカリ", "その他"]);
+    expect(sitePrice(dialog, "メルカリ")).toHaveTextContent("¥800");
+    expect(sitePrice(dialog, "メルカリ")).not.toHaveTextContent("〜");
     for (const r of rows) {
       expect(r).toHaveAttribute("target", "_blank");
       expect(r.getAttribute("rel")).toMatch(/\bnoopener\b/);
@@ -171,20 +171,20 @@ describe("目安価格: サイト行", () => {
     }
   });
 
-  it("AC-EST-03 目安が無いサイト(link_only など)は今までどおりリンクだけ(価格・件数・在庫・状態を出さない)", async () => {
+  it("AC-EST-03 目安が無いサイト(link_only など)はリンクだけ(価格・状態を出さない)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () => est();
     });
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("¥3,000");
+      expect(sitePrice(dialog, "Amazon")).toHaveTextContent("¥3,000");
     });
+    expect(sitePrice(dialog, "その他")).not.toBeInTheDocument();
     const linkOnly = siteRows(dialog)[2];
-    expect(linkOnly?.textContent).toContain("その他");
-    for (const w of ["¥", "件", "在庫", "最終取得", "出品ないかも"])
-      expect(linkOnly).not.toHaveTextContent(w);
+    expect(linkOnly).not.toHaveAttribute("data-dim");
+    expect(linkOnly).not.toHaveAttribute("data-failed");
   });
 
-  it("AC-EST-03 status=failed は前回の値と「最終取得: N日前」(JST の暦日。今日なら「今日」)", async () => {
+  it("AC-EST-03 status=failed は前回の値を出し、title に「最終取得: N日前」(JST の暦日。今日なら「今日」)", async () => {
     const { dialog } = await openSheet(
       (a) => {
         a.estimates = () =>
@@ -199,18 +199,16 @@ describe("目安価格: サイト行", () => {
       { now: "2026-10-03T03:00:00Z" },
     );
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("最終取得");
+      expect(sitePrice(dialog, "Amazon")).toHaveTextContent("¥3,000");
     });
     const rows = siteRows(dialog);
-    expect(rows[0]).toHaveTextContent("¥3,000〜¥4,500");
-    expect(rows[0]).toHaveTextContent("最終取得: 3日前");
-    expect(rows[1]).toHaveTextContent("最終取得: 1日前");
-    expect(rows[2]).toHaveTextContent("最終取得: 今日");
-    expect(rows[0]).not.toHaveTextContent("エラー");
+    expect(rows[0]).toHaveAttribute("title", "最終取得: 3日前");
+    expect(rows[1]).toHaveAttribute("title", "最終取得: 1日前");
+    expect(rows[2]).toHaveAttribute("title", "最終取得: 今日");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
-  it("AC-EST-03 status=failed で前回値が無ければ「取得できませんでした」。リンクは出る。ok の行に最終取得は出さない", async () => {
+  it("AC-EST-03 status=failed で前回値が無ければ価格なし(data-failed)。リンクは出る。ok のタイルに最終取得(title)は付けない", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () =>
         est({
@@ -221,14 +219,14 @@ describe("目安価格: サイト行", () => {
         });
     });
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("取得できませんでした");
+      expect(siteRows(dialog)[0]).toHaveAttribute("data-failed", "true");
     });
     expect(siteRows(dialog)[0]?.getAttribute("href")).toMatch(/^https:\/\/www\.amazon\.co\.jp\//);
-    expect(siteRows(dialog)[0]).not.toHaveTextContent("¥");
-    expect(siteRows(dialog)[1]).not.toHaveTextContent("最終取得");
+    expect(sitePrice(dialog, "Amazon")).not.toBeInTheDocument();
+    expect(siteRows(dialog)[1]).not.toHaveAttribute("title");
   });
 
-  it("AC-EST-03 status=no_result は「出品ないかも」だけ(金額・件数・在庫は出さず、検索結果へのリンクは残す)", async () => {
+  it("AC-EST-03 status=no_result は薄く(data-dim)「なし」だけ(検索結果へのリンクは残す)", async () => {
     const { dialog } = await openSheet((a) => {
       a.estimates = () =>
         est({
@@ -236,9 +234,9 @@ describe("目安価格: サイト行", () => {
         });
     });
     await waitFor(() => {
-      expect(siteRows(dialog)[0]).toHaveTextContent("出品ないかも");
+      expect(siteRows(dialog)[0]).toHaveAttribute("data-dim", "true");
     });
-    for (const w of ["¥", "件", "在庫"]) expect(siteRows(dialog)[0]).not.toHaveTextContent(w);
+    expect(sitePrice(dialog, "Amazon")).toHaveTextContent("なし");
     expect(siteRows(dialog)[0]).toHaveAttribute("target", "_blank");
     expect(siteRows(dialog)[0]).toHaveAttribute("rel", "noopener");
   });
@@ -266,7 +264,7 @@ describe("目安価格: refreshing の再取得", () => {
     });
     await clock.advance(5000);
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい ¥3,000〜¥4,500 で買えそう");
+      expect(bandLow(dialog)).toHaveTextContent("¥3,000");
     });
     expect(status(dialog)).not.toHaveTextContent("更新中");
     expect(gets(api)).toHaveLength(3);
@@ -280,7 +278,7 @@ describe("目安価格: refreshing の再取得", () => {
       a.estimates = () => est();
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい");
+      hasBand(dialog);
     });
     expect(clock.pendingCount()).toBe(0);
     await clock.advance(60_000);
@@ -303,7 +301,7 @@ describe("目安価格: refreshing の再取得", () => {
     await waitFor(() => {
       expect(status(dialog)).not.toHaveTextContent("更新中");
     });
-    expect(status(dialog)).toHaveTextContent("だいたい ¥3,000〜¥4,500 で買えそう"); // 値は残す
+    expect(bandLow(dialog)).toHaveTextContent("¥3,000"); // 値は残す
     expect(clock.pendingCount()).toBe(0);
     await clock.advance(60_000);
     expect(gets(api)).toHaveLength(7);
@@ -330,15 +328,15 @@ describe("目安価格: 手動更新", () => {
       a.estimates = () => est();
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい");
+      hasBand(dialog);
     });
     expect(api.callsTo("POST", "/api/items/12/estimates/refresh")).toHaveLength(0);
     await user.click(within(dialog).getByRole("button", { name: "更新" }));
     await waitFor(() => {
       expect(api.callsTo("POST", "/api/items/12/estimates/refresh")).toHaveLength(1);
     });
-    expect(api.callsTo("POST", "/api/items/12/estimates/refresh")[0]?.headers.get("Authorization")).toBe(
-      "Bearer test-token",
+    expect(api.callsTo("POST", "/api/items/12/estimates/refresh")[0]?.headers.has("Authorization")).toBe(
+      false,
     );
     await waitFor(() => {
       expect(status(dialog)).toHaveTextContent("更新中…"); // POST の本文は refreshing:true
@@ -355,8 +353,8 @@ describe("目安価格: 手動更新", () => {
   });
 });
 
-// AC-EST-06: 参考外
-describe("目安価格: 参考外", () => {
+// AC-EST-06: あやしい出品(旧「参考外 N件」の折りたたみ。5-2 で「あやしい出品 N」のボタン→一覧に置き換え。ユーザー決定 2026-10-11 / phase5-spec 5-2)
+describe("目安価格: あやしい出品", () => {
   const suspicious = [
     listing(1, {
       title: "メルカリの安い出品",
@@ -366,6 +364,7 @@ describe("目安価格: 参考外", () => {
     listing(2, {
       title: "下限未満の出品",
       price: 500,
+      site_id: 2,
       suspicious_reasons: ["below_min"],
       url: "javascript:alert(1)",
       image_url: "data:image/png;base64,AAAA",
@@ -378,29 +377,30 @@ describe("目安価格: 参考外", () => {
     a.listings = suspicious;
   };
 
-  it("AC-EST-06 suspicious_count の合計が 0 なら「参考外」の文字を出さず、listings も取らない", async () => {
+  it("AC-EST-06 suspicious_count の合計が 0 なら「あやしい出品」を出さず、listings も取らない", async () => {
     const { api, dialog } = await openSheet((a) => {
       a.estimates = () => est();
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい");
+      hasBand(dialog);
     });
+    expect(within(dialog).queryByText(/あやしい出品/)).not.toBeInTheDocument();
     expect(within(dialog).queryByText(/参考外/)).not.toBeInTheDocument();
     expect(api.callsTo("GET", "/api/items/12/listings")).toHaveLength(0);
   });
 
-  it("AC-EST-06 「参考外 N件」(合計)は折りたたみ。開くまで listings を取らない", async () => {
+  it("AC-EST-06 「あやしい出品 N」(合計)のボタン。押すまで listings を取らない", async () => {
     const { api, dialog } = await openSheet(withSuspicious);
-    const toggle = await within(dialog).findByText("参考外 3件");
-    expect(toggle.closest("details") ?? toggle.closest("[aria-expanded]")).not.toBeNull();
+    const button = await within(dialog).findByRole("button", { name: "あやしい出品 3" });
+    expect(button).toHaveAttribute("aria-expanded", "false");
     expect(api.callsTo("GET", "/api/items/12/listings")).toHaveLength(0);
-    expect(within(dialog).queryByRole("list", { name: "参考外の出品" })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole("list", { name: "あやしい出品" })).not.toBeInTheDocument();
   });
 
-  it("AC-EST-06 開くと GET listings を呼び、理由のある出品だけを画像・タイトル・価格・理由・リンクで並べる", async () => {
+  it("AC-EST-06 押すと GET listings を呼び、理由のある出品だけを画像・価格・理由のタグ・サイト・リンクで並べる", async () => {
     const { api, dialog, user } = await openSheet(withSuspicious);
-    await user.click(await within(dialog).findByText("参考外 3件"));
-    const list = await within(dialog).findByRole("list", { name: "参考外の出品" });
+    await user.click(await within(dialog).findByRole("button", { name: "あやしい出品 3" }));
+    const list = await within(dialog).findByRole("list", { name: "あやしい出品" });
     expect(api.callsTo("GET", "/api/items/12/listings")).toHaveLength(1);
     const rows = within(list).getAllByRole("listitem");
     expect(rows).toHaveLength(2);
@@ -408,10 +408,13 @@ describe("目安価格: 参考外", () => {
 
     const first = rows[0];
     if (!first) throw new Error("no row");
-    expect(first).toHaveTextContent("メルカリの安い出品");
     expect(first).toHaveTextContent("¥300");
-    expect(first).toHaveTextContent("商品名が一致しない");
-    expect(first).toHaveTextContent("安すぎる");
+    // 理由は小さなタグ(data-reason が種類、文字は短く)
+    const tags = within(first).getAllByTestId("reason-tag");
+    expect(tags.map((t) => t.getAttribute("data-reason"))).toEqual(["title_mismatch", "too_cheap"]);
+    expect(tags.map((t) => t.textContent)).toEqual(["名前が違う", "安すぎ"]);
+    // サイトのマーク(site_id 1 = メルカリ)
+    expect(within(first).getByTestId("listing-site")).toHaveAttribute("aria-label", "メルカリ");
     expect(within(first).getByRole("img", { name: "メルカリの安い出品" })).toHaveAttribute(
       "src",
       "https://img.example/l/1.png",
@@ -422,18 +425,27 @@ describe("目安価格: 参考外", () => {
     expect(a.getAttribute("rel")).toMatch(/\bnoopener\b/);
   });
 
-  it("AC-EST-06 URL・画像が http(s) でない出品はリンクにも画像にもしない(題名・価格・理由は出す)", async () => {
+  it("AC-EST-06 below_min のタグは「下限より下」。URL・画像が http(s) でない出品はリンクにも画像にもしない(価格・タグ・サイトは出す)", async () => {
     const { dialog, user } = await openSheet(withSuspicious);
-    await user.click(await within(dialog).findByText("参考外 3件"));
-    const list = await within(dialog).findByRole("list", { name: "参考外の出品" });
+    await user.click(await within(dialog).findByRole("button", { name: "あやしい出品 3" }));
+    const list = await within(dialog).findByRole("list", { name: "あやしい出品" });
     const second = within(list).getAllByRole("listitem")[1];
     if (!second) throw new Error("no row");
-    expect(second).toHaveTextContent("下限未満の出品");
     expect(second).toHaveTextContent("¥500");
-    expect(second).toHaveTextContent("下限価格未満");
+    expect(within(second).getByTestId("reason-tag")).toHaveTextContent("下限より下");
+    expect(within(second).getByTestId("listing-site")).toHaveAttribute("aria-label", "Amazon");
     expect(within(second).queryByRole("link")).not.toBeInTheDocument();
     expect(within(second).queryByRole("img")).not.toBeInTheDocument();
     expect(list.querySelector("[href^='javascript'], [src^='data:']")).toBeNull();
+  });
+
+  it("AC-EST-06 一覧の「戻る」で一覧を閉じ、シートの本体(帯・タイル)に戻る", async () => {
+    const { dialog, user } = await openSheet(withSuspicious);
+    await user.click(await within(dialog).findByRole("button", { name: "あやしい出品 3" }));
+    await within(dialog).findByRole("list", { name: "あやしい出品" });
+    await user.click(within(dialog).getByRole("button", { name: "戻る" }));
+    expect(within(dialog).queryByRole("list", { name: "あやしい出品" })).not.toBeInTheDocument();
+    expect(within(dialog).getByTestId("price-band")).toBeInTheDocument();
   });
 });
 
@@ -459,14 +471,14 @@ describe("目安価格: 取得失敗", () => {
       a.failRefresh = true;
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい");
+      hasBand(dialog);
     });
     await user.click(within(dialog).getByRole("button", { name: "更新" }));
     await waitFor(() => {
       expect(status(dialog)).toHaveTextContent("オフライン(前回の値)");
     });
-    expect(status(dialog)).toHaveTextContent("だいたい");
-    expect(within(dialog).getByText(/5件/)).toBeInTheDocument();
+    hasBand(dialog);
+    expect(sitePrice(dialog, "Amazon")).toHaveTextContent("¥3,000");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(clock.pendingCount()).toBe(0);
     expect(api.callsTo("POST", "/api/items/12/estimates/refresh")).toHaveLength(1);
@@ -484,9 +496,9 @@ describe("目安価格: 取得失敗", () => {
     await waitFor(() => {
       expect(status(dialog)).toHaveTextContent("オフライン(前回の値)");
     });
-    expect(status(dialog)).toHaveTextContent("だいたい");
+    hasBand(dialog);
     expect(status(dialog)).not.toHaveTextContent("更新中");
-    expect(within(dialog).getByText(/5件/)).toBeInTheDocument();
+    expect(sitePrice(dialog, "Amazon")).toHaveTextContent("¥3,000");
     expect(clock.pendingCount()).toBe(0);
   });
 });
@@ -499,7 +511,7 @@ describe("目安価格: 更新中の操作と応答の順序", () => {
       a.delay = (c) => (c.method === "POST" ? new Promise<void>((r) => (release = r)) : undefined);
     });
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("だいたい");
+      hasBand(dialog);
     });
     const button = within(dialog).getByRole("button", { name: "更新" });
     await user.click(button);
@@ -535,13 +547,13 @@ describe("目安価格: 更新中の操作と応答の順序", () => {
     });
     await user.click(within(dialog).getByRole("button", { name: "更新" }));
     await waitFor(() => {
-      expect(status(dialog)).toHaveTextContent("2,222");
+      expect(bandLow(dialog)).toHaveTextContent("¥2,222");
     });
     release(); // 古い GET がここで返る
     await act(async () => {
       await new Promise((r) => setTimeout(r, 50));
     });
-    expect(status(dialog)).toHaveTextContent("2,222");
-    expect(status(dialog)).not.toHaveTextContent("1,111");
+    expect(bandLow(dialog)).toHaveTextContent("¥2,222");
+    expect(bandLow(dialog)).not.toHaveTextContent("¥1,111");
   });
 });

@@ -34,7 +34,8 @@ export class ApiError extends Error {
 export interface ApiClientOptions {
   /** 末尾 / の有無は問わない(内部で正規化する) */
   baseUrl: string;
-  token: string;
+  /** 廃止予定(フェーズ5 5-1a でサーバーの認証が無くなった。5-2 の実装で消す。今は型を通すためだけに残す) */
+  token?: string;
   /** 省略時は呼び出し時点の globalThis.fetch(vi.stubGlobal で差し替えられるように、生成時に捕まえない) */
   fetch?: typeof fetch;
 }

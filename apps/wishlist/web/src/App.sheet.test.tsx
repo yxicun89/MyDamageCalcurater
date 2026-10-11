@@ -22,14 +22,11 @@ describe("詳細シート", () => {
     expect(screen.queryByRole("dialog", { name: "詳細" })).not.toBeInTheDocument();
   });
 
-  it("AC-SHEET-02 サイト行は <a href=検索URL target=_blank rel=noopener>。ジャンルの site_ids 順", async () => {
+  it("AC-SHEET-02 サイトのタイルは <a href=検索URL target=_blank rel=noopener>。ジャンルの site_ids 順", async () => {
     const { dialog } = await openSheet("グリス");
     const links = within(dialog).getAllByRole("link");
-    expect(links.map((l) => l.textContent)).toEqual([
-      expect.stringContaining("Amazon"),
-      expect.stringContaining("メルカリ"),
-      expect.stringContaining("その他"),
-    ]);
+    // 旧: 行の textContent にサイト名。5-2 のタイルは名前を aria-label に持つ(文字はマークと価格だけ)。ユーザー決定 2026-10-11 / phase5-spec 5-2
+    expect(links.map((l) => l.getAttribute("aria-label"))).toEqual(["Amazon", "メルカリ", "その他"]);
     const q = encodeURIComponent("S.H.Figuarts グリス");
     expect(links[0]).toHaveAttribute("href", `https://www.amazon.co.jp/s?k=${q}&s=price-asc-rank`);
     expect(links[1]).toHaveAttribute(
