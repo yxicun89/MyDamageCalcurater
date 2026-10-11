@@ -5,13 +5,13 @@ import XCTest
 /// 起動の取り決め:
 /// - `WISHLIST_USE_FAKE=1`: 通信しない。WishlistFixtures を入れた FakeWishlistService と InMemoryWishlistCache、設定済みの接続設定で起動する。
 /// - `WISHLIST_USE_FAKE=offline`: 保存済み(SwiftData のキャッシュに WishlistFixtures)があり、Service は通信できない状態で起動する(機内モード相当)。
-/// - 環境変数なし: 本物の設定を使う。トークン未設定なら設定画面から始まる。
+/// - 環境変数なし: Info.plist(ビルド設定)の接続先を使う。接続先が無ければ保存済みだけで動く(「オフライン」の札)。
 ///
 /// accessibilityIdentifier の取り決め(View はこれを付ける):
 /// `itemGrid`(グリッド)/ `item-<id>`(商品)/ `genreChip-all`・`genreChip-<id>` / `addButton` / `settingsButton` /
 /// `menuEdit`・`menuDelete`(長押しメニュー)/ `deleteConfirm`(削除確認の「削除する」)/
-/// `detailSheet`・`closeSheet`・`queryEditButton`(ラベルは現在の検索ワード)・`queryField`・`querySaveButton`・`summaryText`・`siteRow-<siteID>` /
-/// `registerSheet` / `settingsScreen`・`connectionURLField`・`connectionTokenField`。
+/// `detailSheet`・`closeSheet`・`queryEditButton`(ラベルは現在の検索ワード)・`queryField`・`querySaveButton`・`summaryText`・`siteRow-<siteID>`(サイトのタイル)/
+/// `registerSheet` / `settingsScreen` / `offlineBadge`(ホームの「オフライン」の札)。
 /// フィクスチャ: ジャンル 1 S.H.Figuarts(サイト [1 メルカリ, 2 Amazon])と 2 デュエマ(サイト [2, 1])、商品 12 グリス(ジャンル 1)と 11 ボルシャック(ジャンル 2)。
 @MainActor
 final class WishlistUITests: XCTestCase {
@@ -38,6 +38,13 @@ final class WishlistUITests: XCTestCase {
         return target
     }
 
+    /// 一覧(Form)は遅延して作られるので、画面の外にある項目は上へスクロールして出す(5-3: ジャンル編集の項目が増えた)。
+    private func revealByScrolling(_ app: XCUIApplication, _ identifier: String) {
+        for _ in 0..<8 where !element(app, identifier).exists || !element(app, identifier).isHittable {
+            app.swipeUp()
+        }
+    }
+
     /// AC-IOS-UI-01: 画像のグリッドに全商品が出る。
     func testGridShowsEveryItem() {
         let app = launch(fake: "1")
@@ -59,14 +66,15 @@ final class WishlistUITests: XCTestCase {
         _ = requireExists(app, "item-12")
     }
 
-    /// AC-IOS-UI-03: タップで詳細シートが出て、サイト行がジャンルの順に並ぶ。サマリは「まだ価格情報はありません」。
+    /// AC-IOS-UI-03: タップで詳細シートが出て、サイトのタイルがジャンルの順に並ぶ。サマリは「まだ価格情報はありません」。
     func testTapOpensDetailSheetWithSiteRowsInGenreOrder() {
         let app = launch(fake: "1")
         requireExists(app, "item-12").tap()
         _ = requireExists(app, "detailSheet")
         let mercari = requireExists(app, "siteRow-1")
         let amazon = requireExists(app, "siteRow-2")
-        XCTAssertLessThan(mercari.frame.minY, amazon.frame.minY, "S.H.Figuarts のサイトはメルカリ → Amazon の順")
+        // 5-3(phase5-spec): サイトのタイルは 3 列のグリッドなので、同じ行で左から メルカリ → Amazon の順(旧: 縦に並ぶ行の minY)
+        XCTAssertLessThan(mercari.frame.minX, amazon.frame.minX, "S.H.Figuarts のサイトはメルカリ → Amazon の順")
         XCTAssertEqual(requireExists(app, "summaryText").label, "まだ価格情報はありません")
         XCTAssertTrue(requireExists(app, "queryEditButton").label.contains("S.H.Figuarts グリス"))
     }
@@ -91,8 +99,9 @@ final class WishlistUITests: XCTestCase {
     func testLongPressShowsEditAndDeleteWithoutOpeningTheSheet() {
         let app = launch(fake: "1")
         requireExists(app, "item-12").press(forDuration: 0.8)
-        _ = requireExists(app, "menuEdit")
-        _ = requireExists(app, "menuDelete")
+        // 負荷が高いときにメニューの表示が遅れて落ちたので、ここだけ待ち時間を長くする(5-3)
+        XCTAssertTrue(element(app, "menuEdit").waitForExistence(timeout: 20), "menuEdit が無い")
+        XCTAssertTrue(element(app, "menuDelete").waitForExistence(timeout: 20), "menuDelete が無い")
         XCTAssertFalse(element(app, "detailSheet").exists)
     }
 
@@ -122,22 +131,28 @@ final class WishlistUITests: XCTestCase {
         XCTAssertEqual(requireExists(app, "summaryText").label, "オフライン")
     }
 
-    /// AC-IOS-UI-09: トークン未設定で起動したら設定画面から始める(API を呼ばない)。
-    func testLaunchWithoutTokenStartsOnSettings() {
+    /// AC-IOS-UI-09(置換。ユーザー決定 2026-10-11 / phase5-spec 5-3): 接続先(ビルド設定)が無くても設定画面を挟まずホームが出る。
+    /// 保存済みだけで動き、「オフライン」の札が出る。設定に「接続」の欄は無い。
+    /// (旧: トークン未設定なら設定画面から始まり、接続の URL・トークンの欄があった。)
+    func testLaunchWithoutBaseURLShowsHomeWithOfflineBadgeAndNoConnectionFields() {
         let app = launch(fake: nil)
+        _ = requireExists(app, "itemGrid")
+        _ = requireExists(app, "offlineBadge")
+        XCTAssertFalse(element(app, "settingsScreen").exists, "設定画面から始めない")
+        requireExists(app, "settingsButton").tap()
         _ = requireExists(app, "settingsScreen")
-        _ = requireExists(app, "connectionURLField")
-        _ = requireExists(app, "connectionTokenField")
+        XCTAssertFalse(element(app, "connectionURLField").exists, "接続の URL の欄は無い")
+        XCTAssertFalse(element(app, "connectionTokenField").exists, "トークンの欄は無い")
     }
 
     // MARK: - フェーズ3(目安価格。docs/phase3-ios-spec.md の AC-IOS-EST-UI-*)
     // `WISHLIST_USE_FAKE=estimates`(目安価格つき。商品 12 はメルカリ = ok・Amazon = no_result、商品 11 は両方 no_result)。
-    // 追加の accessibilityIdentifier: `refreshButton`(ラベル「更新」)/ `suspiciousDisclosure`(ラベル「参考外 N件」)/
+    // 追加の accessibilityIdentifier: `refreshButton`(ラベル「更新」)/ `suspiciousDisclosure`(ラベル「あやしい出品 N」。5-3 で「参考外 N件」から置換)/
     // `suspiciousListing-<出品 ID>`(ラベルにタイトル・価格・理由)。`siteRow-<siteID>` のラベルは `SiteRow.accessibilityLabel`
     // (サイト名 + 目安・件数・在庫・注記)。
 
     /// AC-IOS-EST-UI-01: 目安のあるサイトは金額・件数・在庫、no_result のサイトは「出品ないかも」だけ(金額なし・リンクは残る)。
-    /// 参考外は折りたたみで、開くと理由つきの出品が出る。
+    /// あやしい出品(旧「参考外」)はボタンで、押すと同じシートの中身が理由つきの出品の一覧に替わる。
     func testEstimateRowsShowPricesAndNoListingsAndSuspiciousDisclosure() {
         let app = launch(fake: "estimates")
         requireExists(app, "item-12").tap()
@@ -155,13 +170,13 @@ final class WishlistUITests: XCTestCase {
         XCTAssertTrue(requireExists(app, "refreshButton").isEnabled)
 
         let disclosure = requireExists(app, "suspiciousDisclosure")
-        XCTAssertTrue(disclosure.label.contains("参考外 1件"), disclosure.label)
-        XCTAssertFalse(element(app, "suspiciousListing-102").exists, "開くまでは出品を出さない")
+        XCTAssertTrue(disclosure.label.contains("あやしい出品 1"), disclosure.label)  // 5-3: 旧「参考外 1件」
+        XCTAssertFalse(element(app, "suspiciousListing-102").exists, "押すまでは出品を出さない")
         disclosure.tap()
         let listing = requireExists(app, "suspiciousListing-102")
         XCTAssertTrue(listing.label.contains("¥300"), listing.label)
-        XCTAssertTrue(listing.label.contains("商品名が一致しない"), listing.label)
-        XCTAssertTrue(listing.label.contains("安すぎる"), listing.label)
+        XCTAssertTrue(listing.label.contains("名前が違う"), listing.label)
+        XCTAssertTrue(listing.label.contains("安すぎ"), listing.label)
         XCTAssertFalse(element(app, "suspiciousListing-101").exists, "参考にしている出品は出さない")
     }
 
@@ -172,7 +187,7 @@ final class WishlistUITests: XCTestCase {
         XCTAssertEqual(requireExists(app, "summaryText").label, "出品ないかも")
         XCTAssertTrue(requireExists(app, "siteRow-1").label.contains("出品ないかも"))
         XCTAssertTrue(requireExists(app, "siteRow-2").label.contains("出品ないかも"))
-        XCTAssertFalse(element(app, "suspiciousDisclosure").exists, "参考外の合計が 0 なら出さない")
+        XCTAssertFalse(element(app, "suspiciousDisclosure").exists, "あやしい出品の合計が 0 なら出さない")
     }
 
     // MARK: - フェーズ4-2(価格の推移。docs/phase4-spec.md の AC-IOS-HIS-UI-01)
@@ -235,16 +250,21 @@ final class WishlistUITests: XCTestCase {
     func testGenreAliasesCanBeEditedInSettings() {
         let app = launch(fake: "official")
         requireExists(app, "settingsButton").tap()
-        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        app.buttons["S.H.Figuartsを編集"].firstMatch.tap()
+        // 5-3: ジャンル編集に色・絵柄・手がかりが増え、別名グループは下のほうになったので、スクロールして出す
+        revealByScrolling(app, "aliasLine-1")
         XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "S.H.Figuarts, SHフィギュアーツ")
+        revealByScrolling(app, "addAliasLine")
         requireExists(app, "addAliasLine").tap()
+        revealByScrolling(app, "aliasLine-2")
         let line2 = requireExists(app, "aliasLine-2")
         line2.tap()
         line2.typeText("真骨彫, 真骨彫製法")
         app.buttons["保存"].firstMatch.tap()
         XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-1")), "保存したら閉じる")
 
-        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        app.buttons["S.H.Figuartsを編集"].firstMatch.tap()
+        revealByScrolling(app, "aliasLine-2")
         XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "S.H.Figuarts, SHフィギュアーツ")
         XCTAssertEqual(requireExists(app, "aliasLine-2").value as? String, "真骨彫, 真骨彫製法")
     }
@@ -253,17 +273,21 @@ final class WishlistUITests: XCTestCase {
     func testGenreAliasLineCanBeRemoved() {
         let app = launch(fake: "official")
         requireExists(app, "settingsButton").tap()
-        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        app.buttons["S.H.Figuartsを編集"].firstMatch.tap()
+        revealByScrolling(app, "addAliasLine")
         requireExists(app, "addAliasLine").tap()
+        revealByScrolling(app, "aliasLine-2")
         let line2 = requireExists(app, "aliasLine-2")
         line2.tap()
         line2.typeText("真骨彫, 真骨彫製法")
+        revealByScrolling(app, "removeAliasLine-1")
         requireExists(app, "removeAliasLine-1").tap()
         XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法", "消すと番号が詰める")
         XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-2")))
         app.buttons["保存"].firstMatch.tap()
         XCTAssertTrue(waitForDisappearance(element(app, "aliasLine-1")), "保存したら閉じる")
-        app.buttons["S.H.Figuarts"].firstMatch.tap()
+        app.buttons["S.H.Figuartsを編集"].firstMatch.tap()
+        revealByScrolling(app, "aliasLine-1")
         XCTAssertEqual(requireExists(app, "aliasLine-1").value as? String, "真骨彫, 真骨彫製法")
         XCTAssertFalse(element(app, "aliasLine-2").exists)
     }

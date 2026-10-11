@@ -1,7 +1,6 @@
 import Foundation
 
 // フェーズ5-3 詳細の価格の帯(web/src/lib/band.ts の移植。docs/phase5-spec.md 5-2「詳細」)。
-// spec-writer の仮置き: 型は完成品、`make` は実装者が書く。
 
 /// 帯の上の 1 点(1 サイト)。
 public struct BandDot: Equatable, Sendable {
@@ -34,8 +33,23 @@ public struct PriceBand: Equatable, Sendable {
         self.rangeBar = rangeBar
     }
 
-    /// 【spec-writer の仮置き】`estimates` から `sites`(このジャンルのサイトを表示順に)の `low` を引いて組む。
+    /// `estimates` から `sites`(このジャンルのサイトを表示順に)の `low` を引いて組む。
     public static func make(sites: [Site], estimates: [SiteEstimate]) -> PriceBand {
-        PriceBand(dots: [], bestSiteIDs: [], rangeBar: nil)
+        let lows: [(siteID: Int, low: Int)] = sites.compactMap { site in
+            guard let low = estimates.first(where: { $0.siteID == site.id })?.low else { return nil }
+            return (site.id, low)
+        }
+        guard let minLow = lows.map(\.low).min(), let maxLow = lows.map(\.low).max() else {
+            return PriceBand(dots: [], bestSiteIDs: [], rangeBar: nil)
+        }
+        let equal = minLow == maxLow
+        let dots = lows.map { entry -> BandDot in
+            let position = equal ? 0 : Int((Double(entry.low - minLow) / Double(maxLow - minLow) * 100).rounded())
+            let fraction = equal ? 0.5 : Double(position) / 100
+            return BandDot(siteID: entry.siteID, low: entry.low, position: position, fraction: fraction)
+        }
+        return PriceBand(
+            dots: dots, bestSiteIDs: Set(lows.filter { $0.low == minLow }.map(\.siteID)),
+            rangeBar: equal ? nil : 0.0...1.0)
     }
 }

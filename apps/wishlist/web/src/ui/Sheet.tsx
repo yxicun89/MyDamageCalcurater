@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Genre, Item, ItemEstimates, Listing, PriceHistory, Site, SiteEstimate } from "../api/types";
-import { bandDots, bestSiteIds } from "../lib/band";
+import { bandDots, bandLeft, bestSiteIds, hasBandRange } from "../lib/band";
 import { ApiError, resolveImageUrl, type ApiClient } from "../lib/api";
 import { CHART_BOX, buildChart, historyLabel } from "../lib/history";
 import { itemQuery, resolveSiteLinks, type SiteLink } from "../lib/links";
@@ -280,7 +280,7 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
           </div>
           <div className="band-track">
             <span className="band-line" />
-            <span className="band-range" />
+            {hasBandRange(dots) ? <span className="band-range" data-testid="band-range" /> : null}
             {dots.map((d) => (
               <span
                 key={d.site.id}
@@ -290,7 +290,7 @@ export function Sheet({ item, genre, sites, client, baseUrl, onClose, onUpdated 
                 data-position={d.position}
                 aria-label={d.site.name}
                 style={{
-                  left: `calc(6% + ${String(d.position)} * 0.88%)`,
+                  left: bandLeft(dots, d),
                   background: siteColor(d.site.name),
                 }}
               >

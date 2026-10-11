@@ -31,10 +31,3 @@ public protocol WishlistService: Sendable {
     func createSite(_ body: SiteCreate) async throws -> Site
     func updateSite(id: Int, patch: SiteUpdate) async throws -> Site
 }
-
-extension WishlistService {
-    /// 【spec-writer の仮置き】実装者が APIWishlistService で上書きする(いまは title・image_url を捨てるので、テストは失敗する)。
-    public func draftFromPage(url: String, title: String?, imageURL: String?) async throws -> ItemDraft {
-        try await draftFromURL(url, genreID: nil)
-    }
-}

@@ -4,12 +4,15 @@ import WishlistCore
 
 /// アプリ全体の依存(サービス・キャッシュ・設定・画像キャッシュ・ホームの状態)を束ねる。View はこれを Environment から読むだけ。
 ///
+/// 接続先はビルド設定 `WISHLIST_API_BASE_URL`(git に入れない `Config/Local.xcconfig`)を Info.plist 経由で読む。認証の情報は持たない。
+/// 接続先が無いときは API を呼ばず、保存済みのキャッシュだけで動く(ホームに「オフライン」の札を出す)。
+///
 /// 起動の取り決め(docs/phase2-ios-spec.md の XCUITest):
-/// - `WISHLIST_USE_FAKE=1`: 通信しない。WishlistFixtures の FakeWishlistService + InMemoryWishlistCache、設定済みの接続設定。
+/// - `WISHLIST_USE_FAKE=1`: 通信しない。WishlistFixtures の FakeWishlistService + InMemoryWishlistCache、接続先ありの設定。
 /// - `WISHLIST_USE_FAKE=estimates`: `1` と同じ。ただし目安価格・参考外の出品つき(`WishlistFixtures.makeServiceWithEstimates`)。
 /// - `WISHLIST_USE_FAKE=official`: `1` と同じ。ただし商品 12 は公式の販売状況を監視中、ジャンル 1 に別名グループつき(`WishlistFixtures.makeServiceWithOfficial`)。
 /// - `WISHLIST_USE_FAKE=offline`: SwiftData のキャッシュに WishlistFixtures があり、Service は通信できない。
-/// - 環境変数なし: 本物の設定(UserDefaults)と API。未設定なら設定画面から始まる。
+/// - 環境変数なし: Info.plist の接続先と API。接続先が無ければ保存済みだけで動く。
 @MainActor
 @Observable
 final class AppModel {
@@ -17,25 +20,25 @@ final class AppModel {
     private(set) var service: any WishlistService
     private(set) var settings: WishlistSettings
     private(set) var imageCache: ImageFileCache
-    let settingsStore: any WishlistSettingsStore
 
     private let cache: any WishlistCache
-    private let usesFixedBackend: Bool
     private let seed: (@Sendable () async -> Void)?
     private var isPrepared = false
 
-    private static let fakeSettings = WishlistSettings(apiBaseURL: "https://fake.example/wishlist/", token: "fake")
+    private static let fakeModes: Set<String> = ["1", "estimates", "official", "offline"]
+    private static let fakeSettings = WishlistSettings(apiBaseURL: "https://fake.example/wishlist/")
 
-    init(environment: [String: String] = ProcessInfo.processInfo.environment) {
+    init(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        info: [String: Any]? = Bundle.main.infoDictionary
+    ) {
         let mode = environment["WISHLIST_USE_FAKE"]
-        let store: any WishlistSettingsStore
         let cache: any WishlistCache
         let service: any WishlistService
         let settings: WishlistSettings
         var seed: (@Sendable () async -> Void)?
         switch mode {
         case "1", "estimates":
-            store = UserDefaultsSettingsStore(defaults: UserDefaults(suiteName: "wishlist.fake") ?? .standard)
             cache = InMemoryWishlistCache(items: WishlistFixtures.items, genres: WishlistFixtures.genres, sites: WishlistFixtures.sites)
             // "estimates" は目安価格つき(docs/phase3-ios-spec.md)。"1" は価格情報なし(フェーズ2の XCUITest が依存する)
             service = mode == "estimates"
@@ -43,13 +46,11 @@ final class AppModel {
                 : FakeWishlistService(items: WishlistFixtures.items, genres: WishlistFixtures.genres, sites: WishlistFixtures.sites)
             settings = Self.fakeSettings
         case "official":
-            store = UserDefaultsSettingsStore(defaults: UserDefaults(suiteName: "wishlist.fake") ?? .standard)
             cache = InMemoryWishlistCache(
                 items: WishlistFixtures.officialItems, genres: WishlistFixtures.officialGenres, sites: WishlistFixtures.sites)
             service = WishlistFixtures.makeServiceWithOfficial()
             settings = Self.fakeSettings
         case "offline":
-            store = UserDefaultsSettingsStore(defaults: UserDefaults(suiteName: "wishlist.fake") ?? .standard)
             let persistent: any WishlistCache = (try? SwiftDataWishlistCache(inMemory: true)) ?? InMemoryWishlistCache()
             cache = persistent
             let fake = FakeWishlistService(items: WishlistFixtures.items, genres: WishlistFixtures.genres, sites: WishlistFixtures.sites)
@@ -62,19 +63,15 @@ final class AppModel {
                 await persistent.saveSites(WishlistFixtures.sites)
             }
         default:
-            let live = UserDefaultsSettingsStore()
-            store = live
-            settings = live.load()
+            settings = WishlistSettings.fromInfo(info)
             cache = Self.makePersistentCache()
             service = Self.makeService(settings)
         }
-        self.settingsStore = store
         self.cache = cache
         self.service = service
         self.settings = settings
-        self.usesFixedBackend = mode != nil && (mode == "1" || mode == "estimates" || mode == "official" || mode == "offline")
         self.seed = seed
-        self.imageCache = Self.makeImageCache(settings: settings, offline: usesFixedBackend)
+        self.imageCache = Self.makeImageCache(settings: settings, offline: Self.fakeModes.contains(mode ?? ""))
         self.home = HomeViewModel(service: service, cache: cache, settings: settings)
     }
 
@@ -85,21 +82,11 @@ final class AppModel {
         await seed?()
     }
 
-    /// 設定画面で接続設定を保存したあとに呼ぶ。API・画像キャッシュ・ホームの状態を作り直す。
-    func reconnect() {
-        guard !usesFixedBackend else { return }
-        settings = settingsStore.load()
-        service = Self.makeService(settings)
-        imageCache = Self.makeImageCache(settings: settings, offline: false)
-        home = HomeViewModel(service: service, cache: cache, settings: settings)
-    }
-
     // MARK: - 組み立て
 
     private static func makeService(_ settings: WishlistSettings) -> any WishlistService {
-        // 未設定のときは API を呼ばない(HomeViewModel・設定画面が止める)。ここは型を満たすための置き場。
-        let url = settings.baseURL ?? URL(string: "http://localhost/")!
-        return APIWishlistService(baseURL: url, token: settings.token)
+        // 接続先が無いときは API を呼ばない(HomeViewModel が止める)。ここは型を満たすための置き場。
+        APIWishlistService(baseURL: settings.baseURL ?? URL(string: "http://localhost/")!)
     }
 
     private static func makePersistentCache() -> any WishlistCache {
@@ -117,9 +104,9 @@ final class AppModel {
         let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent(offline ? "wishlist-images-fake" : "wishlist-images", isDirectory: true)
             ?? FileManager.default.temporaryDirectory.appendingPathComponent("wishlist-images", isDirectory: true)
-        guard !offline, let baseURL = settings.baseURL else {
+        guard !offline, settings.baseURL != nil else {
             return ImageFileCache(directory: directory) { _ in throw URLError(.notConnectedToInternet) }
         }
-        return ImageFileCache(directory: directory, loader: ImageLoader.make(baseURL: baseURL, token: settings.token))
+        return ImageFileCache(directory: directory, loader: ImageLoader.make())
     }
 }

@@ -1,0 +1,3 @@
+// プロジェクト全体のビルド設定。接続先は git に入れない Local.xcconfig から読む(無くても失敗しない)。
+// 作り方は Local.xcconfig.example を参照。
+#include? "Local.xcconfig"

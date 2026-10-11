@@ -57,8 +57,9 @@ final class PriceFormatTests: XCTestCase {
     }
 
     func testReasonLabels() {
-        XCTAssertEqual(PriceFormat.reasonLabel(.titleMismatch), "商品名が一致しない")
-        XCTAssertEqual(PriceFormat.reasonLabel(.tooCheap), "安すぎる")
-        XCTAssertEqual(PriceFormat.reasonLabel(.belowMin), "下限価格未満")
+        // 【5-3 で置換】旧「商品名が一致しない / 安すぎる / 下限価格未満」。Web の短いラベルに揃える(ユーザー決定 2026-10-11 / phase5-spec 5-2)
+        XCTAssertEqual(PriceFormat.reasonLabel(.titleMismatch), "名前が違う")
+        XCTAssertEqual(PriceFormat.reasonLabel(.tooCheap), "安すぎ")
+        XCTAssertEqual(PriceFormat.reasonLabel(.belowMin), "下限より下")
     }
 }

@@ -412,16 +412,17 @@ final class ItemDetailEstimatesTests: XCTestCase {
         await vm.loadEstimates()
         await vm.loadSuspiciousListings()
         XCTAssertEqual(service.calls.last, .listings(itemID: 12, siteID: nil))
+        // 【5-3 で置換】理由の文言は Web の短いラベル(名前が違う/安すぎ/下限より下)、行に出品元の siteID を持つ(ユーザー決定 2026-10-11 / phase5-spec 5-2)
         XCTAssertEqual(
             vm.suspicious,
             .loaded([
                 SuspiciousListingRow(
-                    id: 2, title: "ベルトだけ", priceText: "¥300", reasonTexts: ["商品名が一致しない", "安すぎる"],
+                    id: 2, siteID: 1, title: "ベルトだけ", priceText: "¥300", reasonTexts: ["名前が違う", "安すぎ"],
                     imageURL: URL(string: "https://img.example.com/2.jpg"), linkURL: URL(string: "https://item.example.com/2")),
                 SuspiciousListingRow(
-                    id: 3, title: "危ない出品", priceText: "¥1,200", reasonTexts: ["下限価格未満"], imageURL: nil, linkURL: nil),
+                    id: 3, siteID: 1, title: "危ない出品", priceText: "¥1,200", reasonTexts: ["下限より下"], imageURL: nil, linkURL: nil),
                 SuspiciousListingRow(
-                    id: 4, title: "画像なし", priceText: "¥500", reasonTexts: ["安すぎる"], imageURL: nil,
+                    id: 4, siteID: 1, title: "画像なし", priceText: "¥500", reasonTexts: ["安すぎ"], imageURL: nil,
                     linkURL: URL(string: "http://item.example.com/4")),
             ]), "理由のある出品だけ・API の並びのまま・http(s) 以外は画像もリンクも nil")
     }

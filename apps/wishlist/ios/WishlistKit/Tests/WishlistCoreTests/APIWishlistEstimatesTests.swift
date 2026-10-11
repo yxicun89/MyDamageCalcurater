@@ -44,7 +44,7 @@ final class APIWishlistEstimatesTests: XCTestCase {
         XCTAssertEqual(result, expectedEstimates())
     }
 
-    /// POST は 202 で本文を返す(GET と同じ形)。Bearer を付ける。
+    /// POST は 202 で本文を返す(GET と同じ形)。Authorization は付けない。
     func testRefreshEstimatesPostsAndReadsThe202Body() async throws {
         let transport = RecordingTransport(reply: .json(202, estimatesJSON))
         let result = try await service(transport).refreshEstimates(itemID: 12)

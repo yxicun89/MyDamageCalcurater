@@ -1,7 +1,6 @@
 import Foundation
 
 // フェーズ5-3 ホームのタイル(docs/phase5-spec.md 5-2「ホーム」・5-3「決めたこと」)。
-// spec-writer の仮置き: 型は完成品、ロジック(`make`・`HomeViewModel.tiles`)は実装者が書く。
 
 /// タイル右下の価格の札。`nil`(札なし)は目安が none / failed / 無しのとき、またはオフライン中。
 public enum PriceTag: Equatable, Sendable {
@@ -29,9 +28,21 @@ public struct HomeTile: Equatable, Sendable, Identifiable {
         self.priceTag = priceTag
     }
 
-    /// 【spec-writer の仮置き】`item.summary`: status ok で low あり → `.price("¥low〜")` / noResult → `.noListing` / それ以外・nil → nil。
+    /// `item.summary`: status ok で low あり → `.price("¥low〜")` / noResult → `.noListing` / それ以外・nil → nil。
     /// `isOffline` なら常に nil(オフライン中は価格の札を消す)。
     public static func make(item: Item, genres: [Genre], isOffline: Bool) -> HomeTile {
-        HomeTile(item: item, genreColor: "", genreIcon: .box, priceTag: nil)
+        let genre = genres.first { $0.id == item.genreID }
+        return HomeTile(
+            item: item, genreColor: genre?.color ?? GenreIcon.defaultColor, genreIcon: genre?.icon ?? .box,
+            priceTag: isOffline ? nil : priceTag(for: item.summary))
+    }
+
+    private static func priceTag(for summary: ItemSummary?) -> PriceTag? {
+        guard let summary else { return nil }
+        switch summary.status {
+        case .ok: return summary.low.map { .price(PriceFormat.yen($0) + "〜") }
+        case .noResult: return .noListing
+        case .failed, .none: return nil
+        }
     }
 }

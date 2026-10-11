@@ -4,3 +4,6 @@
 build/
 DerivedData/
 xcuserdata/
+
+# 接続先(ビルド設定)。実在のホストを含むので git に入れない。見本は Config/Local.xcconfig.example
+Config/Local.xcconfig

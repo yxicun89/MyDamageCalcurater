@@ -110,7 +110,7 @@ final class RegisterViewModelTests: XCTestCase {
 
     /// 下書きに画像が無く、写真も無いときは登録できない(API は画像が必須)。
     func testDraftWithoutImageCannotRegisterUntilAPhotoIsAdded() async {
-        let (viewModel, service) = makeViewModel()
+        let (viewModel, service) = makeViewModel(initialGenreID: 1)  // 5-3: 既定では未選択なので、絞り込み中のジャンルを渡す(phase5-spec 5-3 の置換と同じ理由)
         service.draft = ItemDraft(name: "画像なし", imageURL: nil, sourceURL: "https://shop.example/p/2", genreID: nil)
         viewModel.urlText = "https://shop.example/p/2"
         await viewModel.fetchDraft()
@@ -150,7 +150,7 @@ final class RegisterViewModelTests: XCTestCase {
     }
 
     func testRegisterFailureKeepsInputAndReportsError() async {
-        let (viewModel, service) = makeViewModel()
+        let (viewModel, service) = makeViewModel(initialGenreID: 1)  // 5-3: 既定では未選択なので、絞り込み中のジャンルを渡す(phase5-spec 5-3 の置換と同じ理由)
         viewModel.name = "新商品"
         viewModel.setPhoto(photo)
         service.offline = true

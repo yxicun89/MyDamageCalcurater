@@ -5,7 +5,7 @@ import XCTest
 
 @testable import WishlistCore
 
-// AC-IOS-SVC-01/02: APIWishlistService(生成クライアント + Bearer ミドルウェア)の送信内容と応答の写像。
+// AC-IOS-SVC-01/02: APIWishlistService(生成クライアント。認証ヘッダーは付けない。phase5-spec 5-3)の送信内容と応答の写像。
 // 実ネットワークは使わず、送られたリクエストを RecordingTransport で検査する。URL の連結だけは本物の URLSessionTransport + URLProtocol。
 final class APIWishlistServiceTests: XCTestCase {
     private let base = URL(string: "https://wishlist.example/wishlist/")!

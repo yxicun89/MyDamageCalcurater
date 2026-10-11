@@ -130,7 +130,7 @@ public final class ItemDetailViewModel {
             suspicious = .loaded(
                 all.filter { !$0.suspiciousReasons.isEmpty }.map { listing in
                     SuspiciousListingRow(
-                        id: listing.id, title: listing.title, priceText: PriceFormat.yen(listing.price),
+                        id: listing.id, siteID: listing.siteID, title: listing.title, priceText: PriceFormat.yen(listing.price),
                         reasonTexts: listing.suspiciousReasons.map(PriceFormat.reasonLabel),
                         imageURL: listing.imageURL.flatMap(Self.httpURL), linkURL: Self.httpURL(listing.url))
                 })
@@ -388,14 +388,17 @@ public struct SiteRow: Equatable, Sendable, Identifiable {
 /// 参考外の出品 1 件の表示。`imageURL`・`linkURL` は http(s) のときだけ入る(`javascript:`・`data:` は nil)。
 public struct SuspiciousListingRow: Equatable, Sendable, Identifiable {
     public var id: Int
+    /// 出品元のサイト(行にサイトのマークを出す)
+    public var siteID: Int
     public var title: String
     public var priceText: String
     public var reasonTexts: [String]
     public var imageURL: URL?
     public var linkURL: URL?
 
-    public init(id: Int, title: String, priceText: String, reasonTexts: [String], imageURL: URL?, linkURL: URL?) {
+    public init(id: Int, siteID: Int, title: String, priceText: String, reasonTexts: [String], imageURL: URL?, linkURL: URL?) {
         self.id = id
+        self.siteID = siteID
         self.title = title
         self.priceText = priceText
         self.reasonTexts = reasonTexts

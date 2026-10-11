@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-/// 設定画面のジャンル・サイト(接続先の設定は ConnectionSettingsViewModel)。
+/// 設定画面のジャンル・サイト。
 @MainActor
 @Observable
 public final class SettingsListViewModel {
@@ -89,13 +89,18 @@ public final class SettingsListViewModel {
         await addGenre(name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: nil)
     }
 
-    private func addGenre(name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?) async -> Genre? {
+    private func addGenre(
+        name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?, edit: GenreEdit? = nil
+    ) async -> Genre? {
         let name = Self.trimmed(name)
         guard !name.isEmpty else { return nil }
         let template = Self.trimmed(queryTemplate)
         do {
             let genre = try await service.createGenre(
-                GenreCreate(name: name, queryTemplate: template.isEmpty ? nil : template, siteIDs: siteIDs, aliases: aliases))
+                GenreCreate(
+                    name: name, queryTemplate: template.isEmpty ? nil : template, siteIDs: siteIDs, aliases: aliases,
+                    color: edit?.color, icon: edit?.icon, matchHosts: edit.map { Self.parseClues($0.hostsText) },
+                    matchKeywords: edit.map { Self.parseClues($0.keywordsText) }))
             genres.append(genre)
             errorMessage = nil
             return genre
@@ -111,7 +116,9 @@ public final class SettingsListViewModel {
         await updateGenre(genre, name: name, queryTemplate: queryTemplate, siteIDs: siteIDs, aliases: nil)
     }
 
-    private func updateGenre(_ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?) async -> Genre? {
+    private func updateGenre(
+        _ genre: Genre, name: String, queryTemplate: String, siteIDs: [Int], aliases: [[String]]?, edit: GenreEdit? = nil
+    ) async -> Genre? {
         var patch = GenreUpdate()
         let newName = Self.trimmed(name)
         if newName != genre.name { patch.name = newName }
@@ -119,6 +126,14 @@ public final class SettingsListViewModel {
         if template != genre.queryTemplate, !template.isEmpty { patch.queryTemplate = template }
         if siteIDs != genre.siteIDs { patch.siteIDs = siteIDs }
         if let aliases, aliases != genre.aliases { patch.aliases = aliases }
+        if let edit {
+            if edit.color != genre.color { patch.color = edit.color }
+            if edit.icon != genre.icon { patch.icon = edit.icon }
+            let hosts = Self.parseClues(edit.hostsText)
+            if hosts != genre.matchHosts { patch.matchHosts = hosts }
+            let keywords = Self.parseClues(edit.keywordsText)
+            if keywords != genre.matchKeywords { patch.matchKeywords = keywords }
+        }
         if patch == GenreUpdate() { return genre }
         do {
             let updated = try await service.updateGenre(id: genre.id, patch: patch)
@@ -134,26 +149,39 @@ public final class SettingsListViewModel {
     // MARK: - フェーズ5-3 ジャンルの編集(色・絵柄・URL の手がかり。docs/phase5-spec.md 5-2「ジャンルの編集」)
 
     /// 「URL の手がかり」の欄の文字を項目にする。区切りは `,`・`、`・改行。前後の空白と空の項目は除く(重複は残す)。
-    /// 【spec-writer の仮置き】
     public static func parseClues(_ text: String) -> [String] {
-        []
+        text.split(whereSeparator: { ",、\n\r".contains($0) })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
-    /// 商品数(ジャンル ID → 件数)。設定の行の「件数」。商品が無いジャンルは含めない。【spec-writer の仮置き】
+    /// 商品数(ジャンル ID → 件数)。設定の行の「件数」。商品が無いジャンルは含めない。
     public static func itemCounts(_ items: [Item]) -> [Int: Int] {
-        [:]
+        items.reduce(into: [:]) { $0[$1.genreID, default: 0] += 1 }
     }
 
-    /// 【spec-writer の仮置き】色・絵柄・手がかりを含むジャンルの追加。名前が空白のみなら API を呼ばず nil。
-    /// `color`・`icon`・`matchHosts`・`matchKeywords` を常に送る(`parseClues` を通す)。それ以外の規則は `addGenre(name:queryTemplate:siteIDs:aliasLines:)` と同じ。
+    /// 色・絵柄・手がかりを含むジャンルの追加。名前が空白のみなら API を呼ばず nil。
+    /// `color`・`icon`・`matchHosts`・`matchKeywords` を常に送る(`parseClues` を通す)。辞書の扱いは `addGenre(name:queryTemplate:siteIDs:aliasLines:)` と同じ。
     public func addGenre(_ edit: GenreEdit) async -> Genre? {
-        nil
+        let parsed = AliasLines.parseGroups(edit.aliasLines)
+        if let row = parsed.invalidRow {
+            errorMessage = AliasLines.invalidRowMessage(row)
+            return nil
+        }
+        return await addGenre(
+            name: edit.name, queryTemplate: edit.queryTemplate, siteIDs: edit.siteIDs, aliases: parsed.groups, edit: edit)
     }
 
-    /// 【spec-writer の仮置き】色・絵柄・手がかりを含むジャンルの編集。変えた項目だけ PATCH(何も変えていなければ API を呼ばず元のジャンルを返す)。
-    /// 手がかりは `parseClues` の結果が元と違うときだけ送る。それ以外の規則は `updateGenre(_:name:queryTemplate:siteIDs:aliasLines:)` と同じ。
+    /// 色・絵柄・手がかりを含むジャンルの編集。変えた項目だけ PATCH(何も変えていなければ API を呼ばず元のジャンルを返す)。
+    /// 手がかりは `parseClues` の結果が元と違うときだけ送る。辞書の扱いは `updateGenre(_:name:queryTemplate:siteIDs:aliasLines:)` と同じ。
     public func updateGenre(_ genre: Genre, edit: GenreEdit) async -> Genre? {
-        nil
+        let parsed = AliasLines.parseGroups(edit.aliasLines)
+        if let row = parsed.invalidRow {
+            errorMessage = AliasLines.invalidRowMessage(row)
+            return nil
+        }
+        return await updateGenre(
+            genre, name: edit.name, queryTemplate: edit.queryTemplate, siteIDs: edit.siteIDs, aliases: parsed.groups, edit: edit)
     }
 
     // MARK: - フェーズ4-1 表記揺れの辞書(docs/phase4-spec.md AC-IOS-ALI-02〜05)

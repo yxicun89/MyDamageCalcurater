@@ -3,7 +3,6 @@ import WishlistCore
 
 private enum HomeSheet: Identifiable {
     case detail(Item)
-    case actions(Item)
     case edit(Item)
     case register
     case settings
@@ -11,7 +10,6 @@ private enum HomeSheet: Identifiable {
     var id: String {
         switch self {
         case .detail(let item): "detail-\(item.id)"
-        case .actions(let item): "actions-\(item.id)"
         case .edit(let item): "edit-\(item.id)"
         case .register: "register"
         case .settings: "settings"
@@ -19,14 +17,14 @@ private enum HomeSheet: Identifiable {
     }
 }
 
-/// ホーム: 画像だけの 3 列グリッド + ジャンルのチップ(スクロールで隠れる)+ 右下の「+」。
+/// ホーム: 2 列の画像グリッド(ジャンル色の枠・価格の札)+ ジャンルの絵柄のボタン + 右下の「+」。
+/// 長押し(0.5 秒)で背景をぼかして編集・元のページを開く・削除のメニューを出す。
 struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var sheet: HomeSheet?
+    @State private var menuTile: HomeTile?
 
-    private var columns: [GridItem] {
-        Array(repeating: GridItem(.flexible(), spacing: 4), count: HomeLayout.gridColumnCount)
-    }
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: Metrics.gridSpacing), count: HomeLayout.tileColumnCount)
 
     private var isSettingsOpen: Bool {
         if case .settings = sheet { true } else { false }
@@ -34,46 +32,23 @@ struct HomeView: View {
 
     var body: some View {
         let home = model.home
-        ScrollView {
-            VStack(spacing: 12) {
-                chips(home)
-                if let message = home.loadError, home.items.isEmpty {
-                    VStack(spacing: 12) {
-                        Text(message).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                        Button("再読み込み") { Task { await home.refresh() } }
-                    }
-                    .padding(32)
-                }
-                LazyVGrid(columns: columns, spacing: 4) {
-                    ForEach(home.visibleItems) { item in
-                        cell(item)
-                    }
-                }
-                .padding(.horizontal, 4)
-                .accessibilityIdentifier("itemGrid")
-            }
-            .padding(.bottom, 96)
-        }
-        // 設定を開いている間は、背面の一覧(ジャンルのチップなど)を支援技術・UI テストから隠す(設定のジャンル行と同じ名前のため)
-        .accessibilityHidden(isSettingsOpen)
-        .refreshable { await home.refresh() }
-        .overlay(alignment: .topTrailing) {
-            GlassCircleButton(systemImage: "gearshape", label: "設定") { sheet = .settings }
-                .accessibilityIdentifier("settingsButton")
-                .padding(.trailing, 16)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            GlassCircleButton(systemImage: "plus", label: "登録") { sheet = .register }
-                .accessibilityIdentifier("addButton")
-                .padding(20)
-        }
-        .overlay(alignment: .bottomLeading) {
-            if home.isStale {
-                Image(systemName: "icloud.slash")
-                    .padding(12)
-                    .glassEffect(.regular, in: Circle())
-                    .padding(20)
-                    .accessibilityLabel("保存済みの一覧を表示中")
+        ZStack {
+            Palette.bg.ignoresSafeArea()
+            content(home)
+                .blur(radius: menuTile == nil ? 0 : 6)
+                .accessibilityHidden(menuTile != nil || isSettingsOpen)
+            if let tile = menuTile {
+                ItemContextMenu(
+                    tile: tile,
+                    onEdit: {
+                        menuTile = nil
+                        sheet = .edit(tile.item)
+                    },
+                    onDelete: {
+                        _ = await model.home.delete(tile.item)
+                        menuTile = nil
+                    },
+                    onClose: { menuTile = nil })
             }
         }
         .task {
@@ -93,49 +68,126 @@ struct HomeView: View {
 
     // MARK: - 部品
 
-    private func chips(_ home: HomeViewModel) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip("すべて", selected: home.selectedGenreID == nil, id: "genreChip-all") { home.selectedGenreID = nil }
-                ForEach(home.chipGenres) { genre in
-                    chip(genre.name, selected: home.selectedGenreID == genre.id, id: "genreChip-\(genre.id)") {
-                        home.selectedGenreID = genre.id
+    private func content(_ home: HomeViewModel) -> some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                header(home)
+                genreButtons(home)
+                if let message = home.loadError, home.items.isEmpty {
+                    VStack(spacing: 12) {
+                        Text(message).font(.wl(14)).foregroundStyle(Palette.muted).multilineTextAlignment(.center)
+                        Button("再読み込み") { Task { await home.refresh() } }
+                            .buttonStyle(OutlineButtonStyle(height: 44))
+                            .frame(maxWidth: 200)
                     }
+                    .padding(32)
+                }
+                LazyVGrid(columns: columns, spacing: Metrics.gridSpacing) {
+                    ForEach(home.tiles) { tile in
+                        tileView(tile)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .accessibilityIdentifier("itemGrid")
+            }
+            .padding(.bottom, 110)
+        }
+        .refreshable { await home.refresh() }
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                sheet = .register
+            } label: {
+                Image(systemName: "plus").font(.system(size: 26, weight: .bold))
+                    .foregroundStyle(Palette.onAccent)
+                    .frame(width: 64, height: 64)
+                    .background(Palette.accent, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                    .shadow(color: .black.opacity(0.3), radius: 15, y: 10)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("登録")
+            .accessibilityIdentifier("addButton")
+            .padding(20)
+        }
+    }
+
+    private func header(_ home: HomeViewModel) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("欲しいもの").font(.wl(26, .heavy)).foregroundStyle(Palette.fg)
+                    .accessibilityAddTraits(.isHeader)
+                Text("\(home.tiles.count)件").font(.wl(13)).foregroundStyle(Palette.muted)
+                    .accessibilityIdentifier("itemCount")
+            }
+            Spacer()
+            if home.showsOfflineBadge { OfflineBadge() }
+            Button {
+                sheet = .settings
+            } label: {
+                Image(systemName: "gearshape").font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Palette.fg)
+                    .frame(width: 44, height: 44)
+                    .card(radius: Metrics.buttonRadius)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("設定")
+            .accessibilityIdentifier("settingsButton")
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+    }
+
+    private func genreButtons(_ home: HomeViewModel) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                genreButton(
+                    name: "すべて", selected: home.selectedGenreID == nil, id: "genreChip-all", glyph: { GlyphIcon(all: $0, size: 24) }
+                ) { home.selectedGenreID = nil }
+                ForEach(home.chipGenres) { genre in
+                    genreButton(
+                        name: genre.name, selected: home.selectedGenreID == genre.id, id: "genreChip-\(genre.id)",
+                        color: Color(hex: genre.color), glyph: { GlyphIcon(icon: genre.icon, color: $0, size: 24) }
+                    ) { home.selectedGenreID = genre.id }
                 }
             }
             .padding(.horizontal, 16)
         }
-        .padding(.top, 8)
-        .padding(.trailing, 72)
     }
 
-    @ViewBuilder
-    private func chip(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
-        let label = Text(title)
-            .font(.subheadline.weight(selected ? .semibold : .regular))
-            .padding(.horizontal, 6)
-        if selected {
-            Button(action: action) { label }
-                .buttonStyle(.glassProminent)
-                .accessibilityIdentifier(id)
-                .accessibilityAddTraits(.isSelected)
-        } else {
-            Button(action: action) { label }
-                .buttonStyle(.glass)
-                .accessibilityIdentifier(id)
+    /// 絵柄だけのジャンルボタン(52px 角・角丸 16)。非選択は白地+ジャンル色の線画、選択は強調色の地+白の線画。
+    private func genreButton<Glyph: View>(
+        name: String, selected: Bool, id: String, color: Color = Palette.muted,
+        @ViewBuilder glyph: (Color) -> Glyph, action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            glyph(selected ? .white : color)
+                .frame(width: 52, height: 52)
+                .background(selected ? Palette.accent : Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.line, lineWidth: selected ? 0 : 1))
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier(id)
     }
 
-    /// 画像だけのセル。タップで詳細シート、長押し(0.5 秒)で編集・削除。
-    private func cell(_ item: Item) -> some View {
-        ItemImageView(item: item)
-            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .onTapGesture { sheet = .detail(item) }
-            .onLongPressGesture(minimumDuration: HomeLayout.longPressSeconds) { sheet = .actions(item) }
+    /// 画像と価格の札だけのタイル。タップで詳細シート、長押し(0.5 秒)でメニュー。
+    private func tileView(_ tile: HomeTile) -> some View {
+        ItemImageView(item: tile.item, genreColor: tile.genreColor)
+            .frame(height: Metrics.tileHeight)
+            .frame(maxWidth: .infinity)
+            .overlay(alignment: .bottomTrailing) {
+                if let tag = tile.priceTag { PriceTagView(tag: tag).padding(8) }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.tileRadius, style: .continuous))
+            .genreRing(tile.genreColor)
+            .contentShape(RoundedRectangle(cornerRadius: Metrics.tileRadius, style: .continuous))
+            .onTapGesture { sheet = .detail(tile.item) }
+            .onLongPressGesture(minimumDuration: HomeLayout.longPressSeconds) { menuTile = tile }
             .accessibilityElement(children: .ignore)
-            .accessibilityLabel(item.name)
+            .accessibilityLabel(tile.item.name)
+            .accessibilityValue(tile.priceTag?.accessibilityText ?? "")
             .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("item-\(item.id)")
+            .accessibilityIdentifier("item-\(tile.item.id)")
     }
 
     @ViewBuilder
@@ -146,14 +198,6 @@ struct HomeView: View {
             ItemDetailSheet(item: item, genre: home.genres.first { $0.id == item.genreID }, sites: home.sites, service: model.service) { saved in
                 Task { await model.home.upsert(saved) }
             }
-        case .actions(let item):
-            ItemActionsSheet(
-                item: item,
-                onEdit: { self.sheet = .edit(item) },
-                onDelete: {
-                    _ = await model.home.delete(item)
-                    self.sheet = nil
-                })
         case .edit(let item):
             EditItemSheet(item: item, genres: home.genres, service: model.service) { saved in
                 Task { await model.home.upsert(saved) }
@@ -163,7 +207,37 @@ struct HomeView: View {
                 Task { await model.home.upsert(created) }
             }
         case .settings:
-            SettingsView(isInitialSetup: false)
+            SettingsView()
+        }
+    }
+}
+
+/// タイル右下の価格の札。暗い半透明の地+白い文字(`¥880〜` は 14px/800、「出品なし」は 12px)。
+private struct PriceTagView: View {
+    let tag: PriceTag
+
+    var body: some View {
+        Text(tag.accessibilityText)
+            .font(.wl(isPrice ? 14 : 12, isPrice ? .heavy : .medium))
+            .foregroundStyle(isPrice ? Color.white : Color(hex: "#e6ebf2"))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 4)
+            .background(Palette.tagBackground, in: Capsule())
+            .background(.ultraThinMaterial, in: Capsule())
+            .accessibilityHidden(true)
+    }
+
+    private var isPrice: Bool {
+        if case .price = tag { true } else { false }
+    }
+}
+
+extension PriceTag {
+    /// 札の文字(`¥880〜` / `出品なし`)
+    var accessibilityText: String {
+        switch self {
+        case .price(let text): text
+        case .noListing: "出品なし"
         }
     }
 }
