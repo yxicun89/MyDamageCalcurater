@@ -174,12 +174,11 @@ export function createSpeedClient(input: CreateSpeedClientInput): SpeedClient {
     position(request) {
       return postJson(SPEED_PATHS.position, request);
     },
-    // I-speed-4b のスタブ(未実装。実装者が postJson(SPEED_PATHS.matchup / reach, request) にする)。
-    matchup() {
-      return Promise.reject(new Error("not implemented: I-speed-4b"));
+    matchup(request) {
+      return postJson(SPEED_PATHS.matchup, request);
     },
-    reach() {
-      return Promise.reject(new Error("not implemented: I-speed-4b"));
+    reach(request) {
+      return postJson(SPEED_PATHS.reach, request);
     },
   };
 }
