@@ -334,8 +334,15 @@ func TestConvertStatusMoveBoosts(t *testing.T) {
 		{"上げ下げ混在(からをやぶる)", "self", map[string]int{"atk": 2, "def": -1, "spa": 2, "spd": -1, "spe": 2}, `{"Chance":100,"Target":"self","Stages":{"atk":2,"def":-1,"spa":2,"spd":-1,"spe":2}}`},
 		{"相手の下降(なきごえ)", "allAdjacentFoes", map[string]int{"atk": -1}, `{"Chance":100,"Target":"target","Stages":{"atk":-1}}`},
 		{"相手の下降(normal)", "normal", map[string]int{"spe": -2}, `{"Chance":100,"Target":"target","Stages":{"spe":-2}}`},
-		{"allies は自分(ほえる)", "allies", map[string]int{"atk": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1}}`},
+		{"allies は自分(とおぼえ)", "allies", map[string]int{"atk": 1}, `{"Chance":100,"Target":"self","Stages":{"atk":1}}`},
+		{"adjacentFoe は相手", "adjacentFoe", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"allAdjacent は相手(シングル前提)", "allAdjacent", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"any は相手", "any", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
+		{"randomNormal は相手", "randomNormal", map[string]int{"def": -1}, `{"Chance":100,"Target":"target","Stages":{"def":-1}}`},
 		{"味方だけは取り込まない", "adjacentAlly", map[string]int{"spd": 1}, ""},
+		{"allySide は取り込まない", "allySide", map[string]int{"def": 1}, ""},
+		{"all は取り込まない", "all", map[string]int{"def": 1}, ""},
+		{"evasion だけは行を作らない", "self", map[string]int{"evasion": 1}, ""},
 		{"ランク変化なしは行を作らない", "self", map[string]int{}, ""},
 	}
 	for _, tt := range tests {
@@ -356,8 +363,12 @@ func TestConvertStatusMoveBoosts(t *testing.T) {
 			} else if got != tt.want {
 				t.Fatalf("move_effects = %q, want %q", got, tt.want)
 			}
-			if tt.target == "adjacentAlly" && !hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedTarget, "testglare") {
-				t.Errorf("味方だけの対象が Warnings に無い")
+			unsupportedTarget := tt.target == "adjacentAlly" || tt.target == "allySide" || tt.target == "all"
+			if unsupportedTarget != hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedTarget, "testglare") {
+				t.Errorf("対象 %s の KindMoveEffectUnsupportedTarget 警告の有無が違う(want %v)", tt.target, unsupportedTarget)
+			}
+			if _, evasionOnly := tt.boosts["evasion"]; evasionOnly != hasFinding(rep.Warnings, importer.KindMoveEffectUnsupportedStat, "testglare") {
+				t.Errorf("KindMoveEffectUnsupportedStat 警告の有無が違う(evasion のみ = %v)", evasionOnly)
 			}
 		})
 	}
@@ -390,5 +401,36 @@ func TestConvertBlocksOnStatusBoostsWithSelf(t *testing.T) {
 	_, rep, err := importer.Convert(in)
 	if err == nil && !hasFinding(rep.Blockers, importer.KindMoveEffectAmbiguous, "teststrike") {
 		t.Fatalf("重なりを素通りさせた: %+v", rep.Blockers)
+	}
+}
+
+// TestConvertWarnsOnConditionalStatusBoosts は、フック(条件付きの増減・失敗)を持つ変化技に、
+// 表の値を入れたうえで警告 KindMoveEffectConditional を出すこと(黙って入れない。CB-1)。
+// フックの無い変化技・攻撃技の self/secondary には出さない。
+func TestConvertWarnsOnConditionalStatusBoosts(t *testing.T) {
+	in := loadFixture(t)
+	boosts := map[string]int{"atk": 1, "spa": 1}
+	m := showdownMove(t, &in, "testglare")
+	self := "self"
+	m.Target = &self
+	m.Boosts = &boosts
+	m.Mechanism.Hooks = []string{"onModifyMove"}
+	out, rep := convertOK(t, in)
+	if got := moveEffectsByID(out)["testglare"]; got != `{"Chance":100,"Target":"self","Stages":{"atk":1,"spa":1}}` {
+		t.Errorf("表の値が入っていない: %q", got)
+	}
+	if !hasFinding(rep.Warnings, importer.KindMoveEffectConditional, "testglare") {
+		t.Errorf("条件付きの変化技の警告が無い")
+	}
+	for _, id := range []string{"testflame", "teststrike", "testrevived"} {
+		if hasFinding(rep.Warnings, importer.KindMoveEffectConditional, id) {
+			t.Errorf("攻撃技 %s に条件付きの警告を出した", id)
+		}
+	}
+
+	m.Mechanism.Hooks = nil
+	_, rep = convertOK(t, in)
+	if hasFinding(rep.Warnings, importer.KindMoveEffectConditional, "testglare") {
+		t.Errorf("フックの無い変化技に警告を出した")
 	}
 }

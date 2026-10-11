@@ -74,6 +74,9 @@ const (
 	// KindMoveEffectUnsupportedTarget は変化技のランク変化の対象が自分でも相手でもない
 	// (味方だけ・場全体 等。シングルでは効果が無い)ので取り込まなかった(CB-1)。
 	KindMoveEffectUnsupportedTarget FindingKind = "move-effect-unsupported-target"
+	// KindMoveEffectConditional は変化技のランク変化に、条件付きの増減・失敗(天候・HP・連続使用 等。
+	// 技のフックで判る)があるのに、表の値だけを入れた(CB-1。条件は扱わない既知の制限。CB-3 で再検討)。
+	KindMoveEffectConditional FindingKind = "move-effect-conditional"
 	// KindMoveEffectAmbiguous は1つの技が2つ以上のランク変化エントリを持つとき(ADR-0107 決定3
 	// の前提「取得元に2エントリ以上の技は無い」が崩れたことを人に知らせる。決定6 規則6)。
 	KindMoveEffectAmbiguous FindingKind = "move-effect-ambiguous"

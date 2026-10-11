@@ -29,7 +29,8 @@ type rankEntry struct {
 
 // boostsTarget は変化技の target を、ランク変化を受ける側に写す(CB-1)。
 // ok=false は自分でも相手でもない対象(味方だけ・場全体 等)で、シングルでは効果が無い。
-// allies は味方全体(使用者を含む。ほえる)なので自分。
+// allies は味方全体(使用者を含む。とおぼえ)なので自分。
+// シングル前提(allAdjacent も相手1体に写す)。ダブル対応で見直す。
 func boostsTarget(target string) (engine.RankTarget, bool) {
 	switch target {
 	case "self", "allies":
@@ -138,6 +139,11 @@ func buildMoveEffects(moves []ShowdownMove, included map[string]bool) ([]EffectR
 			return nil, nil, nil, err
 		}
 		rows = append(rows, EffectRow{ID: m.ID, Effect: canon})
+		// 変化技の表の値を入れた技に条件付きの増減・失敗のフック(growth の天候・clangoroussoul の HP・
+		// noretreat の2回目 等)があれば、黙って入れずに報告する(CB-1。条件は扱わない既知の制限)。
+		if m.Boosts != nil && len(*m.Boosts) > 0 && m.Mechanism != nil && len(m.Mechanism.Hooks) > 0 {
+			warnings = append(warnings, Finding{Kind: KindMoveEffectConditional, ID: m.ID})
+		}
 	}
 	return rows, warnings, blockers, nil
 }
