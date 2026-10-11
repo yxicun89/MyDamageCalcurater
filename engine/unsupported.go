@@ -100,6 +100,13 @@ const (
 	UnsupportedMoveTargetUnknown UnsupportedReason = "move_target_unknown"
 	// UnsupportedEffect は持ち物・特性のダメージへの効果を計算に入れていない(効果スキーマで表せない。ADR-0120)。
 	UnsupportedEffect UnsupportedReason = "unsupported_effect"
+	// 連続技 CalcCombo だけが出す理由(ADR-0179 追記 CB-3 §5)。
+	// UnsupportedChoiceLocked はこだわり系の持ち物で手ごとに技が違う。
+	UnsupportedChoiceLocked UnsupportedReason = "choice_locked"
+	// UnsupportedDefenderFullHPAssumed は 2 手目以降を防御側が満タンのまま計算した(タスキ型・残り HP で変わる技)。
+	UnsupportedDefenderFullHPAssumed UnsupportedReason = "defender_full_hp_assumed"
+	// UnsupportedSpeedUndetermined は素早さの補正の条件を判定できず飛ばした(FinalSpeed の *Undetermined)。
+	UnsupportedSpeedUndetermined UnsupportedReason = "speed_undetermined"
 )
 
 // UnsupportedMark は「この結果は正しくない可能性がある」印1つ。

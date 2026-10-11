@@ -176,27 +176,24 @@ describe("増減ボタン", () => {
     expect(input).toHaveValue(32);
   });
 
-  test("ランクも増減ボタン。範囲外の入力は従来どおり誤りとして出し、送らない", async () => {
+  test("ランクはメーターと増減ボタン。両端で止まり、範囲外の値は作れない(ADR-0357)", async () => {
     const positions: Schemas["PositionRequest"][] = [];
     const { user } = await renderScreen(positions);
     await user.click(within(selfRegion()).getByRole("radio", { name: speedScreenText.modeLabel.custom }));
     await chooseBird(user);
-    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rankLabel });
+    const meter = within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel });
     await user.click(
-      within(selfRegion()).getByRole("button", { name: `${speedScreenText.rankLabel}を減らす` }),
+      within(selfRegion()).getByRole("button", { name: `${speedScreenText.rankLabel}を下げる` }),
     );
-    expect(input).toHaveValue(-1);
-    const before = positions.length;
-    fireEvent.change(input, { target: { value: "7" } });
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(within(selfRegion()).getByRole("alert")).toBeInTheDocument();
-    // 範囲外の値から押すと、範囲に収めた値になって誤りが消える。
-    await user.click(
-      within(selfRegion()).getByRole("button", { name: `${speedScreenText.rankLabel}を増やす` }),
-    );
-    expect(input).toHaveValue(6);
-    expect(input).not.toHaveAttribute("aria-invalid", "true");
-    expect(positions.slice(before).every((request) => request.mode !== "custom" || request.rank !== 7)).toBe(
+    expect(meter).toHaveAttribute("aria-valuenow", "-1");
+    meter.focus();
+    await user.keyboard("{End}{ArrowRight}");
+    expect(meter).toHaveAttribute("aria-valuenow", "6");
+    expect(
+      within(selfRegion()).getByRole("button", { name: `${speedScreenText.rankLabel}を上げる` }),
+    ).toBeDisabled();
+    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+    expect(positions.every((request) => request.mode !== "custom" || Math.abs(request.rank ?? 0) <= 6)).toBe(
       true,
     );
   });

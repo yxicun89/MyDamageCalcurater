@@ -44,6 +44,8 @@ var (
 		"SpeedMods":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
 		"Grounds": true, // 持ち物で接地する(ADR-0144)
+		// 連続技の印にだけ使う(ダメージ計算は読まない。ADR-0179 追記 CB-3)
+		"LocksMove": true, "FullHPOnly": true,
 	}
 	abilityEffectFields = map[string]bool{
 		"StabMod": true, "OffBoostType": true, "OffBoostTypeMod": true,
@@ -59,6 +61,7 @@ var (
 		// 特性の段階2(技のフラグ。ADR-0178)
 		"PostAuraPowerMods": true, "FlagTypeConvert": true, "DefImmuneFlags": true,
 		"DefFinalModsByFlag": true, "DefFinalModsByType": true, "NoContact": true,
+		"FullHPOnly": true, // 連続技の印にだけ使う(ADR-0179 追記 CB-3)
 		// 重さの補正(ADR-0143)
 		"WeightMod":           true,
 		"UnsupportedAttacker": true, "UnsupportedDefender": true,
@@ -518,7 +521,54 @@ func DecodeItemEffect(raw []byte, chart engine.TypeChart) (*engine.ItemEffect, e
 			return nil, err
 		}
 	}
+	if v, ok := fields["LocksMove"]; ok {
+		if e.LocksMove, err = decodeTrueLiteral(v); err != nil {
+			return nil, err
+		}
+	}
+	if v, ok := fields["FullHPOnly"]; ok {
+		if e.FullHPOnly, err = decodeTrueLiteral(v); err != nil {
+			return nil, err
+		}
+	}
 	return &e, nil
+}
+
+// DecodeAbilityEffectIgnoringUnknown は DecodeAbilityEffect と同じ検証をするが、このバイナリが知らない
+// トップレベルのフィールド(abilityEffectFields に無いもの)は読み捨て、その名前を昇順で返す(ADR-0145)。
+// read model の書き出し専用: 古いイメージが、後から増えた効果で落ちないようにする。
+// 知っているフィールドの型・値・組の検証、入れ子の未知のキーの拒否は従来どおり厳格。
+// calc-svc・importer・WASM は DecodeAbilityEffect を使い続ける(タイプミスを捕まえる)。
+func DecodeAbilityEffectIgnoringUnknown(raw []byte, chart engine.TypeChart) (*engine.AbilityEffect, []string, error) {
+	fields, err := decodeEffectObject(raw)
+	if err != nil {
+		return nil, nil, err
+	}
+	var ignored []string
+	known := make(map[string]json.RawMessage, len(fields))
+	for k, v := range fields {
+		if abilityEffectFields[k] {
+			known[k] = v
+		} else {
+			ignored = append(ignored, k)
+		}
+	}
+	sort.Strings(ignored)
+	if len(known) == 0 {
+		if chart.IsZero() {
+			return nil, nil, fmt.Errorf("%w: タイプ相性表が未設定", ErrInvalidEffect)
+		}
+		return &engine.AbilityEffect{}, ignored, nil
+	}
+	filtered, err := json.Marshal(known)
+	if err != nil {
+		return nil, nil, fmt.Errorf("%w: %v", ErrInvalidEffect, err)
+	}
+	e, err := DecodeAbilityEffect(filtered, chart)
+	if err != nil {
+		return nil, nil, err
+	}
+	return e, ignored, nil
 }
 
 // DecodeAbilityEffect は ability_effects.effect の JSON を engine.AbilityEffect に厳格デコードする。
@@ -968,6 +1018,11 @@ func decodeAbilityStage2(fields map[string]json.RawMessage, chart engine.TypeCha
 			return err
 		}
 	}
+	if v, ok := fields["FullHPOnly"]; ok {
+		if e.FullHPOnly, err = decodeTrueLiteral(v); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -1071,6 +1126,9 @@ func (w *effectWriter) encodeAbilityStage2(e engine.AbilityEffect) {
 	}
 	if e.NoContact {
 		w.field("NoContact", []byte("true"))
+	}
+	if e.FullHPOnly {
+		w.field("FullHPOnly", []byte("true"))
 	}
 	if e.WeightMod != 0 {
 		w.field("WeightMod", []byte(strconv.Itoa(e.WeightMod)))
@@ -1246,6 +1304,12 @@ func EncodeItemEffect(e engine.ItemEffect) ([]byte, error) {
 	w.unsupportedMarks(e.UnsupportedAttacker, e.UnsupportedDefender)
 	if e.Grounds {
 		w.field("Grounds", []byte("true"))
+	}
+	if e.LocksMove {
+		w.field("LocksMove", []byte("true"))
+	}
+	if e.FullHPOnly {
+		w.field("FullHPOnly", []byte("true"))
 	}
 	return w.bytes()
 }

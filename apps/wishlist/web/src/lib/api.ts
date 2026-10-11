@@ -85,8 +85,14 @@ const ERROR_CODES: readonly string[] = [
 export const normalizeBaseUrl = (baseUrl: string): string =>
   baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
 
-/** 既定のベース URL。document.baseURI(= index.html のある場所。クラスタでは .../wishlist/)から、クエリとハッシュを除いたディレクトリ。 */
-export const defaultBaseUrl = (baseURI: string = document.baseURI): string => new URL("./", baseURI).href;
+/**
+ * 既定のベース URL。ビルドの base(vite の `base: "/wishlist/"`)を document.baseURI で解決する(クエリ・ハッシュは除かれる)。
+ * `./` で解決すると、末尾の / なしの `/wishlist` で開いたとき `/` になり、API がダメ計の gateway に行ってしまう。
+ */
+export const defaultBaseUrl = (
+  baseURI: string = document.baseURI,
+  base: string = import.meta.env.BASE_URL,
+): string => new URL(base, baseURI).href;
 
 /** Item.image_url(`images/<name>`。先頭 / なし)をベース URL 基準で解決する。 */
 export const resolveImageUrl = (imageUrl: string, baseUrl: string): string =>

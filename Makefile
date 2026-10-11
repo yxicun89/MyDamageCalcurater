@@ -124,6 +124,7 @@ lint: gen-go-all ## gofmt / go vet / shell・Node構文チェック
 	@$(MAKE) --no-print-directory staticcheck
 	@scripts/check-conflict-markers.sh
 	@scripts/check-plan.sh
+	@$(GO) run ./tools/archcheck .
 	@for script in scripts/*.sh; do bash -n "$$script" || exit; done
 	@for script in tools/importer/*.sh; do sh -n "$$script" || exit; done
 	@node --check tools/golden/generate.mjs

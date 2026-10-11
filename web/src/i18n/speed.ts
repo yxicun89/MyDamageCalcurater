@@ -6,7 +6,8 @@
  * 通信できない・応答が読めない・エラー本文の形が不正なとき(自動の切り替え先は持たない)。
  */
 export const speedClientText = {
-  unavailable: "素早さのサーバーに接続できません",
+  unavailable:
+    "素早さのサーバーに接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
 } as const;
 
 /**
@@ -86,7 +87,11 @@ export const speedScreenText = {
     request_too_large: "入力が大きすぎます",
     master_unavailable: "ポケモンのデータを読み込めません",
     internal_error: "素早さの計算に失敗しました",
-    speed_unavailable: "素早さのサーバーに接続できません",
+    upstream_unavailable:
+      "素早さのサーバーが起動中か、一時的に使えません。しばらくしてからもう一度お試しください",
+    speed_unavailable:
+      "素早さのサーバーに接続できません。起動中か、通信が切れている可能性があります。しばらくしてからもう一度お試しください",
+    /** gateway が上流(speed)へ届かないときの 503 は上の upstream_unavailable(契約外。ADR-0357 の次の PR で文言を原因が分かる形に)。 */
   } satisfies Readonly<Record<string, string>>,
   /** errorByCode に無い code のとき。 */
   errorFallback: "素早さの計算に失敗しました",

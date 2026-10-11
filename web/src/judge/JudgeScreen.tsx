@@ -18,9 +18,11 @@ import {
 } from "../domain/itemRoles";
 import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { MAX_SP_PER_STAT } from "../domain/requests";
+import { rankStatNameJa } from "../i18n/common";
 import { calcScreenText, judgeErrorText, judgeScreenText, unsupportedText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
+import { RankMeter } from "../ui/RankMeter";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import "./JudgeScreen.css";
@@ -757,29 +759,29 @@ function IndividualFields({
 
           {RANK_STATS.map((stat) => {
             const invalid = errors?.rankStats.has(stat) === true;
+            const rank = parseRank(value.ranks[stat]);
             return (
-              <label key={stat} className="judge-individual__field">
+              <div key={stat} className="judge-individual__field">
                 <span>{judgeScreenText.rankLabel(stat)}</span>
                 {/*
-                 * type="number" だと jsdom は "-" 単独(負数を打っている途中)を無効値として即座に ""
-                 * へ戻してしまい、キー入力を1文字ずつ追う実際の操作で負数を打てない。ランクは -6..+6 を
-                 * 送るため text + inputMode="numeric" にし、入力の生の文字列をそのまま state に持つ
-                 * (数への変換・範囲検査は parseRank / judgeValidation.ts で行う)。
+                 * ADR-0357: ランクは -6..+6 のメーター(13 段)。範囲外の値は作れない。state は従来どおり文字列で持つ
+                 * (未知の保存値などの NaN はメーター上は 0 として見せ、検査(judgeValidation.ts)は残す)。
                  */}
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="-?[0-9]*"
-                  aria-label={judgeScreenText.rankLabel(stat)}
-                  aria-invalid={invalid}
-                  aria-describedby={describedBy(invalid && rankErrorId)}
-                  value={value.ranks[stat]}
-                  onChange={(event) => {
-                    const raw = event.target.value;
-                    onChange((current) => ({ ...current, ranks: { ...current.ranks, [stat]: raw } }));
+                <RankMeter
+                  asGroup={false}
+                  label={judgeScreenText.rankLabel(stat)}
+                  statName={rankStatNameJa[stat]}
+                  value={Number.isNaN(rank) ? 0 : rank}
+                  invalid={invalid}
+                  describedBy={describedBy(invalid && rankErrorId)}
+                  onChange={(next) => {
+                    onChange((current) => ({
+                      ...current,
+                      ranks: { ...current.ranks, [stat]: String(next) },
+                    }));
                   }}
                 />
-              </label>
+              </div>
             );
           })}
           <ErrorText id={rankErrorId} message={errors?.rankRange ?? null} />

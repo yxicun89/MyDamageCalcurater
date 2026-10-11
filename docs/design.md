@@ -134,6 +134,7 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 | `.ui-notice` + `.ui-notice--empty` / `.ui-notice--error` / `.ui-notice--loading` / `.ui-notice--info` | 角丸の囲み。empty は surface.card、error は danger.soft、loading・info は info.soft |
 | `.ui-icon` | インライン SVG のアイコン(色は文字色に従う。縮まない) |
 | `.ui-segmented` / `.ui-segmented__option` / `.ui-segmented__option--selected` | 区切りボタン(`SegmentedControl`。G-05)。枠は text.secondary、選択中は brand.primary / on.primary + チェックの印。最小 44px |
+| `.ui-rank` / `.ui-rank__track` / `.ui-rank__segment` / `.ui-rank__value` | 能力ランクのメーター(`RankMeter`。ADR-0357)。13 段(左 6 = 下降・中央 0・右 6 = 上昇)。上昇は `brand.primary`、下降は `warning`、0 は常に見える太い目印。値は符号付きの文字でも出す(色だけに頼らない) |
 | `.ui-stepper` / `.ui-stepper__button` / `.ui-stepper__input` | 増減ボタン(`Stepper`。G-05)。− / + は 44px の丸、数値欄は中央寄せ・等幅数字 |
 | `.ui-tile` / `.ui-tile--selected` / `.ui-tile--empty` | タイル(`Tile`。G-05)。選択中は brand.primary の 2px の枠 + チェック、空き枠は破線 + 「+」 |
 | `.ui-pokemon-card` / `.ui-pokemon-card--small` | ポケモンカード(`PokemonCard`。G-05)。画像かエンブレム + 名前 + タイプバッジ + 持ち物。押せるときは 1 つのボタン |
@@ -388,7 +389,7 @@ SC 3.3.2 ラベル又は説明)。読み上げ用の名前(accessible name)だ�
   結果の行は「ダメージ幅の大きい数字 + 確定数のバッジ(brand.primary の塗り・on.primary の文字。見出しの大きさ)」を 1 行目、ダメージバーを 2 行目、調整・持ち物・特性を caption で最後に
   (見た目の順 = DOM の順。`order` を使わない)。技の相性(ばつぐん等)は枠だけのバッジ。性格補正は `SegmentedControl`、SP は − / + と文字の数値欄
   (不正な値を誤りとして出すため数値欄にしない)、プリセット・条件(急所・やけど・天候・フィールド・壁)・「持ち物の候補も比較」はチップ(選択中は塗り + チェック。主な操作は 44px)、
-  ランクは増減ボタン。防御側の残りHPの長い説明は「説明」ボタンの奥(単位の 1 行は残す)
+  ランクはメーター(13 段・− / + 付き。ADR-0357)。防御側の残りHPの長い説明は「説明」ボタンの奥(単位の 1 行は残す)
 - カードの上端に「攻撃側」「防御側」の見出しを出し、ポケモン・持ち物・技の欄にも見えるラベルを付ける
   (「入力のラベル」)
 - ダメージバーは**装飾**として扱う(2026-09-25、issue #306)。同じ行に %幅 と 確定数 を文字で出しており、
