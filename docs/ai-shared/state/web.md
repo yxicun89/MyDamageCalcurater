@@ -246,3 +246,5 @@ Status(追記 2026-10-11): I-web-13i(G-05 このアプリについて、ADR-0349
 Status(追記 2026-10-11): I-web-13d2(構築の技を `MovePicker` に、ADR-0350)= `TeamMemberFields.tsx` の技 4 枠を共有ピッカーへ。`MovePicker` に `noneLabel`・`disabledIds` を追加(計算・逆算は不変)、`moveOptions` は `Move` を返す。既存テストは `TeamScreen.members`・`TeamScreen.rebuild`・e2e `teamRebuild` を `test/teamMovePicker.ts` で付け替え。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-team-move-picker.md`。次は I-web-13e。
 
 Status(追記 2026-10-11): I-web-13e(G-05 素早さの画面、ADR-0351)= `SpeedScreen.tsx`・`.css`・`SpeedNeighborhoodPanel.tsx` を作り直した(`ToggleChip` に任意 prop `ariaDisabled`、`NeighborTierInput` に任意の pokemonId/types)。既存テストの付け替えは `SpeedScreen.visual.test.tsx` の 1 件(入力の方法が ui-chip から区切りボタンへ)のみ。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-speed.md`。残りは 13f・13h。
+
+Status(追記 2026-10-11): I-web-13f(G-05 タイプバランスの画面、ADR-0352)= `BalanceScreen.tsx`・`.css`・新規 `balanceCells.tsx` を作り直した(メンバー/仮想敵のポケモンカード・追加の空きタイル・升目の記号 + 文字 + 淡い色・タイプバッジ見出し・大きい人数)。API・状態の流れは不変。既存テストの付け替えは 4 件(追加ボタンの class、段落の textContent での引き方 3)。技の `MovePicker` 化は見送り。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-balance.md`。残りは 13h。
