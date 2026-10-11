@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: pokecalc balance API
-  version: 0.9.0
+  version: 0.10.0
   description: |
     パーティのタイプバランスを分析する独立サービスの契約。
     TB1 は防御タイプバランス(18 攻撃タイプごとの各メンバーの倍率とチーム集計)を返す。
@@ -985,6 +985,17 @@ components:
         - candidates
         - abilityOptions
       properties:
+        skewedAttackTypes:
+          description: |
+            Attack types the party is already lopsided against (ADR-0422 §1): the number of weak members
+            (x2 or more, abilities applied) minus the number of resisting or immune members is 2 or more,
+            in canonical type order. A candidate that is weak (x2 or more) to any of them is left out of `candidates`.
+            Absent in responses of servers older than 0.10.0; treat a missing value as empty.
+          type: array
+          minItems: 0
+          maxItems: 18
+          items:
+            $ref: '#/components/schemas/TypeId'
         defenseHoles:
           description: Attack types that no member resists or is immune to, in canonical type order.
           type: array
