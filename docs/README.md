@@ -28,6 +28,7 @@
 |---|---|
 | [overview.md](overview.md) | プロジェクト概要 |
 | [architecture.md](architecture.md) | アーキテクチャ全体図 |
+| [architecture-comparison.md](architecture-comparison.md) | ソフトウェアアーキテクチャの比較(ヘキサゴナル・クリーン・レイヤード等のこのプロジェクトでの利点と欠点) |
 | [requirements.md](requirements.md) | 要件の正 |
 | [plan.md](plan.md) | 進行状況とタスクの索引(作業の起点)。タスクの行は区画ごとのファイル [plan/](plan/)(ADR-0172) |
 | [plan-archive.md](plan-archive.md) | 完了したタスクの経過・解決済みのブロッカー(plan.md から移した記録) |
