@@ -1,7 +1,7 @@
 package engine
 
 // 素早さの補正(SpeedMods)の型と発動条件の語彙(ADR-0139)。
-// engine は素早さの補正(SpeedMods)を評価しない(素早さの実数値とランクは RealStats・EffectiveStat が持つ。ADR-0177 §3)。
+// 素早さの補正(SpeedMods)は FinalSpeed が評価する(ADR-0179。素早さの実数値とランクは RealStats・EffectiveStat が持つ)。
 // ダメージ計算はこの値を読まない。
 // マスタ(services/internal/master)と判定(services/judge)が同じ語彙を参照する単一の正。
 
