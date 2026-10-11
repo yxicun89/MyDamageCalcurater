@@ -1,7 +1,7 @@
 # ARCH: ソフトウェアアーキテクチャの正式採用(調査と計画)
 
 - 状態: **方式はユーザーが決定(2026-10-11): ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用する。A(このリポジトリを段階的に改造)も決定**。
-  コードはまだ変えていない。採用の ADR(ADR-0811 の予定)は S0 で書く。残りの未決は §8。
+  **S0 実装済み(2026-10-11。ADR-0811・coding-rules・`tools/archcheck`・`make lint`)。コードはまだ動かしていない**。§8 は全問決定済み。次は S1(越境の解消)と S2(judge)。
 - 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
 - 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
@@ -249,7 +249,7 @@ services/<svc>/
 
 | 段階 | 担当レーン | 内容 | 受け入れ条件(機械で確かめる) |
 |---|---|---|---|
-| **S0 規約・ADR・検査の骨組み** | データ(§8 Q2 の推奨。未回答) | ADR-0811(ヘキサゴナル採用)・`docs/coding-rules.md` に §5.1 の形と図・`tools/archcheck`(向きの検査と未移行の一覧。初版は全サービスが一覧に載る)・`make lint` に 1 行。**コードは動かさない** | `make lint` が通る。archcheck のテストで「domain → adapters の import」「app → adapters の import」「一覧に無いのに形がそろっていないサービス」がそれぞれ失敗する |
+| **S0 規約・ADR・検査の骨組み**(**完了 2026-10-11**) | データ(§8 Q2 決定) | ADR-0811(ヘキサゴナル採用)・`docs/coding-rules.md` に §5.1 の形と図・`tools/archcheck`(向きの検査と未移行の一覧。初版は全サービスが一覧に載る)・`make lint` に 1 行。**コードは動かさない** | `make lint` が通る。archcheck のテストで「domain → adapters の import」「app → adapters の import」「一覧に無いのに形がそろっていないサービス」がそれぞれ失敗する |
 | S1 越境の解消(G1) | データ → API | `RoleGrant`・プロビジョニングを `services/pokedex/db` から `services/internal/dbmigrate` へ。record・team の migrate の import を差し替える | record・team の `cmd/migrate` が `services/pokedex/...` を import しない。`make test`(`-tags mysql`・`tidb` を含む)が通る |
 | S2 judge | 判定 | `internal/judge`・`speedeffects` の純粋な部分 → `domain`。`outspeedAndKo` の手順 → `app`(`Pokedex`・`Calc` のポートを app で宣言)。`httpapi`・`client`・`httpguard`・`httpmetrics` → `adapters`。G3〜G5 を解消 | judge が未移行の一覧から消え、archcheck が通る。app のテストが HTTP なしで fake のポートで走る。既存の judge のテストが全件通る |
 | S3 calc | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
@@ -277,38 +277,40 @@ services/<svc>/
   データ 0179〜 / API 0252〜 / Web 0356〜 / タイプバランス 0423〜(進行中 0422)/ iOS 0531〜(進行中 0529・0530)/ 素早さ 0610〜 / 判定 0715〜。
   判断が要らない移行は ADR を作らず、ADR-0811 の「段階の記録」に 1 行足す(§8 Q9)。
 
-## 8. 未決の質問(推奨を先頭に)
+## 8. 質問と決定(全問決定済み)
+
+**ユーザー決定(2026-10-11): Q1 は A、Q2〜Q10 はすべて各項の(推奨)のとおり。** 以下は決定の記録(先頭が採用した案)。
 
 1. **A か B か** — **決定済み: A(このリポジトリを段階的に改造)**(ユーザー回答 2026-10-11)。
-2. **S0(規約・ADR・検査の骨組み)をどのレーンが持つか**(未回答)
+2. **S0(規約・ADR・検査の骨組み)をどのレーンが持つか**(決定済み)
    - (推奨)データレーン(M4・運用・横断の持ち主。COORDINATION.md)。
    - 新しく「アーキテクチャ」レーンを作る(`state/` と作業ディレクトリが 1 つ増える)。
    - API レーン(Go サービスの大半を持つ)。
-3. **Go の機械検査の道具**(未回答)
+3. **Go の機械検査の道具**(決定済み)
    - (推奨)自前の `tools/archcheck`(go/parser。依存追加なし。前例あり)。
    - go-arch-lint(YAML で宣言。新しい道具を固定版で導入)。
    - golangci-lint + depguard(lint の仕組みごと置き換え)。
-4. **大きいサービスの中の順番**(未回答)
+4. **大きいサービスの中の順番**(決定済み)
    - (推奨)judge → calc → record → pokedex(手順が一番溜まっていて 1 レーンで閉じる judge で型を決める)。
    - calc → judge → record → pokedex(利用者に一番近い計算から)。
    - pokedex → calc → judge → record(マスタの提供元から)。
-5. **record・team の移行と M2(必須。ADR-0137)の関係**(未回答)
+5. **record・team の移行と M2(必須。ADR-0137)の関係**(決定済み)
    - (推奨)M2 の PR が record・team に無い時に行う(M2 を止めず、移行も後回しにしない)。
    - M2 の必須が終わるまで record・team の移行を後ろに回す(「大きいサービスから」の順は崩れる)。
    - M2 より先に移行する。
-6. **バッチの置き場所(pokedex の importer・record/team の失効ジョブ)**(未回答)
+6. **バッチの置き場所(pokedex の importer・record/team の失効ジョブ)**(決定済み)
    - (推奨)失効ジョブは各サービスの `app`(手順)+ `adapters/store`。importer(`services/pokedex/importer`)は今回の対象外にし、S5 の後で同じ形にするかを判断する。
    - importer も S5 で同時に移す(PR が大きくなる)。
-7. **domain・app の中身が無いサービスのフォルダ**(未回答)
+7. **domain・app の中身が無いサービスのフォルダ**(決定済み)
    - (推奨)フォルダを置き、`doc.go` に役割を書く(形が全サービスでそろい、archcheck の判定も単純)。
    - 中身が無ければフォルダを置かない(archcheck に例外を持たせる)。
-8. **oapi-codegen の生成物(`internal/api`)の場所**(未回答)
+8. **oapi-codegen の生成物(`internal/api`)の場所**(決定済み)
    - (推奨)今のまま(`scripts/ensure-gen.sh`・`.gitignore`・Makefile の生成先を動かさない。外側として扱う)。
    - `internal/adapters/httpapi/api` へ移す(生成の設定と共有ファイルを全レーンで変える)。
-9. **サービスごとの ADR**(未回答)
+9. **サービスごとの ADR**(決定済み)
    - (推奨)ADR-0811 の 1 本 + 判断が要る移行だけレーンの帯で ADR。判断の要らない移行は 0811 の「段階の記録」に 1 行。
    - サービスごとに必ず ADR。
-10. **iOS のターゲット分割**(未回答)
+10. **iOS のターゲット分割**(決定済み)
     - (推奨)今はしない。テスト(I0)で足り、分割は iOS の大きな作業の切れ目で改めて判断する。
     - S0 と同じ時期に分ける。
 
