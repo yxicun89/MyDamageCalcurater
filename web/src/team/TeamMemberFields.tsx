@@ -20,6 +20,7 @@ import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { uiText } from "../i18n/ui";
 import { AbilitySelect } from "../screens/AbilitySelect";
+import { MovePicker } from "../screens/MovePicker";
 import { MegaItemReason } from "../screens/MegaItemReason";
 import { PokemonIcon } from "../images/PokemonIcon";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
@@ -309,26 +310,24 @@ export function TeamMemberFields({
       <div className="team-member__grid">
         {Array.from({ length: MAX_MEMBER_MOVES }, (_, slot) => {
           const current = draft.moves[slot] ?? null;
+          // 他の枠で選んだ技はこの枠では選べない(自分の枠の選択は無効にしない)。
+          const takenByOthers = new Set(
+            draft.moves.filter((other, index): other is string => index !== slot && other !== null),
+          );
           return (
-            <LabeledSelect
-              key={slot}
-              label={teamMemberText.moveLabel(slot + 1)}
-              value={current ?? ""}
-              onChange={(value) => {
-                pickMove(slot, value);
-              }}
-            >
-              <option value="">{teamMemberText.moveNone}</option>
-              {moveOptions(species, movePool, current).map((move) => (
-                <option
-                  key={move.id}
-                  value={move.id}
-                  disabled={draft.moves.some((other, index) => index !== slot && other === move.id)}
-                >
-                  {move.nameJa}
-                </option>
-              ))}
-            </LabeledSelect>
+            <div key={slot} className="team-member__field">
+              <MovePicker
+                label={teamMemberText.moveLabel(slot + 1)}
+                moves={moveOptions(species, movePool, current)}
+                types={master.typeChart.types}
+                value={current ?? ""}
+                onChange={(value) => {
+                  pickMove(slot, value);
+                }}
+                noneLabel={teamMemberText.moveNone}
+                disabledIds={takenByOthers}
+              />
+            </div>
           );
         })}
       </div>

@@ -32,7 +32,12 @@ function typeName(type: string): string {
 }
 
 function rowLabel(move: Move): string {
-  const parts = [move.nameJa, typeName(move.type), formatMovePickerCategory(move.category)];
+  // タイプが空の技(マスタに無い現在値の代役。構築)はタイプ名を読まない。
+  const parts = [
+    move.nameJa,
+    ...(move.type === "" ? [] : [typeName(move.type)]),
+    formatMovePickerCategory(move.category),
+  ];
   if (move.category !== "status") {
     parts.push(`${calcScreenText.movePowerLabel} ${String(move.power)}`);
   }
@@ -51,6 +56,13 @@ export interface MovePickerProps {
   readonly disabled?: boolean;
   /** 技が空のとき、先頭に押せない「技を選んでください」行を出すか(計算画面。ADR-0333 §4)。 */
   readonly showUnselected?: boolean;
+  /**
+   * 指定すると、先頭に「空にする」行(この文言。選ぶと onChange("") )を出し、空のときのトリガーにも同じ文言を見せる
+   * (構築の技 2〜4 枠。ADR-0350)。showUnselected とは併用しない(計算・逆算は渡さない)。
+   */
+  readonly noneLabel?: string;
+  /** 選べない技 ID(行は aria-disabled で押せない。構築で他の枠が選んだ技。ADR-0350)。 */
+  readonly disabledIds?: ReadonlySet<string>;
   /** 見えるラベルのクラス(画面ごと)。 */
   readonly labelClassName?: string;
   /** トリガーに足すクラス(画面ごとの入力の形。例: calc-screen__move)。 */
@@ -65,6 +77,8 @@ export function MovePicker({
   onChange,
   disabled = false,
   showUnselected = false,
+  noneLabel,
+  disabledIds,
   labelClassName,
   triggerClassName,
 }: MovePickerProps): ReactElement {
@@ -86,11 +100,19 @@ export function MovePicker({
   }, [ordered, query]);
   const isOpen = open && !disabled;
   const showUnselectedRow = showUnselected && value === "" && ordered.length > 0 && query.trim() === "";
-  const active = shown.find((move) => move.id === activeId) ?? shown[0] ?? null;
+  const showNoneRow = noneLabel !== undefined && query.trim() === "";
+  // キーボードで辿る行の ID(空にする行は ""。先頭)。
+  const navIds = useMemo(
+    () => [...(showNoneRow ? [""] : []), ...shown.map((move) => move.id)],
+    [showNoneRow, shown],
+  );
+  const activeNavId = activeId !== null && navIds.includes(activeId) ? activeId : (navIds[0] ?? null);
+  const rowDomId = (id: string): string => `${listId}-${id === "" ? "none" : id}`;
+  const emptyText = noneLabel ?? favoritesRestoreText.moveUnselectedOption;
 
   function openPanel(): void {
     setQuery("");
-    setActiveId(selected?.id ?? ordered[0]?.id ?? null);
+    setActiveId(selected?.id ?? (noneLabel !== undefined ? "" : (ordered[0]?.id ?? null)));
     setOpen(true);
   }
 
@@ -99,6 +121,9 @@ export function MovePicker({
   }
 
   function choose(id: string): void {
+    if (id !== "" && disabledIds?.has(id) === true) {
+      return;
+    }
     onChange(id);
     setOpen(false);
     triggerRef.current?.focus();
@@ -113,13 +138,13 @@ export function MovePicker({
 
   // 活性の行が見える位置へ。
   useEffect(() => {
-    if (isOpen && active !== null) {
-      const row = document.getElementById(`${listId}-${active.id}`);
+    if (isOpen && activeNavId !== null) {
+      const row = document.getElementById(`${listId}-${activeNavId === "" ? "none" : activeNavId}`);
       // jsdom には scrollIntoView が無い。
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       row?.scrollIntoView?.({ block: "nearest" });
     }
-  }, [isOpen, active, listId]);
+  }, [isOpen, activeNavId, listId]);
 
   // 外側の押下で閉じる(選ばない)。
   useEffect(() => {
@@ -142,9 +167,9 @@ export function MovePicker({
   }, [isOpen]);
 
   function moveActive(index: number): void {
-    const next = shown[Math.max(0, Math.min(shown.length - 1, index))];
+    const next = navIds[Math.max(0, Math.min(navIds.length - 1, index))];
     if (next !== undefined) {
-      setActiveId(next.id);
+      setActiveId(next);
     }
   }
 
@@ -153,7 +178,7 @@ export function MovePicker({
     if (event.nativeEvent.isComposing) {
       return;
     }
-    const index = active === null ? 0 : shown.indexOf(active);
+    const index = activeNavId === null ? 0 : navIds.indexOf(activeNavId);
     switch (event.key) {
       case "ArrowDown":
         event.preventDefault();
@@ -169,12 +194,12 @@ export function MovePicker({
         break;
       case "End":
         event.preventDefault();
-        moveActive(shown.length - 1);
+        moveActive(navIds.length - 1);
         break;
       case "Enter":
         event.preventDefault();
-        if (active !== null) {
-          choose(active.id);
+        if (activeNavId !== null) {
+          choose(activeNavId);
         }
         break;
       case "Escape":
@@ -205,7 +230,7 @@ export function MovePicker({
         role="combobox"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
-        aria-controls={isOpen && shown.length > 0 ? listId : undefined}
+        aria-controls={isOpen && navIds.length > 0 ? listId : undefined}
         aria-label={label}
         data-value={value}
         disabled={disabled}
@@ -226,12 +251,10 @@ export function MovePicker({
         }}
       >
         {selected === null ? (
-          <span className="move-picker__name move-picker__name--placeholder">
-            {favoritesRestoreText.moveUnselectedOption}
-          </span>
+          <span className="move-picker__name move-picker__name--placeholder">{emptyText}</span>
         ) : (
           <>
-            <TypeBadge className="move-picker__type" type={selected.type} />
+            {selected.type !== "" && <TypeBadge className="move-picker__type" type={selected.type} />}
             <span className="move-picker__name">{selected.nameJa}</span>
             <Icon
               name={CATEGORY_ICON[selected.category]}
@@ -260,8 +283,8 @@ export function MovePicker({
             className="move-picker__search"
             role="searchbox"
             aria-label={movePickerText.searchLabel}
-            aria-controls={shown.length > 0 ? listId : undefined}
-            aria-activedescendant={active === null ? undefined : `${listId}-${active.id}`}
+            aria-controls={navIds.length > 0 ? listId : undefined}
+            aria-activedescendant={activeNavId === null ? undefined : rowDomId(activeNavId)}
             autoComplete="off"
             placeholder={movePickerText.searchLabel}
             value={query}
@@ -271,7 +294,7 @@ export function MovePicker({
             }}
             onKeyDown={onSearchKeyDown}
           />
-          {shown.length === 0 ? (
+          {navIds.length === 0 ? (
             <p role="status" className="move-picker__empty">
               {movePickerText.noResults}
             </p>
@@ -291,20 +314,36 @@ export function MovePicker({
                   </span>
                 </li>
               )}
+              {showNoneRow && (
+                <li
+                  id={rowDomId("")}
+                  role="option"
+                  aria-selected={value === ""}
+                  aria-label={noneLabel}
+                  data-move-id=""
+                  className={`move-picker__row${activeNavId === "" ? " move-picker__row--active" : ""}`}
+                  onClick={() => {
+                    choose("");
+                  }}
+                >
+                  <span className="move-picker__name move-picker__name--placeholder">{noneLabel}</span>
+                </li>
+              )}
               {shown.map((move) => (
                 <li
                   key={move.id}
-                  id={`${listId}-${move.id}`}
+                  id={rowDomId(move.id)}
                   role="option"
                   aria-selected={move.id === value}
+                  aria-disabled={disabledIds?.has(move.id) === true ? true : undefined}
                   aria-label={rowLabel(move)}
                   data-move-id={move.id}
-                  className={`move-picker__row${move.id === active?.id ? " move-picker__row--active" : ""}`}
+                  className={`move-picker__row${move.id === activeNavId ? " move-picker__row--active" : ""}`}
                   onClick={() => {
                     choose(move.id);
                   }}
                 >
-                  <TypeBadge className="move-picker__type" type={move.type} />
+                  {move.type !== "" && <TypeBadge className="move-picker__type" type={move.type} />}
                   <span className="move-picker__name">{move.nameJa}</span>
                   <Icon
                     name={CATEGORY_ICON[move.category]}

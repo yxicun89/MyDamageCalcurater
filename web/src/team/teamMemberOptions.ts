@@ -34,19 +34,31 @@ export function abilityOptions(abilities: readonly Ability[], currentId: string 
   return withCurrent(abilities, currentId, (id) => ({ id, nameJa: id, effect: null }));
 }
 
-/** 技の選択肢: その種族の learnset を技の一覧(pool)で名前解決したもの + 現在値(learnset 外・解決不能)。 */
+/**
+ * 技の選択肢(MovePicker に渡す。ADR-0350): その種族の learnset を技の一覧(pool)で名前解決したもの + 現在値(learnset 外・解決不能)。
+ * 変化技も含む。現在値がマスタに無いときは、技 ID を名前にしたタイプ無し・変化技の代役を足す(壊さず開ける)。
+ */
 export function moveOptions(
   species: MasterSpecies | null,
   pool: readonly Move[],
   currentId: string | null,
-): readonly Named[] {
+): readonly Move[] {
   const candidates = (species?.learnset ?? []).flatMap((id) =>
     pool.filter((move) => move.id === id).slice(0, 1),
   );
-  return withCurrent<Named>(candidates, currentId, (id) => ({
-    id,
-    nameJa: pool.find((move) => move.id === id)?.nameJa ?? id,
-  }));
+  return withCurrent<Move>(
+    candidates,
+    currentId,
+    (id) =>
+      pool.find((move) => move.id === id) ?? {
+        id,
+        nameJa: id,
+        type: "",
+        category: "status",
+        power: 0,
+        priority: 0,
+      },
+  );
 }
 
 /** 新しい枠の性格の既定: 無補正(plus・minus とも null)の先頭、無ければ先頭、マスタが空なら ""。 */

@@ -20,6 +20,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
 import { createFakeTeamClient, flush, lastCall, type FakeTeamClient } from "../test/fakeTeamClient";
 import { MEGA_FIRE, MEGA_FIRE_STONE, MEGA_FIRE_STONE_LABEL, withMegaFixture } from "../test/megaMaster";
+import { chooseTeamMove, teamMoveRowName, teamMoveRows, teamMoveTrigger } from "../test/teamMovePicker";
 import { MAX_TEAM_MEMBERS, TeamScreen } from "./TeamScreen";
 import { MAX_MEMBER_MOVES, SP_STATS } from "./teamMember";
 
@@ -202,12 +203,6 @@ function moveName(id: string): string {
   return found.nameJa;
 }
 
-function optionLabels(element: HTMLElement): string[] {
-  return within(element)
-    .getAllByRole("option")
-    .map((option) => option.textContent.trim());
-}
-
 /** 保存を押し、update の応答を成功で返す(サーバーと同じく name の省略には既定名を補う)。 */
 async function saveAndSucceed(user: UserEvent, client: FakeTeamClient, editor: HTMLElement): Promise<void> {
   await user.click(saveButton(editor));
@@ -369,9 +364,7 @@ describe("R-3 6枠の編集画面", () => {
     for (const position of [1, 2]) {
       const group = slot(editor, position);
       for (let move = 1; move <= MAX_MEMBER_MOVES; move += 1) {
-        expect(
-          within(group).getByRole("combobox", { name: teamMemberText.moveLabel(move) }),
-        ).toBeInTheDocument();
+        expect(teamMoveTrigger(group, move)).toBeInTheDocument();
       }
       expect(combo(group, teamMemberText.itemLabel)).toBeInTheDocument();
       expect(combo(group, teamMemberText.natureLabel)).toBeInTheDocument();
@@ -416,12 +409,15 @@ describe("R-3 6枠の編集画面", () => {
 
     const group = slot(editor, 3);
     expect(within(group).queryByText(teamMemberText.emptySlotHint)).toBeNull();
-    const move1 = combo(group, teamMemberText.moveLabel(1));
-    expect(optionLabels(move1)).toEqual([
+    // 並びはタイプ順(ADR-0341・ADR-0350)。変化技(なきごえ)も候補に含まれ、先頭は「(なし)」の行。
+    const rows = await teamMoveRows(user, group, 1);
+    expect(rows.map(teamMoveRowName)).toEqual([
       teamMemberText.moveNone,
-      moveName("examplemovewaterblast"),
       moveName("examplemovegrowl"),
+      moveName("examplemovewaterblast"),
     ]);
+    expect(rows[0]?.getAttribute("data-move-id")).toBe("");
+    expect(rows.map((row) => row.getAttribute("data-move-id"))).toContain("examplemovegrowl");
     expect(combo(group, teamMemberText.itemLabel)).toBeEnabled();
     expect(within(group).getByRole("button", { name: teamMemberText.removeLabel(3) })).toBeInTheDocument();
   });
@@ -440,7 +436,7 @@ describe("R-4 保存", () => {
     const editor = await createNew(rendered);
 
     await user.selectOptions(speciesSelect(slot(editor, 2)), FIRE.speciesKey);
-    await user.selectOptions(combo(slot(editor, 2), teamMemberText.moveLabel(1)), "examplemovetackle");
+    await chooseTeamMove(user, slot(editor, 2), 1, "examplemovetackle");
     await user.clear(spInput(slot(editor, 2), "atk"));
     await user.type(spInput(slot(editor, 2), "atk"), "32");
     await user.click(saveButton(editor));
