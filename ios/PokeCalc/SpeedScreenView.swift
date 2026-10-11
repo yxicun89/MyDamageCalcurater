@@ -141,18 +141,16 @@ private struct SpeedSelfSection: View {
                     ) { viewModel.setNature(nature) }
                 }
             }
-            SpeedStepper(
-                title: SpeedLabels.rank, valueText: Self.rankText(viewModel.rank),
-                decrementLabel: CalcConditionLabels.rankDecrement, incrementLabel: CalcConditionLabels.rankIncrement,
-                canDecrement: viewModel.rank > RankLimits.min, canIncrement: viewModel.rank < RankLimits.max,
-                identifierPrefix: "speedRank",
-                onDecrement: { viewModel.setRank(viewModel.rank - 1) },
-                onIncrement: { viewModel.setRank(viewModel.rank + 1) })
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                SpeedCaption(text: SpeedLabels.rank)
+                RankMeterView(
+                    field: "speed", fieldName: SpeedLabels.rank,
+                    statName: RankMeterLogic.statName(for: .spe), value: viewModel.rank
+                ) { viewModel.setRank($0) }
+            }
             fieldFlags
         }
     }
-
-    private static func rankText(_ rank: Int) -> String { rank > 0 ? "+\(rank)" : String(rank) }
 
     /// スカーフ・追い風・まひ(preset と custom で共通。raw は補正済みの値を入れるので出さない)。
     private var fieldFlags: some View {
