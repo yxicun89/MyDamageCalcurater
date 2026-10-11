@@ -74,6 +74,15 @@ type TruncatedAbility struct {
 // Report は Export の副次的な結果。
 type Report struct {
 	TruncatedAbilities []TruncatedAbility
+	// IgnoredEffectFields は、このバイナリが知らないため読み捨てた特性の効果フィールド(ADR-0145)。
+	// 名前の昇順。Count はそのフィールドを持っていた特性の数。
+	IgnoredEffectFields []IgnoredEffectField
+}
+
+// IgnoredEffectField は読み捨てた効果フィールド名と、それを持っていた特性の数。
+type IgnoredEffectField struct {
+	Field string
+	Count int
 }
 
 // --- on-disk の形(ADR-0105 §5) ---------------------------------------------------
@@ -300,8 +309,9 @@ func exportFrom(ctx context.Context, q store.Querier) (Files, Report, error) {
 	}
 	abilityIDsSorted := sortedStrings(abilitySet)
 	abilityEntries := make([]abilityEntry, 0, len(abilityIDsSorted))
+	ignoredCount := map[string]int{}
 	for _, id := range abilityIDsSorted {
-		effects, err := normalizedAbilityEffects(effectByAbility[id], chart)
+		effects, err := normalizedAbilityEffects(effectByAbility[id], chart, ignoredCount)
 		if err != nil {
 			return Files{}, Report{}, err
 		}
@@ -326,6 +336,9 @@ func exportFrom(ctx context.Context, q store.Querier) (Files, Report, error) {
 	typeChartJSON, err := marshalLine(typeChartExport(allTypes, allTypeChart, dataVersion))
 	if err != nil {
 		return Files{}, Report{}, err
+	}
+	for _, name := range sortedStrings(ignoredCount) {
+		report.IgnoredEffectFields = append(report.IgnoredEffectFields, IgnoredEffectField{Field: name, Count: ignoredCount[name]})
 	}
 	metadataJSON, err := marshalLine(metadataFile{SchemaVersion: exportSchemaVersion, DataVersion: dataVersion})
 	if err != nil {
@@ -392,14 +405,18 @@ func typeChartFrom(types []store.Type, chart []store.TypeChart) (engine.TypeChar
 
 // normalizedAbilityEffects は ability_effects の JSON を防御側のタイプ相性の効果だけに正規化する
 // (ADR-0017 §2・ADR-0105 §5)。効果の行が無い・防御側の効果を持たない特性は空配列(null にしない)。
-func normalizedAbilityEffects(raw []byte, chart engine.TypeChart) ([]effectEntry, error) {
+// このバイナリが知らないフィールドは読み捨て、名前ごとの特性数を ignored に足す(ADR-0145)。
+func normalizedAbilityEffects(raw []byte, chart engine.TypeChart, ignored map[string]int) ([]effectEntry, error) {
 	out := []effectEntry{}
 	if raw == nil {
 		return out, nil
 	}
-	effect, err := master.DecodeAbilityEffect(raw, chart)
+	effect, unknown, err := master.DecodeAbilityEffectIgnoringUnknown(raw, chart)
 	if err != nil {
 		return nil, fmt.Errorf("%w: 特性の効果定義を読めない: %v", ErrInvalidExport, err)
+	}
+	for _, name := range unknown {
+		ignored[name]++
 	}
 	for _, t := range sortedImmuneTypes(effect.DefImmuneTypes) {
 		out = append(out, effectEntry{Kind: "immune", AttackType: string(t)})
@@ -469,7 +486,7 @@ func toSet(ids []string) map[string]bool {
 	return m
 }
 
-func sortedStrings(m map[string]bool) []string {
+func sortedStrings[V any](m map[string]V) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {
 		out = append(out, k)

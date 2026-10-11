@@ -307,6 +307,12 @@ func runExport(args []string) int {
 			fmt.Fprintf(os.Stderr, "  %s: %s\n", t.PokemonID, t.AbilityID)
 		}
 	}
+	if n := len(report.IgnoredEffectFields); n > 0 {
+		fmt.Fprintf(os.Stderr, "pokedex export: 警告: このイメージが知らない特性の効果フィールドを %d 種読み捨てた(JSON には印を付けない。pokedex イメージの更新が要る。ADR-0145):\n", n)
+		for _, f := range report.IgnoredEffectFields {
+			fmt.Fprintf(os.Stderr, "  %s: 特性 %d 件\n", f.Field, f.Count)
+		}
+	}
 	fmt.Printf("export: %s に書いた\n", *out)
 	return 0
 }

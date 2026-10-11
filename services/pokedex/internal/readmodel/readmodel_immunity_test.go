@@ -147,3 +147,53 @@ func TestExportRejectsInvalidImmunityEffect(t *testing.T) {
 		})
 	}
 }
+
+// ADR-0145: このイメージが知らないトップレベルのフィールドは読み捨てる(古いイメージが落ちない)。
+// 出力の JSON は未知のフィールドが無いときと同じバイト列で、読み捨てた名前は Report にだけ出る。
+func TestExportIgnoresUnknownEffectFields(t *testing.T) {
+	withEffect := func(effect string) *storetest.Querier {
+		q := storetest.New()
+		q.AbilityEffects = append(q.AbilityEffects,
+			store.AbilityEffect{AbilityID: "testhidden", Effect: json.RawMessage(effect)})
+		return q
+	}
+	plain, plainRep := export(t, withEffect(`{"DefImmuneTypes":["grass"]}`))
+	if len(plainRep.IgnoredEffectFields) != 0 {
+		t.Fatalf("未知のフィールドが無いのに IgnoredEffectFields = %+v", plainRep.IgnoredEffectFields)
+	}
+	files, rep := export(t, withEffect(`{"DefImmuneTypes":["grass"],"FutureField":{"x":1},"AnotherField":true}`))
+	if !bytes.Equal(files.Abilities, plain.Abilities) || !bytes.Equal(files.Metadata, plain.Metadata) ||
+		!bytes.Equal(files.PokemonTypes, plain.PokemonTypes) || !bytes.Equal(files.SpeedPokemon, plain.SpeedPokemon) {
+		t.Error("未知のフィールドがあると read model の出力が変わった")
+	}
+	want := []readmodel.IgnoredEffectField{{Field: "AnotherField", Count: 1}, {Field: "FutureField", Count: 1}}
+	if !reflect.DeepEqual(rep.IgnoredEffectFields, want) {
+		t.Errorf("IgnoredEffectFields = %+v, want %+v", rep.IgnoredEffectFields, want)
+	}
+	// 未知のフィールドだけの定義は、防御側の効果なし(空配列)として成功する。
+	only, onlyRep := export(t, withEffect(`{"FutureField":1}`))
+	if got := abilityEffectsFor(t, only.Abilities, "testhidden"); len(got) != 0 {
+		t.Errorf("未知のフィールドだけの特性の effects = %+v, want 空", got)
+	}
+	if len(onlyRep.IgnoredEffectFields) != 1 {
+		t.Errorf("IgnoredEffectFields = %+v", onlyRep.IgnoredEffectFields)
+	}
+}
+
+// 未知のフィールドを許しても、知っているフィールドの検証は厳格なまま。
+func TestExportStillRejectsBrokenKnownFieldsAlongsideUnknown(t *testing.T) {
+	for _, effect := range []string{
+		`{"FutureField":1,"DefImmuneTypes":["nosuchtype"]}`,
+		`{"FutureField":1,"ReduceSuperEffective":"x"}`,
+		`{"FutureField":1,"DefAbsorbTypes":{"water":{"Heal":1}}}`,
+		`{"FutureField":1,"DefImmuneTypes":["water"],"DefAbsorbTypes":{"water":{}}}`,
+		`{"TypeConvert":{"From":"fire","To":"fire","PowerMod":4915},"FutureField":1}`,
+	} {
+		q := storetest.New()
+		q.AbilityEffects = append(q.AbilityEffects,
+			store.AbilityEffect{AbilityID: "testhidden", Effect: json.RawMessage(effect)})
+		if _, _, err := readmodel.Export(context.Background(), q); !errors.Is(err, readmodel.ErrInvalidExport) {
+			t.Errorf("%s: err = %v, want ErrInvalidExport", effect, err)
+		}
+	}
+}
