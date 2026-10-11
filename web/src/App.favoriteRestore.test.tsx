@@ -16,6 +16,7 @@ import type { BulkRequest } from "./engine/types";
 import { favoritesRestoreText, favoritesScreenText } from "./i18n/favorites";
 import { exampleMasterSource } from "./master/exampleSource";
 import { createFakeEngine, type FakeEngine } from "./test/fakeEngine";
+import { screenTab } from "./test/navTabs";
 
 type Favorite = components["schemas"]["Favorite"];
 
@@ -111,8 +112,8 @@ function lastBulk(engine: FakeEngine): BulkRequest | undefined {
   return engine.bulkRequests.at(-1);
 }
 
-const calcTab = () => screen.getByRole("tab", { name: "計算" });
-const favoritesTab = () => screen.getByRole("tab", { name: favoritesScreenText.tabLabel });
+const calcTab = () => screenTab("計算");
+const favoritesTab = () => screenTab("お気に入り");
 const attackerSelect = () => screen.getByRole("combobox", { name: "攻撃側のポケモン" });
 const defenderSelect = () => screen.getByRole("combobox", { name: "防御側のポケモン" });
 const useButton = (favorite: Favorite) =>

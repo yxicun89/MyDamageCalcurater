@@ -23,6 +23,7 @@ import { teamScreenText } from "./i18n/ja";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { MasterData, MasterSource, MasterSources } from "./master/types";
 import { createFakeEngine } from "./test/fakeEngine";
+import { openTab } from "./test/navTabs";
 
 /** RFC 4122 v4 の小文字表記(clientIds.ts が作る形)。 */
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
@@ -105,10 +106,8 @@ function switchToOfflineButton(): HTMLElement {
 
 /** タブ一覧に出ている画面名(issue #308: 失敗中も消えないことを確かめる)。 */
 function tabLabels(): string[] {
-  const list = screen.getByRole("tablist", { name: "画面の切り替え" });
-  return within(list)
-    .getAllByRole("tab")
-    .map((tab) => tab.textContent);
+  // 上位のタブ(画面の切り替え)と、ダメージの下位のタブ(ダメージの種類)。
+  return screen.getAllByRole("tab").map((tab) => tab.textContent);
 }
 
 /** 計算モードのラジオ。 */
@@ -262,11 +261,12 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     return { user, online };
   }
 
-  test("失敗してもタブ一覧は消えない(判定を除く7つの画面すべてが選べる)", async () => {
+  test("失敗してもタブ一覧は消えない(判定を除く画面すべてが選べる。上位 4 + ダメージの下位 3)", async () => {
     await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
     // P5-5 PR-A1: 構築(/team)を末尾に足した(ADR-0309 §1)。P5-3c: お気に入り(/favorites、order 650)を構築と調整の間に足した(ADR-0327 §1)。AJ6: 調整(/adjust)は末尾(ADR-0319 §1)。
-    expect(tabLabels()).toEqual(["計算", "逆算", "タイプバランス", "素早さ", "構築", "お気に入り", "調整"]);
+    // ADR-0356: 上位は 4 区分(ダメージ・構築・素早さ・記録)、ダメージの下位は 計算・逆算・調整(タイプバランスは構築へ統合)。
+    expect(tabLabels()).toEqual(["ダメージ", "構築", "素早さ", "記録", "計算", "逆算", "調整"]);
   });
 
   // P5-5 PR-A1(ADR-0309 §1): 構築は usesMaster: true。PR-A2 のメンバー編集で種族・技・持ち物・特性の
@@ -275,7 +275,7 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const { user } = await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
-    await user.click(screen.getByRole("tab", { name: "構築" }));
+    await openTab(user, "構築");
 
     expect(screen.getByRole("tab", { name: "構築" })).toHaveAttribute("aria-selected", "true");
     expect(await screen.findByRole("alert")).toBeInTheDocument();
@@ -289,14 +289,14 @@ describe("issue #308 マスタの読み込みに失敗したときの立て直�
     vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("Failed to fetch"));
     const { user } = await renderOnlineFailure([new Error("テストの読み込み失敗")]);
 
-    await user.click(screen.getByRole("tab", { name: "素早さ" }));
+    await openTab(user, "素早さ");
 
     expect(await screen.findByRole("region", { name: "自分のポケモン" })).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "素早さ" })).toHaveAttribute("aria-selected", "true");
     expect(window.location.pathname).toBe("/speed");
 
     // マスタを使う画面へ戻ると、また失敗の案内が出る(黙って古いマスタで描かない)。
-    await user.click(screen.getByRole("tab", { name: "計算" }));
+    await openTab(user, "計算");
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.queryByRole("combobox", { name: "攻撃側のポケモン" })).toBeNull();
   });

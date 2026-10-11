@@ -15,11 +15,11 @@ describe("ルート表", () => {
   // 共有ファイルへの追記はこの1件・screens.tsx の1件・ja.ts の文言・App.tsx の client の受け渡しに限る。
   // P5-5 PR-A1(ADR-0309 §1): 構築(/team)を判定の後ろ(末尾)に足す。持ち物は web/src/team/ の中だけ。
   // AJ6(ADR-0319 §1): 調整(/adjust)を構築の後ろ(末尾)に足す。持ち物は web/src/adjust/ の中だけ。
-  test("計算 → calc、逆算 → reverse、タイプバランス → balance、素早さ → speed、構築 → team、お気に入り → favorites、調整 → adjust の順に並び、表示名は appText の語", () => {
+  // ADR-0421: タイプバランス(/balance)は構築編集の中へ統合し、ナビ・URL から外した(旧 /balance は構築へ寄せる。下の screenFromPath)。
+  test("計算 → calc、逆算 → reverse、素早さ → speed、構築 → team、お気に入り → favorites、調整 → adjust の順に並び、表示名は appText の語", () => {
     expect(SCREEN_ROUTES.map((route) => [route.id, route.segment, route.label])).toEqual([
       ["calc", "calc", appText.calcTabLabel],
       ["reverse", "reverse", appText.reverseTabLabel],
-      ["balance", "balance", appText.balanceTabLabel],
       ["speed", "speed", appText.speedTabLabel],
       ["team", "team", appText.teamTabLabel],
       ["favorites", "favorites", favoritesScreenText.tabLabel],
@@ -63,8 +63,9 @@ describe("パス → 画面(screenFromPath)", () => {
     // base が付くときは、base からの相対で読む。
     ["/app/reverse", "/app/", "reverse"],
     ["/app/calc", "/app/", "calc"],
-    ["/balance", "/", "balance"],
-    ["/app/balance", "/app/", "balance"],
+    // ADR-0421: 旧タイプバランスの URL は構築へ寄せる。
+    ["/balance", "/", "team"],
+    ["/app/balance", "/app/", "team"],
     // AJ6(ADR-0319 §1): 調整の画面。
     ["/adjust", "/", "adjust"],
     ["/adjust/", "/", "adjust"],
@@ -115,7 +116,7 @@ describe("文書のタイトル(documentTitle)", () => {
   test.each([
     ["calc", "計算 | pokecalc"],
     ["reverse", "逆算 | pokecalc"],
-    ["balance", "タイプバランス | pokecalc"],
+    ["team", "構築 | pokecalc"],
   ] as const)("%s は「%s」", (id, expected) => {
     expect(documentTitle(id)).toBe(expected);
   });
