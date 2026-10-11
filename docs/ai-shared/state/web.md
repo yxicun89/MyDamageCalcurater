@@ -242,3 +242,5 @@ Status(追記 2026-10-11): I-web-13d(G-05 構築の画面、ADR-0347)= 構築を
 
 Status(追記 2026-10-11): I-web-13g(G-05 お気に入り・計算履歴、ADR-0348)= `FavoritesScreen.tsx`・`CalcHistorySection.tsx`・`.css`・`i18n/favorites.ts` を作り直した(アイコン見出し・行全体を押せる使うボタン・%の大きい数字とバー・空の状態のアイコン + 短い一言)。既存テストの付け替えは `FavoritesScreen.restore.test.tsx` の 1 件のみ(使うボタンの見える文字が「使う」に短くなったため)。「計算へ」ボタンは後続。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-favorites.md`。次は I-web-13e(素早さ。speed レーンと調整)。
 Status(追記 2026-10-11): I-web-13i(G-05 このアプリについて、ADR-0349)= `AboutScreen.tsx`・`DeviceDataSection.tsx`・App.css を作り直した(見出しのアイコン・説明の箇条化・削除ボタンのごみ箱)。文面・名前は不変で既存テストの付け替えなし。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-about.md`。
+
+Status(追記 2026-10-11): I-web-13d2(構築の技を `MovePicker` に、ADR-0350)= `TeamMemberFields.tsx` の技 4 枠を共有ピッカーへ。`MovePicker` に `noneLabel`・`disabledIds` を追加(計算・逆算は不変)、`moveOptions` は `Move` を返す。既存テストは `TeamScreen.members`・`TeamScreen.rebuild`・e2e `teamRebuild` を `test/teamMovePicker.ts` で付け替え。実装済み・コミット前。iOS は `decisions/2026-10-11-web-g05-team-move-picker.md`。次は I-web-13e。

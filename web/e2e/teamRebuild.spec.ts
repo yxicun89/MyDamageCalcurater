@@ -122,7 +122,15 @@ test("新しい構築 → ポケモンを選ぶ → 技 → 保存すると PUT 
 
   const member = editor.getByRole("group", { name: "1体目", exact: true });
   await selectSlotSpecies(member, SPECIES.fire.nameJa);
-  await member.getByRole("combobox", { name: "技1", exact: true }).selectOption({ index: 1 });
+  // 技ピッカー(ADR-0350): トリガーを押して開き、「(なし)」の次の行(先頭の技)を選ぶ(旧 selectOption({ index: 1 }))。
+  await member.getByRole("combobox", { name: "技1", exact: true }).click();
+  const moveList = member.getByRole("listbox", { name: "技1", exact: true });
+  await expect(moveList.getByRole("option", { name: "(なし)", exact: true })).toBeVisible();
+  await moveList.getByRole("option").nth(1).click();
+  await expect(member.getByRole("combobox", { name: "技1", exact: true })).not.toHaveAttribute(
+    "data-value",
+    "",
+  );
   await member.getByRole("textbox", { name: "SP A", exact: true }).fill("32");
   await member.getByRole("textbox", { name: "SP S", exact: true }).fill("32");
   await expect(member).toContainText("合計 64/66(残り 2)");

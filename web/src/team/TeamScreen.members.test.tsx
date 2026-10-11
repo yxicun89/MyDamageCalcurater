@@ -18,12 +18,22 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
+import { orderMoves } from "../domain/moveOrder";
 import { selectableAbilities } from "../domain/requests";
 import { statLetterJa, teamMemberText, teamScreenText, typeNameJa, type TypeId } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
 import { createFakeTeamClient, flush, lastCall, type FakeTeamClient } from "../test/fakeTeamClient";
 import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
+import {
+  chooseTeamMove,
+  openTeamMove,
+  teamMoveRowName,
+  teamMoveRowNamesSync,
+  teamMoveRows,
+  teamMoveTrigger,
+  teamMoveValue,
+} from "../test/teamMovePicker";
 import { MAX_TEAM_MEMBERS, TeamScreen } from "./TeamScreen";
 import { MAX_MEMBER_MOVES, SP_STATS } from "./teamMember";
 
@@ -137,6 +147,15 @@ function saveButton(editor: HTMLElement): HTMLElement {
   return within(editor).getByRole("button", { name: teamMemberText.saveLabel });
 }
 
+/** 技ピッカーの listbox から、その技 ID の行(option)を引く。 */
+function rowOf(listbox: HTMLElement, id: string): HTMLElement {
+  const row = listbox.querySelector<HTMLElement>(`[role="option"][data-move-id="${id}"]`);
+  if (row === null) {
+    throw new Error(`技 ${id} の行が無い`);
+  }
+  return row;
+}
+
 function optionLabels(element: HTMLElement): string[] {
   return within(element)
     .getAllByRole("option")
@@ -205,10 +224,10 @@ describe("AC-1 開く・閉じる", () => {
     const first = memberGroup(editor, 1);
 
     expect(select(first, teamMemberText.speciesLabel).value).toBe("9001-000");
-    expect(select(first, teamMemberText.moveLabel(1)).value).toBe("examplemovetackle");
-    expect(select(first, teamMemberText.moveLabel(2)).value).toBe("examplemovefirepunch");
-    expect(select(first, teamMemberText.moveLabel(3)).value).toBe("");
-    expect(select(first, teamMemberText.moveLabel(4)).value).toBe("");
+    expect(teamMoveValue(first, 1)).toBe("examplemovetackle");
+    expect(teamMoveValue(first, 2)).toBe("examplemovefirepunch");
+    expect(teamMoveValue(first, 3)).toBe("");
+    expect(teamMoveValue(first, 4)).toBe("");
     expect(select(first, teamMemberText.itemLabel).value).toBe("exampleitemdef");
     expect(select(first, teamMemberText.abilityLabel).value).toBe("exampleabilitynone");
     expect(select(first, teamMemberText.natureLabel).value).toBe("example-nature-atk");
@@ -252,7 +271,7 @@ describe("AC-2 並べ替え・種族を選んだ枠の初期値", () => {
     expect(memberGroups(editor)).toHaveLength(1);
     expect(group).toHaveTextContent(teamMemberText.spSummary(0, 66, 66));
     for (let slot = 1; slot <= MAX_MEMBER_MOVES; slot += 1) {
-      expect(select(group, teamMemberText.moveLabel(slot)).value).toBe("");
+      expect(teamMoveValue(group, slot)).toBe("");
     }
   });
 
@@ -270,7 +289,7 @@ describe("AC-2 並べ替え・種族を選んだ枠の初期値", () => {
     expect(select(memberGroup(editor, 1), teamMemberText.speciesLabel).value).toBe("9004-000");
     expect(select(memberGroup(editor, 2), teamMemberText.speciesLabel).value).toBe("9001-000");
     // 内容(技・SP)も体と一緒に動く。
-    expect(select(memberGroup(editor, 2), teamMemberText.moveLabel(1)).value).toBe("examplemovetackle");
+    expect(teamMoveValue(memberGroup(editor, 2), 1)).toBe("examplemovetackle");
     expect(spInput(memberGroup(editor, 1), "spa").value).toBe("32");
   });
 
@@ -313,7 +332,7 @@ describe("AC-3 保存(update は全置換。応答で一覧を書き換える)",
     await user.selectOptions(select(first, teamMemberText.natureLabel), "example-nature-neutral-hardy");
     await user.selectOptions(select(first, teamMemberText.itemLabel), "");
     await user.selectOptions(select(first, teamMemberText.teraLabel), "water");
-    await user.selectOptions(select(first, teamMemberText.moveLabel(1)), "");
+    await chooseTeamMove(user, first, 1, "");
     await setSp(user, first, "hp", "0");
     await setSp(user, first, "def", "2");
     await user.click(saveButton(editor));
@@ -530,7 +549,7 @@ describe("AC-5 技(最大4・その種族の learnset から)", () => {
     const first = memberGroup(await openEditor(user, TEAM_A.name), 1);
 
     for (let slot = 1; slot <= MAX_MEMBER_MOVES; slot += 1) {
-      expect(select(first, teamMemberText.moveLabel(slot))).toBeInTheDocument();
+      expect(teamMoveTrigger(first, slot)).toBeInTheDocument();
     }
     expect(
       within(first).queryByRole("combobox", { name: teamMemberText.moveLabel(MAX_MEMBER_MOVES + 1) }),
@@ -542,28 +561,32 @@ describe("AC-5 技(最大4・その種族の learnset から)", () => {
     const first = memberGroup(await openEditor(user, TEAM_A.name), 1);
     const species = master.species.find((candidate) => candidate.key === "9001-000");
 
-    expect(optionLabels(select(first, teamMemberText.moveLabel(3)))).toEqual([
+    // 並びはタイプ順(ADR-0341・ADR-0350)。候補の集合は learnset と同じで、先頭に「(なし)」の行。
+    const learnt = master.moves.filter((move) => species?.learnset.includes(move.id) === true);
+    const rows = await teamMoveRows(user, first, 3);
+    expect(rows.map(teamMoveRowName)).toEqual([
       teamMemberText.moveNone,
-      ...(species?.learnset.map((id) => moveName(id)) ?? []),
+      ...orderMoves(learnt, master.typeChart.types).map((move) => move.nameJa),
     ]);
+    expect(rows[0]?.getAttribute("data-move-id")).toBe("");
   });
 
   test("他の枠で選んだ技は、この枠では選べない(無効)。自分の枠の選択は無効にしない", async () => {
     const { user } = await renderScreen([TEAM_A]);
     const first = memberGroup(await openEditor(user, TEAM_A.name), 1);
-    const slot3 = select(first, teamMemberText.moveLabel(3));
+    const slot3 = await openTeamMove(user, first, 3);
 
-    expect(within(slot3).getByRole("option", { name: moveName("examplemovetackle") })).toBeDisabled();
-    expect(within(slot3).getByRole("option", { name: moveName("examplemovefirepunch") })).toBeDisabled();
-    expect(within(slot3).getByRole("option", { name: moveName("examplemovegrowl") })).toBeEnabled();
-    const slot1 = select(first, teamMemberText.moveLabel(1));
-    expect(within(slot1).getByRole("option", { name: moveName("examplemovetackle") })).toBeEnabled();
+    expect(rowOf(slot3, "examplemovetackle")).toHaveAttribute("aria-disabled", "true");
+    expect(rowOf(slot3, "examplemovefirepunch")).toHaveAttribute("aria-disabled", "true");
+    expect(rowOf(slot3, "examplemovegrowl")).not.toHaveAttribute("aria-disabled");
+    const slot1 = await openTeamMove(user, first, 1);
+    expect(rowOf(slot1, "examplemovetackle")).not.toHaveAttribute("aria-disabled");
   });
 
   test("枠を埋めて保存すると4技が順に送られる", async () => {
     const { client, user } = await renderScreen([TEAM_A]);
     const editor = await openEditor(user, TEAM_A.name);
-    await user.selectOptions(select(memberGroup(editor, 1), teamMemberText.moveLabel(3)), "examplemovegrowl");
+    await chooseTeamMove(user, memberGroup(editor, 1), 3, "examplemovegrowl");
     await user.click(saveButton(editor));
 
     await waitFor(() => {
@@ -616,9 +639,9 @@ describe("AC-6 種族を変えたときの特性・技", () => {
 
     await user.selectOptions(select(first, teamMemberText.speciesLabel), "9002-000"); // learnset: みずでっぽう, なきごえ
 
-    expect(select(first, teamMemberText.moveLabel(1)).value).toBe("examplemovegrowl");
-    expect(select(first, teamMemberText.moveLabel(2)).value).toBe("");
-    expect(select(first, teamMemberText.moveLabel(3)).value).toBe("");
+    expect(teamMoveValue(first, 1)).toBe("examplemovegrowl");
+    expect(teamMoveValue(first, 2)).toBe("");
+    expect(teamMoveValue(first, 3)).toBe("");
     expect(select(first, teamMemberText.itemLabel).value).toBe("exampleitemdef");
     expect(spInput(first, "atk").value).toBe("32");
 
@@ -680,7 +703,7 @@ describe("AC-7 マスタの状態", () => {
       );
     });
     // 技は resolveSpecies が運んだ learnset から(MasterData.moves は空)。
-    expect(select(first, teamMemberText.moveLabel(1)).value).toBe("examplemovetackle");
+    expect(teamMoveValue(first, 1)).toBe("examplemovetackle");
     expect(select(first, teamMemberText.abilityLabel).value).toBe("exampleabilitynone");
   });
 
@@ -699,9 +722,7 @@ describe("AC-7 マスタの状態", () => {
     await waitFor(() => {
       expect(select(memberGroup(editor, 1), teamMemberText.abilityLabel).value).toBe("exampleabilityadapt");
     });
-    expect(optionLabels(select(memberGroup(editor, 1), teamMemberText.moveLabel(1)))).toContain(
-      moveName("examplemovethunder"),
-    );
+    expect(teamMoveRowNamesSync(memberGroup(editor, 1), 1)).toContain(moveName("examplemovethunder"));
   });
 
   test("種族の解決に失敗したメンバーは、その旨を alert で出し、保存済みの内容は壊さない", async () => {
