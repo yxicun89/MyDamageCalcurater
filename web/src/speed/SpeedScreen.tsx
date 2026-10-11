@@ -16,12 +16,14 @@
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
 import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
+import { rankStatNameJa } from "../i18n/common";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
 import { uiText } from "../i18n/ui";
 import { PokemonImage } from "../images/PokemonImage";
 import { ToggleChip } from "../screens/ToggleChip";
 import { Icon } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
+import { RankMeter } from "../ui/RankMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import "./SpeedScreen.css";
 import { SpeedNeighborhood } from "./SpeedNeighborhoodPanel";
@@ -353,7 +355,6 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
 
   const filterMinimumNoticeId = useId();
   const spErrorId = useId();
-  const rankErrorId = useId();
   const rawErrorId = useId();
 
   const selectedPokemon =
@@ -523,17 +524,18 @@ export function SpeedScreen({ speedClient }: SpeedScreenProps) {
                 updateSelf({ nature });
               }}
             />
-            <NumberStepper
-              label={speedScreenText.rankLabel}
-              value={self.rank}
-              min={MIN_RANK}
-              max={MAX_RANK}
-              error={fieldErrors.rank}
-              errorId={rankErrorId}
-              onChange={(rank) => {
-                updateSelf({ rank });
-              }}
-            />
+            <div className="speed-self__field">
+              <span>{speedScreenText.rankLabel}</span>
+              <RankMeter
+                asGroup={false}
+                label={speedScreenText.rankLabel}
+                statName={rankStatNameJa.spe}
+                value={self.rank}
+                onChange={(rank) => {
+                  updateSelf({ rank });
+                }}
+              />
+            </div>
             <ScarfChip self={self} onChange={updateSelf} />
             <SelfFieldChecks self={self} onChange={updateSelf} />
           </>
