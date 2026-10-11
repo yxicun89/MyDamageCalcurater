@@ -168,7 +168,7 @@ func (s *Server) SearchMoves(ctx *echo.Context, params api.SearchMovesParams) er
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
 			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
-			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID],
+			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID], Effect: extras.effectByID[r.ID],
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)
@@ -182,6 +182,8 @@ type moveExtras struct {
 	// paramsByID・ruleByID は機構の中身と処理の定義(ADR-0143 §6)。行の無い技はキーごと省く。
 	paramsByID map[string]*api.MasterMoveMechanismParams
 	ruleByID   map[string]*api.MasterEffect
+	// effectByID は確率 100% の追加効果(ランク変化。ADR-0253)。確率 100% 未満・行の無い技はキーごと省く。
+	effectByID map[string]*api.MasterEffect
 }
 
 // mechanisms は技の機構を返す(常に返す。通常の技は空配列)。
@@ -211,6 +213,7 @@ func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras
 	out := moveExtras{
 		mechanismsByID: map[string][]string{}, flagsByID: map[string][]api.MoveFlag{},
 		paramsByID: map[string]*api.MasterMoveMechanismParams{}, ruleByID: map[string]*api.MasterEffect{},
+		effectByID: map[string]*api.MasterEffect{},
 	}
 	if len(ids) == 0 {
 		return out, nil
@@ -248,6 +251,19 @@ func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras
 		}
 		out.ruleByID[rules[i].MoveID] = rule
 	}
+	effects, err := s.q.ListMoveEffectsByMoveIDs(ctx, ids)
+	if err != nil {
+		return moveExtras{}, unavailable("ListMoveEffectsByMoveIDs", err)
+	}
+	for _, e := range effects {
+		effect, err := publicGuaranteedMoveEffect(e.Effect)
+		if err != nil {
+			return moveExtras{}, unavailable("move effect: "+e.MoveID, err)
+		}
+		if effect != nil {
+			out.effectByID[e.MoveID] = effect
+		}
+	}
 	if out.flagsKnown, err = s.q.HasMoveFlags(ctx); err != nil {
 		return moveExtras{}, unavailable("HasMoveFlags", err)
 	}
@@ -268,6 +284,20 @@ func (s *Server) publicMoveExtras(ctx context.Context, ids []string) (moveExtras
 		sort.Slice(out.flagsByID[id], func(i, j int) bool { return out.flagsByID[id][i] < out.flagsByID[id][j] })
 	}
 	return out, nil
+}
+
+// publicGuaranteedMoveEffect は技の追加効果の行を共通マスタ(master.DecodeMoveEffect)で厳格に検証し、確率 100% のときだけ
+// 数値の字面を保った api.MasterEffect にする(ADR-0253)。確率 100% 未満は nil(キーを省く)。検証に通らなければ error
+// (確率 100% 未満の行でも黙って捨てない。呼び出し側が 503 にする)。
+func publicGuaranteedMoveEffect(raw json.RawMessage) (*api.MasterEffect, error) {
+	decoded, err := master.DecodeMoveEffect(raw)
+	if err != nil {
+		return nil, err
+	}
+	if decoded.Chance != 100 {
+		return nil, nil
+	}
+	return masterEffectFor(raw)
 }
 
 // publicMoveTarget は技の対象を公開 API の分類(single/spread)にする。NULL はキーを省く(nil)。
@@ -436,7 +466,7 @@ func (s *Server) GetMove(ctx *echo.Context, key string, params api.GetMoveParams
 		Id: row.ID, NameJa: row.NameJa, Type: api.PokeType(row.Type), Category: api.MoveCategory(row.Category),
 		Power: int(row.Power), Priority: &priority, Target: target,
 		Mechanisms: extras.mechanisms(row.ID), Flags: extras.flags(row.ID),
-		MechanismParams: extras.paramsByID[row.ID], Rule: extras.ruleByID[row.ID],
+		MechanismParams: extras.paramsByID[row.ID], Rule: extras.ruleByID[row.ID], Effect: extras.effectByID[row.ID],
 	}
 	return ctx.JSON(http.StatusOK, move)
 }
@@ -481,7 +511,7 @@ func (s *Server) GetMovesByIds(ctx *echo.Context, params api.GetMovesByIdsParams
 			Id: r.ID, NameJa: r.NameJa, Type: api.PokeType(r.Type), Category: api.MoveCategory(r.Category),
 			Power: int(r.Power), Priority: &priority, Target: target,
 			Mechanisms: extras.mechanisms(r.ID), Flags: extras.flags(r.ID),
-			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID],
+			MechanismParams: extras.paramsByID[r.ID], Rule: extras.ruleByID[r.ID], Effect: extras.effectByID[r.ID],
 		})
 	}
 	return ctx.JSON(http.StatusOK, out)

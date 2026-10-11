@@ -340,6 +340,20 @@ func (q *Querier) ListMoveEffects(context.Context) ([]store.MoveEffect, error) {
 	return append([]store.MoveEffect(nil), q.MoveEffects...), nil
 }
 
+func (q *Querier) ListMoveEffectsByMoveIDs(_ context.Context, ids []string) ([]store.MoveEffect, error) {
+	if err := q.record("ListMoveEffectsByMoveIDs", ids); err != nil {
+		return nil, err
+	}
+	want := set(ids)
+	var out []store.MoveEffect
+	for _, e := range q.MoveEffects {
+		if want[e.MoveID] {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
 func (q *Querier) ListMoveMechanisms(context.Context) ([]store.MoveMechanism, error) {
 	if err := q.record("ListMoveMechanisms", nil); err != nil {
 		return nil, err
