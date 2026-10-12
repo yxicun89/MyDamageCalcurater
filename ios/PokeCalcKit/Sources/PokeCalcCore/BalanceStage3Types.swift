@@ -117,16 +117,20 @@ public struct BalanceAbilityOption: Equatable, Sendable {
 }
 
 public struct BalanceRecommendations: Equatable, Sendable {
+    /// すでに偏っている攻撃タイプ(弱い人数 − 耐性・無効の人数 ≥ 2。正準順。契約 0.10.0。ADR-0422 §1)。
+    /// 0.10.0 より前のサーバーは項目を返さないので空。
+    public var skewedAttackTypes: [PokeType]
     public var defenseHoles: [PokeType]
     public var offenseHoles: [PokeType]
-    /// 応答の順(ふさげる穴の数の降順 → 弱点数の昇順 → 正準順)。
+    /// 応答の順(ふさげる穴の数の降順 → 弱点数の昇順 → 正準順。偏りを悪化させる候補はサーバーが除く)。
     public var candidates: [BalanceTypeCandidate]
     public var abilityOptions: [BalanceAbilityOption]
 
     public init(
         defenseHoles: [PokeType], offenseHoles: [PokeType], candidates: [BalanceTypeCandidate],
-        abilityOptions: [BalanceAbilityOption]
+        abilityOptions: [BalanceAbilityOption], skewedAttackTypes: [PokeType] = []
     ) {
+        self.skewedAttackTypes = skewedAttackTypes
         self.defenseHoles = defenseHoles
         self.offenseHoles = offenseHoles
         self.candidates = candidates

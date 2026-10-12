@@ -78,8 +78,12 @@ final class GlossaryTests: XCTestCase {
             ReverseCandidateDisplay.matchLabel(exact: true), ReverseCandidateDisplay.matchLabel(exact: false),
         ])
         add("BalanceScreenText", [
-            BalanceScreenText.screenTitle, BalanceScreenText.emptyNotice, BalanceScreenText.threatsRegionLabel,
+            BalanceScreenText.screenTitle, BalanceScreenText.threatsRegionLabel,
             BalanceScreenText.addThreatLabel, BalanceScreenText.threatsLoadingNotice, BalanceScreenText.tooManyThreats,
+            // 構築編集の中の「タイプバランス」(ADR-0532)
+            BalanceScreenText.teamEmptyNotice, BalanceScreenText.pickShowMore, BalanceScreenText.pickShowLess,
+            BalanceScreenText.pickNoEmptySlot, BalanceScreenText.pickGroupLabel("みず"),
+            BalanceErrorText.message(forCode: BalanceErrorText.unavailableCode),
         ])
         return out
     }

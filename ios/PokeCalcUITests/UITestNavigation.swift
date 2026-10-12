@@ -5,7 +5,7 @@ import XCTest
 ///
 /// - 計算・逆算・調整(判定を出すときは判定も)は「ダメージ」タブの上部の区切り。区切りのボタンは旧 ID をそのまま持つ
 /// - 構築・素早さ・お気に入り/履歴はそれぞれのタブ(タブのボタンの識別子は `tab-<タブ>`)
-/// - タイプバランスは構築タブの一覧の行(`openBalanceScreen`)
+/// - タイプバランスは構築編集の中の節(別画面・入口は無い。ADR-0532)
 /// - 「このアプリについて」は今のタブの右上のアイコン(`openAboutScreen`)
 enum UITestNavigation {
     static let existenceTimeout: TimeInterval = 5
@@ -30,14 +30,13 @@ enum UITestNavigation {
         "openAdjustScreen": TabID.damage,
         "openJudgeScreen": TabID.damage,
         "openTeamListScreen": TabID.team,
-        "openBalanceScreen": TabID.team,
         "openSpeedScreen": TabID.speed,
         "openFavoritesScreen": TabID.records,
     ]
 
     /// タブを開いたあと、さらに入口 ID のボタンを押す画面(タブ内の区切り・一覧の行)。
     static let entriesInsideTab: Set<String> = [
-        "openCalcScreen", "openReverseScreen", "openAdjustScreen", "openJudgeScreen", "openBalanceScreen",
+        "openCalcScreen", "openReverseScreen", "openAdjustScreen", "openJudgeScreen",
     ]
 }
 

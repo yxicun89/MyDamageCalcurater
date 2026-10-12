@@ -7,7 +7,7 @@ import SwiftUI
 // 6 つの枠(1体目〜6体目)が最初から並ぶ。空の枠は「ポケモン」の欄と案内だけ、種族を選ぶと技・持ち物などの
 // カードになる。保存は明示([保存])。ロジックは持たない。`TeamEditViewModel`(PokeCalcCore)の状態を描き、
 // 操作を async/同期メソッドへつなぐだけ(ADR-0500 §1)。メンバーカードは `TeamEditMemberCard.swift`、
-// 枠の部品は `TeamSlotViews.swift` に分ける。
+// 枠の部品は `TeamSlotViews.swift` に分ける。枠の下に「タイプバランス」の節(`TeamBalanceSection`。ADR-0421・ADR-0532)。
 
 /// 構築編集画面。
 struct TeamEditView: View {
@@ -15,15 +15,23 @@ struct TeamEditView: View {
     private static let loadingIndicatorHeight: CGFloat = 24
 
     @State private var viewModel: TeamEditViewModel
+    /// 構築編集の中の「タイプバランス」(balance の呼び先が無い構成では nil で節を出さない)。
+    @State private var balanceViewModel: BalanceViewModel?
     @Environment(\.dismiss) private var dismiss
     /// 見出しに出す表示名(「構築 N」または旧データの名前)。
     private let title: String
     /// 「保存していない変更があります。保存せずに一覧に戻りますか」の確認を出している。
     @State private var isConfirmingLeave = false
 
-    init(store: any TeamStore, service: any PokeCalcService, team: Team, title: String) {
+    init(store: any TeamStore, service: any PokeCalcService, balance: (any BalanceService)? = nil, team: Team, title: String) {
         self.title = title
         _viewModel = State(initialValue: TeamEditViewModel(store: store, service: service, team: team))
+        _balanceViewModel = State(
+            initialValue: balance.map {
+                BalanceViewModel(
+                    balance: $0, master: service, refreshDebounce: BalanceViewModel.teamRefreshDebounce,
+                    recommendationsLimit: BalanceViewModel.teamRecommendationsLimit)
+            })
     }
 
     var body: some View {
@@ -62,6 +70,9 @@ struct TeamEditView: View {
             slotsSection
             if let teamError = viewModel.teamError {
                 PopNoticeView(kind: .error, message: teamError.uiMessage, identifier: "teamLimitMessage")
+            }
+            if let balanceViewModel {
+                TeamBalanceSection(balance: balanceViewModel, team: viewModel)
             }
         }
         .padding(SpacingToken.x4)
