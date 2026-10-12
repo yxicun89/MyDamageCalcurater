@@ -1,0 +1,168 @@
+package httpapi_test
+
+// pokedex-svc の HTTP 境界のテストの共通部分(ADR-0105 §2・§3)。DB の代わりに storetest の偽の Querier を使う。
+// 応答は api/openapi.yaml(生成物に埋め込まれた仕様)に kin-openapi で照らす(test-strategy.md L4)。
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/getkin/kin-openapi/openapi3filter"
+	"github.com/getkin/kin-openapi/routers/legacy"
+
+	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
+)
+
+// 端末ID・セッションID(公開 API の必須ヘッダ。形式の検証は gateway の仕事で、pokedex-svc は有無だけを見る。ADR-0202)。
+const (
+	testDeviceID  = "00000000-0000-4000-8000-000000000001"
+	testSessionID = "00000000-0000-4000-8000-000000000002"
+)
+
+// do は handler に1リクエストを送る。withHeaders が真なら端末ID・セッションIDを付ける。
+func do(t *testing.T, h http.Handler, method, target string, withHeaders bool) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(method, target, nil)
+	if withHeaders {
+		req.Header.Set("X-Device-Id", testDeviceID)
+		req.Header.Set("X-Session-Id", testSessionID)
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func newHandler(t *testing.T, q readtx.DB) http.Handler {
+	t.Helper()
+	h := httpapi.NewHandler(q)
+	if h == nil {
+		t.Fatal("NewHandler が nil を返した")
+	}
+	return h
+}
+
+// validateAgainstContract は応答(status・本文)を契約に照らす。リクエストも契約に照らす
+// (公開 API はヘッダ付き、内部 API はヘッダ無しで送る)。
+func validateAgainstContract(t *testing.T, method, target string, withHeaders bool, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	in := contractRoute(t, method, target, withHeaders)
+	if err := openapi3filter.ValidateRequest(context.Background(), in); err != nil {
+		t.Fatalf("リクエストが契約に合わない: %v", err)
+	}
+	if err := responseContractError(in, rec); err != nil {
+		t.Fatalf("%v\nbody=%s", err, rec.Body.String())
+	}
+}
+
+// validateResponseAgainstContract は応答だけを契約に照らす(リクエストは照らさない)。
+// 400 のように契約に合わないリクエストへの応答も、その操作の応答 schema(Error)に合うかを確かめるために使う(#74)。
+func validateResponseAgainstContract(t *testing.T, method, target string, withHeaders bool, rec *httptest.ResponseRecorder) {
+	t.Helper()
+	if err := responseContractError(contractRoute(t, method, target, withHeaders), rec); err != nil {
+		t.Fatalf("%v\nbody=%s", err, rec.Body.String())
+	}
+}
+
+// contractRoute は method・target に当たる契約の操作を引き、検証の入力を作る(リクエストはまだ照らさない)。
+func contractRoute(t *testing.T, method, target string, withHeaders bool) *openapi3filter.RequestValidationInput {
+	t.Helper()
+	doc, err := api.GetSpec()
+	if err != nil {
+		t.Fatalf("契約を読めない: %v", err)
+	}
+	doc.Servers = nil
+	router, err := legacy.NewRouter(doc)
+	if err != nil {
+		t.Fatalf("契約のルータを作れない: %v", err)
+	}
+	req := httptest.NewRequest(method, target, nil)
+	if withHeaders {
+		req.Header.Set("X-Device-Id", testDeviceID)
+		req.Header.Set("X-Session-Id", testSessionID)
+	}
+	route, params, err := router.FindRoute(req)
+	if err != nil {
+		t.Fatalf("契約に %s %s が無い: %v", method, target, err)
+	}
+	return &openapi3filter.RequestValidationInput{
+		Request: req, PathParams: params, Route: route,
+		Options: &openapi3filter.Options{IncludeResponseStatus: true, MultiError: true},
+	}
+}
+
+// responseContractError は応答(status・Content-Type・本文)が契約の操作の応答に合わなければ error を返す。
+// IncludeResponseStatus により、契約に無い status(default も無い操作)も不一致として返す。
+func responseContractError(in *openapi3filter.RequestValidationInput, rec *httptest.ResponseRecorder) error {
+	if ct := rec.Header().Get("Content-Type"); ct == "" {
+		return fmt.Errorf("応答(%d)に Content-Type が無い", rec.Code)
+	}
+	err := openapi3filter.ValidateResponse(context.Background(), &openapi3filter.ResponseValidationInput{
+		RequestValidationInput: in, Status: rec.Code, Header: rec.Header(),
+		Body: io.NopCloser(bytes.NewReader(rec.Body.Bytes())), Options: in.Options,
+	})
+	if err != nil {
+		return fmt.Errorf("応答(%d)が契約に合わない: %w", rec.Code, err)
+	}
+	return nil
+}
+
+// contractQueryParamMaxItems は path(operation)の query パラメータ name の maxItems を契約
+// (埋め込まれた spec)から読む。テスト側に上限の数値をハードコードせず、契約が唯一の正であることを
+// 保つ(絶対ルール1。契約の maxItems を変えたらこのテストの期待値も自動で追従する)。
+func contractQueryParamMaxItems(t *testing.T, path, method, name string) int {
+	t.Helper()
+	doc, err := api.GetSpec()
+	if err != nil {
+		t.Fatalf("契約を読めない: %v", err)
+	}
+	item := doc.Paths.Find(path)
+	if item == nil {
+		t.Fatalf("契約に %s が無い", path)
+	}
+	op := item.GetOperation(method)
+	if op == nil {
+		t.Fatalf("契約に %s %s が無い", method, path)
+	}
+	param := op.Parameters.GetByInAndName("query", name)
+	if param == nil || param.Schema == nil || param.Schema.Value == nil {
+		t.Fatalf("契約に %s %s のクエリパラメータ %s が無い", method, path, name)
+	}
+	if param.Schema.Value.MaxItems == nil {
+		t.Fatalf("契約の %s %s の %s に maxItems が無い", method, path, name)
+	}
+	return int(*param.Schema.Value.MaxItems)
+}
+
+// decodeError は Error 形式の本文を読む(未知のフィールドを拒否)。
+func decodeError(t *testing.T, rec *httptest.ResponseRecorder) api.Error {
+	t.Helper()
+	var e api.Error
+	dec := json.NewDecoder(bytes.NewReader(rec.Body.Bytes()))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&e); err != nil {
+		t.Fatalf("Error 形式でない: %v\nbody=%s", err, rec.Body.String())
+	}
+	if e.Message == "" {
+		t.Errorf("message が空")
+	}
+	return e
+}
+
+// assertError は status と code を確かめる。
+func assertError(t *testing.T, rec *httptest.ResponseRecorder, status int, code api.ErrorCode) {
+	t.Helper()
+	if rec.Code != status {
+		t.Fatalf("status = %d, want %d\nbody=%s", rec.Code, status, rec.Body.String())
+	}
+	if e := decodeError(t, rec); e.Code != code {
+		t.Fatalf("code = %q, want %q(message=%q)", e.Code, code, e.Message)
+	}
+}

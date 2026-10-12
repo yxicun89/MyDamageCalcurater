@@ -29,8 +29,12 @@ flowchart LR
 | `cmd/migrate` | migrate CLI(`up` / `down` / `version`) |
 | `cmd/import` | import CLI(照合・報告・投入。`-dry-run` で DB に触れず確認できる) |
 | `cmd/pokedex` | HTTP サーバ(`serve`)と read model の書き出し(`export -out <dir>`) |
-| `internal/httpapi` | HTTP 境界。生成物 `services/internal/api` の `ServerInterface` を実装する |
-| `internal/readmodel` | `pokedex export` の中身(DB → balance・speed 向け JSON)。HTTP に依存しない |
+| `internal/domain` | 純粋な核(ADR-0811・ADR-0180)。検索の入力の検証(limit・offset・format・種族キー・ids)、LIKE のパターン、効果定義を字面のまま読むこと、dataVersion、read model の特性の効果の正規化、失敗の語彙(`Code`・`Error`) |
+| `internal/app` | ユースケース。検索8操作・内部 API のマスタ一式・readiness・read model の手順。DB の読み出しのポート(`Reader`・`Snapshot`・`Store`・`SnapshotBeginner`)を宣言する |
+| `internal/adapters/httpapi` | HTTP 境界。生成物 `services/internal/api` の `ServerInterface` を実装し、生成型 ⇄ app の変換・エラー整形・ログだけを行う |
+| `internal/adapters/store` | app のポートの実装(sqlc の `internal/store` を `readtx` 経由で呼び、行を app の型へ写す) |
+| `internal/adapters/readtx` | 読み取り専用トランザクション(一貫したスナップショット)の口(ADR-0127) |
+| `internal/adapters/readmodel` | `pokedex export` の入出力(DB の口の用意と6ファイルの書き出し)。組み立ては `app` |
 | `internal/storetest` | テスト専用の偽の `store.Querier` と架空データ(本番のコードから import しない) |
 
 ## よく使うコマンド

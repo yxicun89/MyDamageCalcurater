@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"example.com/pokecalc/services/pokedex/internal/readtx"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 

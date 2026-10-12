@@ -31,8 +31,6 @@ var unmigrated = []string{
 	"balance",
 	"gateway",
 	"judge",
-	"pokedex",
-	"record",
 	"speed",
 }
 
