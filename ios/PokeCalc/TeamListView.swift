@@ -22,18 +22,20 @@ struct TeamListView: View {
     private let service: any PokeCalcService
     /// `RootView` が持つ `NavigationStack` の `path` をそのまま共有する(上記コメント参照)。
     @Binding var path: NavigationPath
-    /// 一覧の下に置く別画面への行(タイプバランス。構築編集へ統合する ADR-0421 までの入口。ADR-0531)。
-    private let links: [FeatureLink]
+    /// 構築編集の中の「タイプバランス」の呼び先(無ければ節を出さない。ADR-0421・ADR-0532)。
+    private let balance: (any BalanceService)?
 
     @State private var isCreating = false
 
     /// 読み込み中インジケータの高さ(Calc/Reverse 画面と同じ理由で固定する)。
     private static let loadingIndicatorHeight: CGFloat = 24
 
-    init(store: any TeamStore, service: any PokeCalcService, path: Binding<NavigationPath>, links: [FeatureLink] = []) {
+    init(
+        store: any TeamStore, service: any PokeCalcService, balance: (any BalanceService)? = nil, path: Binding<NavigationPath>
+    ) {
         self.store = store
         self.service = service
-        self.links = links
+        self.balance = balance
         _path = path
         _viewModel = State(initialValue: TeamListViewModel(store: store, service: service))
     }
@@ -45,14 +47,6 @@ struct TeamListView: View {
                     ErrorBannerView(message: error.message, identifier: "teamListErrorMessage")
                 }
                 createButton
-                ForEach(links) { link in
-                    NavigationLink(value: FeatureRoute(featureID: link.id)) {
-                        PopLabel(title: link.title, systemImage: PopSymbol.forFeature(id: link.id))
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(PillButtonStyle(kind: .secondary))
-                    .accessibilityIdentifier(link.accessibilityIdentifier)
-                }
                 loadingSlot
                 if viewModel.teams.isEmpty {
                     if !viewModel.isLoading {
@@ -77,7 +71,8 @@ struct TeamListView: View {
         }
         .navigationDestination(for: String.self) { teamID in
             if let team = viewModel.teams.first(where: { $0.id == teamID }) {
-                TeamEditView(store: store, service: service, team: team, title: viewModel.displayName(for: team.id))
+                TeamEditView(
+                    store: store, service: service, balance: balance, team: team, title: viewModel.displayName(for: team.id))
             }
         }
         // `.task` は初回表示の1回しか走らないため、編集画面から戻るたびの再読み込みは

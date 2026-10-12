@@ -2,25 +2,19 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// BalanceResultViews: タイプバランス画面の結果(ADR-0415。docs/type-balance-design.md §10)。
+// BalanceResultViews: 構築編集の中の「タイプバランス」の結果(ADR-0415・ADR-0421。docs/type-balance-design.md §10)。
 //
 // 表は横に広げず、タイプごとの縦並びにする(Dynamic Type 最大でも崩れない・ダークモードはトークンに従う)。
-// 倍率の語(弱点/耐性/無効・抜群/いまひとつ)は文字で出し、色だけに頼らない。倍率と集計は応答のまま。
+// 倍率の語(弱点/耐性/無効・抜群/いまひとつ)は文字と印で出し、色だけに頼らない(色は ADR-0422 §3)。倍率と集計は応答のまま。
+// メンバーが 0 体のときは置かない(案内は節〈TeamBalanceSection〉が出す)。
 
 struct BalanceResultsView: View {
     let viewModel: BalanceViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x4) {
-            if viewModel.members.isEmpty {
-                Text(BalanceScreenText.emptyNotice)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("balanceEmptyNotice")
-            } else {
-                defenseSection
-                coverageSection
-            }
+            defenseSection
+            coverageSection
         }
     }
 
@@ -69,8 +63,9 @@ struct BalanceResultsView: View {
             ForEach(member.defense, id: \.attackType) { entry in
                 BalanceTypeRow(type: entry.attackType) {
                     let note = entry.source == .ability ? "(\(BalanceScreenText.abilityEffectNote))" : ""
-                    Text(BalanceLabels.defenseLabel(multiplier: entry.multiplier, category: entry.category) + note)
-                        .fontWeight(entry.category == .neutral ? .regular : .semibold)
+                    BalanceToneLabel(
+                        text: BalanceLabels.defenseLabel(multiplier: entry.multiplier, category: entry.category) + note,
+                        tone: BalanceMatchupTone(defense: entry.category))
                 }
             }
         }
@@ -91,8 +86,9 @@ struct BalanceResultsView: View {
                     ForEach(coverage.teamCoverage, id: \.defenseType) { entry in
                         BalanceTypeRow(type: entry.defenseType) {
                             VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                                Text(BalanceLabels.coverageLabel(entry.bestMultiplier))
-                                    .fontWeight(entry.superEffectiveMembers > 0 ? .semibold : .regular)
+                                BalanceToneLabel(
+                                    text: BalanceLabels.coverageLabel(entry.bestMultiplier),
+                                    tone: BalanceMatchupTone(coverage: entry.bestMultiplier))
                                 Text(
                                     "\(BalanceScreenText.effectiveSummary(entry.effectiveMembers)) / \(BalanceScreenText.superEffectiveSummary(entry.superEffectiveMembers))"
                                 )
@@ -127,8 +123,9 @@ struct BalanceResultsView: View {
             }
             ForEach(member.coverage.filter { $0.bestMultiplier != nil }, id: \.defenseType) { entry in
                 BalanceTypeRow(type: entry.defenseType) {
-                    Text(BalanceLabels.coverageLabel(entry.bestMultiplier))
-                        .fontWeight(entry.superEffective ? .semibold : .regular)
+                    BalanceToneLabel(
+                        text: BalanceLabels.coverageLabel(entry.bestMultiplier),
+                        tone: BalanceMatchupTone(coverage: entry.bestMultiplier))
                 }
             }
         }

@@ -24,7 +24,7 @@ import XCTest
 //   - `setAbility(id:abilityId:)`: 代入して `scheduleRefresh()`。
 //   - `addMove(id:moveId:) -> Bool` / `removeMove(id:at:)`: 構築編集と同じ規則(最大 `TeamLimits.maxMovesPerMember`・重複不可。
 //     違反は false + `memberErrors[id] = .tooManyMoves/.duplicateMove` で要求を出さない)。成功したら `scheduleRefresh()`。
-//   - `loadTeam(_ team: Team) async`: 保存済みの構築(`Team`)のメンバーで入れ替える(種族・特性・技 ID を写す。
+//   - `setParty(_ members: [TeamMember]) async`(旧 `loadTeam`。ADR-0532): 構築のメンバーで入れ替える(種族・特性・技 ID を写す。
 //     各メンバーの `species(key:)` で名前・タイプ・選択肢を作る)。`scheduleRefresh()`。
 // - 結果: `analysis: BalanceDefenseAnalysis?`・`coverage: BalanceCoverageAnalysis?`(それぞれ最後の成功応答)・
 //   `isLoadingAnalysis` / `isLoadingCoverage`・`analysisError: BalanceScreenError?` / `coverageError: BalanceScreenError?`。
@@ -250,9 +250,9 @@ final class BalanceViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.members[0].moveIds, ["m2", "m3", "m4"])
     }
 
-    // MARK: - 構築からの読み込み
+    // MARK: - 構築のメンバーで入れ替える(旧 loadTeam。構築編集の下書きと同じ setParty に一本化。ADR-0532)
 
-    func testLoadTeamReplacesMembersWithTeamMembers() async {
+    func testSetPartyReplacesMembersWithTeamMembers() async {
         let balance = StubBalanceService()
         let viewModel = await loadedViewModel(balance: balance)
         _ = await viewModel.addMember(speciesKey: StubMaster.gamma.key)
@@ -267,7 +267,7 @@ final class BalanceViewModelTests: XCTestCase {
             ]
         )
 
-        await viewModel.loadTeam(team)
+        await viewModel.setParty(team.members)
         await settle(viewModel)
 
         XCTAssertEqual(viewModel.members.map(\.speciesKey), [StubMaster.alpha.key, StubMaster.beta.key], "入れ替える(追加しない)")

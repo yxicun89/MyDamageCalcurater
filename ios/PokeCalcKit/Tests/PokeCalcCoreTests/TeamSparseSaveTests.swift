@@ -100,7 +100,8 @@ final class TeamSparseSaveTests: XCTestCase {
         let balance = StubBalanceService()
         let viewModel = BalanceViewModel(balance: balance, master: StubMaster.makeService(), refreshDebounce: .zero)
         await viewModel.load()
-        await viewModel.loadTeam(team)
+        // 構築編集の下書きと同じ入口(ADR-0421。別画面の「構築から読み込む」は廃止。ADR-0532)。
+        await viewModel.setParty(team.members)
         for _ in 0..<10000 where viewModel.isLoadingAnalysis || viewModel.isLoadingCoverage {
             try? await Task.sleep(for: .milliseconds(1))
         }

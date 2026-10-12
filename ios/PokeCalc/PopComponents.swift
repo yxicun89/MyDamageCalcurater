@@ -158,7 +158,6 @@ enum PopSymbol {
         case "calc": return calc
         case "reverse": return reverse
         case "speed": return speed
-        case "balance": return balance
         case "judge": return judge
         case "team": return team
         case "favorites": return favorites

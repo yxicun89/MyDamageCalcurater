@@ -65,7 +65,7 @@ export const balanceLabelText = {
   notSuperEffective: "ふつう",
 } as const;
 
-/** P4-12a: タイプバランスの画面(screens/BalanceScreen.tsx、ADR-0303 §2)の文言。 */
+/** P4-12a: タイプバランスの結果・入力欄(balance/・team/TeamBalanceSection.tsx、ADR-0303 §2。別画面は ADR-0421 で撤去)の文言。 */
 export const balanceScreenText = {
   memberGroupLabel: (n: number): string => `メンバー${String(n)}`,
   addMemberLabel: "メンバーを追加",
