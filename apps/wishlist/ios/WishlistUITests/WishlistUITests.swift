@@ -66,6 +66,21 @@ final class WishlistUITests: XCTestCase {
         _ = requireExists(app, "item-12")
     }
 
+    /// AC-6-2-3: 選ばれているジャンルのボタンだけ名前が見える(`genreName-<id>` / `genreName-all`)。選び直すと移る。
+    func testOnlySelectedGenreChipShowsItsName() {
+        let app = launch(fake: "1")
+        _ = requireExists(app, "item-12")
+        XCTAssertTrue(element(app, "genreName-all").exists, "最初は「すべて」だけ名前が出る")
+        XCTAssertFalse(element(app, "genreName-2").exists)
+        XCTAssertFalse(element(app, "genreName-1").exists)
+        requireExists(app, "genreChip-2").tap()
+        _ = requireExists(app, "genreName-2")
+        XCTAssertFalse(element(app, "genreName-all").exists, "選び直したら前の名前は消える")
+        XCTAssertFalse(element(app, "genreName-1").exists)
+        XCTAssertEqual(element(app, "genreChip-2").label, "デュエマ", "名前が出ても accessibilityLabel はジャンル名のまま")
+        XCTAssertEqual(element(app, "genreChip-1").label, "S.H.Figuarts", "名前が出ていないボタンにも accessibilityLabel はある")
+    }
+
     /// AC-IOS-UI-03: タップで詳細シートが出て、サイトのタイルがジャンルの順に並ぶ。サマリは「まだ価格情報はありません」。
     func testTapOpensDetailSheetWithSiteRowsInGenreOrder() {
         let app = launch(fake: "1")

@@ -140,7 +140,7 @@ struct HomeView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 genreButton(
-                    name: "すべて", selected: home.selectedGenreID == nil, id: "genreChip-all", glyph: { GlyphIcon(all: $0, size: 24) }
+                    name: GenreLabel.allName, selected: home.selectedGenreID == nil, id: "genreChip-all", glyph: { GlyphIcon(all: $0, size: 24) }
                 ) { home.selectedGenreID = nil }
                 ForEach(home.chipGenres) { genre in
                     genreButton(
@@ -153,21 +153,15 @@ struct HomeView: View {
         }
     }
 
-    /// 絵柄だけのジャンルボタン(52px 角・角丸 16)。非選択は白地+ジャンル色の線画、選択は強調色の地+白の線画。
+    /// ジャンルボタン(高さ 52・角丸 16)。非選択は白地+ジャンル色の線画だけ、選択は強調色の地+白の線画と名前(`GenrePill`)。
     private func genreButton<Glyph: View>(
         name: String, selected: Bool, id: String, color: Color = Palette.muted,
-        @ViewBuilder glyph: (Color) -> Glyph, action: @escaping () -> Void
+        @ViewBuilder glyph: @escaping (Color) -> Glyph, action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
-            glyph(selected ? .white : color)
-                .frame(width: 52, height: 52)
-                .background(selected ? Palette.accent : Palette.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Palette.line, lineWidth: selected ? 0 : 1))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(name)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier(id)
+        GenrePill(
+            name: name, selected: selected, background: selected ? Palette.accent : color, foreground: .white,
+            size: 52, radius: 16, nameIdentifier: id.replacingOccurrences(of: "genreChip-", with: "genreName-"),
+            buttonIdentifier: id, glyph: glyph, action: action)
     }
 
     /// 画像と価格の札だけのタイル。タップで詳細シート、長押し(0.5 秒)でメニュー。

@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
 import type { Genre } from "../api/types";
+import { onColor } from "../lib/contrast";
 
 /** ジャンルの絵柄(24x24 の線画)。docs/phase5-spec.md「5-2 デザインの決まり」。 */
 const GENRE_PATHS = {
@@ -89,7 +90,7 @@ export function UiIcon({
 
 /** ジャンルの色を子孫の CSS から引けるようにする(`--genre-color`)。同じ値を `data-genre-color` にも置くのは呼び出し側。 */
 export const genreColorStyle = (color: string): CSSProperties =>
-  ({ "--genre-color": color }) as CSSProperties;
+  ({ "--genre-color": color, "--on-genre": onColor(color) }) as CSSProperties;
 
 /** 12 色の見本(ジャンル編集)。 */
 export const COLOR_SWATCHES: readonly { color: string; label: string }[] = [
