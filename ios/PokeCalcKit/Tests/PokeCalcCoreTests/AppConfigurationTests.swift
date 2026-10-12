@@ -5,7 +5,7 @@ import XCTest
 
 /// `AppConfiguration`(ADR-0500 §5): 接続先は Info.plist の `PokeCalcAPIBaseURL`(xcconfig の
 /// `POKECALC_API_BASE_URL` から入る)と、起動時の環境変数 `POKECALC_USE_MOCK` から1か所で決める。
-/// - 空・無し → モック
+/// - 空・無し → 未設定(`.unconfigured`。黙ってモックに落とさない。I-ios-19)
 /// - 有効な http(s) の URL → API
 /// - `POKECALC_USE_MOCK=1` → URL があってもモック(XCUITest 用)
 /// - 不正な URL → エラー(黙ってモックに落とさない。設定ミスを起動時に気付けるように。coding-rules §2)
@@ -20,10 +20,10 @@ final class AppConfigurationTests: XCTestCase {
     func testBackendSelection() throws {
         let key = "PokeCalcAPIBaseURL"
         let cases: [(name: String, info: [String: Any], env: [String: String], expected: String?)] = [
-            // expected: "mock" / URL 文字列(api)
-            ("キー無し", [:], [:], "mock"),
-            ("空文字", [key: ""], [:], "mock"),
-            ("空白だけ", [key: "  "], [:], "mock"),
+            // expected: "mock" / "unconfigured" / URL 文字列(api)
+            ("キー無し", [:], [:], "unconfigured"),
+            ("空文字", [key: ""], [:], "unconfigured"),
+            ("空白だけ", [key: "  "], [:], "unconfigured"),
             ("http", [key: "http://localhost:8080"], [:], "http://localhost:8080"),
             ("https とパス", [key: "https://pokecalc.example.invalid/base"], [:],
              "https://pokecalc.example.invalid/base"),
@@ -40,7 +40,9 @@ final class AppConfigurationTests: XCTestCase {
             switch (config.backend, testCase.expected) {
             case (.mock, "mock"):
                 break
-            case (.api(let url), let expected?) where expected != "mock":
+            case (.unconfigured, "unconfigured"):
+                break
+            case (.api(let url), let expected?) where expected != "mock" && expected != "unconfigured":
                 XCTAssertEqual(url.absoluteString, expected, testCase.name)
             default:
                 XCTFail("\(testCase.name): \(config.backend) (期待 \(testCase.expected ?? "nil"))")

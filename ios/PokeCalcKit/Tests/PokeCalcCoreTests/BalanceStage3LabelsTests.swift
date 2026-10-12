@@ -94,7 +94,7 @@ final class BalanceStage3LabelsTests: XCTestCase {
         XCTAssertEqual(BalanceErrorText.message(forCode: "unknown_move"), "選んだ技がサーバーのデータにありません。選び直してください")
         XCTAssertEqual(
             BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.transport, message: "x")).message,
-            "タイプバランスのサーバーに接続できません")
+            ServiceFailureKind.offline.message(feature: "タイプバランス"))
     }
 
     // MARK: - 表示上限(長い一覧を端末で出し切らない)

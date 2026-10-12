@@ -126,7 +126,7 @@ final class FavoritesScreenUITests: XCTestCase {
         openFavorites(app)
         let error = element(app, "favoritesError")
         XCTAssertTrue(error.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(error.label.contains("通信に失敗しました"), "label: \(error.label)")
+        XCTAssertTrue(error.label.contains("サーバーに接続できません"), "label: \(error.label)")
         XCTAssertTrue(app.buttons["favoritesRetryButton"].exists)
         XCTAssertFalse(element(app, "favoritesEmpty").exists, "失敗を「空」と見せない")
         XCTAssertTrue(
@@ -210,7 +210,7 @@ final class FavoritesScreenUITests: XCTestCase {
     }
 
     func testPinFailureAndUnavailableKeepCalcWorkingAndShowJapaneseGuidance() {
-        for (scenario, expected) in [("fail", "通信に失敗しました"), ("unavailable", "計算はそのまま使えます")] {
+        for (scenario, expected) in [("fail", "サーバーに接続できません"), ("unavailable", "計算はそのまま使えます")] {
             let app = launch(favorites: scenario)
             openCalc(app)
             let pin = app.buttons["pinDefenderFavoriteButton"]

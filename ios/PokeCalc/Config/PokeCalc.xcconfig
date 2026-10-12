@@ -1,6 +1,6 @@
 // PokeCalc アプリの接続先(ADR-0500 §5)。
 //
-// POKECALC_API_BASE_URL が空なら起動時にモックを使う。http(s) の URL を入れると
+// POKECALC_API_BASE_URL が空なら起動時に「サーバーの接続先が設定されていません」を出す(モックは POKECALC_USE_MOCK=1 のときだけ。ADR-0534)。http(s) の URL を入れると
 // その API に接続する(全リクエストに X-Device-Id / X-Session-Id を付ける)。
 //
 // 注意: xcconfig は "//" 以降を行コメントとして扱うため、URL をそのまま書くと

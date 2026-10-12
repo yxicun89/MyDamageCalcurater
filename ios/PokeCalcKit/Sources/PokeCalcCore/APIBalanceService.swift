@@ -18,7 +18,7 @@ public struct APIBalanceService: BalanceService {
 
     /// `URLSession` を使う既定の transport で組み立てる。`baseURL` は gateway の基点 URL(パスは足さない)。
     public init(baseURL: URL, identity: ClientIdentity) {
-        self.init(client: Client(serverURL: baseURL, transport: URLSessionTransport()), identity: identity)
+        self.init(client: Client(serverURL: baseURL, transport: ClientFailureMapping.makeTransport()), identity: identity)
     }
 
     // MARK: - BalanceService
@@ -35,12 +35,12 @@ public struct APIBalanceService: BalanceService {
         }
         switch output {
         case .ok(let ok): return try Self.domainDefense(ok.body.json)
-        case .badRequest(let r): throw try Self.domainError(r.body.json)
-        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
-        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
-        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
-        case .internalServerError(let r): throw try Self.domainError(r.body.json)
-        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        case .badRequest(let r): throw try Self.domainError(r.body.json, status: 400)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json, status: 413)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json, status: 422)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json, status: 503)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json, status: 500)
+        case .undocumented(let status, let payload): throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -56,12 +56,12 @@ public struct APIBalanceService: BalanceService {
         }
         switch output {
         case .ok(let ok): return try Self.domainCoverage(ok.body.json)
-        case .badRequest(let r): throw try Self.domainError(r.body.json)
-        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
-        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
-        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
-        case .internalServerError(let r): throw try Self.domainError(r.body.json)
-        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        case .badRequest(let r): throw try Self.domainError(r.body.json, status: 400)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json, status: 413)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json, status: 422)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json, status: 503)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json, status: 500)
+        case .undocumented(let status, let payload): throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -76,12 +76,12 @@ public struct APIBalanceService: BalanceService {
         }
         switch output {
         case .ok(let ok): return try Self.domainThreats(ok.body.json)
-        case .badRequest(let r): throw try Self.domainError(r.body.json)
-        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
-        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
-        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
-        case .internalServerError(let r): throw try Self.domainError(r.body.json)
-        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        case .badRequest(let r): throw try Self.domainError(r.body.json, status: 400)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json, status: 413)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json, status: 422)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json, status: 503)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json, status: 500)
+        case .undocumented(let status, let payload): throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -100,12 +100,12 @@ public struct APIBalanceService: BalanceService {
         }
         switch output {
         case .ok(let ok): return try Self.domainRecommendations(ok.body.json)
-        case .badRequest(let r): throw try Self.domainError(r.body.json)
-        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
-        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
-        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
-        case .internalServerError(let r): throw try Self.domainError(r.body.json)
-        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        case .badRequest(let r): throw try Self.domainError(r.body.json, status: 400)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json, status: 413)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json, status: 422)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json, status: 503)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json, status: 500)
+        case .undocumented(let status, let payload): throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -119,12 +119,12 @@ public struct APIBalanceService: BalanceService {
         }
         switch output {
         case .ok(let ok): return try Self.domainMoveRange(ok.body.json)
-        case .badRequest(let r): throw try Self.domainError(r.body.json)
-        case .contentTooLarge(let r): throw try Self.domainError(r.body.json)
-        case .unprocessableContent(let r): throw try Self.domainError(r.body.json)
-        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json)
-        case .internalServerError(let r): throw try Self.domainError(r.body.json)
-        case .undocumented(let status, _): throw Self.undocumentedError(status)
+        case .badRequest(let r): throw try Self.domainError(r.body.json, status: 400)
+        case .contentTooLarge(let r): throw try Self.domainError(r.body.json, status: 413)
+        case .unprocessableContent(let r): throw try Self.domainError(r.body.json, status: 422)
+        case .serviceUnavailable(let r): throw try Self.domainError(r.body.json, status: 503)
+        case .internalServerError(let r): throw try Self.domainError(r.body.json, status: 500)
+        case .undocumented(let status, let payload): throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -137,34 +137,13 @@ public struct APIBalanceService: BalanceService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            if Self.isCancellation(error) { throw CancellationError() }
-            if Self.isDecodingFailure(error) {
-                throw PokeCalcError(code: PokeCalcError.Code.decode, message: "\(error)")
-            }
-            throw PokeCalcError(code: PokeCalcError.Code.transport, message: "\(error)")
+            if ClientFailureMapping.isCancellation(error) { throw CancellationError() }
+            throw ClientFailureMapping.pokeCalcError(from: error)
         }
     }
 
-    private static func isCancellation(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        if clientError.underlyingError is CancellationError { return true }
-        // URLSession 経由のキャンセルは URLError(.cancelled) として届く。
-        if let urlError = clientError.underlyingError as? URLError, urlError.code == .cancelled { return true }
-        return false
-    }
-
-    private static func isDecodingFailure(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        return clientError.underlyingError is DecodingError
-    }
-
-    private static func domainError(_ error: Components.Schemas._Error) -> PokeCalcError {
-        PokeCalcError(code: error.code.rawValue, message: error.message)
-    }
-
-    /// 契約に無い HTTP ステータス。サーバーのコードが無いので、接続できないのと同じ扱い(`transport`)にする。
-    private static func undocumentedError(_ status: Int) -> PokeCalcError {
-        PokeCalcError(code: PokeCalcError.Code.transport, message: "unexpected HTTP status \(status)")
+    private static func domainError(_ error: Components.Schemas._Error, status: Int? = nil) -> PokeCalcError {
+        PokeCalcError(code: error.code.rawValue, message: error.message, statusCode: status)
     }
 
     // MARK: - 応答 → ドメイン

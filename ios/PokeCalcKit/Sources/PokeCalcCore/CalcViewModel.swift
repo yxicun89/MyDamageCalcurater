@@ -67,6 +67,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     var natureOptions: [Nature] = []
     /// `load()` の二重実行を防ぐ(同じ画面から複数回 `load()` を呼んでも読み込みは1回だけ)。
     private var didLoad = false
+    /// 最初の読み込み(`load()`)が失敗した状態か(`canRetryLoad` の元。ADR-0534)。
+    private var loadFailed = false
 
     // MARK: - 画面の入力
 
@@ -293,6 +295,18 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         let token = beginInput()
         defenderAbilityId = id
         await recalculate(token: token)
+    }
+
+    /// 最初の読み込みに失敗していて、いまやり直せる(View は「もう一度」を出す。ADR-0534)。
+    public var canRetryLoad: Bool { loadFailed && !isLoading }
+
+    /// 失敗した最初の読み込みをやり直す。読み込めているとき・読み込み中は何もしない。
+    public func retryLoad() async {
+        guard canRetryLoad else { return }
+        loadFailed = false
+        didLoad = false
+        error = nil
+        await load()
     }
 
     // MARK: - 構築から個体を呼び出す(P6-2d)
@@ -540,6 +554,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
             guard token == latestRequestToken else { return }
         } catch {
             guard token == latestRequestToken else { return }
+            loadFailed = !(error is CancellationError)
             handleInputFailure(error)
             return
         }

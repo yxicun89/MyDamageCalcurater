@@ -8,16 +8,21 @@
 public struct PokeCalcError: Error, Equatable, Sendable {
     public let code: String
     public let message: String
+    /// 応答があったときの HTTP ステータス番号(ADR-0534)。失敗の分類(`ServiceFailureKind`)にだけ使い、画面には出さない。
+    public let statusCode: Int?
 
-    public init(code: String, message: String) {
+    public init(code: String, message: String, statusCode: Int? = nil) {
         self.code = code
         self.message = message
+        self.statusCode = statusCode
     }
 
     /// クライアント側で作るエラーコード(1か所に集約。coding-rules §2)。
     public enum Code {
         /// 通信できない(接続失敗・タイムアウト等)。HTTP 応答が無い失敗すべて。
         public static let transport = "client_transport_error"
+        /// 通信が時間切れになった(`URLError.timedOut`。ADR-0534)。接続できない(`transport`)とは原因が違う。
+        public static let timeout = "client_timeout"
         /// 応答は受け取ったが期待した形の JSON にデコードできない。`transport`(接続できない)とは
         /// 原因が違うので分ける。
         public static let decode = "client_decode_error"

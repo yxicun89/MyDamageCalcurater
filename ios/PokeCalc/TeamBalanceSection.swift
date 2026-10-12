@@ -27,7 +27,13 @@ struct TeamBalanceSection: View {
             if let error = balance.masterError {
                 ErrorBannerView(message: error.message, identifier: "balanceMasterError")
             }
-            if hasError {
+            if balance.canRetryLoad {
+                // ポケモン・技の一覧が読めていない: 一覧を読み直してから計算し直す(ADR-0534)。
+                LoadRetryButton(identifier: "balanceMasterRetry") {
+                    await balance.retryLoad()
+                    if !balance.canRetryLoad { await balance.retry(party: team.balanceParty) }
+                }
+            } else if hasError {
                 retryButton
             }
             if !balance.members.isEmpty {

@@ -252,7 +252,7 @@ final class TeamBalanceUITests: XCTestCase {
 
         let error = element(app, "balanceAnalysisError")
         XCTAssertTrue(error.waitForExistence(timeout: Self.existenceTimeout), "節の中にエラー")
-        XCTAssertEqual(error.label, "タイプバランスのサーバーに接続できません")
+        XCTAssertEqual(error.label, "サーバーの接続先が設定されていません")
         XCTAssertTrue(element(app, "teamBalanceRetry").exists, "再計算のボタン")
         XCTAssertFalse(element(app, "teamEditErrorMessage").exists, "構築の側にはエラーを出さない")
 

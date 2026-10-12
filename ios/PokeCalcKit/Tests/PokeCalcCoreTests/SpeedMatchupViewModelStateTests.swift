@@ -248,7 +248,7 @@ final class SpeedMatchupViewModelStateTests: XCTestCase {
 
         XCTAssertEqual(viewModel.matchupState, .failed(SpeedFailure(code: "upstream_unavailable")))
         if case .failed(let failure) = viewModel.matchupState {
-            XCTAssertEqual(failure.message, "素早さのサーバーに接続できません", "gateway の 503 も接続できない旨にする。サーバーの英語は出さない")
+            XCTAssertEqual(failure.message, ServiceFailureKind.serverFault.message(feature: "素早さ"), "gateway の 503 はサーバーの障害として伝える(接続できないとは別)。サーバーの英語は出さない")
         }
         XCTAssertEqual(viewModel.matchupCards, [])
         guard case .loaded = viewModel.reachState else { return XCTFail("matchup の失敗が reach を消してはいけない: \(viewModel.reachState)") }
@@ -290,7 +290,7 @@ final class SpeedMatchupViewModelStateTests: XCTestCase {
         selectBoth(viewModel)
         await viewModel.settle()
         if case .failed(let failure) = viewModel.matchupState {
-            XCTAssertEqual(failure.message, SpeedLabels.unavailable)
+            XCTAssertEqual(failure.message, ServiceFailureKind.offline.message(feature: "素早さ"))
         } else {
             XCTFail("失敗になっていない")
         }

@@ -157,7 +157,7 @@ final class CalcHistoryUITests: XCTestCase {
                 XCTAssertTrue(error.label.contains("計算はそのまま使えます"), "label: \(error.label)")
                 XCTAssertFalse(error.label.contains("store_unavailable"), "code を出さない")
             } else {
-                XCTAssertTrue(error.label.contains("通信に失敗しました"), "label: \(error.label)")
+                XCTAssertTrue(error.label.contains("サーバーに接続できません"), "label: \(error.label)")
             }
             XCTAssertTrue(app.buttons["calcHistoryRetryButton"].exists, scenario)
             XCTAssertFalse(element(app, "calcHistoryEmpty").exists, "失敗を「空」と見せない: \(scenario)")

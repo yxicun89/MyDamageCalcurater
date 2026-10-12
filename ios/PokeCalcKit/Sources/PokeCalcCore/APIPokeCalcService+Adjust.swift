@@ -19,13 +19,13 @@ extension APIPokeCalcService: AdjustService {
         case .ok(let ok):
             return Self.domainIndicesResult(try ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -40,13 +40,13 @@ extension APIPokeCalcService: AdjustService {
         case .ok(let ok):
             return Self.domainKOResult(try ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -61,13 +61,13 @@ extension APIPokeCalcService: AdjustService {
         case .ok(let ok):
             return Self.domainSurviveResult(try ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -82,13 +82,13 @@ extension APIPokeCalcService: AdjustService {
         case .ok(let ok):
             return Self.domainAllocationResult(try ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -104,11 +104,11 @@ extension APIPokeCalcService: AdjustService {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainSpeciesSummary)
         case .notFound(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 404)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 

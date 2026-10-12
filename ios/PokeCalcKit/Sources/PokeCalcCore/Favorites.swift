@@ -115,7 +115,15 @@ public enum RecordAction: Equatable, Sendable {
 public enum RecordScreenError: Equatable, Sendable {
     /// 通信できない(`PokeCalcError.Code.transport`)。
     case transport
-    /// 応答の形が想定と違う(`decode`・`unexpectedStatus`・`PokeCalcError` 以外の Error)。
+    /// 時間内に返事が無かった(ADR-0534)。
+    case timeout
+    /// サーバーの障害(5xx・`internal_error` など。ADR-0534)。
+    case serverFault
+    /// いまつないでいるサーバーがその機能を持っていない(経路の無い 404・501。ADR-0534)。
+    case unsupported
+    /// サーバーが混み合っている(ADR-0534)。
+    case overloaded
+    /// 応答の形が想定と違う(`decode`・番号の無い `unexpectedStatus`・`PokeCalcError` 以外の Error)。
     case unexpectedResponse
     /// 503 `store_unavailable` / `upstream_unavailable`(保存・取得できないが計算はできる)。
     case storeUnavailable
@@ -132,12 +140,19 @@ public enum RecordScreenError: Equatable, Sendable {
             return
         }
         switch error.code {
-        case PokeCalcError.Code.transport: self = .transport
-        case PokeCalcError.Code.decode, PokeCalcError.Code.unexpectedStatus: self = .unexpectedResponse
         case "store_unavailable", "upstream_unavailable": self = .storeUnavailable
         case "not_found": self = .notFound
         case "invalid_input": self = .invalidInput
-        default: self = .other(code: error.code)
+        default:
+            switch ServiceFailureKind(error) {
+            case .offline: self = .transport
+            case .timeout: self = .timeout
+            case .serverFault: self = .serverFault
+            case .unsupported: self = .unsupported
+            case .overloaded: self = .overloaded
+            case .unreadable: self = .unexpectedResponse
+            case .other(let code): self = .other(code: code)
+            }
         }
     }
 
@@ -146,6 +161,14 @@ public enum RecordScreenError: Equatable, Sendable {
         switch self {
         case .transport:
             return FavoritesLabels.transportFailure
+        case .timeout:
+            return ServiceFailureKind.timeout.message(feature: FavoritesLabels.screenTitle)
+        case .serverFault:
+            return ServiceFailureKind.serverFault.message(feature: FavoritesLabels.screenTitle)
+        case .unsupported:
+            return ServiceFailureKind.unsupported.message(feature: FavoritesLabels.screenTitle)
+        case .overloaded:
+            return ServiceFailureKind.overloaded.message(feature: FavoritesLabels.screenTitle)
         case .storeUnavailable:
             switch action {
             case .loadFavorites: return FavoritesLabels.loadFavoritesUnavailable
@@ -190,7 +213,7 @@ public enum FavoritesLabels {
     public static let restoreLimitNote =
         "防御側の性格・能力ポイント・持ち物は戻しません(防御側は代表的な調整の一覧で計算します)。ダブルで保存した計算もシングルで開きます。"
 
-    public static let transportFailure = "通信に失敗しました。接続を確認してもう一度お試しください。"
+    public static let transportFailure = ServiceFailureKind.offline.message(feature: screenTitle)
     public static let genericFailure = "うまくいきませんでした。時間をおいてもう一度お試しください。"
     public static let loadFavoritesUnavailable = "お気に入りを読み込めません。計算はそのまま使えます。しばらくしてからもう一度お試しください。"
     public static let addFavoriteUnavailable = "いまはお気に入りに保存できません。計算はそのまま使えます。"

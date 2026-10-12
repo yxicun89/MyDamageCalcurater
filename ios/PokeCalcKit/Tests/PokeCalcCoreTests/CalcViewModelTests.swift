@@ -625,8 +625,8 @@ final class CalcScreenErrorTests: XCTestCase {
         }
         // apiUnsupported は P3-1 で逆算が API 対応し、生成元が無くなったので削除した(ADR-0500 §3)
         XCTAssertEqual(Set([transport, unexpected, service]).count, 3, "種類ごとに別の文言")
-        // サーバーのエラーは原因が分かるように code と説明を含める
-        XCTAssertTrue(service.contains("test_code"), service)
+        // 日本語の説明は出すが、code は画面に出さない(ADR-0534)
+        XCTAssertFalse(service.contains("test_code"), service)
         XCTAssertTrue(service.contains("テストの説明"), service)
     }
 }

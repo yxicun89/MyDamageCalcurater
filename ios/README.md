@@ -1,6 +1,6 @@
 # iOS(SwiftUI)
 
-iPhone 向けのダメージ計算アプリ(計算画面・逆算画面・構築ビルダー)。gateway 経由で calc / pokedex の API を呼び、接続先が無いときは架空データのモックで動く。
+iPhone 向けのダメージ計算アプリ(計算画面・逆算画面・構築ビルダー)。gateway 経由で calc / pokedex の API を呼び、接続先が無いときは「サーバーの接続先が設定されていません」を出す(架空データのモックは `POKECALC_USE_MOCK=1` のときだけ。ADR-0534)。
 API クライアントは `api/openapi.yaml` から swift-openapi-generator で生成し、手で書かない(契約は変更しない)。
 シミュレータでの確認は [docs/runbooks/ios.md](../docs/runbooks/ios.md)、実機インストールは [docs/runbooks/ios-device-install.md](../docs/runbooks/ios-device-install.md)(人間の作業)。設計は [ADR-0500](../docs/adr/0500-ios-app-architecture.md)、見た目は [docs/design.md](../docs/design.md)。
 
@@ -37,7 +37,7 @@ flowchart LR
 | `PokeCalcKit/Sources/PokeCalcDesign` | デザイントークン(docs/design.md と同じ名前・値) |
 | `PokeCalcKit/Tests` | XCTest(ロジック) |
 | `PokeCalc.xcodeproj` / `PokeCalc/` | アプリ(SwiftUI の View だけ)。フォルダ同期で手書きのプロジェクト |
-| `PokeCalc/Config/PokeCalc.xcconfig` / `PokeCalc-Info.plist` | API の接続先(`POKECALC_API_BASE_URL`。空ならモック) |
+| `PokeCalc/Config/PokeCalc.xcconfig` / `PokeCalc-Info.plist` | API の接続先(`POKECALC_API_BASE_URL`。空なら接続先なしの 1 画面) |
 | `PokeCalcUITests/` | XCUITest(主要な画面操作。モック強制) |
 | `tools/openapi-gen/` | 生成器の版を固定する生成専用パッケージと生成設定 |
 | `scripts/` | テストの合否判定・生成・Info.plist の検査・シミュレータ起動 |

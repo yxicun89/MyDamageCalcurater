@@ -65,6 +65,9 @@ struct TeamEditView: View {
             }
             if let error = viewModel.error {
                 ErrorBannerView(message: error.message, identifier: "teamEditErrorMessage")
+                if viewModel.canRetryLoad {
+                    LoadRetryButton(identifier: "teamEditLoadRetry") { await viewModel.load() }
+                }
             }
             loadingSlot
             slotsSection
