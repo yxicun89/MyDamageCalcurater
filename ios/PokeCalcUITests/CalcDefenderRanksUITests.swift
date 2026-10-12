@@ -179,4 +179,22 @@ final class CalcDefenderRanksUITests: XCTestCase {
         waitForValue(meter, "±0")
         assertRowsStillShown(app, "メーターのタップ")
     }
+
+    /// 縦スワイプでは値が変わらず(縦スクロールを奪わない)、水平ドラッグでは段が変わる(ADR-0533)。
+    func testDefenderRankMeterVerticalSwipeKeepsValueAndHorizontalDragChangesIt() {
+        let app = launchCalcScreen()
+        openConditions(app)
+
+        let meter = element(app, "rankMeter-calcDefender")
+        scrollUntilHittable(app, meter)
+        let start = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.press(forDuration: 0.05, thenDragTo: meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: -6)))
+        XCTAssertEqual(meter.value as? String, "±0", "縦に動かしても値は変わらない")
+
+        scrollUntilHittable(app, meter)
+        let left = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        left.press(forDuration: 0.05, thenDragTo: meter.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.5)))
+        waitForValue(meter, "+6")
+        assertRowsStillShown(app, "メーターのドラッグ")
+    }
 }

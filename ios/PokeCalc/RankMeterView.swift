@@ -20,12 +20,16 @@ struct RankMeterView: View {
     let value: Int
     let onChange: (Int) -> Void
 
+    /// 今のドラッグが水平優勢か(nil = 未判定)。ドラッグの間だけ持つ。
+    @State private var dragIsHorizontal: Bool?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// ボタンとトラックのタップ領域の一辺。受け入れ条件は 36pt 以上だが、描画の丸めで 35.99999… になると
     /// XCUITest の `frame` 検査で落ちるため 1pt 余裕を持つ(旧ランクのボタンも 37。ADR-0501「issue #274」5)。
     private static let minTapSide: CGFloat = 37
+    /// ドラッグとみなす最小の移動量(これ未満はタップ。縦スクロールとの切り分けのため)。
+    private static let dragMinimumDistance: CGFloat = 10
     private static let segmentSpacing: CGFloat = 2
     private static let segmentHeight: CGFloat = 20
     private static let zeroMarkerWidth: CGFloat = 4
@@ -77,9 +81,19 @@ struct RankMeterView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .contentShape(Rectangle())
-            .gesture(
-                DragGesture(minimumDistance: 0)
-                    .onChanged { gesture in select(atX: gesture.location.x, width: proxy.size.width) }
+            // タップは別ジェスチャで受ける。ドラッグは一定距離動いてから、水平が優勢のときだけ値を変える
+            // (縦が優勢なら捨てて、ScrollView の縦スクロールを奪わない。Web の touch-action: pan-y に相当)。
+            .gesture(SpatialTapGesture().onEnded { tap in select(atX: tap.location.x, width: proxy.size.width) })
+            .simultaneousGesture(
+                DragGesture(minimumDistance: Self.dragMinimumDistance)
+                    .onChanged { drag in
+                        if dragIsHorizontal == nil {
+                            dragIsHorizontal = RankMeterLogic.isHorizontalDrag(dx: Double(drag.translation.width), dy: Double(drag.translation.height))
+                        }
+                        guard dragIsHorizontal == true else { return }
+                        select(atX: drag.location.x, width: proxy.size.width)
+                    }
+                    .onEnded { _ in dragIsHorizontal = nil }
             )
         }
         .frame(minWidth: Self.trackMinWidth, maxWidth: .infinity)

@@ -4983,3 +4983,5 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `SpeedScreenUITests.testCustomModeShowsItsControlsAndAResult` | `speedRank*` → `rankMeter*-speed` | 同上 |
 | `JudgeScreenUITests.testRankStepperIsLimitedToPlusMinusSix` | `judgeAttackerRank*-spe` → `rankMeter*-judgeAttacker-spe`。「+6 に届く・+ が無効」は同じ。label「素早さ」を追加 | 同上 |
 
+追記(ドラッグ方針): タップは `SpatialTapGesture`、ドラッグは 10pt 以上かつ水平優勢のときだけ値を変える。新規 UITest `testDefenderRankMeterVerticalSwipeKeepsValueAndHorizontalDragChangesIt`(縦に動かしても ±0・水平ドラッグで +6)と `RankMeterLogicTests.testHorizontalDragDecision`。既存の 37pt・タップ位置の検査は不変。
+

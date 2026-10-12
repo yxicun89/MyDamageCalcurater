@@ -9,7 +9,7 @@
 1. **共通 SwiftUI 部品 `RankMeterView`**(`ios/PokeCalc/RankMeterView.swift`)。13 段(左 6 = 下降・中央 0・右 6 = 上昇)。
    純粋ロジック(段↔値、ドラッグ位置→段、増減のクランプ、符号付き文字、読み上げ、識別子)は `RankMeterLogic`(PokeCalcCore)に置き XCTest で固定する。
 2. **色**: 上昇 = `brandPrimary`、下降 = `warning`、0 の目印 = `textPrimary`(太い縦棒)、未到達の段の枠 = `textSecondary`。赤は使わない。値は `+2` / `-3` / `±0` の文字でも併記する。
-3. **操作**: トラックのタップ・ドラッグで最寄りの段(`DragGesture(minimumDistance: 0)`)、− / + ボタン(36pt 以上、両端で無効)。
+3. **操作**: トラックのタップ(`SpatialTapGesture`)・ドラッグで最寄りの段。ドラッグは 10pt 動いてから、水平が優勢のときだけ値を変え、縦が優勢なら捨てる(ScrollView の縦スクロールを奪わない。Web の `touch-action: pan-y` 相当。判定は `RankMeterLogic.isHorizontalDrag`)、− / + ボタン(36pt 以上、両端で無効)。
    VoiceOver ではトラック全体を 1 つの adjustable 要素にし(`accessibilityAdjustableAction` で ±1)、label は欄のステータス名(「攻撃」)、value は「+2」(0 は「±0」)。
    Web の `aria-valuetext`「攻撃 +2」は `RankMeterLogic.spokenText` に持つ(label + value を続けて読むと同じ読み上げになる)。
    − / + の名前は「<欄の名前>を上げる / 下げる」(例「防御側のランクを上げる」)。

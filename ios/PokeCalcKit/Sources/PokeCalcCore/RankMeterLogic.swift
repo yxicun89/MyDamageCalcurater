@@ -78,4 +78,7 @@ public enum RankMeterLogic {
     public static func identifier(field: String) -> String { "rankMeter-\(field)" }
     public static func minusIdentifier(field: String) -> String { "rankMeterMinus-\(field)" }
     public static func plusIdentifier(field: String) -> String { "rankMeterPlus-\(field)" }
+
+    /// ドラッグの移動量が水平優勢か(縦と同じ大きさは縦扱い。縦スクロールを優先する)。
+    public static func isHorizontalDrag(dx: Double, dy: Double) -> Bool { abs(dx) > abs(dy) }
 }

@@ -104,4 +104,11 @@ final class RankMeterLogicTests: XCTestCase {
         XCTAssertEqual(RankMeterLogic.minusIdentifier(field: "speed"), "rankMeterMinus-speed")
         XCTAssertEqual(RankMeterLogic.plusIdentifier(field: "speed"), "rankMeterPlus-speed")
     }
+
+    func testHorizontalDragDecision() {
+        XCTAssertTrue(RankMeterLogic.isHorizontalDrag(dx: 12, dy: 3))
+        XCTAssertTrue(RankMeterLogic.isHorizontalDrag(dx: -12, dy: 3))
+        XCTAssertFalse(RankMeterLogic.isHorizontalDrag(dx: 3, dy: 12))
+        XCTAssertFalse(RankMeterLogic.isHorizontalDrag(dx: 10, dy: 10), "同じなら縦扱い")
+    }
 }
