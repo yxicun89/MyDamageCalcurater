@@ -106,6 +106,8 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
+import { favoriteOfLastCalcInput, loadLastCalcInput, saveLastCalcInput } from "../app/lastCalcInput";
+import { defaultStorage, type StorageLike } from "../app/storage";
 import { AddFavoriteButton } from "../favorites/AddFavoriteButton";
 import type { RecordClient } from "../record/recordClient";
 import { useFrequentOpponents } from "../record/useFrequentOpponents";
@@ -305,6 +307,16 @@ export interface CalcScreenProps {
   readonly comboRequest?: ComboOpenRequest;
   /** CB-6 段階 C1: 連続技の素早さの種族の例を引く口。App はオンラインのときだけ渡す(省略は「出さない」)。 */
   readonly speedClient?: SpeedClient;
+  /**
+   * ADR-0358 段 2: 直近の入力の保存先(端末の localStorage)。省略は既定のストレージ、null は「保存しない・復元しない」。
+   * mount 時に保存があり、お気に入りの復元要求(restoreRequest)が無ければ、その入力を戻す。
+   */
+  readonly lastInputStorage?: StorageLike | null;
+  /**
+   * ADR-0358 段 2: mount 時に保存した直近の入力を戻すか。省略は戻す。App は、計算する場所を切り替えたあと
+   * (マスタが入れ替わって画面が作り直されるとき)は false にする(ページを開き直したときだけ戻す。ADR-0308 決定3)。
+   */
+  readonly restoreLastInput?: boolean;
 }
 
 /** お気に入りから戻したときの案内(ADR-0333 §2・§4)。 */
@@ -513,6 +525,8 @@ export function CalcScreen({
   restoreRequest,
   comboRequest,
   speedClient,
+  lastInputStorage = defaultStorage(),
+  restoreLastInput = true,
 }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
@@ -622,9 +636,20 @@ export function CalcScreen({
       setRestoreNotice(null);
     }
   }
-  const restoreToken = restoreRequest?.token ?? null;
+  // ADR-0358 段 2: mount 時にお気に入りの復元要求が無ければ、保存した直近の入力を同じ道(restoreFavoriteInputs)で戻す。
+  // 案内(status / alert)は出さない(利用者が操作した結果ではないため。戻せない項目は黙って捨てる)。
+  const [lastInputRestore] = useState<FavoriteRestoreRequest | null>(() => {
+    if (restoreRequest !== undefined || !restoreLastInput) {
+      return null;
+    }
+    const saved = loadLastCalcInput(lastInputStorage);
+    return saved === null ? null : { token: 0, favorite: favoriteOfLastCalcInput(saved) };
+  });
+  const restoreToken = restoreRequest?.token ?? lastInputRestore?.token ?? null;
   useEffect(() => {
-    const { request, master: data, masterSearch: search, speciesListAvailable } = restoreContextRef.current;
+    const { master: data, masterSearch: search, speciesListAvailable } = restoreContextRef.current;
+    const request = restoreContextRef.current.request ?? lastInputRestore ?? undefined;
+    const silent = restoreContextRef.current.request === undefined;
     if (restoreToken === null || request === undefined) {
       return;
     }
@@ -636,6 +661,11 @@ export function CalcScreen({
       signal: controller.signal,
     }).then((restored) => {
       if (restored === null || controller.signal.aborted) {
+        return;
+      }
+      // ADR-0358 段 2: 保存した直近の入力で、今のマスタに無い種族があれば全体を捨てる(種族の無い持ち物・技だけが
+      // 残る中途半端な入力にしない。計算モードの切り替えでマスタが入れ替わったときも古い入力を持ち込まない)。
+      if (silent && restored.issues.some((issue) => issue.kind === "species")) {
         return;
       }
       for (const resolution of restored.resolutions) {
@@ -670,18 +700,20 @@ export function CalcScreen({
       setCompareItems(false);
       setAttackerDroppedName(null);
       setDefenderDroppedName(null);
-      setRestoreNotice({
-        token: request.token,
-        baseline: null,
-        title,
-        attackerOnly: restored.kind === "attacker",
-        issues: restored.issues,
-      });
+      if (!silent) {
+        setRestoreNotice({
+          token: request.token,
+          baseline: null,
+          title,
+          attackerOnly: restored.kind === "attacker",
+          issues: restored.issues,
+        });
+      }
     });
     return () => {
       controller.abort();
     };
-  }, [restoreToken, registerSpeciesResolution]);
+  }, [restoreToken, registerSpeciesResolution, lastInputRestore]);
 
   // CB-6 段階 C2: 素早さ画面からの「連続技を開く」要求。token が変わったときだけ攻撃側・防御側を入れ、連続技の節を広げる。
   // 入れる処理は最新の画面の関数を ref から読む(token 以外の変化では入れ直さない。復元の restoreContextRef と同じ考え方)。
@@ -961,6 +993,13 @@ export function CalcScreen({
     conditions,
     favoriteBattleState,
   ]);
+
+  // ADR-0358 段 2: 直近の入力を 1 件、端末に覚える(入力が揃っているときだけ。空で上書きしない)。
+  useEffect(() => {
+    if (favoriteInput !== null) {
+      saveLastCalcInput(favoriteInput, lastInputStorage);
+    }
+  }, [favoriteInput, lastInputStorage]);
 
   function selectAttacker(key: string): void {
     setAttackerKey(key);

@@ -134,10 +134,15 @@ export interface MasterSpeciesResolution {
 export interface MasterSpeciesSearch {
   /**
    * 日本語名の前方一致検索。空白だけ・空の query は「全件」ではなく**空配列**(fetch もしない)。
-   * 返す件数の上限は実装が決める(onlineSource.ts の SPECIES_SEARCH_LIMIT)。
+   * 返す件数の上限は実装が決める(onlineSource.ts の SPECIES_SEARCH_LIMIT)。limit を渡すと上限をそれにする
+   * (オフライン用の事前保存が一覧を集めるときだけ。ADR-0358 段 3。公開 API の上限は 200)。
    * 通信・応答の失敗は reject する(空配列で握りつぶさない)。
    */
-  searchSpecies(query: string, signal?: AbortSignal): Promise<readonly MasterSpeciesSummary[]>;
+  searchSpecies(
+    query: string,
+    signal?: AbortSignal,
+    limit?: number,
+  ): Promise<readonly MasterSpeciesSummary[]>;
   /** 選ばれた種族の実体(種族値・特性・learnset)を引く。見つからない・通信の失敗は reject する。 */
   resolveSpecies(key: string, signal?: AbortSignal): Promise<MasterSpeciesResolution>;
 }

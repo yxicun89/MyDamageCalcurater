@@ -18,13 +18,14 @@ printf '{"schemaVersion":1,"dataVersion":"pokeapi=v1@aaaaaaaa"}\n' > "$work/rm/m
 
 cat > "$work/bin/kubectl" <<'FAKE'
 #!/usr/bin/env bash
-# 偽の kubectl: context と、calc の /readyz・balance/speed の Deployment 注釈(環境変数で指定)だけに答える。
+# 偽の kubectl: context と、calc の /readyz・balance/speed の /healthz(環境変数で指定)だけに答える。
 args="$*"
 case "$args" in
   "config current-context") echo "k3d-pokecalc" ;;
   *"services/calc:http/proxy/readyz"*) [ -n "${FAKE_CALC:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_CALC" || exit 1 ;;
   *"services/speed:http/proxy/healthz"*) [ -n "${FAKE_SPEED:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_SPEED" || exit 1 ;;
-  *"deployment/balance"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "${FAKE_BALANCE:-}" ;;
+  *"services/balance:http/proxy/healthz"*) [ -n "${FAKE_BALANCE:-}" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$FAKE_BALANCE" || exit 1 ;;
+  *"deployment/balance"*) echo "balance の Deployment 注釈は見ないはず(Argo CD 管理では古いまま残る)" >&2; exit 98 ;;
   *"deployment/speed"*) echo "speed の Deployment 注釈は見ないはず" >&2; exit 98 ;;
   *) echo "unexpected kubectl: $args" >&2; exit 99 ;;
 esac
@@ -50,7 +51,7 @@ run() {
 
 run 0 "3つとも期待と同じ版なら成功" "版が一致" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED="$V"
 run 1 "calc だけ旧版なら失敗し、calc を名指しする" "STALE calc" FAKE_CALC="pokeapi=v0@bbbbbbbb" FAKE_BALANCE="$V" FAKE_SPEED="$V"
-run 1 "balance が注釈無し(未配備)なら失敗し、balance を名指しする" "STALE balance" FAKE_CALC="$V" FAKE_BALANCE="" FAKE_SPEED="$V"
+run 1 "balance の /healthz が取れなければ、注釈へ戻らず失敗し、balance を名指しする" "STALE balance" FAKE_CALC="$V" FAKE_BALANCE="" FAKE_SPEED="$V"
 run 1 "speed が旧版なら失敗し、speed を名指しする" "STALE speed" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED="old"
 run 1 "speed の /healthz が取れなければ、注釈へ戻らず失敗する" "STALE speed" FAKE_CALC="$V" FAKE_BALANCE="$V" FAKE_SPEED=""
 run 1 "calc に届かない(dataVersion が取れない)なら失敗する" "STALE calc" FAKE_CALC="" FAKE_BALANCE="$V" FAKE_SPEED="$V"

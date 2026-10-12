@@ -34,7 +34,7 @@
 ### 2.1 全体
 
 - Go モジュール: `engine`・`services`(calc・gateway・pokedex・record・team・internal)・`services/balance`・`services/speed`・`services/judge`・`tools`(`go.work`)。
-  `apps/wishlist` は別アプリで、本計画の対象外。
+  `apps/wishlist` は別アプリで、本計画の段階(S1〜)には入れない。ただしユーザーの意向(2026-10-12「このプロジェクト全てで」)により、同じ規則(domain / app / adapters・外 → 内の一方向)に Wishlist レーンが移行済み(`apps/wishlist/docs/arch-spec.md`。向きは `apps/wishlist/api/internal/archtest` が検査し、`tools/archcheck` の対象ではない)。
 - 各サービスの中は、ほぼ同じ形: `cmd/<名前>`(起動・設定)、`internal/httpapi`(生成した ServerInterface の実装)、`internal/store`(DB)、`internal/events`(NATS)、`internal/master`(マスタの読み込み)。
   名前は揃っているが、**どの層が何に依存してよいかは文書にも検査にも無い**。
 - 既にある機械検査: `make lint`(gofmt・go vet・staticcheck・plan・公開前検査)。import の向きの検査は 2 か所だけ:
@@ -317,6 +317,6 @@ services/<svc>/
 
 ## 9. この調査で見ていないこと
 
-- `apps/wishlist`(別アプリ)・`tools/`(importer・golden)・k8s の構成は対象外。
+- `tools/`(importer・golden)・k8s の構成は対象外。`apps/wishlist` は Wishlist レーンが同じ規則で移行済み(2026-10-12。§2.1)。
 - engine の純粋さ(`time.Now()`・乱数などの関数単位)とサービス間の import の禁止は、archcheck に入れていない(§5.1)。入れるかは全サービスの移行の後に判断する。
 - 移行によるパスの変更で `docs/impl/`(実装の対応表)の記述が古くなる。各サービスの移行 PR で該当行を直す。

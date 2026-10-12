@@ -2,6 +2,7 @@
 // マスタ・engine は使わない(読み込み中・失敗中でも出す)。文言は i18n/ja.ts の aboutText が正。
 
 import { useEffect, useRef } from "react";
+import { OfflinePreloadSection, type OfflinePreloadDeps } from "./app/OfflinePreloadSection";
 import { DeviceDataSection } from "./deviceData/DeviceDataSection";
 import type { DeviceDataDeleter } from "./deviceData/deleteDeviceData";
 import { aboutText } from "./i18n/ja";
@@ -20,6 +21,11 @@ interface AboutScreenProps {
   readonly recordClient?: DeviceDataDeleter;
   readonly teamClient?: DeviceDataDeleter;
   readonly onTeamDataDeleted?: () => void;
+  /** ADR-0358 段 3: 「オフライン用にポケモンのデータを保存」節。渡されたときだけ出す。 */
+  readonly offlinePreload?: OfflinePreloadDeps;
+  /** 計算する場所がサーバーか(オフラインでは保存ボタンを押せなくする)。 */
+  readonly online?: boolean;
+  readonly onPreloadSaved?: () => void;
 }
 
 export function AboutScreen({
@@ -29,6 +35,9 @@ export function AboutScreen({
   recordClient,
   teamClient,
   onTeamDataDeleted,
+  offlinePreload,
+  online = true,
+  onPreloadSaved,
 }: AboutScreenProps) {
   const headingRef = useRef<HTMLHeadingElement>(null);
   useEffect(() => {
@@ -70,6 +79,9 @@ export function AboutScreen({
           teamClient={teamClient}
           onTeamDataDeleted={onTeamDataDeleted}
         />
+      )}
+      {offlinePreload !== undefined && (
+        <OfflinePreloadSection online={online} preload={offlinePreload} onSaved={onPreloadSaved} />
       )}
       <a
         href={backHref}

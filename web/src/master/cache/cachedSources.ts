@@ -215,3 +215,18 @@ export function createCachedMasterSources(input: CreateCachedMasterSourcesInput)
     offline: createCachedOfflineMasterSource({ store: input.store }),
   };
 }
+
+/**
+ * ADR-0358 段 1: オフラインで使える保存済みのポケモンの数(record.species のキー数)。
+ * 未保存・読めない・壊れた・版違いは 0(失敗させない)。
+ */
+export async function countSavedSpecies(store: MasterCacheStore): Promise<number> {
+  const record = await loadRecord(store);
+  return record === null ? 0 : Object.keys(record.species).length;
+}
+
+/** ADR-0358 段 3: 保存済みのポケモンの key の集合(事前保存が保存済みを飛ばすのに使う)。読めない・壊れた・版違いは空。 */
+export async function listSavedSpeciesKeys(store: MasterCacheStore): Promise<ReadonlySet<string>> {
+  const record = await loadRecord(store);
+  return new Set(record === null ? [] : Object.keys(record.species));
+}

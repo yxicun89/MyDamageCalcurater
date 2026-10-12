@@ -14,6 +14,8 @@ export default defineScreen({
   order: 700,
   group: NAV_GROUPS.damage,
   usesMaster: true,
+  // API 専用(オフラインでは動かない。ADR-0358)。
+  onlineOnly: true,
   // createAdjustClient 自体は fetch しない(調整のタブを開くだけでは呼ばれない)。
   createClient: createAdjustClient,
   render: (env, client) => (

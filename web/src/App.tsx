@@ -27,6 +27,7 @@ import {
   pathForScreen,
   screenFromPath,
   isLegacyScreenPath,
+  screenIsOnlineOnly,
   screenLabel,
   type ScreenId,
 } from "./app/routes";
@@ -36,6 +37,8 @@ import { createWasmEngine } from "./engine/wasmEngine";
 import { PokemonImagesProvider } from "./images/PokemonImagesContext";
 import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
+import { offlineScopeText } from "./i18n/offlineScope";
+import { OfflineScopeNotice } from "./app/OfflineScopeNotice";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
 import type { ComboOpenRequest } from "./app/comboOpenRequest";
@@ -90,6 +93,16 @@ export interface AppProps {
   readonly masterSources?: (ids: ClientIds) => MasterSources;
   /** ポケモン画像の manifest を取る fetch(P8-1c、ADR-0325)。省くと globalThis.fetch。テストで差し替える。 */
   readonly imageFetch?: typeof fetch;
+  /**
+   * ADR-0358 段 1: オフラインで使える保存済みのポケモンの数を読む口(オフライン表示の 1 行に使う)。
+   * 本番は main.tsx が MasterCacheStore から作って渡す。省くと 0 匹として案内する。
+   */
+  readonly savedSpeciesCount?: () => Promise<number>;
+  /**
+   * ADR-0358 段 3: 保存済みのポケモンの key を読む口(「オフライン用にポケモンのデータを保存」が保存済みを飛ばす)。
+   * 本番は main.tsx が MasterCacheStore から作って渡す。省くと保存の節を出さない。
+   */
+  readonly savedSpeciesKeys?: () => Promise<ReadonlySet<string>>;
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
@@ -116,6 +129,8 @@ export function App({
   masterSource = exampleMasterSource,
   masterSources,
   imageFetch = globalThis.fetch,
+  savedSpeciesCount,
+  savedSpeciesKeys,
 }: AppProps) {
   // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
@@ -164,7 +179,12 @@ export function App({
     [mode, recordApiClient],
   );
 
+  // ADR-0358 段 2: 直近の計算入力はページを開いたときだけ戻す。計算する場所を切り替えたあとに画面が作り直されても、
+  // 古いマスタで選んだ入力を持ち込まない(ADR-0308 決定3)。
+  const [restoreLastInput, setRestoreLastInput] = useState(true);
+
   function selectMode(nextMode: CalcMode): void {
+    setRestoreLastInput(false);
     setMode(nextMode);
     saveCalcMode(nextMode);
   }
@@ -316,6 +336,14 @@ export function App({
   // キーボードで選んだときに参照する(WAI-ARIA Authoring Practices「automatic activation」)。
   const tabRefs = useRef<Partial<Record<string, HTMLButtonElement>>>({});
 
+  /**
+   * ADR-0358: オフラインのとき、API 専用の画面のタブには「オンラインのみ」の理由を添える。押せないようにはしない
+   * (ADR-0411: API 専用の画面は計算モードに関係なくオンラインのマスタで開ける。お気に入りは開くと案内を出す)。
+   */
+  function isOnlineOnlyTab(id: ScreenId): boolean {
+    return mode === "offline" && screenIsOnlineOnly(id);
+  }
+
   /** タブの選択(クリック・キーボード)。URL を pushState する(同じタブの選び直しは履歴を積まない)。 */
   function navigateToTab(nextTab: ScreenId): void {
     if (nextTab === tab) {
@@ -431,6 +459,14 @@ export function App({
   const currentGroupId = groupIdOf(tab);
   const currentScreenIds = NAV_TABS.find((navTab) => navTab.group.id === currentGroupId)?.screenIds ?? [tab];
 
+  // ADR-0358 段 3: 事前保存の節に渡す口。保存済み件数の表示(OfflineScopeNotice)は、保存が終わったら取り直す。
+  const [savedCountToken, setSavedCountToken] = useState(0);
+  const preloadSource = modeMasterSources?.online;
+  const offlinePreload =
+    savedSpeciesKeys !== undefined && preloadSource !== undefined && isSearchableMasterSource(preloadSource)
+      ? { source: preloadSource, loadSavedKeys: savedSpeciesKeys }
+      : undefined;
+
   // 文書のタイトル(「<画面名> | pokecalc」)。タブの切り替え・popstate に追従し、マスタ読み込み中も設定する。
   useEffect(() => {
     document.title = aboutOpen ? aboutDocumentTitle() : documentTitle(tab);
@@ -451,6 +487,11 @@ export function App({
             focusOnMount={focusAbout}
             recordClient={recordApiClient}
             teamClient={teamClient}
+            offlinePreload={offlinePreload}
+            online={mode === "online"}
+            onPreloadSaved={() => {
+              setSavedCountToken((token) => token + 1);
+            }}
             onTeamDataDeleted={() => {
               setTeamReloadToken((token) => token + 1);
               bumpFavoritesReloadToken();
@@ -458,6 +499,7 @@ export function App({
           />
         )}
         <div hidden={aboutOpen}>
+          {mode === "offline" && <OfflineScopeNotice key={savedCountToken} loadCount={savedSpeciesCount} />}
           {currentMasterLoad === null && <p>{appText.loading}</p>}
           {currentMasterLoad !== null && (
             <div className="app-tabs">
@@ -465,6 +507,7 @@ export function App({
                 {NAV_TABS.map((navTab, index) => {
                   const selected = currentGroupId === navTab.group.id;
                   const key = `group:${navTab.group.id}`;
+                  const onlineOnlyTab = navTab.screenIds.every(isOnlineOnlyTab);
                   return (
                     <button
                       key={key}
@@ -472,6 +515,7 @@ export function App({
                       role="tab"
                       id={tabElementId(key)}
                       aria-selected={selected}
+                      aria-describedby={onlineOnlyTab ? `${tabElementId(key)}-reason` : undefined}
                       aria-controls={panelId}
                       // ロービング tabIndex(WAI-ARIA Authoring Practices): 選択中のタブだけ Tab キーで
                       // 止まり、他のタブは矢印キー(handleTabKeyDown)でだけ選ぶ。
@@ -479,7 +523,7 @@ export function App({
                       ref={(element) => {
                         tabRefs.current[key] = element ?? undefined;
                       }}
-                      className="ui-tab app-tabs__tab"
+                      className={`ui-tab app-tabs__tab${onlineOnlyTab ? " app-tabs__tab--online-only" : ""}`}
                       onClick={() => {
                         navigateToGroup(navTab.group.id);
                       }}
@@ -499,6 +543,7 @@ export function App({
                     >
                       <Icon name={navTab.group.icon} />
                       {navTab.group.label}
+                      {onlineOnlyTab && <OnlineOnlyReason id={`${tabElementId(key)}-reason`} />}
                     </button>
                   );
                 })}
@@ -511,6 +556,7 @@ export function App({
                 >
                   {currentScreenIds.map((id, index) => {
                     const selected = tab === id;
+                    const onlineOnlyTab = isOnlineOnlyTab(id);
                     return (
                       <button
                         key={id}
@@ -518,12 +564,13 @@ export function App({
                         role="tab"
                         id={tabElementId(id)}
                         aria-selected={selected}
+                        aria-describedby={onlineOnlyTab ? `${tabElementId(id)}-reason` : undefined}
                         aria-controls={panelId}
                         tabIndex={selected ? 0 : -1}
                         ref={(element) => {
                           tabRefs.current[id] = element ?? undefined;
                         }}
-                        className="ui-tab app-tabs__tab"
+                        className={`ui-tab app-tabs__tab${onlineOnlyTab ? " app-tabs__tab--online-only" : ""}`}
                         onClick={() => {
                           navigateToTab(id);
                         }}
@@ -538,6 +585,7 @@ export function App({
                       >
                         <Icon name={screenIconName(id)} />
                         {screenLabel(id)}
+                        {onlineOnlyTab && <OnlineOnlyReason id={`${tabElementId(id)}-reason`} />}
                       </button>
                     );
                   })}
@@ -572,6 +620,7 @@ export function App({
                   onOpenCombo={openComboInCalc}
                   recordClient={recordClient}
                   mode={mode}
+                  restoreLastInput={restoreLastInput}
                   retryMasterLoad={retryMasterLoad}
                   selectMode={selectMode}
                 />
@@ -626,6 +675,7 @@ interface AppTabPanelProps {
   readonly onOpenCombo: (request: SpeedComboRequest) => void;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
+  readonly restoreLastInput: boolean;
   readonly retryMasterLoad: () => void;
   readonly selectMode: (mode: CalcMode) => void;
 }
@@ -655,6 +705,7 @@ function AppTabPanel({
   onOpenCombo,
   recordClient,
   mode,
+  restoreLastInput,
   retryMasterLoad,
   selectMode,
 }: AppTabPanelProps) {
@@ -697,6 +748,7 @@ function AppTabPanel({
                   comboOpenRequest,
                   onOpenCombo,
                   onlineMasterSource,
+                  restoreLastInput,
                 })}
               </div>
             );
@@ -777,6 +829,15 @@ function MasterLoadFailureNotice({
         )}
       </div>
     </div>
+  );
+}
+
+/** ADR-0358: 押せないタブに出す理由(目に見える短い文。名前には含めず aria-describedby で結ぶ)。 */
+function OnlineOnlyReason({ id }: { readonly id: string }) {
+  return (
+    <span id={id} className="app-tabs__reason" aria-hidden="true">
+      {offlineScopeText.onlineOnlyReason}
+    </span>
   );
 }
 

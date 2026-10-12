@@ -69,6 +69,12 @@
     font-size: var(--font-size-caption);
   }
 
+  /* ADR-0358: 固定バーのタブは幅が足りない(理由の文でタブがはみ出す)ので、理由は目に隠す。aria-describedby では
+     display: none の要素も参照できる。見える説明は画面上部の「保存済み…オンラインで」の 1 行が担う。 */
+  .app-tabs__reason {
+    display: none;
+  }
+
   /* 後ろにある基本の .app-footer の padding に負けないよう、詳細度を上げる。 */
   footer.app-footer {
     padding-bottom: calc(4.5rem + env(safe-area-inset-bottom));
@@ -239,4 +245,20 @@
 .about__back {
   margin-top: var(--space-4);
   text-decoration: none;
+}
+
+/* ADR-0358: オフラインでは API 専用のタブ。控えめな見た目にして、理由を小さく添える(押せなくはしない。色はトークンのみ)。 */
+.app-tabs__tab--online-only {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-secondary);
+}
+
+.app-tabs__reason {
+  font-size: var(--font-size-caption);
+}
+
+/* ADR-0358: オフラインで使える範囲の 1 行。 */
+.app-offline-scope {
+  margin: 0 0 var(--space-3);
 }

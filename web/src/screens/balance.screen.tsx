@@ -14,6 +14,8 @@ export default defineScreen({
   order: 300,
   group: NAV_GROUPS.team,
   usesMaster: true,
+  // API 専用(オフラインでは動かない。ADR-0358)。
+  onlineOnly: true,
   // ADR-0421: タイプバランスは構築編集の中に統合した。ナビ・URL・マウントから外す(旧 /balance は構築へ寄せる。app/routes.ts)。
   // 画面の部品はテストの足場として残し、整理は段階 4 で行う。再表示はこの行を消すだけ。
   hidden: true,
