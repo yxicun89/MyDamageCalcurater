@@ -714,6 +714,8 @@ export function CalcScreen({
       return;
     }
     const controller = new AbortController();
+    // 非同期の途中で中断されたか(型の絞り込みで定数に見えないよう関数にする)。
+    const isAborted = (): boolean => controller.signal.aborted;
     /** ポケモン ID(= 種族の key)を画面に入れる。引けなければ(安全側に)何も入れない。 */
     async function applySide(pokemonId: string, side: "attacker" | "defender"): Promise<void> {
       const context = comboOpenContextRef.current;
@@ -735,8 +737,15 @@ export function CalcScreen({
     }
     void (async () => {
       await applySide(comboRequest.attackerPokemonId, "attacker");
+      // 攻撃側の state 更新が描画に反映され、comboOpenContextRef が最新になるのを待ってから防御側を入れる。
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      if (isAborted()) {
+        return;
+      }
       await applySide(comboRequest.defenderPokemonId, "defender");
-      if (!controller.signal.aborted) {
+      if (!isAborted()) {
         setComboOpenToken(comboRequestToken);
       }
     })();

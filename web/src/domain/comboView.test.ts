@@ -1,7 +1,7 @@
 // CB-6 段階 B: 連続技の表示用の純粋関数(ランク変化チップ・倒す確率・素早さの線・耐える確率・相手の振りの選択肢)。
 import { describe, expect, test } from "vitest";
 import type { Move } from "../engine/types";
-import { comboKoText, formatSurviveChance, rankChipsOf, speedLineText } from "./comboView";
+import { comboKoText, formatSurviveChance, rankChipsOf, speedExampleLines, speedLineText } from "./comboView";
 
 const move = (effect: Move["effect"]): Move => ({
   id: "m",
@@ -95,5 +95,33 @@ describe("speedLineText", () => {
         opponentFirst: { min: 1, max: 999 },
       }),
     ).toBe("0 は同速 / 1 以上は相手が先");
+  });
+});
+
+describe("speedExampleLines(準速 = neutral-max の行だけを使う。ADR-0610 の「族」)", () => {
+  test("準速の行が無ければ空", () => {
+    expect(speedExampleLines([])).toEqual([]);
+    expect(speedExampleLines([{ preset: "max", faster: { min: 1, max: 10 } }])).toEqual([]);
+  });
+
+  test("faster だけ・slower だけの行は、あるものだけ出す。例のポケモン名が無ければ名前を付けない", () => {
+    const fasterOnly = speedExampleLines([{ preset: "neutral-max", faster: { min: 120, max: 255 } }]);
+    expect(fasterOnly).toHaveLength(1);
+    expect(fasterOnly[0]).toContain("120");
+    expect(fasterOnly[0]).not.toContain("例");
+    const slowerOnly = speedExampleLines([
+      { preset: "neutral-max", slower: { min: 1, max: 80 }, fastestSlower: { nameJa: "テストモン" } },
+    ]);
+    expect(slowerOnly).toHaveLength(1);
+    expect(slowerOnly[0]).toContain("80");
+    expect(slowerOnly[0]).toContain("テストモン");
+  });
+
+  test("同速の区間は min と max が同じなら 1 つの数だけ、違えば範囲で出す", () => {
+    const same = speedExampleLines([{ preset: "neutral-max", tie: { min: 100, max: 100 } }]);
+    expect(same[0]).toContain("100");
+    expect(same[0]).not.toContain("〜");
+    const range = speedExampleLines([{ preset: "neutral-max", tie: { min: 100, max: 102 } }]);
+    expect(range[0]).toContain("100〜102");
   });
 });

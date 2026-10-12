@@ -287,8 +287,9 @@ describe("C2 素早さ画面からの要求(comboRequest)", () => {
     render(<CalcScreen engine={createComboEngine()} master={master} comboRequest={request(1)} />);
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(attacker.key);
+      // 防御側は攻撃側の反映を 1 フレーム待ってから入る(ADR-0359 追記)。
+      expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(defender.key);
     });
-    expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(defender.key);
     expect(await screen.findByRole("combobox", { name: "追加の技" })).toBeInTheDocument();
   });
 
@@ -311,8 +312,8 @@ describe("C2 素早さ画面からの要求(comboRequest)", () => {
     );
     await waitFor(() => {
       expect(screen.getByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue(defender.key);
+      expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(attacker.key);
     });
-    expect(screen.getByRole("combobox", { name: "防御側のポケモン" })).toHaveValue(attacker.key);
   });
 
   test("マスタに無いポケモン ID は(オフラインで引けないので)そのポケモンだけ入れず、画面は壊れない", async () => {

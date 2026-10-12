@@ -694,11 +694,15 @@ function SpeedExample({
 
   useEffect(() => {
     let cancelled = false;
-    void speedClient.reach({ mode: "raw", value: selfSpeed }).then((result) => {
-      if (!cancelled) {
-        setSettled({ selfSpeed, result });
-      }
-    });
+    // reach は失敗も SpeedResult で返し reject しない(speedClient.ts)。万一の reject は例を出さないだけにする。
+    void speedClient
+      .reach({ mode: "raw", value: selfSpeed })
+      .then((result) => {
+        if (!cancelled) {
+          setSettled({ selfSpeed, result });
+        }
+      })
+      .catch(() => undefined);
     return () => {
       cancelled = true;
     };
