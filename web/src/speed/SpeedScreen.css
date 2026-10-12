@@ -354,10 +354,10 @@
 
 /* 開閉の目印(▸ が開くと下向きに変わる。操作時の切り替えだけで動かさない)。 */
 .speed-details__summary::before {
-  content: "▸";
+  content: "▸" / "";
   margin-right: var(--space-2);
 }
 
 .speed-details[open] > .speed-details__summary::before {
-  content: "▾";
+  content: "▾" / "";
 }
