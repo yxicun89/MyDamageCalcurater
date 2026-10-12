@@ -8,7 +8,7 @@ patches:
 images:
   - name: pokecalc/speed
     newName: localhost:5000/pokecalc/speed
-    digest: sha256:712987380efc4b6a4d5ca3a99096d20a5a6a37050d72f3d2ee71009350ebbc21
+    digest: sha256:bb3dc89eb2be67e36fd6d3c54799ab6ddbaba638c1f7d7d7cc156f4ed33a119c
   # read model を作る initContainer 用の pokedex image(ADR-0412)。digest は make pokedex-registry-push の出力で置き換える。
   - name: pokecalc/pokedex
     newName: localhost:5000/pokecalc/pokedex
