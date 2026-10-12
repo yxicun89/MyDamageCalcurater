@@ -2,7 +2,8 @@
 
 - 状態: **方式はユーザーが決定(2026-10-11): ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用する。A(このリポジトリを段階的に改造)も決定**。
   **S0 実装済み(2026-10-11。ADR-0811・coding-rules・`tools/archcheck`・`make lint`)**。§8 は全問決定済み。
-  **S3(calc)完了(2026-10-12。S3a〈計算・一括・逆算〉と S3b〈調整。データレーンが代行〉。ADR-0252。calc は archcheck の未移行の一覧から外れた)**。S1(G1 の解消)も 2026-10-12 完了。残りは S2・S4 以降。
+  **S3(calc)完了(2026-10-12。S3a〈計算・一括・逆算〉と S3b〈調整。データレーンが代行〉。ADR-0252。calc は archcheck の未移行の一覧から外れた)**。S1(G1 の解消)も 2026-10-12 完了。
+  **S6(team)完了(2026-10-12。ADR-0255。データレーンが代行。team は archcheck の未移行の一覧から外れた)**。残りは S2・S4・S5・S7 以降。
 - 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
 - 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
@@ -256,7 +257,7 @@ services/<svc>/
 | S3 calc(**完了 2026-10-12。前半 S3a〈計算・一括・逆算〉・後半 S3b〈調整 `adjust.go` → app。データレーンが代行。I-api-2〉。ADR-0252**) | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
 | S4 record | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
 | S5 pokedex | データ | 検索の組み立て → `app`(正規化など純粋な部分は `domain`)。`httpapi`・`store`・`readtx`・`readmodel` の I/O → `adapters`。G7 を解消。importer は §8 Q6 | `-tags mysql` のテストが通る。storetest の import 検査(ADR-0105)を新しいパスに合わせる |
-| S6 team | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
+| S6 team(**完了 2026-10-12・ADR-0255。データレーンが代行。I-api-4**) | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
 | S7 gateway | API | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
 | S8 balance | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
 | S9 speed | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |

@@ -1,8 +1,8 @@
 // TiDB(MySQL 互換)への Store の実装(ADR-0209・ADR-0211・ADR-0213)。
 //
-// すべてのクエリは device_id で絞る(package doc の規則)。TiDB に届かない失敗はすべて
+// すべてのクエリは device_id で絞る(app/ports.go の規則)。TiDB に届かない失敗はすべて
 // ErrUnavailable で包んで返し、httpapi / events はそれを見て 503 / Nak に写す。DB のエラー文自体は
-// ログにだけ残し、クライアントへは出さない(package doc・ADR-0105 §2 と同じ扱い)。
+// ログにだけ残し、クライアントへは出さない(app/ports.go・ADR-0105 §2 と同じ扱い)。
 package store
 
 import (
@@ -44,8 +44,8 @@ func wrapUnavailable(err error) error {
 	return fmt.Errorf("team store: %w: %w", ErrUnavailable, err)
 }
 
-// Ping は TiDB への到達可否だけを確かめる(httpapi の /readyz が使う。Store インターフェースには
-// 含めない — httpapi は型アサーションで使い、fake には無いので httpapi のテストは
+// Ping は TiDB への到達可否だけを確かめる(app.Service.Ready が /readyz で使う。Store インターフェースには
+// 含めない — app は型アサーション(app.Pinger)で使い、fake には無いので httpapi のテストは
 // ListTeams 経由の判定にフォールバックする)。
 func (s *TiDBStore) Ping(ctx context.Context) error {
 	return wrapUnavailable(s.db.PingContext(ctx))

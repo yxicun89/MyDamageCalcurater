@@ -9,7 +9,8 @@ import (
 	"log/slog"
 	"time"
 
-	"example.com/pokecalc/services/team/internal/expire"
+	"example.com/pokecalc/services/team/internal/adapters/expirestore"
+	"example.com/pokecalc/services/team/internal/app/expire"
 )
 
 // envExpireBatchLimit は1回の実行で消す構築数の上限(失効ジョブだけが読む。serve は要求しない)。
@@ -65,7 +66,7 @@ func runExpire(ctx context.Context, getenv func(string) string, stderr io.Writer
 	defer db.Close()
 
 	log := slog.New(slog.NewJSONHandler(stderr, nil))
-	if _, err := expire.Run(ctx, expire.NewTiDB(db), cfg.Policy, time.Now().UTC(), log); err != nil {
+	if _, err := expire.Run(ctx, expirestore.NewTiDB(db), cfg.Policy, time.Now().UTC(), log); err != nil {
 		fmt.Fprintln(stderr, "team expire:", err)
 		return 1
 	}

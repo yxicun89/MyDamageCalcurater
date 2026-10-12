@@ -1,6 +1,6 @@
 package httpapi
 
-// エラーの共通の形(record-svc の services/record/internal/httpapi/errors.go と同じ流儀)。
+// エラーの共通の形(record-svc の services/record/internal/adapters/httpapi/errors.go と同じ流儀)。
 // team-svc の失敗はすべて httpError に写し、echo の HTTPErrorHandler で {"code","message"} の
 // Error 本文に変換する。
 
@@ -18,7 +18,8 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/app"
+	"example.com/pokecalc/services/team/internal/domain"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文(Go の内部情報を出さない)。
@@ -55,11 +56,17 @@ func statusForCode(code api.ErrorCode) int {
 	}
 }
 
-// errFromStore は store のエラーを httpError に写す(store.ErrUnavailable は 503 store_unavailable、
+// errFromDomain は domain の検証の失敗を httpError に写す(code は契約の ErrorCode と同じ文字列。
+// 一致は TestDomainCodesAreContractErrorCodes が固定する)。
+func errFromDomain(e *domain.Error) error {
+	return newError(api.ErrorCode(e.Code), "%s", e.Message)
+}
+
+// errFromStore は store のエラーを httpError に写す(app.ErrUnavailable は 503 store_unavailable、
 // それ以外は 500 internal)。DB のエラー文はログにだけ残し、クライアントへの応答には出さない
 // (AC-L1)。
 func errFromStore(deviceID string, err error) error {
-	if errors.Is(err, store.ErrUnavailable) {
+	if errors.Is(err, app.ErrUnavailable) {
 		slog.Warn("team-svc: store に届かない", "deviceId", deviceID, "code", api.StoreUnavailable, "error", err)
 		return newError(api.StoreUnavailable, "保存データの DB を利用できない")
 	}
