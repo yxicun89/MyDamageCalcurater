@@ -229,7 +229,6 @@ public enum AdjustText {
         return kind.message(feature: screenTitle)
     }
 
-
     /// 「実数値 H 155 / A 120 / …」。
     public static func statsLine(_ stats: StatBlock) -> String { "実数値 " + statBlockText(stats) }
     /// 「能力ポイント H 4 / A 0 / …」。

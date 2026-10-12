@@ -5037,7 +5037,6 @@ UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、�
 | `FavoritesScreenUITests`(2 件)・`FavoriteLoadUITests`・`CalcHistoryUITests` | 「通信に失敗しました」→「サーバーに接続できません」 | 接続できない文言の統一 |
 | `SpeedMatchupUITests.testMatchupFailureKeepsInputsAndDoesNotBlockTheCalcScreen` | 「素早さのサーバーに接続できません」→「素早さのサーバーで問題が起きています」 | 同上(モックの失敗は `upstream_unavailable`) |
 | `TeamBalanceUITests.testBalanceUnavailableKeepsEditingAndSaving` | ラベル → 「サーバーの接続先が設定されていません」 | 同上(モックのタイプバランスは接続先なし) |
-
 | `AdjustTextTests`(接続できない/読み取れない・PokeCalcError 以外)・`GlossaryTests.testReplacementWordsAreUsed` | 「調整のサーバーに接続できません」→ 分類の文(offline / unreadable)。`AdjustText.unavailable` は offline の文 | 形のずれを「接続できません」にしない |
 | `BalanceLabelsTests`(3 件)・`BalanceStage3LabelsTests` | transport の文言 → offline の文、`balance_unavailable` → 「サーバーの接続先が設定されていません」、PokeCalcError 以外 → unreadable の文。`code`(`balance_unavailable`)は従来どおり | 同上 |
 | `SpeedMatchupViewModelStateTests.testTransportFailure...` | `SpeedLabels.unavailable` → offline の文 | 同上 |
