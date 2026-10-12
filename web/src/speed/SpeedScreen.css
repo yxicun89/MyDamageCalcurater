@@ -312,3 +312,52 @@
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }
+
+/* ---- 結論の 1 行と折りたたみ(I-web-34。全行の一覧は必要なときだけ開く) ---- */
+.speed-conclusion {
+  margin: 0;
+  font-size: var(--font-size-heading);
+  font-weight: var(--font-weight-heading);
+  overflow-wrap: anywhere;
+}
+
+/* 選んだポケモンのタイプ色を上端の帯とカードの左帯に使う(未選択なら brand.primary)。 */
+.speed-card--typed {
+  border-top: 4px solid var(--card-type, var(--brand-primary));
+}
+
+.speed-matchup-card {
+  border-left: 4px solid var(--card-type, var(--brand-primary));
+}
+
+.speed-details {
+  min-width: 0;
+}
+
+.speed-details__summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  cursor: pointer;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+}
+
+.speed-details__summary:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+}
+
+.speed-details[open] > .speed-details__summary {
+  margin-bottom: var(--space-2);
+}
+
+/* 開閉の目印(▸ が開くと下向きに変わる。操作時の切り替えだけで動かさない)。 */
+.speed-details__summary::before {
+  content: "▸" / "";
+  margin-right: var(--space-2);
+}
+
+.speed-details[open] > .speed-details__summary::before {
+  content: "▾" / "";
+}
