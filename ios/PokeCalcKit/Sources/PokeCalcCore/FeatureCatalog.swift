@@ -9,6 +9,8 @@ public struct FeatureSpec: Equatable, Sendable {
     public let openAtLaunchEnvironmentKey: String?
     /// 画面を開くのに必要なサービス(起動時にすべて登録されていることを検証する)。
     public let requiredServices: [ServiceKey]
+    /// 画面が入る下部タブ(タブ内の区切りの 1 つになる。ADR-0531)。右上のアイコンや、画面の中から積んで開く画面は `nil`。
+    public let tab: AppTab?
     /// 入口が右上のアイコン(設定エラー時も出る)か。
     public let isToolbarEntry: Bool
     /// 設定エラーでサービスが無いときも開ける(`destinationWithoutServices` を実装している)か。
@@ -16,12 +18,13 @@ public struct FeatureSpec: Equatable, Sendable {
 
     public init(
         id: String, order: Int, openAtLaunchEnvironmentKey: String? = nil, requiredServices: [ServiceKey] = [],
-        isToolbarEntry: Bool = false, availableWithoutServices: Bool = false
+        tab: AppTab? = nil, isToolbarEntry: Bool = false, availableWithoutServices: Bool = false
     ) {
         self.id = id
         self.order = order
         self.openAtLaunchEnvironmentKey = openAtLaunchEnvironmentKey
         self.requiredServices = requiredServices
+        self.tab = tab
         self.isToolbarEntry = isToolbarEntry
         self.availableWithoutServices = availableWithoutServices
     }

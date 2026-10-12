@@ -64,9 +64,7 @@ final class SpeedMatchupUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if let scenario { app.launchEnvironment["POKECALC_MOCK_SPEED"] = scenario }
         app.launch()
-        let open = element(app, "openSpeedScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
         return app
     }
@@ -249,11 +247,8 @@ final class SpeedMatchupUITests: XCTestCase {
         wait(element(app, "speedReachError"), "「これ以上」の失敗が別に表示される")
         XCTAssertTrue(element(app, "speedMatchupError").exists)
 
-        // 絶対ルール 5: 素早さが失敗しても、ルートから計算画面はこれまでどおり開く。
-        app.navigationBars.buttons.firstMatch.tap()
-        let calc = element(app, "openCalcScreen")
-        wait(calc, "ルートに戻れない")
-        calc.tap()
+        // 絶対ルール 5: 素早さが失敗しても、計算画面はこれまでどおり開く(素早さタブからダメージタブの計算へ。ADR-0531)。
+        app.openScreen("openCalcScreen")
         wait(element(app, "calcScreen"), "素早さが失敗しても計算画面は開く")
     }
 }

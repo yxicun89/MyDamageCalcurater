@@ -33,12 +33,10 @@ final class ReverseScreenUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
     }
 
-    /// ルート画面の構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
+    /// 構築タブの構築一覧を開き、メンバー1体だけの構築を1つ作って一覧まで戻る
     /// (`CalcScreenUITests.createTeamWithOneMember` と同じ操作列。P6-2d)。
     private func createTeamWithOneMember(_ app: XCUIApplication) {
-        let openTeamList = app.buttons["openTeamListScreen"]
-        XCTAssertTrue(openTeamList.waitForExistence(timeout: Self.existenceTimeout))
-        openTeamList.tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let createButton = element(app, "createTeamButton")
@@ -71,18 +69,14 @@ final class ReverseScreenUITests: XCTestCase {
         XCTAssertTrue(element(app, "teamSavedNotice").waitForExistence(timeout: Self.existenceTimeout))
         backButton.tap()
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
-
-        // ルートへ戻る(構築一覧の戻るボタン)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築一覧は構築タブの根なので戻る先は無い(ADR-0531。呼び出し側がタブを移る)。
     }
 
     private func launchReverseScreen() -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launch()
-        let openButton = app.buttons["openReverseScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout))
-        openButton.tap()
+        app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }
@@ -92,6 +86,13 @@ final class ReverseScreenUITests: XCTestCase {
     private func typeObservation(_ app: XCUIApplication, fieldIdentifier: String, text: String) {
         let field = element(app, fieldIdentifier)
         XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
+        // 下部タブ・区切りの分だけ欄が下がり、前の欄で出たキーボードの裏に隠れることがある(ADR-0531)。
+        // 前の欄のキーボードを「完了」で閉じてから押す(打つ内容・検査は不変)。
+        let done = app.buttons["完了"]
+        if app.keyboards.firstMatch.exists, done.exists {
+            done.tap()
+            XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: Self.existenceTimeout))
+        }
         field.tap()
         field.typeText(text)
     }
@@ -222,14 +223,11 @@ final class ReverseScreenUITests: XCTestCase {
         XCTAssertFalse(teamButton.isEnabled, "構築が無いときは無効")
         XCTAssertTrue(element(app, "reverseTeamEmptyMessage").waitForExistence(timeout: Self.existenceTimeout))
 
-        // ルートへ戻り、構築を1つ作って逆算画面を開き直す(`loadTeams()` は画面の起動時に走る。
-        // `POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを再起動せず
-        // 同じアプリのまま画面を行き来する。`CalcScreenUITests` と同じ)。
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築タブで構築を1つ作り、ダメージタブの逆算へ戻る(逆算画面はタブを移って戻ると `loadTeams()` を
+        // 呼び直す。ADR-0531)。`POKECALC_USE_MOCK=1` は起動のたびに構築の保存先を空にするため、プロセスを
+        // 再起動せず同じアプリのまま画面を行き来する(`CalcScreenUITests` と同じ)。
         createTeamWithOneMember(app)
-        let openReverseAgain = app.buttons["openReverseScreen"]
-        XCTAssertTrue(openReverseAgain.waitForExistence(timeout: Self.existenceTimeout))
-        openReverseAgain.tap()
+        app.openScreen("openReverseScreen")
         XCTAssertTrue(element(app, "reverseScreen").waitForExistence(timeout: Self.existenceTimeout))
 
         let teamButtonAfter = element(app, "reverseTeamSourceButton")
@@ -284,12 +282,19 @@ final class ReverseScreenUITests: XCTestCase {
         // ラベルの文字列だけで探すと、シートの裏の自分側カードのヘッダー(既定の自分 = 2番目の種族。
         // ラベルが同じ文字列)を誤って拾う(`CalcScreenUITests` と同じ理由)。検索結果一覧に限定した
         // identifier で確かめる。
-        XCTAssertFalse(
-            element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").exists, "絞り込まれて一致しない種族は消える"
+        // 絞り込み・シートを閉じる・ラベルの更新は非同期なので、即時判定ではなく終わるまで待つ(17 Pro・並列実行で
+        // 即時判定が揺れた。ADR-0501「iPhone 17 Pro のゲート」)。期待する状態そのものは変えない。
+        XCTAssertTrue(
+            element(app, "speciesSearchResult-\(Self.secondMockSpeciesKey)").waitForNonExistence(timeout: Self.existenceTimeout),
+            "絞り込まれて一致しない種族は消える"
         )
         result.tap()
 
-        XCTAssertFalse(element(app, "speciesSearchSheet").exists, "選ぶとシートが閉じる")
+        XCTAssertTrue(
+            element(app, "speciesSearchSheet").waitForNonExistence(timeout: Self.existenceTimeout), "選ぶとシートが閉じる")
+        let labelUpdated = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "label == %@", Self.thirdMockSpeciesName), object: opponentPicker)
+        XCTAssertEqual(XCTWaiter().wait(for: [labelUpdated], timeout: Self.existenceTimeout), .completed)
         XCTAssertEqual(opponentPicker.label, Self.thirdMockSpeciesName)
     }
 }

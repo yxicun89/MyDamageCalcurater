@@ -22,7 +22,9 @@ final class JudgeHiddenUITests: XCTestCase {
     func testJudgeEntryIsHiddenByDefault() {
         let app = launchRoot(showJudge: false)
         XCTAssertTrue(app.buttons["openCalcScreen"].waitForExistence(timeout: Self.existenceTimeout), "計算の入口は出る")
-        XCTAssertTrue(app.buttons["openSpeedScreen"].exists, "素早さの入口は出る")
+        // タブバーのボタンは計算画面より後に支援技術へ出ることがある(17 Pro で実測)ので、存在を待つ。
+        XCTAssertTrue(
+            app.tabButton(UITestNavigation.TabID.speed).waitForExistence(timeout: Self.existenceTimeout), "素早さの入口(タブ)は出る")
         XCTAssertFalse(app.buttons["openJudgeScreen"].exists, "判定の入口は既定で出さない")
     }
 
@@ -31,7 +33,7 @@ final class JudgeHiddenUITests: XCTestCase {
         let app = launchRoot(showJudge: true)
         XCTAssertTrue(app.buttons["openCalcScreen"].waitForExistence(timeout: Self.existenceTimeout))
         let judge = app.buttons["openJudgeScreen"]
-        // ルートはスクロールすることがあるので、押せる位置まで探す。
+        // 判定はダメージタブの区切りに並ぶ(ADR-0531)。念のため押せる位置まで探す。
         var attempts = 0
         while !judge.exists && attempts < 6 {
             app.swipeUp()

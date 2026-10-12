@@ -22,9 +22,7 @@ final class SpeciesImageUITests: XCTestCase {
             app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         }
         app.launch()
-        let open = app.buttons["openCalcScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }
@@ -105,9 +103,7 @@ final class SpeciesImageUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if images { app.launchEnvironment["POKECALC_MOCK_IMAGES"] = "1" }
         app.launch()
-        let open = app.buttons["openSpeedScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

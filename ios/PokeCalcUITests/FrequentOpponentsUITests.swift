@@ -22,9 +22,7 @@ final class FrequentOpponentsUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if let scenario { app.launchEnvironment["POKECALC_MOCK_FREQUENT_OPPONENTS"] = scenario }
         app.launch()
-        let open = app.buttons["open\(screen)Screen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("open\(screen)Screen")
         XCTAssertTrue(element(app, "\(screen.prefix(1).lowercased() + screen.dropFirst())Screen").waitForExistence(timeout: Self.existenceTimeout))
         return app
     }

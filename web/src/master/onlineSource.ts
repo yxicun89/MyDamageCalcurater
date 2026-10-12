@@ -12,7 +12,7 @@
 import typeChartData from "@typechart";
 import type { ClientIds } from "../api/clientIds";
 import type { components } from "../api/openapi.gen";
-import type { Ability, Move } from "../engine/types";
+import type { Ability, Move, MoveEffect } from "../engine/types";
 import { typeChartFromData } from "./typeChart";
 import type {
   MasterCapabilities,
@@ -152,6 +152,28 @@ function mapAbility(ability: Schemas["Ability"]): Ability {
   };
 }
 
+/**
+ * 公開 API の Move.effect(PascalCase `{Chance,Target,Stages}`。確率 100% のランク変化だけ。ADR-0253)を、WASM 境界の
+ * camelCase `{chance,target,stages}` にする(連続技 CB-6)。省略・null・形が合わないものは undefined
+ * (= ランク変化なし。サーバーが検証済みなので形が合わないのは古いサーバー相当として握りつぶしてよい)。
+ * stages のキー(atk 等)は元から小文字で、変換しない。
+ */
+export function fromPublicMoveEffect(effect: Schemas["MasterEffect"] | undefined): MoveEffect | undefined {
+  if (effect === undefined || effect === null) {
+    return undefined;
+  }
+  const { Chance: chance, Target: target, Stages: stages } = effect;
+  if (
+    typeof chance !== "number" ||
+    (target !== "self" && target !== "target") ||
+    typeof stages !== "object" ||
+    stages === null
+  ) {
+    return undefined;
+  }
+  return { chance, target, stages };
+}
+
 /** 技(getMovesByIds の応答をそのまま MasterSpeciesResolution.moves に写す。ADR-0304 A-13)。 */
 function mapMove(move: Schemas["Move"]): Move {
   // target・mechanisms・flags は応答のまま写す(ADR-0178 §6)。応答に無いキーは作らない
@@ -169,7 +191,15 @@ function mapMove(move: Schemas["Move"]): Move {
     // ADR-0143 §6: 機構の中身・処理の定義も応答のまま写す(オフライン計算で多段・固定ダメージ・重さの技等の印を外す)。
     ...(move.mechanismParams !== undefined && { mechanismParams: move.mechanismParams }),
     ...(move.rule !== undefined && { rule: move.rule }),
+    // CB-6: 追加効果(確率 100% のランク変化)。無い技はキーを作らない(= ランク変化なし)。
+    ...mapMoveEffect(move.effect),
   };
+}
+
+/** effect を持つ技だけ `{effect}` を返す(スプレッド用)。 */
+function mapMoveEffect(effect: Schemas["MasterEffect"] | undefined): { effect?: MoveEffect } {
+  const mapped = fromPublicMoveEffect(effect);
+  return mapped === undefined ? {} : { effect: mapped };
 }
 
 /** 性格(plus・minus の省略と null をどちらも null にする)。 */

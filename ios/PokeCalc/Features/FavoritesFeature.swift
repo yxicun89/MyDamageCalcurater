@@ -5,8 +5,8 @@ import SwiftUI
 struct FavoritesFeature: AppFeature {
     let id = "favorites"
     let order = 800
-    let entry = FeatureEntry.rootButton(
-        title: FavoritesLabels.rootButtonTitle, accessibilityIdentifier: "openFavoritesScreen")
+    let entry = FeatureEntry.tab(
+        .records, title: FavoritesLabels.rootButtonTitle, accessibilityIdentifier: "openFavoritesScreen")
     let openAtLaunchEnvironmentKey: String? = "POKECALC_OPEN_FAVORITES_SCREEN_AT_LAUNCH"
     let requiredServices = [ServiceKey((any FavoritesService).self), ServiceKey((any CalcHistoryService).self)]
 
@@ -37,7 +37,9 @@ struct FavoritesFeature: AppFeature {
                             service: context.core.pokeCalc, teamStore: context.teamStore,
                             backendDescription: context.core.backendDescription,
                             frequentOpponentsService: context.core.frequentOpponents, favoritesService: service,
-                            restoring: favorite == nil ? calc : nil, restoringFavorite: favorite))
+                            restoring: favorite == nil ? calc : nil, restoringFavorite: favorite,
+                            // 記録の画面に積む計算は、戻ると破棄されるので離れたら取り消す(ADR-0531 §2)。
+                            lifetime: .pushed))
                 }))
     }
 }

@@ -31,9 +31,7 @@ final class SpeedScreenUITests: XCTestCase {
 
     private func launchSpeedScreen(scenario: String? = nil) -> XCUIApplication {
         let app = launch(scenario: scenario)
-        let open = element(app, "openSpeedScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
         return app
     }
@@ -44,6 +42,14 @@ final class SpeedScreenUITests: XCTestCase {
 
     private func wait(_ element: XCUIElement, _ message: String, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(element.waitForExistence(timeout: Self.existenceTimeout), message, file: file, line: line)
+    }
+
+    /// 遅延して描く表の段が出るまでスクロールする(見つかったら止める)。
+    private func scrollUntilExists(_ app: XCUIApplication, prefix: String) {
+        let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
+        for _ in 0..<Self.maxScrolls where !first.exists {
+            app.swipeUp()
+        }
     }
 
     /// 画面外の要素をタップできる位置までスクロールする(画面は縦に長い単一の ScrollView)。
@@ -120,14 +126,12 @@ final class SpeedScreenUITests: XCTestCase {
         expectSelected(element(app, "speedTrickRoom"), true, "トリックルームも切り替えられる")
     }
 
-    /// 絶対ルール5: 素早さが全面的に失敗しても、ルートから計算画面はこれまでどおり開く。
+    /// 絶対ルール5: 素早さが全面的に失敗しても、計算画面はこれまでどおり開く。
     func testCalcScreenStillWorksWhenSpeedFailsEntirely() {
         let app = launchSpeedScreen(scenario: "all-error")
         wait(element(app, "speedPokemonError"), "一覧の失敗が表示されない")
-        app.navigationBars.buttons.firstMatch.tap()
-        let calc = element(app, "openCalcScreen")
-        wait(calc, "ルートに戻れない")
-        calc.tap()
+        // 素早さタブからダメージタブの計算へ移る(ADR-0531。以前はルートへ戻ってから開いた)。
+        app.openScreen("openCalcScreen")
         wait(element(app, "calcScreen"), "素早さが失敗しても計算画面は開く")
     }
 }

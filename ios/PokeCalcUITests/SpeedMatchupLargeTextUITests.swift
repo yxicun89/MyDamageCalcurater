@@ -42,9 +42,7 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
         app.launch()
-        let open = element(app, "openSpeedScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        open.tap()
+        app.openScreen("openSpeedScreen")
         XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
         return app
     }

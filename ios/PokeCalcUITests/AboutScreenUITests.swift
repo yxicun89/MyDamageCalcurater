@@ -27,9 +27,7 @@ final class AboutScreenUITests: XCTestCase {
     }
 
     private func openAboutScreen(_ app: XCUIApplication) {
-        let openButton = element(app, "openAboutScreen")
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openAboutScreen が無い")
-        openButton.tap()
+        app.openScreen("openAboutScreen")
         XCTAssertTrue(element(app, "aboutScreen").waitForExistence(timeout: Self.existenceTimeout), "aboutScreen が開かない")
     }
 

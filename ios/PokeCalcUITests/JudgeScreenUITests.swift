@@ -63,9 +63,7 @@ final class JudgeScreenUITests: XCTestCase {
     }
 
     private func openJudgeScreen(_ app: XCUIApplication) {
-        let open = element(app, "openJudgeScreen")
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openJudgeScreen が無い")
-        open.tap()
+        app.openScreen("openJudgeScreen")
         XCTAssertTrue(element(app, "judgeScreen").waitForExistence(timeout: Self.existenceTimeout), "judgeScreen が開かない")
     }
 
@@ -358,10 +356,8 @@ final class JudgeScreenUITests: XCTestCase {
         XCTAssertFalse(element(app, "judgeResult").exists)
         XCTAssertTrue(label(app, "judgeAttackerSpeciesButton").contains(Self.speciesOne.name), "入力は消えない(直して送り直せる)")
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
-        let openCalc = app.buttons["openCalcScreen"]
-        wait(openCalc, "ルートに戻れない")
-        openCalc.tap()
+        // 判定と計算は同じダメージタブの区切り(ADR-0531)。
+        app.openScreen("openCalcScreen")
         wait(element(app, "calcScreen"), "判定が失敗しても計算画面は開く")
     }
 
@@ -380,9 +376,7 @@ final class JudgeScreenUITests: XCTestCase {
 
     /// 構築ビルダーでメンバーを1体作る(`CalcScreenUITests.createTeamWithOneMember` と同じ操作列)。
     private func createTeamWithOneMember(_ app: XCUIApplication) {
-        let openTeamList = app.buttons["openTeamListScreen"]
-        wait(openTeamList, "openTeamListScreen が無い")
-        openTeamList.tap()
+        app.openScreen("openTeamListScreen")
         wait(element(app, "teamListScreen"), "構築一覧が開かない")
         element(app, "createTeamButton").tap()
         wait(element(app, "teamEditScreen"), "編集画面が開かない")
@@ -401,22 +395,18 @@ final class JudgeScreenUITests: XCTestCase {
         wait(element(app, "teamSavedNotice"), "保存できない")
         element(app, "backToListButton").tap()
         wait(element(app, "teamListScreen"), "保存して一覧に戻れない")
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        // 構築一覧は構築タブの根なので戻る先は無い(ADR-0531。呼び出し側がタブを移る)。
     }
 
     /// 構築が無い間は入口が無効(案内つき)。構築を作ってから開くと、自分側にも候補側にもメンバーを呼び出せる。
     func testCallingTeamMembersIntoTheAttackerAndACandidate() {
         let app = launch()
-        let open = app.buttons["openJudgeScreen"]
-        wait(open, "openJudgeScreen が無い")
-        open.tap()
-        wait(element(app, "judgeScreen"), "judgeScreen が開かない")
+        openJudgeScreen(app)
         let emptyButton = element(app, "judgeAttackerTeamSourceButton")
         wait(emptyButton, "構築から呼び出す入口が無い")
         XCTAssertFalse(emptyButton.isEnabled, "構築が無いときは無効")
         wait(element(app, "judgeAttackerTeamEmptyMessage"), "案内が出る")
 
-        app.navigationBars.buttons.element(boundBy: 0).tap()
         createTeamWithOneMember(app)
         openJudgeScreen(app)
 

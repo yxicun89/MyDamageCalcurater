@@ -15,7 +15,14 @@ struct SpeedScreenView: View {
     /// 連続技(計算画面)へ渡す先。nil の間は連続技へのリンクを出さない(連続技 CB-8 が入るまで)。
     private let onOpenCombo: ((SpeedComboHandoff) -> Void)?
 
-    init(service: any SpeedService, onOpenCombo: ((SpeedComboHandoff) -> Void)? = nil) {
+    /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
+    private let lifetime: ScreenLifetime
+
+    init(
+        service: any SpeedService, lifetime: ScreenLifetime = .retained,
+        onOpenCombo: ((SpeedComboHandoff) -> Void)? = nil
+    ) {
+        self.lifetime = lifetime
         _viewModel = State(
             initialValue: SpeedMatchupViewModel(service: service, comboAvailable: onOpenCombo != nil))
         self.onOpenCombo = onOpenCombo
@@ -39,7 +46,8 @@ struct SpeedScreenView: View {
         .popScreenBackground()
         .accessibilityIdentifier("speedScreen")
         .task { await viewModel.load() }
-        .onDisappear { viewModel.cancelPendingWork() }
+        // 戻ると破棄される画面(積んだ画面)だけ、離れたら入力・送信を止める(issue #113 A6・ADR-0531 §2)。
+        .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
         .sheet(item: $pickerTarget) { target in
             SpeedPokemonSheet(viewModel: viewModel, target: target)
         }

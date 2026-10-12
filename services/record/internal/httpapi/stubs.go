@@ -46,6 +46,10 @@ func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) er
 	return notFoundForOtherServices()
 }
 
+func (s *Server) CalcCombo(ctx *echo.Context, params api.CalcComboParams) error {
+	return notFoundForOtherServices()
+}
+
 func (s *Server) SearchItems(ctx *echo.Context, params api.SearchItemsParams) error {
 	return notFoundForOtherServices()
 }

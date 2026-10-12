@@ -30,16 +30,8 @@ final class FavoriteCalcRestoreUITests: XCTestCase {
     }
 
     private func openFavorites(_ app: XCUIApplication) {
-        let open = app.buttons["openFavoritesScreen"]
-        XCTAssertTrue(open.waitForExistence(timeout: Self.existenceTimeout))
-        open.tap()
+        app.openScreen("openFavoritesScreen")
         XCTAssertTrue(element(app, "favoritesScreen").waitForExistence(timeout: Self.existenceTimeout))
-    }
-
-    private func goBack(_ app: XCUIApplication) {
-        let back = app.navigationBars.buttons.element(boundBy: 0)
-        XCTAssertTrue(back.waitForExistence(timeout: Self.existenceTimeout))
-        back.tap()
     }
 
     private func waitForLabel(_ target: XCUIElement, contains text: String) {
@@ -107,9 +99,7 @@ final class FavoriteCalcRestoreUITests: XCTestCase {
 
     func testPinningFromCalcScreenKeepsCalcAndRowOpensIt() {
         let app = launch()
-        let openCalc = app.buttons["openCalcScreen"]
-        XCTAssertTrue(openCalc.waitForExistence(timeout: Self.existenceTimeout))
-        openCalc.tap()
+        app.openScreen("openCalcScreen")
         XCTAssertTrue(element(app, "calcScreen").waitForExistence(timeout: Self.existenceTimeout))
         let pin = app.buttons["pinAttackerFavoriteButton"]
         scrollTo(pin, in: app)
@@ -117,8 +107,8 @@ final class FavoriteCalcRestoreUITests: XCTestCase {
         let status = element(app, "favoritePinStatus")
         XCTAssertTrue(status.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(status.label.contains("お気に入りに追加しました"), "label: \(status.label)")
-        goBack(app)
 
+        // 計算はダメージタブの根なので戻る先は無い。記録タブへ移る(ADR-0531)。
         openFavorites(app)
         let use = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "favoriteUseButton-")).firstMatch
         XCTAssertTrue(use.waitForExistence(timeout: Self.existenceTimeout), "calc つきで保存されたので「計算に使う」が出る")

@@ -1,6 +1,6 @@
 # ADR-0610: 素早さ画面を「相手を選んで上を取る最低ライン」にする(表は画面から外す)
 
-- 状態: 提案(2026-10-12。I-speed-4。ユーザー要望 ec 経由。§6 の未確定点はユーザー確認待ち。推奨案で受け入れ条件とテストを先に書いた)
+- 状態: 提案(Web 画面の具体は §7 に追記。2026-10-12。I-speed-4。ユーザー要望 ec 経由。§6 の未確定点はユーザー確認待ち。推奨案で受け入れ条件とテストを先に書いた)
 - 日付: 2026-10-12
 - 関連: ADR-0600 §3(素早さの式)、ADR-0601(表の 6 行)、ADR-0602(自分の位置)、ADR-0604(Web 画面)、ADR-0607(追い風・まひ・トリックルーム)、
   ADR-0608 / ADR-0609(Web の仮想スクロール・周辺パネル)、ADR-0517 / ADR-0527(iOS の遅延描画・周辺パネル)、ADR-0357(ランクのメーター)、
@@ -147,6 +147,59 @@ C の『族』表記は出力 2(「これ以上」)で使う(要望の『準速�
 - **Q5 下降補正の行**: トリックルームなしでは出さない(推奨)。
 - **Q6 表**: 画面から完全に外す(推奨)か、「全体の表を見る」の折りたたみで残すか。
 - **Q7 連続技へ渡す内容**: 今の振り(SP・性格・ランク・スカーフ)も渡す(推奨)か、ポケモンだけか。
+
+## 7. Web 画面の具体(I-speed-4b。2026-10-12 追記)
+
+§4 を Web で実装するときの決め事。テストは `web/src/speed/SpeedScreen.test.tsx`(W1〜W12)・`SpeedScreen.images.test.tsx`・
+`speedClient.matchup.test.ts`、実ブラウザは `web/e2e/speed.spec.ts`。文言は `web/src/i18n/speed.ts` の `speedScreenText`(F-13 のやさしい言葉。
+「種族」は用語集の禁止語なので「素早さの基本値」と言い換え、「○○ 族」だけを使う)。
+
+**構成(`SpeedScreen`)**
+
+- 領域(`role=region`、見出し h2 と同じ名前。常に描画し、未選択の間は案内文を出す):「自分のポケモン」「相手のポケモン」「場の状態」(group)、
+  出力 1「先に動くための最低ライン」(トリックルーム中は見出しが「先に動ける上限(トリックルーム中)」)、出力 2「これ以上」。
+- 自分: ポケモンの `<select>`(名前「自分のポケモンを選ぶ」。素早さ画面はマスタを使わない = `usesMaster: false` なので speed の `pokemon()` の一覧を使う)・
+  `PokemonCard`(名前 h3)・`RankMeter`(`asGroup={false}`・`statName = rankStatNameJa.spe`)・スカーフ・追い風(自分側)・まひ(自分)のチップ・
+  「今の振りも入れる」(オンで `Stepper`〈素早さ SP 0〜32〉と `SegmentedControl`〈性格補正 下降 / 補正なし / 上昇〉が出る)。
+- 相手: ポケモンの `<select>`・`PokemonCard`・想定のチップ 6 つ(無振り / 準速 / 最速 / 最速スカーフ が既定で on、+1 / +2 は off。最後の 1 つは外せない)・
+  追い風(相手側)・まひ(相手)。カスタムの想定(API の `custom`)は今回の画面では出さない(API は対応済み。必要になったら足す)。
+- 場: トリックルーム(チップ)。
+- 呼び出し: マウント時に `pokemon()` を 1 回。`matchup()` は自分と相手を選んだとき、入力が変わるたびに(省略値は送らない。想定は表の順に明示)。
+  `reach()` は「今の振り」を入れたとき(相手は不要)に `PositionRequest`(`mode: "custom"`)で呼び、相手側の追い風は `tableTailwind` に載せる
+  (相手のまひは `PositionRequest` に無いので載らない)。トリックルームは `reach()` の本文に入れず、読み方だけを切り替える(ADR-0610 §1)。
+  古い応答は捨てる(key 方式)。`table()`・`position()` は画面から呼ばない(クライアント関数とそのテストは残す)。
+
+**表示規則**
+
+- カード(想定ごと): h3 =「最速 ・ 素早さ 145」、一言見出し(補正なしの最小 SP が 0 →「無振りで抜ける」/ 補正なしで足りる →「準速で抜ける」/
+  上昇だけ →「最速なら S○ 以上で抜ける」/ どれも無い →「どう振っても上を取れません」)。トリックルーム中は上限(「S○ まで振っても先に動ける」)。
+- 性格の行: 補正なし・上昇を出し、下降はトリックルーム中だけ(§6 Q5)。「S○ 以上で抜ける」(0 なら「振らなくても抜ける」)・同速は「S○ で同速」を併記・
+  届かないなら「上を取れません」。同速だけがある行も、見出しは「どう振っても上を取れません」のまま同速を併記する。
+- 今の振りがあるとき、カードに行動順のバッジ(「今の振りなら先に動く / 同速 / 後に動く」。文字つき)と自分の素早さを出す。
+- 「これ以上」: 6 プリセットを表の順に 1 行ずつ。「最速 102 族まで抜ける ・ 103 族と同速 ・ 104 族以上に抜かれる」に該当数(○ 体)と境界の例
+  (遅い側で最も速い 1 体・速い側で最も遅い 1 体)を添える。空の区間は「なし」の文。トリックルーム中は「後に動く / 先に動ける」に読み替える。
+  「今の振り」が無い間は入れ方を案内する。
+- 連続技へのリンク「この相手で連続技を計算」: `SpeedScreen` の任意の props `onOpenCombo(SpeedComboRequest)` があり、相手を選んでいるときだけ出す。
+  **連続技の画面は画面レジストリ(ADR-0323)にまだ無い**ので、`speed.screen.tsx` は `onOpenCombo` を渡さず、リンクは出ない(無効表示もしない)。
+  連続技の Web 画面(CB-6)ができたら、そのレーンが `speed.screen.tsx` から渡す。渡す内容は攻撃側 = 自分・防御側 = 相手、今の振りがあれば `speed: {sp, nature, rank, scarf}`(§6 Q7 の推奨)。
+- 見た目: 部品は `web/src/ui`(PokemonCard・RankMeter・Stepper・SegmentedControl・Tile・Icon・TypeBadge)と `ToggleChip`。色は tokens.css のトークンだけ
+  (上昇は brand.primary、下降は warning。赤は弱点専用なので使わない)。常時動くアニメーションなし。計算画面(`web/src/screens/CalcScreen`)の領域・カードの作りに合わせる。
+
+**消すもの(置き換え)と付け替え**
+
+画面ごと外れる部品と、その部品専用のテスト・コード(判定〈judge〉画面は speed の型・部品を共有しないので影響しない。import 元は grep で確認済み =
+`App.tsx`・`app/screens.tsx` は `speed.screen.tsx` の登録経由だけ):
+
+| 消すもの | 理由・付け替え先 |
+|---|---|
+| `speedWindow.ts` / `speedWindow.test.ts` | 表の仮想スクロールの計算(ADR-0608)。表が無いので不要 |
+| `SpeedScreen.virtual.test.tsx` | 同上(TierViewport・位置マーカーの振る舞い)。実ブラウザの高さ揃え e2e も `e2e/speed.spec.ts` から外した |
+| `speedNeighborhood.ts` / `speedNeighborhood.test.ts` / `SpeedNeighborhoodPanel.tsx` / `SpeedNeighborhoodPanel.test.tsx` | 周辺パネル(ADR-0609)。役目は「これ以上」の境界の例が引き継ぐ |
+| `SpeedScreen.test.tsx`(旧 A1〜A8)/ `SpeedScreen.g05.test.tsx` / `SpeedScreen.visual.test.tsx` / `SpeedScreen.images.test.tsx`(旧) | 旧画面の振る舞い。新しい `SpeedScreen.test.tsx`(W1〜W12)・`SpeedScreen.images.test.tsx` に付け替えた。付け替え先: 入力の方法 3 モード・範囲外の検証 → 廃止(`Stepper` が 0〜32 に収める。実数値入力は無くなった)/ エラーの日本語化・古い応答の無視・読み込み中 → W10 / カードの部品(PokemonCard・RankMeter・Stepper・SegmentedControl)→ W12 / 画像・エンブレム → images テスト |
+| `plainWording.test.ts` の `modeLabel.preset` の期待 | 入力の方法の選択が無くなった。代わりに新しい見出し・読み方の文言を固定した |
+| `SpeedScreen.css` の表・周辺パネル・マーカーのスタイル | 実装者が新しい作りに合わせて書き直す |
+
+`speedClient.ts` の `table()`・`position()` とそのテスト(`speedClient.test.ts`)、`speed.gen.ts` は残す。
 
 ## 受け入れ条件
 
