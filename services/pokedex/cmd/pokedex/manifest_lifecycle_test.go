@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/gateway/deploytest"
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
 )
 
 // readyzPath は readiness の probe のパス(httpapi の GET /readyz)。

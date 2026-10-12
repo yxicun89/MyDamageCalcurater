@@ -2,79 +2,67 @@ package httpapi
 
 // 調整(plan.md AJ4・AJ10)の5操作。契約は api/openapi.yaml の /api/calc/adjust/* と ADR-0250。
 //
-// 流れは既存の calc と同じ: 厳格デコード → 値域の検査(hits・thresholdPercent・ceiling・minSpeed・modifier・damageModifier。ID 解決より前)
-// → 列挙(format・mode・focus・offenseCategory・field・status・teraType)→ ID 解決 → engine → 生成型への写し。
-// 自分の個体は境界で Validate しない(探索する能力の SP は engine が上書きする。ADR-0250 §2)。
+// ここは 厳格デコードと、生成型 ⇄ app の型の変換・結果の写しだけを持つ。値域の検査(domain)→ 列挙の検証
+// → ID 解決 → engine の手順は app.Service.Adjust* が持つ(ADR-0811・ADR-0252 追記 S3b)。
 // 計算イベントは発行しない(ADR-0250 §7)。式は持たず engine の関数を呼ぶだけ(CLAUDE.md 絶対ルール2・3)。
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/engine"
+	"example.com/pokecalc/services/calc/internal/app"
+	"example.com/pokecalc/services/calc/internal/domain"
 	"example.com/pokecalc/services/internal/api"
 )
 
-// --- 値域の検査(ID 解決より前)--------------------------------------------------
+// --- 生成型 → app -------------------------------------------------------------------
 
-// checkAdjustHits は発数 1..engine.MaxAdjustHits を確かめる(欠落 = 0 も拒否する)。
-func checkAdjustHits(label string, hits int) error {
-	if hits < 1 || hits > engine.MaxAdjustHits {
-		return newError(api.InvalidInput, "%s は 1..%d でなければならない: %d", label, engine.MaxAdjustHits, hits)
+func ceilingFrom(c *api.AdjustCeiling) *domain.Ceiling {
+	if c == nil {
+		return nil
 	}
-	return nil
+	return &domain.Ceiling{HP: c.Hp, Atk: c.Atk, Def: c.Def, SpA: c.Spa, SpD: c.Spd, Spe: c.Spe}
 }
 
-// adjustThreshold はしきい値を確かめて engine に渡す値にする。省略は 0(engine の既定 = 100)、
-// 明示した値は (0, 100] でなければならない(ADR-0250 §3)。
-func adjustThreshold(label string, p *float64) (float64, error) {
-	if p == nil {
-		return 0, nil
+func adjustSearchRequestFrom(req api.AdjustSearchRequest) app.AdjustSearchRequest {
+	return app.AdjustSearchRequest{
+		Format: formatFrom(req.Format), Attacker: individualFrom(req.Attacker), Defender: individualFrom(req.Defender),
+		MoveID: req.MoveId, Field: fieldFrom(req.Field), Options: optionsFrom(req.Options),
+		Hits: req.Hits, ThresholdPercent: req.ThresholdPercent,
 	}
-	if !(*p > 0 && *p <= engine.DefaultAdjustThresholdPercent) {
-		return 0, newError(api.InvalidInput, "%s は (0, %v] でなければならない: %v", label, engine.DefaultAdjustThresholdPercent, *p)
-	}
-	return *p, nil
 }
 
-// adjustCeiling は能力ごとの上限を確かめ、省略を engine.MaxSPPerStat で補う(ADR-0250 §3)。
-func adjustCeiling(c *api.AdjustCeiling) (engine.Stats, error) {
-	var in api.AdjustCeiling
-	if c != nil {
-		in = *c
+func adjustGoalsRequestFrom(req api.AdjustGoalsRequest) app.AdjustGoalsRequest {
+	goals := make([]app.AdjustGoal, 0, len(req.Goals))
+	for _, g := range req.Goals {
+		goals = append(goals, app.AdjustGoal{
+			Kind: domain.Enum{Value: string(g.Kind), Known: g.Kind.Valid()}, Opponent: individualFrom(g.Opponent),
+			MoveID: g.MoveId, Hits: g.Hits, ThresholdPercent: g.ThresholdPercent,
+		})
 	}
-	var out engine.Stats
-	for _, f := range []struct {
-		key engine.StatKey
-		v   *int
-	}{
-		{engine.StatHP, in.Hp}, {engine.StatAtk, in.Atk}, {engine.StatDef, in.Def},
-		{engine.StatSpA, in.Spa}, {engine.StatSpD, in.Spd}, {engine.StatSpe, in.Spe},
-	} {
-		v := engine.MaxSPPerStat
-		if f.v != nil {
-			v = *f.v
+	return app.AdjustGoalsRequest{Format: formatFrom(req.Format), Self: individualFrom(req.Self), Ceiling: ceilingFrom(req.Ceiling), Goals: goals}
+}
+
+func adjustAllocationRequestFrom(req api.AdjustAllocationRequest) app.AdjustAllocationRequest {
+	out := app.AdjustAllocationRequest{
+		Self: individualFrom(req.Self), Ceiling: ceilingFrom(req.Ceiling),
+		Mode: domain.Enum{Value: string(req.Mode), Known: req.Mode.Valid()}, MinSpeed: req.MinSpeed,
+	}
+	if f := req.Focus; f != nil {
+		out.Focus = &domain.Enum{Value: string(*f), Known: f.Valid()}
+	}
+	if c := req.OffenseCategory; c != nil {
+		out.OffenseCategory = &domain.Enum{Value: string(*c), Known: c.Valid()}
+	}
+	if g := req.Goal; g != nil {
+		out.Goal = &app.AdjustAllocGoal{
+			Format: formatFrom(g.Format), Opponent: individualFrom(g.Opponent), MoveID: g.MoveId,
+			Field: fieldFrom(g.Field), Options: optionsFrom(g.Options), Hits: g.Hits, ThresholdPercent: g.ThresholdPercent,
 		}
-		if v < 0 || v > engine.MaxSPPerStat {
-			return engine.Stats{}, newError(api.InvalidInput, "ceiling.%s は 0..%d でなければならない: %d", f.key, engine.MaxSPPerStat, v)
-		}
-		out = out.WithStat(f.key, v)
 	}
-	return out, nil
-}
-
-// adjustModifier は補正を確かめて engine に渡す値にする。省略は 4096、明示した値は
-// engine.MinEffectModifier..engine.MaxEffectModifier でなければならない(技の有無にかかわらず検査する。ADR-0250 §3・§5)。
-func adjustModifier(label string, p *api.AdjustModifier) (int, error) {
-	if p == nil {
-		return engine.Modifier4096, nil
-	}
-	if *p < engine.MinEffectModifier || *p > engine.MaxEffectModifier {
-		return 0, newError(api.InvalidInput, "%s は %d..%d でなければならない: %d", label, engine.MinEffectModifier, engine.MaxEffectModifier, *p)
-	}
-	return *p, nil
+	return out
 }
 
 // --- 結果の写し --------------------------------------------------------------------
@@ -109,242 +97,17 @@ func allocPlanFrom(p engine.AllocPlan) api.AdjustAllocPlan {
 	}
 }
 
-// --- indices -----------------------------------------------------------------------
-
-// AdjustIndices は POST /api/calc/adjust/indices。
-func (s *Server) AdjustIndices(ctx *echo.Context, params api.AdjustIndicesParams) error {
-	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
-		return err
-	}
-	var req api.AdjustIndicesRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
-		return err
-	}
-	// 値域は ID 解決より前(ADR-0250 §5)。
-	modifier, err := adjustModifier("modifier", req.Modifier)
-	if err != nil {
-		return err
-	}
-	damageModifier, err := adjustModifier("damageModifier", req.DamageModifier)
-	if err != nil {
-		return err
-	}
-	self, err := s.resolveIndividual("individual", req.Individual)
-	if err != nil {
-		return err
-	}
-	var move *engine.Move
-	if req.MoveId != nil {
-		mv, err := s.resolveMove(*req.MoveId)
-		if err != nil {
-			return err
-		}
-		move = &mv
-	}
-
+func adjustIndicesResultFrom(o app.AdjustIndicesOutput) api.AdjustIndicesResult {
 	var result api.AdjustIndicesResult
-	if move != nil {
-		fp, err := engine.FirepowerIndex(self, move.Category, move.Power, modifier)
-		if err != nil {
-			return errFromEngine(err)
-		}
-		v := int64(fp)
+	if o.FirepowerIndex != nil {
+		v := int64(*o.FirepowerIndex)
 		result.FirepowerIndex = &v
 	}
-	phys, err := engine.BulkIndex(self, engine.CategoryPhysical, damageModifier)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	spec, err := engine.BulkIndex(self, engine.CategorySpecial, damageModifier)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	lines, err := engine.HPLines(self.Species.BaseStats.HP, self.SP.HP)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	result.Stats = statBlockFrom(engine.RealStats(self))
-	result.PhysicalBulkIndex = int64(phys)
-	result.SpecialBulkIndex = int64(spec)
-	result.HpLines = hpLineReportFrom(lines)
-	return ctx.JSON(http.StatusOK, result)
-}
-
-// --- min-sp-to-ko / min-sp-to-survive ------------------------------------------------
-
-// adjustSearchInput は探索の入力を値域 → 列挙 → ID 解決の順で組み立てる。両側の個体は Validate しない
-// (engine の検査に一本化。ADR-0250 §2)。
-func (s *Server) adjustSearchInput(ctx *echo.Context) (engine.AdjustSearchInput, error) {
-	var req api.AdjustSearchRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	if err := checkAdjustHits("hits", req.Hits); err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	threshold, err := adjustThreshold("thresholdPercent", req.ThresholdPercent)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	format, err := parseFormat(req.Format)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	field, err := parseField(req.Field)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	attacker, err := s.resolveIndividual("attacker", req.Attacker)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	defender, err := s.resolveIndividual("defender", req.Defender)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	move, err := s.resolveMove(req.MoveId)
-	if err != nil {
-		return engine.AdjustSearchInput{}, err
-	}
-	return engine.AdjustSearchInput{
-		Format: format, Attacker: attacker, Defender: defender, Move: move, Field: field,
-		Critical: criticalFrom(req.Options), TypeChart: s.store.TypeChart(),
-		Hits: req.Hits, ThresholdPercent: threshold,
-	}, nil
-}
-
-// AdjustMinSpToKo は POST /api/calc/adjust/min-sp-to-ko。
-func (s *Server) AdjustMinSpToKo(ctx *echo.Context, params api.AdjustMinSpToKoParams) error {
-	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
-		return err
-	}
-	in, err := s.adjustSearchInput(ctx)
-	if err != nil {
-		return err
-	}
-	res, err := engine.MinSPToKO(in)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	return ctx.JSON(http.StatusOK, api.AdjustKOResult{
-		Stat: api.StatKey(res.Stat), SearchLimit: res.SearchLimit, Feasible: res.Feasible, Sp: res.SP,
-		ChancePercent: res.ChancePercent, Unsupported: unsupportedFrom(res.Unsupported),
-	})
-}
-
-// AdjustMinSpToSurvive は POST /api/calc/adjust/min-sp-to-survive。
-func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpToSurviveParams) error {
-	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
-		return err
-	}
-	in, err := s.adjustSearchInput(ctx)
-	if err != nil {
-		return err
-	}
-	res, err := engine.MinSPToSurvive(in)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	return ctx.JSON(http.StatusOK, api.AdjustSurviveResult{
-		Stat: api.StatKey(res.Stat), SearchLimit: res.SearchLimit, Feasible: res.Feasible,
-		HpSp: res.HPSP, StatSp: res.StatSP, TotalSp: res.TotalSP, BulkIndex: int64(res.BulkIndex),
-		ChancePercent: res.ChancePercent, Unsupported: unsupportedFrom(res.Unsupported),
-	})
-}
-
-// --- goals ---------------------------------------------------------------------------
-
-// AdjustGoals は POST /api/calc/adjust/goals(ADR-0331 の段階 B・ADR-0177 §9)。
-// 検査順は 値域 → 列挙 → 種類ごとの必須 → ID 解決(self → 目標の順に opponent → moveId)→ engine。
-// ID 解決より前はマスタを引かない。場は契約に無いので零値(parseField(nil) と同じ)を渡す。
-func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
-	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
-		return err
-	}
-	var req api.AdjustGoalsRequest
-	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
-		return err
-	}
-	// 値域(ID 解決・列挙より前。ADR-0250 §5)。hits・thresholdPercent は種類によらず、値があれば検査する。
-	if len(req.Goals) < 1 || len(req.Goals) > engine.MaxSPGoals {
-		return newError(api.InvalidInput, "goals は 1..%d 件でなければならない: %d", engine.MaxSPGoals, len(req.Goals))
-	}
-	thresholds := make([]float64, len(req.Goals))
-	for i, g := range req.Goals {
-		if g.Hits != nil {
-			if err := checkAdjustHits(fmt.Sprintf("goals[%d].hits", i), *g.Hits); err != nil {
-				return err
-			}
-		}
-		threshold, err := adjustThreshold(fmt.Sprintf("goals[%d].thresholdPercent", i), g.ThresholdPercent)
-		if err != nil {
-			return err
-		}
-		thresholds[i] = threshold
-	}
-	ceiling, err := adjustCeiling(req.Ceiling)
-	if err != nil {
-		return err
-	}
-	// 列挙。
-	format, err := parseFormat(req.Format)
-	if err != nil {
-		return err
-	}
-	for i, g := range req.Goals {
-		if !g.Kind.Valid() {
-			return newError(api.InvalidEnum, "goals[%d].kind に未知の値 %q", i, string(g.Kind))
-		}
-	}
-	// 種類ごとの必須(outspeed の moveId は任意)。
-	for i, g := range req.Goals {
-		if g.Kind == api.AdjustGoalKindOutspeed {
-			continue
-		}
-		if g.MoveId == nil {
-			return newError(api.InvalidInput, "goals[%d](%s)の moveId は必須", i, g.Kind)
-		}
-		if g.Hits == nil {
-			return newError(api.InvalidInput, "goals[%d](%s)の hits は必須", i, g.Kind)
-		}
-	}
-	// ID 解決。
-	self, err := s.resolveIndividual("self", req.Self)
-	if err != nil {
-		return err
-	}
-	goals := make([]engine.SPGoal, 0, len(req.Goals))
-	for i, g := range req.Goals {
-		opponent, err := s.resolveIndividual(fmt.Sprintf("goals[%d].opponent", i), g.Opponent)
-		if err != nil {
-			return err
-		}
-		goal := engine.SPGoal{Kind: engine.SPGoalKind(g.Kind), Opponent: opponent}
-		if g.MoveId != nil {
-			move, err := s.resolveMove(*g.MoveId)
-			if err != nil {
-				return err
-			}
-			if g.Kind == api.AdjustGoalKindOutspeed {
-				// 先に使う技は素早さのランク変化だけを使う(ダメージは計算しない。ADR-0177 §4)。
-				goal.SelfSpeedStage = engine.GuaranteedSelfSpeedStage(move)
-			} else {
-				goal.Move = move
-			}
-		}
-		if g.Kind != api.AdjustGoalKindOutspeed {
-			goal.Hits, goal.ThresholdPercent = *g.Hits, thresholds[i]
-		}
-		goals = append(goals, goal)
-	}
-
-	res, err := engine.SuggestSPForGoals(engine.SPGoalsInput{
-		Format: format, Self: self, Ceiling: ceiling, Field: engine.Field{}, TypeChart: s.store.TypeChart(), Goals: goals,
-	})
-	if err != nil {
-		return errFromEngine(err)
-	}
-	return ctx.JSON(http.StatusOK, adjustGoalsResultFrom(res))
+	result.Stats = statBlockFrom(o.Stats)
+	result.PhysicalBulkIndex = int64(o.PhysicalBulkIndex)
+	result.SpecialBulkIndex = int64(o.SpecialBulkIndex)
+	result.HpLines = hpLineReportFrom(o.HPLines)
+	return result
 }
 
 // adjustGoalsResultFrom は engine の結果を契約の形に写す。outspeed は chancePercent を、survive・ko は
@@ -370,7 +133,91 @@ func adjustGoalsResultFrom(r engine.SPGoalsResult) api.AdjustGoalsResult {
 	return out
 }
 
-// --- allocation ----------------------------------------------------------------------
+func adjustAllocationResultFrom(res engine.SPAllocResult) api.AdjustAllocationResult {
+	result := api.AdjustAllocationResult{
+		Remaining: res.Remaining, MaxIndex: allocPlanFrom(res.MaxIndex), Unsupported: unsupportedFrom(res.Unsupported),
+	}
+	if res.MinSP != nil {
+		p := allocPlanFrom(*res.MinSP)
+		result.MinSp = &p
+	}
+	return result
+}
+
+// --- ハンドラ ----------------------------------------------------------------------
+
+// AdjustIndices は POST /api/calc/adjust/indices。
+func (s *Server) AdjustIndices(ctx *echo.Context, params api.AdjustIndicesParams) error {
+	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
+		return err
+	}
+	var req api.AdjustIndicesRequest
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+		return err
+	}
+	out, err := s.app.AdjustIndices(app.AdjustIndicesRequest{
+		Individual: individualFrom(req.Individual), MoveID: req.MoveId, Modifier: req.Modifier, DamageModifier: req.DamageModifier,
+	})
+	if err != nil {
+		return httpErrorFrom(err)
+	}
+	return ctx.JSON(http.StatusOK, adjustIndicesResultFrom(out))
+}
+
+// AdjustMinSpToKo は POST /api/calc/adjust/min-sp-to-ko。
+func (s *Server) AdjustMinSpToKo(ctx *echo.Context, params api.AdjustMinSpToKoParams) error {
+	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
+		return err
+	}
+	var req api.AdjustSearchRequest
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+		return err
+	}
+	res, err := s.app.AdjustMinSPToKO(adjustSearchRequestFrom(req))
+	if err != nil {
+		return httpErrorFrom(err)
+	}
+	return ctx.JSON(http.StatusOK, api.AdjustKOResult{
+		Stat: api.StatKey(res.Stat), SearchLimit: res.SearchLimit, Feasible: res.Feasible, Sp: res.SP,
+		ChancePercent: res.ChancePercent, Unsupported: unsupportedFrom(res.Unsupported),
+	})
+}
+
+// AdjustMinSpToSurvive は POST /api/calc/adjust/min-sp-to-survive。
+func (s *Server) AdjustMinSpToSurvive(ctx *echo.Context, params api.AdjustMinSpToSurviveParams) error {
+	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
+		return err
+	}
+	var req api.AdjustSearchRequest
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+		return err
+	}
+	res, err := s.app.AdjustMinSPToSurvive(adjustSearchRequestFrom(req))
+	if err != nil {
+		return httpErrorFrom(err)
+	}
+	return ctx.JSON(http.StatusOK, api.AdjustSurviveResult{
+		Stat: api.StatKey(res.Stat), SearchLimit: res.SearchLimit, Feasible: res.Feasible,
+		HpSp: res.HPSP, StatSp: res.StatSP, TotalSp: res.TotalSP, BulkIndex: int64(res.BulkIndex),
+		ChancePercent: res.ChancePercent, Unsupported: unsupportedFrom(res.Unsupported),
+	})
+}
+
+// AdjustGoals は POST /api/calc/adjust/goals(ADR-0331 の段階 B・ADR-0177 §9)。
+func (s *Server) AdjustGoals(ctx *echo.Context, params api.AdjustGoalsParams) error {
+	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
+		return err
+	}
+	var req api.AdjustGoalsRequest
+	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
+		return err
+	}
+	res, err := s.app.AdjustGoals(adjustGoalsRequestFrom(req))
+	if err != nil {
+		return httpErrorFrom(err)
+	}
+	return ctx.JSON(http.StatusOK, adjustGoalsResultFrom(res))
+}
 
 // AdjustAllocation は POST /api/calc/adjust/allocation。
 func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocationParams) error {
@@ -381,88 +228,9 @@ func (s *Server) AdjustAllocation(ctx *echo.Context, params api.AdjustAllocation
 	if err := decodeStrict(limitedBody(ctx), &req); err != nil {
 		return err
 	}
-	// 値域(ID 解決・列挙の検証より前。ADR-0108 決定3・ADR-0208 §3)。
-	ceiling, err := adjustCeiling(req.Ceiling)
+	res, err := s.app.AdjustAllocation(adjustAllocationRequestFrom(req))
 	if err != nil {
-		return err
+		return httpErrorFrom(err)
 	}
-	minSpeed := derefInt(req.MinSpeed)
-	if minSpeed < 0 {
-		return newError(api.InvalidInput, "minSpeed は 0 以上でなければならない: %d", minSpeed)
-	}
-	var goalThreshold float64
-	if g := req.Goal; g != nil {
-		if err := checkAdjustHits("goal.hits", g.Hits); err != nil {
-			return err
-		}
-		if goalThreshold, err = adjustThreshold("goal.thresholdPercent", g.ThresholdPercent); err != nil {
-			return err
-		}
-	}
-
-	// 列挙。mode は必須(欠落も invalid_enum)。focus / offenseCategory は値があれば列挙だけ検査し、
-	// 使う側での欠落は engine が invalid_input にする(ADR-0250 §4)。
-	if !req.Mode.Valid() {
-		return newError(api.InvalidEnum, "mode に未知の値 %q", string(req.Mode))
-	}
-	var focus engine.BulkFocus
-	if req.Focus != nil {
-		if !req.Focus.Valid() {
-			return newError(api.InvalidEnum, "focus に未知の値 %q", string(*req.Focus))
-		}
-		focus = engine.BulkFocus(*req.Focus)
-	}
-	var category engine.MoveCategory
-	if req.OffenseCategory != nil {
-		if !req.OffenseCategory.Valid() {
-			return newError(api.InvalidEnum, "offenseCategory に未知の値 %q", string(*req.OffenseCategory))
-		}
-		category = engine.MoveCategory(*req.OffenseCategory)
-	}
-	var goalFormat engine.Format
-	var goalField engine.Field
-	if g := req.Goal; g != nil {
-		if goalFormat, err = parseFormat(g.Format); err != nil {
-			return err
-		}
-		if goalField, err = parseField(g.Field); err != nil {
-			return err
-		}
-	}
-
-	self, err := s.resolveIndividual("self", req.Self)
-	if err != nil {
-		return err
-	}
-	in := engine.SPAllocInput{
-		Self: self, Ceiling: ceiling, Mode: engine.AllocMode(req.Mode), Focus: focus,
-		OffenseCategory: category, MinSpeed: minSpeed,
-	}
-	if g := req.Goal; g != nil {
-		opponent, err := s.resolveIndividual("goal.opponent", g.Opponent)
-		if err != nil {
-			return err
-		}
-		move, err := s.resolveMove(g.MoveId)
-		if err != nil {
-			return err
-		}
-		in.Goal = &engine.AllocGoal{
-			Format: goalFormat, Opponent: opponent, Move: move, Field: goalField, Critical: criticalFrom(g.Options),
-			TypeChart: s.store.TypeChart(), Hits: g.Hits, ThresholdPercent: goalThreshold,
-		}
-	}
-
-	res, err := engine.SuggestSPAllocation(in)
-	if err != nil {
-		return errFromEngine(err)
-	}
-	result := api.AdjustAllocationResult{
-		Remaining: res.Remaining, MaxIndex: allocPlanFrom(res.MaxIndex), Unsupported: unsupportedFrom(res.Unsupported),
-	}
-	if res.MinSP != nil {
-		p := allocPlanFrom(*res.MinSP)
-		result.MinSp = &p
-	}
-	return ctx.JSON(http.StatusOK, result)
+	return ctx.JSON(http.StatusOK, adjustAllocationResultFrom(res))
 }

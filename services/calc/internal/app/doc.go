@@ -9,5 +9,5 @@
 // マスタの参照(Master)・イベント発行(EventPublisher)・締め切りの確認(Expired)はここで宣言するポートで、
 // 実装は adapters(master・events・httpapi)と cmd が渡す。生成型(services/internal/api)・HTTP・NATS を知らない。
 //
-// 調整(adjust)の手順はまだ adapters/httpapi にある(S3 の後半の PR で移す。docs/plan/architecture-adoption.md §6)。
+// 調整(Adjust*。値域の検査 → 列挙 → ID の解決 → engine。イベント・締め切りの確認なし)も持つ(ADR-0252 追記 S3b)。
 package app

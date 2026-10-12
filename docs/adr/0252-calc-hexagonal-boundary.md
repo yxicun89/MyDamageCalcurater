@@ -36,3 +36,13 @@ S3(docs/plan/architecture-adoption.md §6)で calc-svc を `internal/domain`・`
   Web の `exportSnapshot.contract.test.ts` が読む `export.go` のパスを追従させた。
 - calc は tools/archcheck の未移行の一覧から外れ、向きの検査の対象になった。
 - 振る舞い(openapi.yaml・エラーの code とステータス・失敗の順番・イベントの中身)は変えない。
+
+## 追記 S3b(2026-10-12。調整を app へ。API レーンが止まっていたためデータレーンが代行)
+
+- 調整の5操作(`/api/calc/adjust/{indices,min-sp-to-ko,min-sp-to-survive,goals,allocation}`)の手順を `app.Service.Adjust*`
+  (`services/calc/internal/app/adjust.go`)へ移した。値域の検査(hits・thresholdPercent・ceiling・modifier・minSpeed・目標の件数)と
+  列挙の失敗(mode・focus・offenseCategory・goals[i].kind)の文言は `domain/adjust.go`、生成型 ⇄ app の写しは `adapters/httpapi/adjust.go` に置く
+  (決定1 と同じく `Valid()` の判定は adapters)。決定6 の薄い関数(`resolveIndividual`・`parseFormat` など)は不要になったので消した。
+- 振る舞い(検査の順番・code・文言・応答・ログ)は変えない。調整は計算イベントを発行しない(ADR-0250 §7)。
+  締め切りの確認(`Expired`)は移行前の調整に無かったので足さない(guard の締め切りはこれまでどおり効く)。
+  足すかどうかは振る舞いの変更なので別の判断にする。

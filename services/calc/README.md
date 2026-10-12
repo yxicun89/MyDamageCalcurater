@@ -20,9 +20,9 @@ flowchart LR
 
 | パス | 役割 |
 |---|---|
-| `internal/domain` | 純粋な核。列挙・個体・メガシンカ後の持ち物・観測・対戦の状態の検証と、失敗の語彙(`Code`・`FromEngine`)。計算の核は `engine` |
-| `internal/app` | ユースケース。計算・一括・逆算の手順(検証 → ID解決 → engine → イベント発行)。ポート `Master`・`EventPublisher`・`Expired` を宣言 |
-| `internal/adapters/httpapi` | `api.ServerInterface` の実装。ヘッダ・厳格デコード・件数上限・生成型 ⇄ app の変換・エラー整形。調整(`adjust.go`)の手順はまだここ |
+| `internal/domain` | 純粋な核。列挙・個体・メガシンカ後の持ち物・観測・対戦の状態・調整の値域の検証と、失敗の語彙(`Code`・`FromEngine`)。計算の核は `engine` |
+| `internal/app` | ユースケース。計算・一括・逆算・連続技・調整の手順(検証 → ID解決 → engine → イベント発行〈計算・一括・逆算だけ〉)。ポート `Master`・`EventPublisher`・`Expired` を宣言 |
+| `internal/adapters/httpapi` | `api.ServerInterface` の実装。ヘッダ・厳格デコード・件数上限・生成型 ⇄ app の変換・エラー整形 |
 | `internal/adapters/master` | `MemoryStore`(`app.Master` の実装。`Store` はその別名)と、`MasterExport` からの読み込み(`export.go`)、入手元 `Source`(ファイル・HTTP) |
 | `internal/adapters/events` | NATS JetStream への計算イベントの発行(ADR-0212) |
 | `cmd/calc` | 起動・環境変数の読み込み・URL方式のバックオフ再取得・graceful shutdown |

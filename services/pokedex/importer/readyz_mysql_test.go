@@ -19,8 +19,8 @@ import (
 
 	pokedexdb "example.com/pokecalc/services/pokedex/db"
 	"example.com/pokecalc/services/pokedex/importer"
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/readtx"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
 )
 
 func getStatus(t *testing.T, h http.Handler, path string) (int, string) {
