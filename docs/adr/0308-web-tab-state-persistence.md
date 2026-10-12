@@ -106,6 +106,8 @@ unmount → 新しいマスタが読めた時点で mount し直される。マ�
 `useState` 1つだけ。決定3の実現手段のとおり、置き場は App 直下ではなく `App.tsx` 内の子コンポーネント
 `AppTabPanel` だが、依然としてこの1つのコンポーネントツリーの中に閉じている)。
 
+> 追記(ADR-0358、2026-10-12): 計算画面の直近の入力 1 件だけ `localStorage`(`pokecalc.lastCalcInput`)に保存し、再訪時に復元する。それ以外の入力と `sessionStorage` は引き続き書かない。
+
 ## 影響
 
 - 変更するのは `web/src/App.tsx` のレンダー部だけ(訪れたタブの記録と、パネル内の包み要素 + `hidden`)。
