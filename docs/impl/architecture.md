@@ -91,7 +91,7 @@
 | `services/gateway` | 4 | gateway(唯一の入口。Echo リバースプロキシ)。Dockerfile・Makefile・README |
 | `services/gateway/cmd/gateway` | 3 | gateway の main・環境変数の読み込み |
 | `services/gateway/deploytest` | 8 | k8s マニフェストの静的検査テスト共通部品と検査群 |
-| `services/gateway/internal/httpapi` | 15 | ルーティング・ヘッダ検証・CORS・プロキシ・エラー |
+| `services/gateway/internal/adapters/httpapi` | 15 | ルーティング・ヘッダ検証・CORS・プロキシ・エラー |
 | `services/gateway/scripts` | 1 | api-smoke の本体(smoke.sh) |
 | `services/internal/api` | 4 | ルート openapi.yaml の生成物(サーバ/型)と設定・契約の門番テスト |
 | `services/internal/master` | 9 | DB 行 → engine 型の写像と効果定義の厳格デコード(calc・pokedex 共用) |
@@ -218,7 +218,7 @@ flowchart LR
   Client -. "オフライン" .-> WASM["engine.wasm"]
 ```
 
-- Traefik は `/` を gateway へ振る。`/api/balance|speed|judge` は各サービスの Ingress を撤去したので gateway に届き、gateway が `GATEWAY_BALANCE_URL`・`GATEWAY_SPEED_URL`・`GATEWAY_JUDGE_URL`(`http://balance|speed|judge`)へ転送する(`services/gateway/internal/httpapi/routing.go` `routeBalance`・`routeSpeed`・`routeJudge`)。
+- Traefik は `/` を gateway へ振る。`/api/balance|speed|judge` は各サービスの Ingress を撤去したので gateway に届き、gateway が `GATEWAY_BALANCE_URL`・`GATEWAY_SPEED_URL`・`GATEWAY_JUDGE_URL`(`http://balance|speed|judge`)へ転送する(`services/gateway/internal/adapters/httpapi/routing.go` `routeBalance`・`routeSpeed`・`routeJudge`)。
 - judge は gateway を経由せず Service 名 `http://pokedex`・`http://calc` を直接呼ぶ(`services/judge/deploy/k8s/base/deployment.yaml` の env)。
 - balance・speed は他サービスを HTTP で呼ばない。マスタは環境変数 `BALANCE_*_PATH`・`SPEED_POKEMON_PATH` が指す JSON ファイル(未設定なら 503 `master_unavailable` で起動は継続)。
 - record・team・assets・NATS・TiDB・MinIO は未実装(§9)。gateway の `GATEWAY_ASSETS_URL` は未設定で、`/assets/*` は 404。画像は MinIO を使わず、`make assets` の出力を gateway が `GATEWAY_IMAGES_DIR` から `/images/*` で配信する(ADR-0808。k3d へは `make images-k3d`)。
@@ -255,7 +255,7 @@ flowchart LR
 | `engine.ReverseInput`/`ReverseResult` → `CalcReverse` | `engine/reverse.go:160,207,301` | 逆算(総当たり) |
 | `engine.KOChance` / `ComputeKO` | `engine/ko.go:10,17` | 確定数・確率 |
 | `wasmapi.Calc`/`CalcBulk`/`CalcReverse`(JSON 文字列 ⇄ 文字列) | `engine/wasmapi/wasmapi.go:74,80,86` | WASM/JS 境界。DTO は `dto.go`、リクエスト `requests.go` |
-| `httpapi.Config`・`gateway`(`ReverseProxy` ×4) | `services/gateway/internal/httpapi/server.go:29,49` | ルーティング・検証・CORS |
+| `httpapi.Config`・`gateway`(`ReverseProxy` ×4) | `services/gateway/internal/adapters/httpapi/server.go:29,49` | ルーティング・検証・CORS |
 | `master.Store`(Species/Move/Item/Ability/Nature/NatureID/TypeChart) | `services/calc/internal/adapters/master/master.go:20` | calc が計算に使うマスタ参照口。実装 `MemoryStore`(`:41`) |
 | `master.Source`(`FileSource`・`HTTPSource`) | `services/calc/internal/adapters/master/export.go:378,384,401` | MasterExport の入手元 |
 | `calc httpapi.Server`(`api.ServerInterface` 実装)・`StoreFunc` | `services/calc/internal/adapters/httpapi/server.go:35`・`readiness.go:19` | 3 操作。マスタ未取得の間は 503 |

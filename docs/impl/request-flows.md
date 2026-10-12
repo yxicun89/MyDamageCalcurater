@@ -1,7 +1,7 @@
 # 主要な処理フロー
 
 - 基準: `origin/main` 3379b03。行番号はこの版。全ルートは [api-endpoints.md](api-endpoints.md)、構成は [architecture.md](architecture.md)。
-- 略記: `gw` = `services/gateway/internal/httpapi`、`calc` = `services/calc/internal/httpapi`、`gen` = `services/internal/api/openapi.gen.go`。
+- 略記: `gw` = `services/gateway/internal/adapters/httpapi`、`calc` = `services/calc/internal/httpapi`、`gen` = `services/internal/api/openapi.gen.go`。
 
 ## 1. POST /api/calc(gateway 経由。ダメージ計算)
 

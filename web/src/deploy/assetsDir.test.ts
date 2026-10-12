@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, test } from "vitest";
 import { baseConfig } from "../../vite.config";
 
-// gateway が Web に転送しない先頭セグメント(services/gateway/internal/httpapi/routing.go の reservedFirstSegments)。
+// gateway が Web に転送しない先頭セグメント(services/gateway/internal/adapters/httpapi/routing.go の reservedFirstSegments)。
 const routingGo = fileURLToPath(
-  new URL("../../../services/gateway/internal/httpapi/routing.go", import.meta.url),
+  new URL("../../../services/gateway/internal/adapters/httpapi/routing.go", import.meta.url),
 );
 
 function gatewayReservedSegments(): string[] {
