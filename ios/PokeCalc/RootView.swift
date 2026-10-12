@@ -130,9 +130,7 @@ struct RootView: View {
                         ) { navigation.select(featureID: $0) }
                     }
                     feature.destination(
-                        in: FeatureContext(
-                            core: core, services: services, teamStore: teamStore, path: path(for: featureID),
-                            links: Self.links(in: tab)))
+                        in: FeatureContext(core: core, services: services, teamStore: teamStore, path: path(for: featureID)))
                         .frame(maxHeight: .infinity)
                 }
                 .popScreenBackground()
@@ -225,14 +223,6 @@ extension RootView {
                 case .tab(_, let title, let identifier) = feature.entry
             else { return nil }
             return TabSegment(id: id, title: title, accessibilityIdentifier: identifier)
-        }
-    }
-
-    /// タブの根の画面の中に置く行(`FeatureEntry.link(in:)`)。
-    fileprivate static func links(in tab: AppTab) -> [FeatureLink] {
-        FeatureRegistry.features.compactMap { feature in
-            guard case .link(let linkTab, let title, let identifier) = feature.entry, linkTab == tab else { return nil }
-            return FeatureLink(id: feature.id, title: title, accessibilityIdentifier: identifier)
         }
     }
 

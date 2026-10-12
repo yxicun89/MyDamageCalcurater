@@ -8,7 +8,7 @@
 //   - おすすめタイプの穴・候補・特性の表はタイプバッジ(文字の区切り「・」は残す)
 //   - 説明の文を出し続けない(待機の状態に <p> が無い)
 //   - CSS: 升目の色の組は popPalette.test.ts の検査済みの組だけ・44px・横スクロールの包み・常時動かない
-// 読み上げ用の名前・API の呼び方・状態の流れは既存のテスト(BalanceScreen*.test.tsx)が守る。
+// 読み上げ用の名前・API の呼び方・状態の流れは既存のテスト(BalancePanel.integration*.test.tsx)が守る。
 
 import { render, screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
@@ -21,7 +21,7 @@ import type { MasterData, MasterSpecies } from "../master/types";
 import { contrastRatio } from "../test/colorContrast";
 import { declarationMap, parseCss, rulesInAtRules, splitSelectors, topLevelRules } from "../test/cssRules";
 import { localPath } from "../test/localPath";
-import { BalanceScreen } from "./BalanceScreen";
+import { BalanceHarness } from "./balanceTestHarness";
 
 type Schemas = components["schemas"];
 
@@ -135,7 +135,7 @@ function species(index: number): MasterSpecies {
 
 function renderScreen(): { user: UserEvent; container: HTMLElement } {
   const user = userEvent.setup();
-  const { container } = render(<BalanceScreen master={master} client={createInstantClient()} />);
+  const { container } = render(<BalanceHarness master={master} client={createInstantClient()} />);
   return { user, container };
 }
 

@@ -205,12 +205,22 @@ final class AppNavigationUITests: XCTestCase {
         }
     }
 
-    /// タイプバランスは構築へ統合するまで、構築タブの一覧の行から開ける(機能を失わない)。
-    func testBalanceIsReachableFromTeamTab() {
+    /// タイプバランスは構築編集の中の節になった(ADR-0421・ADR-0532)。構築タブの一覧に別画面への行は無く、
+    /// 構築を開くと編集画面の中に節がある(機能を失わない)。
+    func testBalanceLivesInsideTheTeamEditorWithoutASeparateEntry() {
         let app = launch()
-        app.openScreen("openBalanceScreen")
-        XCTAssertTrue(element(app, "balanceScreen").waitForExistence(timeout: Self.existenceTimeout))
-        app.navigationBars.buttons.element(boundBy: 0).tap()
+        app.openScreen("openTeamListScreen")
         XCTAssertTrue(element(app, "teamListScreen").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(element(app, "openBalanceScreen").exists, "一覧に別画面への行は無い")
+        let create = element(app, "createTeamButton")
+        XCTAssertTrue(create.waitForExistence(timeout: Self.existenceTimeout))
+        create.tap()
+        XCTAssertTrue(element(app, "teamEditScreen").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(element(app, "teamBalanceSection").waitForExistence(timeout: Self.existenceTimeout), "構築編集の中の節")
+        XCTAssertFalse(element(app, "balanceScreen").exists, "別のタイプバランス画面は無い")
+        for tabID in Self.allTabs {
+            app.selectTab(tabID)
+            XCTAssertFalse(element(app, "openBalanceScreen").exists, "\(tabID) にも入口は無い")
+        }
     }
 }

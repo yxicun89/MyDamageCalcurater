@@ -4988,3 +4988,25 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 追記(素早さ画面の新レイアウトへの適用): speed レーンの素早さ画面の作り直し(#757)に合わせ、自分の側の「ランク」行を `RankMeterView`(field `speed`)に置き換えた。ViewModel の `rank`/`setRank` は不変。main 側の新しい `SpeedScreenUITests` には旧ランクの識別子が無かったため、`testRankMeterPlusChangesValueAndStopsAtTheEnds`(±0・ラベル「素早さ」・+1・+6 で + が無効)を新画面向けに追加した。
 
 追記(ゲートの失敗と対処。2026-10-12): `SpeedMatchupLargeTextUITests.testSpeedMatchupInputNoHorizontalOverflowAtAX5` が「画面に出なかった要素」で落ちた。原因は本物で、ランクのメーターの `DragGesture` が ScrollView の縦スクロールを奪い、画面中央(slow swipe の開始点)がメーターに当たると 30 回スワイプしても進まなかった。対処はアプリ側: ドラッグを `RankHorizontalPan`(`UIGestureRecognizerRepresentable` の UIPanGestureRecognizer。最初の速度が水平優勢のときだけ begin。判定は `RankMeterLogic.isHorizontalDrag`)に替え、縦は始まらせない。期待は変えていない。`CalcDefenderRanksUITests` の縦スワイプ試験に「メーターの上から始めても画面がスクロールする」検査を追加。他の3件(`AdjustGoalsUITests.testUnavailableGoals…`・`AdjustScreenUITests.testUnsupportedMarkNoticeIsShown`・`CalcAttackerStatsUITests.testSelectingSpecialMove…`)は単独では再現せず、修正後の上記クラス一式(48 件)と合わせて成功した(同じ原因の可能性が高い:スクロールが進まない)。
+
+## 構築編集の中のタイプバランス・別画面の廃止(ADR-0532。2026-10-12)
+
+受け入れ条件は ADR-0532「受け入れ条件」1〜6。構築編集の 6 枠の下に「タイプバランス」の節(`teamBalanceSection`)。
+識別子: 節 `teamBalanceSection`・0 体の案内 `teamBalanceEmpty`・再計算 `teamBalanceRetry`・タイル `balancePickTile-<候補番号>-<pokemonId>`・
+タイルのまとまり `balancePickTiles-<候補番号>`・もっと見る `balancePickMore-<候補番号>`・満杯の理由 `balancePickNoEmptySlot-<候補番号>`。
+結果の識別子(`balanceTeamSummary`・`balanceMemberDefense-N`・`balanceAnalysisError` など)は旧画面のまま。
+
+### 削除・書き換えたテスト(検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `AppNavigationUITests.testBalanceIsReachableFromTeamTab` | `testBalanceLivesInsideTheTeamEditorWithoutASeparateEntry` に書き換え(一覧・全タブに `openBalanceScreen` が無い/構築編集に節がある/`balanceScreen` が無い) | 別画面を廃止し、機能が構築編集の中へ移ったため。「機能に届く」検査は節の存在で保つ |
+| `UITestNavigation` の `openBalanceScreen` の行き先 | 削除 | 入口が無くなったため |
+| `BalanceViewModelTests.testLoadTeamReplacesMembersWithTeamMembers` | `testSetPartyReplacesMembersWithTeamMembers`(`loadTeam` → `setParty`。期待値は同じ) | `loadTeam` を `setParty` に一本化して削除したため |
+| `TeamSparseSaveTests.testBalanceLoadsSparseTeamAndSendsEmptyMoveIds` | `loadTeam` → `setParty`(期待値は同じ) | 同上 |
+| `APIBalanceServiceStage3Tests.testRecommendationsWithUnknownSkewedTypeIsDecodeError` | 期待値は不変(decode エラー)。説明を追加 | `skewedAttackTypes` の写像は知らないタイプを読み捨てる方針に変えた(表示に使わない項目で応答全体を落とさない=契約の先行追加に強くする。検査を弱める変更ではない)。ただし生成型 `TypeId` が @frozen のため、契約に無い文字列は生成層で失敗する事実は残る(テストはそれを固定) |
+| `GlossaryTests` の `BalanceScreenText.emptyNotice` | 削除し、`teamEmptyNotice`・タイルの文言・接続できないときの文言を追加 | 旧画面の文言を削除したため。検査する文言は増えた |
+
+追加テスト: `TeamBalanceIntegrationTests`(10 件。下書き→setParty・空き枠無視・技 0 個・枠を外すと追随・失敗しても編集と保存が止まらない・再計算・limit 5・最初の空き枠・満杯)、
+`BalancePickTilesTests`(5 件。8 件+残り・相性の色の意味)、`MockBalanceServiceTests`(7 件)、`APIBalanceServiceStage3Tests` の `skewedAttackTypes` 3 件、
+`TeamBalanceUITests`(6 件。1 体で結果・タイルで空き枠へ・満杯で押せない・もっと見る・接続できなくても保存できる・AX5 で節とタイルがはみ出さず押せる)。

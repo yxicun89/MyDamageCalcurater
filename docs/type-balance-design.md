@@ -20,7 +20,7 @@
 - ダメージ計算(damage-calc)・素早さ(speed)・判定(judge)と並ぶ独立サービス `services/balance/`(ADR-0012 のサービス境界)。
   他サービスの実行時 API に依存しない。engine も import しない(自前の純粋な Go のコア)。DB を持たない。
 - マスタ(ポケモンのタイプ・技・特性)は pokedex の export を **read model(JSON)として起動時に 1 回だけ読む**(§7)。
-- 画面は Web の「タイプバランス」タブ(`web/src/screens/BalanceScreen.tsx`、ADR-0303)。iOS の画面は第1〜3段を実装済み(シミュレータ確認は未実施。§11・ADR-0415)。
+- 画面は Web の構築編集の中の「タイプバランス」の節(`web/src/team/TeamBalanceSection.tsx`・`web/src/balance/`。ADR-0421 で別タブを撤去、旧 ADR-0303)。iOS の画面は第1〜3段を実装済み(シミュレータ確認は未実施。§11・ADR-0415)。
 - 認証なし。端末 ID・セッション ID のヘッダを必須とする(§5)。
 
 ## 3. 構成
@@ -132,7 +132,7 @@ services/balance/
 
 ## 10. UI(Web)
 
-- 画面: `web/src/screens/BalanceScreen.tsx`(ADR-0303)。最大 6 体のメンバー、18 タイプの防御相性表、チーム集計、おすすめ、技範囲。
+- 画面: 構築編集の中の節 `web/src/team/TeamBalanceSection.tsx` + `web/src/balance/BalancePanel.tsx`(ADR-0303・ADR-0421)。最大 6 体のメンバー、18 タイプの防御相性表、チーム集計、おすすめ、技範囲。
 - 倍率は**色だけで表現しない**。書式は「×4 弱点」「×2 弱点」「×1 等倍」「×1/2 耐性」「×1/4 耐性」「×0 無効」(`web/src/domain/balanceLabels.ts`)。
 - 画像は必須にしない。無ければタイプ色のエンブレムで成立させる。常時動くアニメーションは入れない。
 

@@ -31,11 +31,10 @@ function fakeScreen(
 const ids: ClientIds = { deviceId: "device", sessionId: "session" };
 
 describe("実際の登録", () => {
-  test("既存の8画面が order の順に登録されている(id・segment・usesMaster)", () => {
+  test("既存の画面が order の順に登録されている(id・segment・usesMaster)", () => {
     expect(SCREENS.map((screen) => [screen.id, screen.segment, screen.usesMaster])).toEqual([
       ["calc", "calc", true],
       ["reverse", "reverse", true],
-      ["balance", "balance", true],
       ["speed", "speed", false],
       ["team", "team", true],
       ["favorites", "favorites", false],
@@ -200,9 +199,11 @@ describe("hidden(非表示の画面。ADR-0330)", () => {
     expect(dummy(true).hidden).toBe(true);
   });
 
-  // CB-7(判定の廃止): 判定の画面は削除した。hidden はタイプバランス(ADR-0421)だけ。
-  test("実際の登録では、タイプバランス(ADR-0421)だけが hidden で、タブの表(SCREEN_ROUTES)に無い。判定は登録に無い", () => {
-    expect(SCREENS.filter((screen) => screen.hidden).map((screen) => screen.id)).toEqual(["balance"]);
+  // CB-7(判定の廃止)・ADR-0421 段階 4(タイプバランスの別画面の撤去): 判定もバランスも登録に無い。hidden な画面は今は無い。
+  test("実際の登録では、hidden の画面は無く、判定・タイプバランスは登録に無い(タブの表 SCREEN_ROUTES にも無い)", () => {
+    expect(SCREENS.filter((screen) => screen.hidden).map((screen) => screen.id)).toEqual([]);
+    expect(SCREENS.map((screen) => screen.id)).not.toContain("balance");
+    expect(SCREEN_ROUTES.map((route) => route.id)).not.toContain("balance");
     expect(SCREENS.map((screen) => screen.id)).not.toContain("judge");
     expect(SCREEN_ROUTES.map((route) => route.id)).not.toContain("judge");
     expect(SCREEN_ROUTES.map((route) => route.id)).toEqual([

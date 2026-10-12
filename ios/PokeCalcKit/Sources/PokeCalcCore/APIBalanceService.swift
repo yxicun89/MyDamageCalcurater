@@ -265,7 +265,9 @@ public struct APIBalanceService: BalanceService {
                             pokemonId: $0.pokemonId, nameJa: $0.nameJa, abilityId: $0.abilityId.value1,
                             multiplier: $0.multiplier)
                     })
-            })
+            },
+            // 0.10.0 より前のサーバーは返さない(空として扱う)。表示に使わないので、写せないタイプは読み捨てる(ADR-0532 §3)。
+            skewedAttackTypes: (response.skewedAttackTypes ?? []).compactMap { try? domainType($0) })
     }
 
     private static func domainMoveRange(_ response: Components.Schemas.MoveRangeResponse) throws -> BalanceMoveRange {

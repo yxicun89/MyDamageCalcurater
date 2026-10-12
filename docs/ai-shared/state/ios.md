@@ -82,3 +82,4 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 
 2026-10-12(能力ランクのメーター。ブランチ feat/ios-rank-meter。ADR-0533): ランク入力を 13 段のメーター(`RankMeterView`。ロジックは `RankMeterLogic`)にし、計算の詳細(攻撃側・防御側)・素早さ(カスタム)・判定(5 欄)に適用。Web の ADR-0357 と色の意味・併記・読み上げ(label「攻撃」+ value「+2」)を揃えた。識別子は `rankMeter-<field>`/`rankMeterMinus-`/`rankMeterPlus-`。旧 `calc*Rank*`・`speedRank*` は廃止(UITest を付け替え)。ViewModel・契約は不変。
 
+2026-10-12(構築編集の中のタイプバランス。ブランチ feat/ios-balance-in-team。ADR-0532): ADR-0421 段階 2'・4 と ADR-0422 段階 C の iOS 分。構築編集の 6 枠の下に「タイプバランス」の節(`TeamBalanceSection`)。下書き(`balanceParty`。空き枠は無視)を `BalanceViewModel.setParty` へ(300ms)。おすすめは limit 5・候補ごとのタイル(8 個+もっと見る。タップで最初の空き枠・満杯は押せない)。相性の色は弱点=赤・耐性=水色系・無効=灰(印+文字)。`skewedAttackTypes` を読む(表示はしない)。別画面 `BalanceScreenView`・`BalanceFeature`・`FeatureEntry.link`・`loadTeam` を削除。UI テスト用の架空の応答は `POKECALC_MOCK_BALANCE=fixture`(既定のモックは接続先なしのまま)。技範囲チェッカーは節の末尾に残した(Web に無い。外すかは別判断)。

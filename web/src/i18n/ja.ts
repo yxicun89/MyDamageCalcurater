@@ -274,8 +274,6 @@ export const appText = {
   siteTitle: "pokecalc",
   calcTabLabel: "計算",
   reverseTabLabel: "逆算",
-  /** P4-12a: タイプバランスのタブ(ADR-0303 §2)。 */
-  balanceTabLabel: "タイプバランス",
   /** SP3: 素早さ比較のタブ(ADR-0604 §2)。 */
   speedTabLabel: "素早さ",
   /** JD5: 判定(抜けて倒せるか・返り討ちに遭うか)のタブ(ADR-0705 §1)。 */

@@ -66,14 +66,12 @@ public enum BalanceLabels {
 
 /// 画面の固定文言(Web の `balanceScreenText` と同じ語)。
 public enum BalanceScreenText {
+    /// 構築編集の中の節の見出し(Web の teamBalanceText.heading と同じ)。
     public static let screenTitle = "タイプバランス"
-    public static let addMemberLabel = "メンバーを追加"
-    public static let loadTeamLabel = "構築から読み込む"
     public static let abilityLabel = "特性"
     public static let noAbilityOption = "なし"
     public static let noneLabel = "なし"
     public static let loadingNotice = "計算中"
-    public static let emptyNotice = "メンバーを追加すると、防御相性と攻撃範囲が表示されます"
     public static let defenseTableLabel = "防御相性"
     public static let teamSummaryTableLabel = "チームの集計"
     public static let coverageTableLabel = "攻撃範囲"
@@ -90,7 +88,6 @@ public enum BalanceScreenText {
     public static let coverageNoAttackMove = "攻撃技なし"
     public static let teamTooManyMembers = "メンバーは\(TeamLimits.maxMembers)体までです"
     public static let abilityEffectNote = "特性"
-    public static let emptyTeamLoadNotice = "保存済みの構築がありません"
     public static let memberColumnLabel = "メンバー"
     public static let attackTypesLabel = "攻撃タイプ"
     public static let duplicateMove = "同じ技が重複しています"
@@ -130,7 +127,14 @@ public enum BalanceScreenText {
     public static let walledByAbilityLabel = "特性で半減以下にできるポケモン"
     public static let noWalledNotice = "受けられるポケモンはいません"
     public static let retryLabel = "再計算"
+    // 構築編集の中の「タイプバランス」(ADR-0421・ADR-0422。Web の teamBalanceText・balanceScreenText と同じ語)
+    public static let teamEmptyNotice = "ポケモンを選ぶと、タイプの強み・弱みがここに出ます"
+    public static let pickShowMore = "もっと見る"
+    public static let pickShowLess = "閉じる"
+    public static let pickNoEmptySlot = "空き枠がありません。枠を外すと入れられます"
 
+    /// おすすめの候補の該当ポケモンのタイルのまとまり(読み上げ名。Web と同じ)。
+    public static func pickGroupLabel(_ typesText: String) -> String { "\(typesText)のポケモン(押すと空き枠に入ります)" }
     public static func threatGroupLabel(_ number: Int) -> String { "仮想敵\(number)" }
     public static func removeThreatLabel(_ number: Int) -> String { "仮想敵\(number)を削除" }
     public static func threatRegionLabel(_ number: Int, name: String) -> String { "仮想敵\(number)(\(name))" }
