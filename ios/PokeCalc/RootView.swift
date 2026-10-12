@@ -130,7 +130,8 @@ struct RootView: View {
                         ) { navigation.select(featureID: $0) }
                     }
                     feature.destination(
-                        in: FeatureContext(core: core, services: services, teamStore: teamStore, path: path(for: featureID)))
+                        in: FeatureContext(core: core, services: services, teamStore: teamStore, path: path(for: featureID),
+                            openCalc: { navigation.select(featureID: "calc") }))
                         .frame(maxHeight: .infinity)
                 }
                 .popScreenBackground()
@@ -148,7 +149,10 @@ struct RootView: View {
         for route: FeatureRoute, core: CoreServices, services: FeatureServices, path: Binding<NavigationPath>
     ) -> some View {
         if let feature = FeatureRegistry.feature(id: route.featureID) {
-            feature.destination(in: FeatureContext(core: core, services: services, teamStore: teamStore, path: path))
+            feature.destination(
+            in: FeatureContext(
+                core: core, services: services, teamStore: teamStore, path: path,
+                openCalc: { navigation.select(featureID: "calc") }))
         }
     }
 

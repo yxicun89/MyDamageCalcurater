@@ -53,8 +53,8 @@ extension FavoritesLabels {
     /// 入口のボタンとシートの見出し(同じ文言)。
     public static func loadTitle(for side: FavoriteLoadSide) -> String {
         switch side {
-        case .attacker: "お気に入りから攻撃側を選ぶ"
-        case .defender: "お気に入りから防御側を選ぶ"
+        case .attacker: "攻撃側のお気に入り"
+        case .defender: "防御側のお気に入り"
         }
     }
 
@@ -66,7 +66,7 @@ extension FavoritesLabels {
         }
     }
 
-    public static let loadCloseButton = "閉じる"
+    public static let loadCloseButton = CommonPartsText.close
     public static let loadLoading = "お気に入りを読み込んでいます…"
 
     public static func loadDroppedName(_ dropped: FavoriteLoadDropped) -> String {
