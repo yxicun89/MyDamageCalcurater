@@ -13,7 +13,7 @@ import XCTest
 ///
 /// 識別子(implementer はこの名前で付ける。ADR-0610 追記):
 ///   画面: speedScreen
-///   自分: speedPokemonButton(ピッカーを開く)/ speedRankValue・speedRankIncrement・speedRankDecrement /
+///   自分: speedPokemonButton(ピッカーを開く)/ rankMeter-speed・rankMeterPlus-speed・rankMeterMinus-speed(ランクはメーター。ADR-0533)/
 ///         speedScarf / speedSelfTailwind / speedSelfParalysis /
 ///         speedCurrentToggle(今の振りを入れる)/ speedCurrentPreset-<uninvested|neutral-max|max>(入れたときだけ見える)/
 ///         speedSPValue・speedSPIncrement・speedSPDecrement / speedNature-<minus|neutral|plus>
@@ -145,7 +145,7 @@ final class SpeedMatchupUITests: XCTestCase {
 
         // 入力: 自分・相手・場。想定のチップは既定で 4 つ選ばれ、+1 / +2 は追加できる。
         for id in ["speedPokemonButton", "speedOpponentPokemonButton", "speedScarf", "speedSelfTailwind", "speedSelfParalysis",
-            "speedOpponentTailwind", "speedOpponentParalysis", "speedTrickRoom", "speedRankValue", "speedCurrentToggle"]
+            "speedOpponentTailwind", "speedOpponentParalysis", "speedTrickRoom", "rankMeter-speed", "speedCurrentToggle"]
         {
             wait(element(app, id), "入力 \(id) が無い")
         }

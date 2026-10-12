@@ -4966,6 +4966,29 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 
 追加テスト: `ImageURLWebpOnlyTests`、`SpeedEntryDisplay.speciesKey`(`SpeedViewModelTableTests`)、`JudgeMatchupDisplay.speciesKey`(`JudgeResultDisplayTests`)、`SpeciesImageUITests` に素早さ表の画像あり/なし 2 件。既存テストの変更なし。
 
+## 能力ランクのメーター(ADR-0533。2026-10-12)
+
+受け入れ条件: (1) 13 段・+2/-3/±0 の併記・色の意味が Web(ADR-0357)と同じ。(2) − / + とトラックのタップで値が変わり、両端で止まる。(3) VoiceOver の adjustable で value が「+2」、label が欄のステータス名。
+(4) AX5 で横にはみ出さずタップできる。(5) 計算(攻撃側・防御側)・素早さ・判定の 5 ステータスに適用。ViewModel・契約は不変。
+
+追加テスト: `RankMeterLogicTests`(13 件)。UITest: `CalcDefenderRanksUITests` にメーターのタップ位置(adjustable の増減は XCUITest の `adjust` が slider 型の要素専用で使えないため UITest では検査せず、増減は `RankMeterLogic` の XCTest とボタンで固定)、`SpeedScreenUITests.testRankMeterPlusChangesValueAndResult`。
+
+### 既存テストの変更(操作の付け替え。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `CalcConditionsUITests`(詳細の既定・条件変更後) | `calcAttackerRankValue`(label「A ±0」)→ `rankMeter-calcAttacker` の value「±0」・label「攻撃」。`calcAttackerRankIncrement` → `rankMeterPlus-calcAttacker` | ランク入力がメーターになり、値は読み上げ値(+N)で見る |
+| `CalcDefenderRanksUITests` 全件 | 識別子を `rankMeter*-calcDefender` に。値は label「B +1」→ value「+1」。ボタン名・上下限の無効化・36pt 以上・攻撃側と混ざらない検査は同じ | 同上。タップ位置(両端・中央)の検査を追加 |
+| `LargeTextLayoutUITests`(AX5 の詳細・防御側ランク) | 識別子の付け替えのみ(はみ出しなし・hittable の検査は同じ) | 同上 |
+| `SpeedScreenUITests.testCustomModeShowsItsControlsAndAResult` | `speedRank*` → `rankMeter*-speed` | 同上 |
+| `JudgeScreenUITests.testRankStepperIsLimitedToPlusMinusSix` | `judgeAttackerRank*-spe` → `rankMeter*-judgeAttacker-spe`。「+6 に届く・+ が無効」は同じ。label「素早さ」を追加 | 同上 |
+
+追記(ドラッグ方針): タップは `SpatialTapGesture`、ドラッグは 10pt 以上かつ水平優勢のときだけ値を変える。新規 UITest `testDefenderRankMeterVerticalSwipeKeepsValueAndHorizontalDragChangesIt`(縦に動かしても ±0・水平ドラッグで +6)と `RankMeterLogicTests.testHorizontalDragDecision`。既存の 37pt・タップ位置の検査は不変。
+
+追記(素早さ画面の新レイアウトへの適用): speed レーンの素早さ画面の作り直し(#757)に合わせ、自分の側の「ランク」行を `RankMeterView`(field `speed`)に置き換えた。ViewModel の `rank`/`setRank` は不変。main 側の新しい `SpeedScreenUITests` には旧ランクの識別子が無かったため、`testRankMeterPlusChangesValueAndStopsAtTheEnds`(±0・ラベル「素早さ」・+1・+6 で + が無効)を新画面向けに追加した。
+
+追記(ゲートの失敗と対処。2026-10-12): `SpeedMatchupLargeTextUITests.testSpeedMatchupInputNoHorizontalOverflowAtAX5` が「画面に出なかった要素」で落ちた。原因は本物で、ランクのメーターの `DragGesture` が ScrollView の縦スクロールを奪い、画面中央(slow swipe の開始点)がメーターに当たると 30 回スワイプしても進まなかった。対処はアプリ側: ドラッグを `RankHorizontalPan`(`UIGestureRecognizerRepresentable` の UIPanGestureRecognizer。最初の速度が水平優勢のときだけ begin。判定は `RankMeterLogic.isHorizontalDrag`)に替え、縦は始まらせない。期待は変えていない。`CalcDefenderRanksUITests` の縦スワイプ試験に「メーターの上から始めても画面がスクロールする」検査を追加。他の3件(`AdjustGoalsUITests.testUnavailableGoals…`・`AdjustScreenUITests.testUnsupportedMarkNoticeIsShown`・`CalcAttackerStatsUITests.testSelectingSpecialMove…`)は単独では再現せず、修正後の上記クラス一式(48 件)と合わせて成功した(同じ原因の可能性が高い:スクロールが進まない)。
+
 ## 構築編集の中のタイプバランス・別画面の廃止(ADR-0532。2026-10-12)
 
 受け入れ条件は ADR-0532「受け入れ条件」1〜6。構築編集の 6 枠の下に「タイプバランス」の節(`teamBalanceSection`)。

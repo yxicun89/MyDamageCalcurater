@@ -241,9 +241,9 @@ final class LargeTextLayoutUITests: XCTestCase {
         "calcConditionsPanel",
         "calcCondition-critical",
         "calcCondition-burn",
-        "calcAttackerRankValue",
-        "calcAttackerRankDecrement",
-        "calcAttackerRankIncrement",
+        "rankMeter-calcAttacker",
+        "rankMeterMinus-calcAttacker",
+        "rankMeterPlus-calcAttacker",
         "calcAttackerAbilityPicker",
     ]
 
@@ -366,11 +366,11 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
 
         let defenderRankIdentifiers = [
-            "calcDefenderRankValue",
-            "calcDefenderRankDecrement",
-            "calcDefenderRankIncrement",
+            "rankMeter-calcDefender",
+            "rankMeterMinus-calcDefender",
+            "rankMeterPlus-calcDefender",
         ]
-        scrollUntilHittable(app, element(app, "calcDefenderRankIncrement"), containerIdentifier: "calcScreen")
+        scrollUntilHittable(app, element(app, "rankMeterPlus-calcDefender"), containerIdentifier: "calcScreen")
         assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + defenderRankIdentifiers)
         for identifier in defenderRankIdentifiers {
             XCTAssertTrue(element(app, identifier).isHittable, "AX5 でもタップできる: \(identifier)")
