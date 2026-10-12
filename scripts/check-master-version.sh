@@ -4,7 +4,8 @@
 #   - 期待値: $READMODEL_DIR/metadata.json の dataVersion(既定 data/generated/readmodel。make pokedex-export が書く)
 #   - calc: GET /readyz の dataVersion(calc-svc が読み込み済みの版)
 #   - speed: GET /healthz の dataVersion(speed が読み込み済みの版。ADR-0138。取れなければ注釈へ戻さず STALE。ADR-0809)
-#   - balance: Deployment の注釈 pokecalc.example/data-version(scripts/gitops/k3d-deploy-readmodel.sh が配備時に付ける)
+#   - balance: GET /healthz の dataVersion(balance が読み込み済みの版。speed と同じ。取れなければ注釈へ戻さず STALE)
+#     Argo CD 管理の balance は initContainer が起動時に read model を作り直すので、手動配備の注釈(古いまま残る)は信用しない
 # 1つでも違う・取れないときは、どの consumer が旧版かを表示して終了コード 1。秘密は出さない(公開データの版だけ)。
 set -euo pipefail
 command -v jq >/dev/null 2>&1 || { echo "check-master-version: jq が必要です(make doctor で確認)" >&2; exit 2; }
@@ -22,7 +23,7 @@ expected=$(jq -r '.dataVersion // empty' "$metadata")
 
 context="k3d-${cluster}"
 actual_calc=$(kubectl --context "$context" get --raw "/api/v1/namespaces/${namespace}/services/calc:http/proxy/readyz" 2>/dev/null | jq -r '.dataVersion // empty' || true)
-actual_balance=$(kubectl --context "$context" -n "$namespace" get deployment/balance -o json 2>/dev/null | jq -r '.metadata.annotations["pokecalc.example/data-version"] // empty' || true)
+actual_balance=$(kubectl --context "$context" get --raw "/api/v1/namespaces/${namespace}/services/balance:http/proxy/healthz" 2>/dev/null | jq -r '.dataVersion // empty' || true)
 actual_speed=$(kubectl --context "$context" get --raw "/api/v1/namespaces/${namespace}/services/speed:http/proxy/healthz" 2>/dev/null | jq -r '.dataVersion // empty' || true)
 
 echo "期待する dataVersion: $expected"

@@ -123,7 +123,7 @@ importer の Pod には Kubernetes API の書き込み権限を与えていな�
 
 calc の起動ログ(`kubectl -n pokecalc logs deployment/calc | grep dataVersion`)と `GET /readyz` の本文にも、読み込んだ `dataVersion` が出る。
 speed も起動ログと `GET /healthz` の `dataVersion` に、読み込んだ版を出す。版の一致確認は calc を `/readyz`、speed を `/healthz` から取る
-(プロセスが読んだ版。取れなければ注釈へ戻らず `STALE speed`。ADR-0809)。balance は配備時の Deployment 注釈で比べる。
+(プロセスが読んだ版。取れなければ注釈へ戻らず `STALE speed`。ADR-0809)。balance も同じく `/healthz` の dataVersion で比べる(Argo CD 管理では手動配備の注釈が古いまま残るため、注釈は見ない)。
 
 ## 6. 手動実行と CronJob の重複を確かめる(issue #106 / ADR-0109)
 
