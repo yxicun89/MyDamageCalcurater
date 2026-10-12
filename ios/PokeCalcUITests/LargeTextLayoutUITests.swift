@@ -773,7 +773,7 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(
             app,
             identifiers: [
-                "favoriteLoadSheet", "favoriteLoadNote", "favoriteLoadRow-304", "favoriteLoadRow-303", "favoriteLoadRow-302",
+                "favoriteLoadSheet", "favoriteLoadHelpButton", "favoriteLoadRow-304", "favoriteLoadRow-303", "favoriteLoadRow-302",
                 "favoriteLoadRow-301", "favoriteLoadClose",
             ])
         let close = element(app, "favoriteLoadClose")

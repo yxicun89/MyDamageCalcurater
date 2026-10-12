@@ -19,12 +19,16 @@ struct FavoritePinSection: View {
                 FavoritePinTarget(label: nil, individual: try calc.defenderIndividualForFavorite())
             }
             if let text = statusText {
-                Text(text)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(isFailure ? ColorToken.danger.color : ColorToken.textSecondary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("favoritePinStatus")
+                // 状態の 1 行(アイコン + 一言)。色だけで伝えず、種類ごとのアイコンを併記する。
+                HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+                    PopIcon(statusSymbol)
+                    Text(text)
+                        .font(TextStyleToken.body.font)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("favoritePinStatus")
+                }
+                .foregroundStyle(isFailure ? ColorToken.danger.color : ColorToken.textSecondary.color)
             }
         }
         // 表示中の個体が変わったら、前の追加結果を消す。
@@ -50,6 +54,16 @@ struct FavoritePinSection: View {
     private var isFailure: Bool {
         if case .failed = pin.status { return true }
         return false
+    }
+
+    private var statusSymbol: String {
+        switch pin.status {
+        case .idle: PopSymbol.info
+        case .saving: PopSymbol.reload
+        case .pinned: PopSymbol.done
+        case .alreadyPinned: PopSymbol.info
+        case .failed: PopSymbol.warning
+        }
     }
 
     private var statusText: String? {

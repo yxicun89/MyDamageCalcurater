@@ -30,6 +30,7 @@ struct FavoritesFeature: AppFeature {
             FavoritesScreenView(
                 favoritesService: service, calcHistoryService: historyService,
                 frequentOpponentsService: context.core.frequentOpponents, resolver: context.core.pokeCalc,
+                openCalc: context.openCalc,
                 // 履歴の行・計算つきお気に入りの計算を、計算画面の入力に復元して開く(ADR-0519・ADR-0524)。
                 calcScreen: { calc, favorite in
                     AnyView(
