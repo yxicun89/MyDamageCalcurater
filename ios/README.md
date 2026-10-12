@@ -48,7 +48,7 @@ flowchart LR
 cd "$(git rev-parse --show-toplevel)"
 make ios-gen                         # 生成物を作る(Git に置かない。変更が無ければ何もしない。Xcode で開く前に1回)
 make ios-test                        # 生成・生成物の一致・XCTest・XCUITest(シミュレータ)・Info.plist の検査
-make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed / judge)
+make ios-sim-run IOS_SCREEN=calc     # モックで起動してスクリーンショット(root / calc / reverse / team / speed)
 cd ios/PokeCalcKit && swift test     # ロジックだけを macOS で手早く
 ```
 
@@ -64,9 +64,6 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 端末内の構築は消さない)。モックの挙動は `POKECALC_MOCK_DEVICE_DATA=partial|fail-once` で切り替える(ADR-0501「P6-7」)。
 素早さ画面(ホームの「素早さを比べる」。相手を選んで上を取る最低ライン。ADR-0610。契約は `services/speed/api/openapi.yaml`)のモックは `POKECALC_MOCK_SPEED=table-error|position-error|pokemon-error|all-error|matchup-error`(`matchup-error` は最低ラインと「これ以上」だけ失敗)、
 起動時に開くのは `POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH=1`(ADR-0503)。
-**判定の入口は既定で非表示**(F-07。再設計まで。`FeatureVisibility`)。環境変数 `POKECALC_SHOW_JUDGE=1` で出る(判定の XCUITest と `make ios-sim-run IOS_SCREEN=judge` が使う)。
-判定画面(ホームの「抜いて倒せるか判定」。P6-25。契約は `services/judge/api/openapi.yaml`)のモックは `POKECALC_MOCK_JUDGE=error|candidate-error|marks|speed-notes`(`speed-notes` は素早さの反映/無視の文と、状態異常まひの付与を固定値で返す。ADR-0512)、
-起動時に開くのは `POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH=1`(ADR-0504)。
 
 計算の防御側・逆算の相手のポケモン検索シートは、検索語が空のとき先頭に「よく使う相手」(過去に相手として計算した種族。
 `GET /api/record/frequent-opponents`)を出す。取得に失敗しても何も出さず、検索と計算は塞がない。
@@ -83,7 +80,7 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 ## 関連 ADR
 
 [0500](../docs/adr/0500-ios-app-architecture.md)(構成・生成・モック・設定・テスト)・
-[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・[0503](../docs/adr/0503-ios-speed-screen-and-multi-contract-generation.md)(素早さ画面)・[0504](../docs/adr/0504-ios-judge-screen.md)(判定画面)・
+[0501](../docs/adr/0501-ios-screen-acceptance.md)(画面ごとの受け入れ条件と判断)・[0503](../docs/adr/0503-ios-speed-screen-and-multi-contract-generation.md)(素早さ画面)・[0504](../docs/adr/0504-ios-judge-screen.md)(判定画面。ADR-0715 で撤去)・
 [0009](../docs/adr/0009-bulk-calc-presets.md)(一括計算のプリセット)・[0010](../docs/adr/0010-reverse-estimation.md) §R(逆算)・
 [0200](../docs/adr/0200-calc-svc-api-contract.md)・[0202](../docs/adr/0202-gateway-routing-and-headers.md)(API 契約)。
 依存(完全固定): swift-openapi-generator 1.13.1・swift-openapi-runtime 1.12.1・swift-openapi-urlsession 1.3.1・swift-http-types 1.8.0(Apache-2.0)。
