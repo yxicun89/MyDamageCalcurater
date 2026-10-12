@@ -123,4 +123,18 @@ final class CalcViewModelComboContextTests: XCTestCase {
         let viewModel = await loaded(stub)
         XCTAssertNil(viewModel.comboContext, "メインの技が無ければ連続技は出さない")
     }
+
+    func testContextStaysConsistentUntilTheNewBulkResponseArrives() async throws {
+        let stub = StubMaster.makeService()
+        let viewModel = await loaded(stub)
+        let before = try XCTUnwrap(viewModel.comboContext)
+        await stub.setBulkMode(.manual)
+        let other = try XCTUnwrap(viewModel.moveOptions.first { $0.id != before.mainMove.id })
+        let task = Task { await viewModel.selectMove(id: other.id) }
+        try await stub.waitForBulkRequests(count: 2)
+        XCTAssertEqual(viewModel.comboContext, before, "応答が来るまでは、古い要求と同じ技・覚える技のまま")
+        await stub.resolveBulkWithEcho(at: 1)
+        await task.value
+        XCTAssertEqual(viewModel.comboContext?.mainMove, other)
+    }
 }

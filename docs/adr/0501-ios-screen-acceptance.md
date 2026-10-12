@@ -5135,4 +5135,8 @@ iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早
 | `ios/scripts/check-request-limits.sh` | `check ComboRequest steps maxComboSteps` を追加 | 手の上限の写しを契約と照合する(検査を強める変更) |
 | `APIPokeCalcServiceComboTests.testErrorResponsesCarryTheServerCode`(新規テストの修正) | 500 の本文の code を `internal_error` から `internal` にした | 計算・マスタの契約の `ErrorCode` に `internal_error` は無い(テストデータの誤り)。検査(サーバーの code を運ぶ)は同じ |
 
+| `ComboViewModelTests.extraKey` | 追加の手でないときは `XCTFail` してから skip | 黙って飛ばさない(検査を強める変更) |
+| `CalcViewModelComboContextTests` | 「応答が来るまで `comboContext` は変わらない」を追加 | critic 指摘: 技・覚える技を要求時点の値で保存(検査の追加) |
+| `ComboViewModelTests` | 取り消された候補の読み込みを次の文脈で読み直すテストを追加 | critic 指摘(検査の追加) |
+
 既存のテストは削除・緩和していない。モックの `test-move-status-a` に効果を足すため、モックの技一覧の件数・名前は変わらない(項目が 1 つ増えるだけ)。

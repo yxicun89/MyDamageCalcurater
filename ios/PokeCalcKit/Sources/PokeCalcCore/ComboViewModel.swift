@@ -43,6 +43,14 @@ public final class ComboViewModel {
     private var generation = 0
     private var candidatesGeneration = 0
 
+    private struct CandidatesKey: Equatable {
+        let learnset: [String]
+        let defenderSpeciesKey: String
+    }
+
+    /// 候補を読み終えた時点の覚える技・防御側種族(nil は未読)。
+    private var loadedCandidatesKey: CandidatesKey?
+
     public private(set) var context: ComboContext?
     public private(set) var isExpanded = false
     public private(set) var extraCandidates: [Move] = []
@@ -118,7 +126,8 @@ public final class ComboViewModel {
         }
         knownMoves[new.mainMove.id] = new.mainMove
         if old?.defenderSpeciesKey != new.defenderSpeciesKey { opponentMoveId = nil }
-        if isExpanded, old?.attackerLearnset != new.attackerLearnset || old?.defenderSpeciesKey != new.defenderSpeciesKey {
+        // 前の文脈ではなく「どの覚える技・防御側種族で候補を読み終えたか」と比べる(取り消された読み込みは未読扱い)。
+        if isExpanded, loadedCandidatesKey != CandidatesKey(learnset: new.attackerLearnset, defenderSpeciesKey: new.defenderSpeciesKey) {
             await loadCandidates()
         }
         await recalculate()
@@ -272,13 +281,26 @@ public final class ComboViewModel {
         let token = candidatesGeneration
         let learnset = context.attackerLearnset
         let defenderKey = context.defenderSpeciesKey
-        let attackMoves = (try? await master.moves(ids: learnset)) ?? []
-        let opponentLearnset = (try? await master.species(key: defenderKey).learnset) ?? []
-        let opponentMoves = (try? await master.moves(ids: opponentLearnset)) ?? []
-        guard token == candidatesGeneration else { return }
+        let attackMoves: [Move]
+        let opponentMoves: [Move]
+        do {
+            attackMoves = try await master.moves(ids: learnset)
+            let opponentLearnset = try await master.species(key: defenderKey).learnset
+            opponentMoves = try await master.moves(ids: opponentLearnset)
+        } catch is CancellationError {
+            return
+        } catch {
+            guard token == candidatesGeneration, !Task.isCancelled else { return }
+            extraCandidates = []
+            opponentCandidates = []
+            loadedCandidatesKey = CandidatesKey(learnset: learnset, defenderSpeciesKey: defenderKey)
+            return
+        }
+        guard token == candidatesGeneration, !Task.isCancelled else { return }
         for move in attackMoves + opponentMoves { knownMoves[move.id] = move }
         extraCandidates = MoveSort.byType(attackMoves.filter(ComboMoveRules.canBeStep))
         opponentCandidates = MoveSort.byType(opponentMoves.filter(ComboMoveRules.canBeOpponentMove))
+        loadedCandidatesKey = CandidatesKey(learnset: learnset, defenderSpeciesKey: defenderKey)
     }
 
     // MARK: - 計算
@@ -323,6 +345,7 @@ public final class ComboViewModel {
             return
         }
         state = .loading
+        speedExampleLines = []
         do {
             let result = try await comboService.calcCombo(request)
             guard token == generation else { return }

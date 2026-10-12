@@ -26,14 +26,17 @@ struct ComboResultView: View {
         case .failed(let message):
             VStack(alignment: .leading, spacing: SpacingToken.x2) {
                 PopNoticeView(kind: .error, message: message, identifier: "comboError")
-                Button {
-                    Task { await viewModel.retry() }
-                } label: {
-                    PopLabel(title: ComboText.retryButton, systemImage: PopSymbol.reload)
+                // 性格が引けない案内は、入力を変えるまで同じ結果になるので「もう一度」を出さない。
+                if message != ComboText.selfSpeedNatureUnavailable {
+                    Button {
+                        Task { await viewModel.retry() }
+                    } label: {
+                        PopLabel(title: ComboText.retryButton, systemImage: PopSymbol.reload)
+                    }
+                    .buttonStyle(PillButtonStyle(kind: .secondary))
+                    .accessibilityLabel(ComboText.retryButton)
+                    .accessibilityIdentifier("comboRetry")
                 }
-                .buttonStyle(PillButtonStyle(kind: .secondary))
-                .accessibilityLabel(ComboText.retryButton)
-                .accessibilityIdentifier("comboRetry")
             }
         case .loaded(let display):
             loaded(display)

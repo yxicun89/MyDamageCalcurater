@@ -483,6 +483,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     private struct LastBulkCalc {
         let request: BulkCalcRequest
         let result: BulkCalcResult
+        /// 要求を作った時点の技・攻撃側の覚える技(連続技の文脈を、応答が届くまで新しい入力と混ぜないため)。
+        let move: Move?
+        let attackerLearnset: [String]
     }
 
     /// 「最新の要求だけを反映する」ための通し番号(規則7)。`beginInput()` が入力操作のたびに進め、
@@ -1102,7 +1105,9 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             let result = try await service.calcBulk(request)
             guard token == latestRequestToken else { return }
-            lastBulkCalc = LastBulkCalc(request: request, result: result)
+            lastBulkCalc = LastBulkCalc(
+                request: request, result: result, move: moveDictionary[request.moveId] ?? selectedMove,
+                attackerLearnset: attackerLearnsetIds)
             applyBulkResult(result)
             error = nil
             isLoading = false
@@ -1201,7 +1206,7 @@ extension CalcViewModel {
     /// 連続技へ渡す計算画面の値(攻撃側・技・急所・場・防御側の振りの選択肢・覚える技)。
     /// 単発の計算が失敗中・結果の行なし・技なしのときは nil(連続技の節を出さない)。
     public var comboContext: ComboContext? {
-        guard error == nil, !rows.isEmpty, let last = lastBulkCalc, let move = selectedMove else { return nil }
+        guard error == nil, !rows.isEmpty, let last = lastBulkCalc, let move = last.move else { return nil }
         let displayItems = ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames)
         let abilityNames = Dictionary(
             defenderAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest })
@@ -1212,7 +1217,7 @@ extension CalcViewModel {
                 rows: last.result.rows, rowIDs: rows.map(\.id), defenderSpeciesKey: last.request.defenderSpeciesKey,
                 defenderRanks: last.request.defenderRanks, items: displayItems, abilityNames: abilityNames,
                 natures: natureOptions),
-            attackerLearnset: attackerLearnsetIds, defenderSpeciesKey: last.request.defenderSpeciesKey,
+            attackerLearnset: last.attackerLearnset, defenderSpeciesKey: last.request.defenderSpeciesKey,
             natures: natureOptions,
             markNames: UnsupportedMarkNames(
                 moves: Array(moveDictionary.values), items: displayItems,

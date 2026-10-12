@@ -52,6 +52,7 @@ final class ComboViewModelTests: XCTestCase {
 
     private func extraKey(_ viewModel: ComboViewModel, at index: Int) throws -> String {
         guard case .extra(let key, _, _) = try XCTUnwrap(viewModel.entries[safe: index]) else {
+            XCTFail("位置 \(index) は追加の手ではない")
             throw XCTSkip("位置 \(index) は追加の手ではない")
         }
         return key
@@ -403,5 +404,24 @@ final class ComboViewModelTests: XCTestCase {
         await noService.open()
         await noService.addStep(moveId: ComboStub.boostMove.id)
         XCTAssertEqual(noService.speedExampleLines, [])
+    }
+
+    // MARK: - 候補の読み込みの取り消し
+
+    func testCancelledCandidateLoadIsReloadedByTheNextContextWithTheSameLearnset() async throws {
+        let master = await makeMaster()
+        await master.setMoveBatchMode(.manual)
+        let viewModel = ComboViewModel(comboService: StubComboService(), master: master, speedService: nil)
+        await viewModel.updateContext(ComboStub.context())
+        let opening = Task { await viewModel.open() }
+        try await master.waitForMoveBatchRequests(count: 1)
+        opening.cancel()
+        await opening.value
+        XCTAssertEqual(viewModel.extraCandidates, [], "取り消された読み込みは候補を書き換えない")
+
+        await master.setMoveBatchMode(.immediate)
+        await viewModel.updateContext(ComboStub.context(field: FieldState(weather: .rain)))
+        XCTAssertFalse(viewModel.extraCandidates.isEmpty, "覚える技が同じでも、未読なら読み直す")
+        XCTAssertFalse(viewModel.opponentCandidates.isEmpty)
     }
 }
