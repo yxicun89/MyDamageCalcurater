@@ -2,7 +2,7 @@ package expire_test
 
 // record-svc の失効ジョブ(ADR-0209 §4・ADR-0220 §3・§4)の手順を、偽ストアで検査する(make test。DB 不要)。
 //
-// **test-first(ADR-0003)**: このパッケージ(services/record/internal/expire)はまだ無い。実装者は次の形で作る:
+// **test-first(ADR-0003)**: 実装済み(当時は services/record/internal/expire。ADR-0254 で手順は internal/app/expire、NewTiDB は internal/adapters/expirestore へ分けた)。最初に定めた形:
 //
 //	type Policy struct {
 //		CalcEventsRetention   time.Duration // RECORD_CALC_EVENTS_RETENTION_DAYS
@@ -52,7 +52,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/pokecalc/services/record/internal/expire"
+	"example.com/pokecalc/services/record/internal/app/expire"
 )
 
 const day = 24 * time.Hour
@@ -524,11 +524,20 @@ func TestExpirePackageImportsStayInsideRecordDB(t *testing.T) {
 		"net/http", "github.com/nats-io/", "github.com/labstack/echo",
 		"example.com/pokecalc/services/team/", "example.com/pokecalc/services/calc/",
 		"example.com/pokecalc/services/gateway/", "example.com/pokecalc/services/pokedex/",
-		"example.com/pokecalc/services/record/internal/httpapi", "example.com/pokecalc/services/record/internal/events",
+		"example.com/pokecalc/services/record/internal/adapters/httpapi", "example.com/pokecalc/services/record/internal/adapters/events",
 	}
-	files, err := filepath.Glob("*.go")
-	if err != nil {
-		t.Fatal(err)
+	// 手順(このパッケージ。app 層)と、その TiDB 実装(adapters/expirestore)の両方を見る
+	// (ADR-0254 で 1 つのパッケージから 2 つに分けた。検査の範囲は分ける前と同じ)。
+	var files []string
+	for _, pattern := range []string{"*.go", "../../adapters/expirestore/*.go"} {
+		matched, err := filepath.Glob(pattern)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(matched) == 0 {
+			t.Fatalf("%s に一致するファイルが無い(検査が空振りしている)", pattern)
+		}
+		files = append(files, matched...)
 	}
 	checked := 0
 	for _, file := range files {

@@ -1,15 +1,15 @@
-// Package store は record-svc のデータアクセス層の契約(型とインターフェース)を持つ。
-// TiDB への実装(SQL・接続・上限の設定値)は同じパッケージの `tidb.go`(`//go:build tidb` の
-// テストは `tidb_test.go`)。httpapi と events はこのインターフェースだけに依存し、単体テストは
-// 架空の実装(fake)で差し替える。
+package app
+
+// record DB のポート(ADR-0811・ADR-0254)。旧 internal/store/store.go の契約(型とインターフェース)を
+// 使う側の app で宣言する。TiDB への実装は adapters/store(`tidb.go`)で、adapters/store は
+// ここの型を同じ名前の別名として持つ(既存の呼び名 store.Store などを保つ)。単体テストは架空の実装(fake)で差し替える。
 //
 // 規則(ADR-0209 §6。このインターフェースを実装するときの絶対条件):
 //   - すべてのメソッドは deviceID を必ず受け取り、SQL は必ず `WHERE device_id = ?` を持つ。
 //     端末 ID の絞り込みを省く経路(全端末を見るメソッド)をこのインターフェースに足さない。
 //   - 端末 ID はヘッダ由来の値だけを渡す(ボディ・クエリからは受け取らない。ADR-0209 §2)。
 //   - record-svc は自分の DB(record DB)にだけ触る(CLAUDE.md 絶対ルール4)。
-//   - TiDB に届かない失敗は ErrUnavailable で包んで返す(httpapi が 503 store_unavailable に写す)。
-package store
+//   - TiDB に届かない失敗は ErrUnavailable で包んで返す(adapters/httpapi が 503 store_unavailable に写す)。
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 )
 
 // ErrUnavailable は record DB(TiDB)に届かない・クエリが実行できない失敗。実装はこれで包んで返し、
-// httpapi は 503 `store_unavailable`(ADR-0209 §5.3)に写す。DB のエラー文はログにだけ残し、
+// adapters/httpapi は 503 `store_unavailable`(ADR-0209 §5.3)に写す。DB のエラー文はログにだけ残し、
 // クライアントへは出さない(ADR-0105 §2 と同じ扱い)。
 var ErrUnavailable = errors.New("record DB に届かない")
 
@@ -192,4 +192,10 @@ type Store interface {
 	// devices.purged_at(墓石)以前の行・q.Since より古い行・q.Before 以降(新しい側)の行は含めない。
 	// 1行も無ければ長さ0のスライス。読むだけで何も書き換えない。届かなければ ErrUnavailable。
 	ListCalcHistory(ctx context.Context, deviceID string, q CalcHistoryQuery) ([]CalcHistoryRow, error)
+}
+
+// Pinger は Store の実装が任意で持つ到達確認(Store には含めない。TiDB の実装が持ち、fake は持たない)。
+// Ready はこれがあれば使い、無ければ読み取り専用の FrequentOpponents で確かめる。
+type Pinger interface {
+	Ping(ctx context.Context) error
 }

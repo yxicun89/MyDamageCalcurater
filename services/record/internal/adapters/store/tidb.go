@@ -1,8 +1,8 @@
 // TiDB(MySQL 互換)への Store の実装(ADR-0209・ADR-0211)。
 //
-// すべてのクエリは device_id で絞る(package doc の規則)。TiDB に届かない失敗はすべて
-// ErrUnavailable で包んで返し、httpapi / events はそれを見て 503 / Nak に写す。DB のエラー文自体は
-// ログにだけ残し、クライアントへは出さない(package doc・ADR-0105 §2 と同じ扱い)。
+// すべてのクエリは device_id で絞る(app/ports.go の規則)。TiDB に届かない失敗はすべて
+// ErrUnavailable で包んで返し、adapters の httpapi / events はそれを見て 503 / Nak に写す。DB のエラー文自体は
+// ログにだけ残し、クライアントへは出さない(app/ports.go・ADR-0105 §2 と同じ扱い)。
 package store
 
 import (
@@ -60,7 +60,7 @@ func wrapUnavailable(err error) error {
 }
 
 // Ping は TiDB への到達可否だけを確かめる(record-svc の /readyz が使う。Store インターフェースには
-// 含めない — httpapi は型アサーションで使い、fake には無いので httpapi のテストは
+// 含めない — app.Ready が app.Pinger として型アサーションで使い、fake には無いので httpapi のテストは
 // FrequentOpponents 経由の判定にフォールバックする)。
 func (s *TiDBStore) Ping(ctx context.Context) error {
 	return wrapUnavailable(s.db.PingContext(ctx))

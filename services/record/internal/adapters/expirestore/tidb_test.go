@@ -1,22 +1,24 @@
 //go:build tidb
 
-package expire_test
+package expirestore_test
 
-// 失効ジョブの TiDB 実装(expire.NewTiDB)の実 SQL を検査する(ADR-0220 §4。make test-db だけで走る。
+// 失効ジョブの TiDB 実装(expirestore.NewTiDB)の実 SQL を検査する(ADR-0220 §4。make test-db だけで走る。
 // RECORD_TEST_DSN が必須でスキップしない。ADR-0211)。
 //
 // 失効の SQL は全端末を横断するので、同じ DB にある他のテストの行も条件に合えば消える。各テストは
 // 乱数の端末 ID を使い、**自分の端末の行の有無だけ**を検査する(件数の合計は他の行の影響を受けるため見ない。
 // 上限のテストだけは「上限ちょうどを消した」ことを見る)。go test -p 1(make test-db)で、
-// internal/store のテストと同時には走らない。
+// adapters/store のテストと同時には走らない。
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -25,7 +27,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	recorddb "example.com/pokecalc/services/record/db"
-	"example.com/pokecalc/services/record/internal/expire"
+	"example.com/pokecalc/services/record/internal/adapters/expirestore"
+	"example.com/pokecalc/services/record/internal/app/expire"
 )
 
 func testDB(t *testing.T) *sql.DB {
@@ -160,7 +163,7 @@ func runUntilDone(t *testing.T, st expire.Store, p expire.Policy, now time.Time)
 
 func TestTiDBExpireCalcEventsAndAggregatesBoundary(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	a, b := newDeviceID(t), newDeviceID(t)
 	insertDevice(t, db, a, now, nil, nil)
@@ -197,7 +200,7 @@ func TestTiDBExpireCalcEventsAndAggregatesBoundary(t *testing.T) {
 
 func TestTiDBExpireFavoritesUsesMaxOfLastSeenAndUpdatedAt(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	cases := []struct {
 		name      string
@@ -232,7 +235,7 @@ func TestTiDBExpireFavoritesUsesMaxOfLastSeenAndUpdatedAt(t *testing.T) {
 
 func TestTiDBExpirePurgeJournalBoundary(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	keep, gone := newDeviceID(t), newDeviceID(t)
 	insertJournal(t, db, keep, now.Add(-90*day))
@@ -251,7 +254,7 @@ func TestTiDBExpirePurgeJournalBoundary(t *testing.T) {
 // AC-E6: devices 行の失効(ADR-0220 §4 の 5・6)。
 func TestTiDBExpireOrphanDevices(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	longAgo := now.Add(-400 * day)
 
@@ -309,7 +312,7 @@ func TestTiDBExpireOrphanDevices(t *testing.T) {
 // AC-E6: 「使われ続けている端末」「墓石が D 以内」の行は、orphaned_since が古くても消えない。
 func TestTiDBExpireKeepsDevicesSeenOrPurgedWithinExpiry(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	oldOrphan := ptrTime(now.Add(-100 * day))
 
@@ -331,7 +334,7 @@ func TestTiDBExpireKeepsDevicesSeenOrPurgedWithinExpiry(t *testing.T) {
 // AC-E4: 上限と冪等(実 SQL の DELETE ... LIMIT)。
 func TestTiDBExpireBatchLimitAndIdempotent(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	// 先に他のテストの残りを掃除する(この後の「上限ちょうど」の検査を他の行に左右させない)。
 	runUntilDone(t, st, defaultPolicy, now)
@@ -369,3 +372,18 @@ func TestTiDBExpireBatchLimitAndIdempotent(t *testing.T) {
 
 func ptr(d time.Duration) *time.Duration { return &d }
 func ptrTime(t time.Time) *time.Time     { return &t }
+
+// ---- 共通の部品(ADR-0254 で app/expire と分かれる前は expire_test.go と共有していたものの写し。値は同じ)----
+
+const day = 24 * time.Hour
+
+// ADR-0211 §7 の既定値(テストの独立した期待値)。
+var defaultPolicy = expire.Policy{
+	CalcEventsRetention:   90 * day,
+	FavoritesRetention:    540 * day,
+	DeviceRowExpiry:       30 * day,
+	PurgeJournalRetention: 90 * day,
+	BatchLimit:            1000,
+}
+
+func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)) }

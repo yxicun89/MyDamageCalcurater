@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/adapters/store"
 )
 
 // 並びはスコアの降順、同点は speciesKey の昇順(契約の 200 の description)。

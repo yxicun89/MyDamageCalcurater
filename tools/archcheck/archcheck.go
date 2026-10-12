@@ -31,7 +31,6 @@ var unmigrated = []string{
 	"balance",
 	"gateway",
 	"judge",
-	"record",
 	"speed",
 	"team",
 }

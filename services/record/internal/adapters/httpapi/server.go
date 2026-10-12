@@ -8,7 +8,6 @@
 package httpapi
 
 import (
-	"context"
 	"net/http"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/httpmetrics"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/app"
 )
 
 // defaultFrequentLimit / minFrequentLimit / maxFrequentLimit は契約の limit の既定・範囲
@@ -27,10 +26,11 @@ const (
 	maxFrequentLimit     = 50
 )
 
-// Server は api.ServerInterface を実装する。record の2操作だけを本実装し、他は stubs.go に置く。
+// Server は api.ServerInterface を実装する。record の操作だけを本実装し(手順は app.Service)、他は stubs.go に置く。
+// ここは生成型 ⇄ app の型の変換と、HTTP のエラー整形だけを持つ(ADR-0811・ADR-0254)。
 type Server struct {
-	store store.Store
-	// calcEventsRetention は計算履歴の下限(これより古い行は返さない。ADR-0230 §4)。0 なら下限なし。
+	svc *app.Service
+	// calcEventsRetention は計算履歴の下限(これより古い行は返さない。ADR-0230 §4)。0 なら下限なし。app.New に渡す。
 	calcEventsRetention time.Duration
 }
 
@@ -46,16 +46,17 @@ func WithCalcEventsRetention(d time.Duration) Option {
 var _ api.ServerInterface = (*Server)(nil)
 
 // NewServer は Store を使う Server を作る。
-func NewServer(st store.Store, opts ...Option) *Server {
-	s := &Server{store: st}
+func NewServer(st app.Store, opts ...Option) *Server {
+	s := &Server{}
 	for _, o := range opts {
 		o(s)
 	}
+	s.svc = app.New(st, contractEnums, time.Now, s.calcEventsRetention)
 	return s
 }
 
 // NewHandler は record-svc の HTTP ハンドラ全体を組み立てる(fixture_test.go の申し送りどおり)。
-func NewHandler(st store.Store, opts ...Option) http.Handler {
+func NewHandler(st app.Store, opts ...Option) http.Handler {
 	e := echo.New()
 	e.HTTPErrorHandler = httpErrorHandler
 	m := httpmetrics.New()
@@ -63,9 +64,10 @@ func NewHandler(st store.Store, opts ...Option) http.Handler {
 	e.Use(recoverMiddleware)
 	e.GET(httpmetrics.Path, m.Handler())
 
-	registerRecordRoutes(e, NewServer(st, opts...))
+	srv := NewServer(st, opts...)
+	registerRecordRoutes(e, srv)
 	e.GET("/healthz", healthzHandler)
-	e.GET("/readyz", readyzHandler(st))
+	e.GET("/readyz", readyzHandler(srv.svc))
 	return e
 }
 
@@ -86,35 +88,15 @@ func healthzHandler(c *echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 }
 
-// pinger は TiDBStore が持つ到達確認(Store インターフェースには含めない。store.go の docstring 参照)。
-// fake はこれを実装しないので、テストは FrequentOpponents 経由のフォールバックを通る。
-type pinger interface {
-	Ping(ctx context.Context) error
-}
-
 // readyzHandler は DB に届けば 200、届かなければ 503 store_unavailable(ADR-0209 §5.3)。
-func readyzHandler(st store.Store) echo.HandlerFunc {
+// 到達の確かめ方(Ping か、無ければ FrequentOpponents)は app.Service.Ready。
+func readyzHandler(svc *app.Service) echo.HandlerFunc {
 	return func(c *echo.Context) error {
-		if err := checkStoreReady(c.Request().Context(), st); err != nil {
-			return err
+		if err := svc.Ready(c.Request().Context()); err != nil {
+			return errFromStore("", err)
 		}
 		return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	}
-}
-
-// checkStoreReady は st が pinger を実装していればそれを、していなければ読み取り専用の
-// FrequentOpponents(空の deviceID。副作用が無い)を1件だけ呼んで到達可否を確かめる。
-func checkStoreReady(ctx context.Context, st store.Store) error {
-	if p, ok := st.(pinger); ok {
-		if err := p.Ping(ctx); err != nil {
-			return errFromStore("", err)
-		}
-		return nil
-	}
-	if _, err := st.FrequentOpponents(ctx, "", 1); err != nil {
-		return errFromStore("", err)
-	}
-	return nil
 }
 
 // recoverMiddleware は panic を回復し、500 internal の httpError にする。
@@ -139,16 +121,6 @@ func httpErrorHandler(c *echo.Context, err error) {
 	_ = c.JSON(status, body)
 }
 
-// touchAndRun は「端末 ID を含む要求を受けたら devices.last_seen_at を更新する」(ADR-0209 §4)を
-// 全操作で徹底したうえで run を呼ぶ。TouchDevice が失敗したら run は呼ばない(どちらも同じ
-// store_unavailable になるだけなので、二重に呼んで待たせない)。
-func touchAndRun(ctx context.Context, st store.Store, deviceID string, run func() error) error {
-	if err := st.TouchDevice(ctx, deviceID, time.Now().UTC()); err != nil {
-		return errFromStore(deviceID, err)
-	}
-	return run()
-}
-
 // DeleteRecordDeviceData は DELETE /api/record/device-data(ADR-0209 §5)。
 func (s *Server) DeleteRecordDeviceData(ctx *echo.Context, params api.DeleteRecordDeviceDataParams) error {
 	if err := checkHeaders(params.XDeviceId, params.XSessionId); err != nil {
@@ -161,23 +133,15 @@ func (s *Server) DeleteRecordDeviceData(ctx *echo.Context, params api.DeleteReco
 		return err
 	}
 
-	var result api.RecordDeletionResult
-	err := touchAndRun(ctx.Request().Context(), s.store, params.XDeviceId, func() error {
-		res, err := s.store.PurgeDevice(ctx.Request().Context(), params.XDeviceId, time.Now().UTC())
-		if err != nil {
-			return errFromStore(params.XDeviceId, err)
-		}
-		result = deletionResultFrom(res)
-		return nil
-	})
+	res, err := s.svc.PurgeDevice(ctx.Request().Context(), params.XDeviceId)
 	if err != nil {
-		return err
+		return errFromStore(params.XDeviceId, err)
 	}
-	return ctx.JSON(http.StatusOK, result)
+	return ctx.JSON(http.StatusOK, deletionResultFrom(res))
 }
 
-// deletionResultFrom は store.PurgeResult を契約の RecordDeletionResult に写す。
-func deletionResultFrom(res store.PurgeResult) api.RecordDeletionResult {
+// deletionResultFrom は app.PurgeResult を契約の RecordDeletionResult に写す。
+func deletionResultFrom(res app.PurgeResult) api.RecordDeletionResult {
 	status := api.Completed
 	if res.Remaining {
 		status = api.Partial
@@ -218,24 +182,16 @@ func (s *Server) ListFrequentOpponents(ctx *echo.Context, params api.ListFrequen
 		return newError(api.InvalidInput, "limit は %d〜%d の範囲でなければならない(%d)", minFrequentLimit, maxFrequentLimit, limit)
 	}
 
-	var out []api.FrequentOpponent
-	err := touchAndRun(ctx.Request().Context(), s.store, params.XDeviceId, func() error {
-		rows, err := s.store.FrequentOpponents(ctx.Request().Context(), params.XDeviceId, limit)
-		if err != nil {
-			return errFromStore(params.XDeviceId, err)
-		}
-		out = frequentOpponentsFrom(rows)
-		return nil
-	})
+	rows, err := s.svc.FrequentOpponents(ctx.Request().Context(), params.XDeviceId, limit)
 	if err != nil {
-		return err
+		return errFromStore(params.XDeviceId, err)
 	}
-	return ctx.JSON(http.StatusOK, out)
+	return ctx.JSON(http.StatusOK, frequentOpponentsFrom(rows))
 }
 
-// frequentOpponentsFrom は store.FrequentOpponent のスライスを契約の型に写す(空なら空配列にする。
+// frequentOpponentsFrom は app.FrequentOpponent のスライスを契約の型に写す(空なら空配列にする。
 // nil を返して JSON が `null` になるのを避ける。契約は「記録が無ければ空配列」)。
-func frequentOpponentsFrom(rows []store.FrequentOpponent) []api.FrequentOpponent {
+func frequentOpponentsFrom(rows []app.FrequentOpponent) []api.FrequentOpponent {
 	out := make([]api.FrequentOpponent, 0, len(rows))
 	for _, r := range rows {
 		out = append(out, api.FrequentOpponent{

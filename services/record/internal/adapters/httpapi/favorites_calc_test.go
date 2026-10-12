@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/internal/api"
+	"example.com/pokecalc/services/record/internal/domain"
 )
 
 const fakeMove = "fake-move"
@@ -384,11 +385,11 @@ func TestCreateFavoriteSnapshotSizeBoundary(t *testing.T) {
 	snapshotLen := func(moveLen int) int {
 		c := calcInput()
 		c["moveId"] = strings.Repeat("m", moveLen)
-		var req favoriteRequest
+		var req domain.FavoriteInput
 		if err := json.Unmarshal(favoriteWithCalcBody(t, nil, minimalIndividual(speciesGuard), c), &req); err != nil {
 			t.Fatal(err)
 		}
-		snap, err := normalizeFavorite(req)
+		snap, err := domain.NormalizeFavorite(req, contractEnums)
 		if err != nil {
 			t.Fatal(err)
 		}
