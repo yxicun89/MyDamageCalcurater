@@ -703,6 +703,18 @@ button.ui-pokemon-card:focus-visible {
   background: transparent;
 }
 
+/* 未入力(off)の段も左右で色味を持たせる(ADR-0357 追記)。下降側 = warning、上昇側 = brand.primary を薄く。
+   値の入った段(濃い塗り)との区別は塗りの濃さと符号付きの文字。 */
+.ui-rank__segment[data-state="off"][data-side="down"] {
+  background: color-mix(in srgb, var(--warning) 16%, transparent);
+  border-color: color-mix(in srgb, var(--warning) 70%, transparent);
+}
+
+.ui-rank__segment[data-state="off"][data-side="up"] {
+  background: color-mix(in srgb, var(--brand-primary) 16%, transparent);
+  border-color: color-mix(in srgb, var(--brand-primary) 70%, transparent);
+}
+
 /* 上昇 = brand.primary、下降 = warning(色名に頼らず、値の符号を文字でも出す)。0 は常に目印(太い縦棒)。 */
 .ui-rank__segment[data-state="up"] {
   background: var(--brand-primary);
@@ -717,6 +729,7 @@ button.ui-pokemon-card:focus-visible {
 .ui-rank__segment[data-state="zero"] {
   flex-grow: 0;
   flex-basis: 6px;
+  margin: 0 2px;
   background: var(--text-primary);
   border-color: var(--text-primary);
 }
