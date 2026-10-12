@@ -89,6 +89,9 @@ var engineSentinels = []struct {
 	{engine.ErrInvalidAdjustInput, CodeInvalidInput},
 	// 対戦の状態の値域外(最大 HP を超える残り HP・範囲の多段でない技の回数・範囲外の回数。ADR-0144 §6)。
 	{engine.ErrInvalidBattleState, CodeInvalidInput},
+	// 連続技の入力の不正(ランク変化の無い変化技の手・変化技の相手の技等。ADR-0253)と、素早さの入力の範囲外(ADR-0179)。
+	{engine.ErrInvalidComboInput, CodeInvalidInput},
+	{engine.ErrInvalidSpeedInput, CodeInvalidInput},
 }
 
 // FromEngine は engine が返したエラーを安定した Code の Error に写す。

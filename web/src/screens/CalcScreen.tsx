@@ -53,6 +53,8 @@ import {
   type CalcConditions,
 } from "../domain/calcConditions";
 import { abilityNamesLabel } from "../domain/abilityLabels";
+import { canBeComboStep } from "../domain/combo";
+import { buildComboDefenders } from "../domain/comboView";
 import { formatEffectiveness, formatKO, formatPercentRange } from "../domain/format";
 import {
   itemIdAfterSpeciesChange,
@@ -62,7 +64,7 @@ import {
   type MegaItemLock,
 } from "../domain/mega";
 import { itemAfterRoleChange, itemsForRole, itemsWithStoneLabels, megaStoneLabel } from "../domain/itemRoles";
-import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove, learnsetMoves } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
@@ -126,6 +128,7 @@ import { MovePicker } from "./MovePicker";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
+import { ComboSection } from "./ComboSection";
 import { Icon } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -1209,6 +1212,65 @@ export function CalcScreen({
       : { status: "error", error: completed.result.error };
   }
 
+  // CB-6 段階 B(ADR-0359): 連続技。攻撃側・防御側・場・条件・ランクは上の値をそのまま渡す(別の入力欄を作らない)。
+  // 防御側は一括計算の行(振り × 持ち物 × 特性)から選ぶ。結果が成功のときだけ選択肢ができる。
+  const comboConditionParts = useMemo(() => conditionRequestParts(conditions), [conditions]);
+  const comboAttacker = useMemo(
+    () =>
+      attackerSpecies === null || !attackerStats.ok
+        ? null
+        : buildIndividual(attackerSpecies, {
+            sp: attackerStats.sp,
+            nature: attackerStats.nature,
+            item: attackerItem,
+            ability: attackerAbility,
+            ...(comboConditionParts.status === undefined ? {} : { status: comboConditionParts.status }),
+            ...(comboConditionParts.ranks === undefined ? {} : { ranks: comboConditionParts.ranks }),
+          }),
+    [attackerSpecies, attackerStats, attackerItem, attackerAbility, comboConditionParts],
+  );
+  const comboRows = outcome.status === "success" ? outcome.result.rows : undefined;
+  const comboDefenders = useMemo(
+    () =>
+      defenderSpecies === null || comboRows === undefined
+        ? []
+        : buildComboDefenders({
+            species: defenderSpecies,
+            rows: comboRows,
+            items: master.items,
+            candidateAbilities: defenderAbilities,
+            abilityNames: markAbilities,
+            hasAbilityChoice: defenderAbilityOptions.length > 1,
+            ...(comboConditionParts.defenderOverride === undefined
+              ? {}
+              : { ranks: comboConditionParts.defenderOverride.ranks }),
+          }),
+    [
+      defenderSpecies,
+      comboRows,
+      master.items,
+      defenderAbilities,
+      markAbilities,
+      defenderAbilityOptions.length,
+      comboConditionParts,
+    ],
+  );
+  // 追加の手の候補: 攻撃側の覚える技のうち、攻撃技またはランクを変える変化技。相手の技の候補: 防御側の覚える攻撃技。
+  const comboExtraMoves = useMemo(
+    () =>
+      attackerSpecies === null
+        ? []
+        : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)).filter(canBeComboStep),
+    [attackerSpecies, master.moves, attackerKey, movesFor],
+  );
+  const comboOpponentMoves = useMemo(
+    () =>
+      defenderSpecies === null
+        ? []
+        : damagingLearnsetMoves(defenderSpecies, movesFor(master.moves, defenderKey)),
+    [defenderSpecies, master.moves, defenderKey, movesFor],
+  );
+
   return (
     <div className="calc-screen">
       {restoreNotice !== null && <RestoreNoticeView notice={restoreNotice} />}
@@ -1381,6 +1443,26 @@ export function CalcScreen({
         defenderHasAbilityChoice={defenderAbilityOptions.length > 1}
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
+      />
+
+      <ComboSection
+        engine={engine}
+        typeChart={master.typeChart}
+        types={master.typeChart.types}
+        attacker={comboAttacker}
+        mainMove={move}
+        mainHits={hits}
+        mainCritical={conditions.critical}
+        onMainCriticalChange={(critical) => {
+          setConditions({ ...conditions, critical });
+        }}
+        extraCandidates={comboExtraMoves}
+        opponentCandidates={comboOpponentMoves}
+        defenders={comboDefenders}
+        field={comboConditionParts.field}
+        moves={markMoves}
+        items={displayItems}
+        abilities={markAbilities}
       />
 
       {frequentOpponents.length > 0 && (

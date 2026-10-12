@@ -3,7 +3,7 @@
 // 1リクエストの流れ(engine/wasmapi と同じ順。同じ失敗は同じ code にする):
 //
 //	ヘッダ・厳格デコード(unknown_field / invalid_json)・件数上限(ここ)
-//	→ 列挙の検証・ID 解決・入力の検証・engine 呼び出し・イベント発行(計算・一括・逆算は app.Service。ADR-0811)
+//	→ 列挙の検証・ID 解決・入力の検証・engine 呼び出し・イベント発行(計算・一括・逆算・連続技は app.Service。ADR-0811)
 //	→ 生成型への写し(ここ)
 //
 // 調整(adjust.go)の手順はまだここにある(S3 の後半の PR で app へ移す)。
@@ -99,6 +99,8 @@ func registerCalcRoutes(e *echo.Echo, srv *Server, guard echo.MiddlewareFunc) {
 	e.POST("/api/calc/adjust/allocation", wrapper.AdjustAllocation, guard)
 	// 複数の目標(ADR-0177 §9)。
 	e.POST("/api/calc/adjust/goals", wrapper.AdjustGoals, guard)
+	// 連続技(ADR-0253)。ほかの計算と同じ guard を通す。
+	e.POST("/api/calc/combo", wrapper.CalcCombo, guard)
 }
 
 // registerPokedexNotFoundRoutes は calc-svc の担当外(pokedex)の7操作を、生成ラッパを

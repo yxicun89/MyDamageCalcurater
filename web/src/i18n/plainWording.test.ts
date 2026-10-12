@@ -150,8 +150,10 @@ describe("調整: 「指数」「16n」「最小の振り方」を言い換え�
 });
 
 describe("素早さ・タイプバランス・構築・お気に入り・このアプリについて", () => {
-  test("素早さの入力の方法(プリセット → 定番の振り方)", () => {
-    expect(speedScreenText.modeLabel.preset).toBe("定番の振り方");
+  test("素早さの画面の見出し・想定の言い方(I-speed-4b。入力の方法〈定番の振り方〉は画面ごと無くなった)", () => {
+    expect(speedScreenText.matchupHeading).toBe("先に動くための最低ライン");
+    expect(speedScreenText.reachHeading).toBe("これ以上");
+    expect(speedScreenText.reachFaster("neutral-max", 119)).toBe("準速 119 族以上に抜かれる");
     // 原因の目安(起動中か通信切れ)を足した文言に更新(ec ラウンド 4)。先頭の言い回しは従来どおり。
     expect(speedScreenText.errorByCode.speed_unavailable).toMatch(/^素早さのサーバーに接続できません。/);
   });

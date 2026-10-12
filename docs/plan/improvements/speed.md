@@ -22,5 +22,9 @@
 - [ ] **I-speed-4(speed-svc・Web・iOS)**: 「相手を選んで上を取る最低ライン」と「これ以上(族の区切り)」の画面にし、表と周辺パネルを画面から外す。設計は ADR-0610(提案。§6 Q1〜Q7 はユーザー確認待ち)、決定は `docs/ai-shared/decisions/2026-10-12-speed-matchup-min-line.md`。
   - [x] 仕様と失敗するテスト(spec-writer): `services/speed/internal/speed/matchup_test.go`・`engine_parity_test.go`、`services/speed/internal/httpapi/matchup_test.go`、契約 0.7.0(`POST /api/speed/v1/matchup`・`/reach`)、スタブ(`matchup.go` 2 つ)
   - [x] I-speed-4a: speed のコア(MovesFirstLines・Matchup・Reach)と HTTP(matchup・reach。ミドルウェア登録)。上のテストを通す(2026-10-12。`Speed` は元から engine.EffectiveStat 経由で、engine_parity_test が engine.FinalSpeed との一致を守る)
-  - [ ] I-speed-4b: Web の画面(入力 = 自分・相手・場、出力 1・2、連続技へのリンク。表・周辺パネルを外す)
+  - [x] I-speed-4b: Web の画面(入力 = 自分・相手・場、出力 1・2、連続技へのリンク。表・周辺パネルを外す)。具体は ADR-0610 §7(2026-10-12。SpeedScreen・speedClient の matchup/reach。vitest 全件・lint・typecheck 成功。e2e の「キーボード」1 件だけ macOS の select が ArrowDown でポップアップを開く挙動で赤〈テストの前提が Linux 向け〉)
+    - [x] 仕様と失敗するテスト(spec-writer): `web/src/speed/SpeedScreen.test.tsx`(W1〜W12)・`SpeedScreen.images.test.tsx`・`speedClient.matchup.test.ts`・`e2e/speed.spec.ts`(書き換え)、フェイク `web/src/test/fakeSpeedClient.ts`、文言 `web/src/i18n/speed.ts`、スタブ(`SpeedScreen.tsx`・`speedClient.ts` の matchup / reach)。旧画面専用のコード・テスト(speedWindow・speedNeighborhood・SpeedNeighborhoodPanel・旧 SpeedScreen*.test)は削除済み
+    - [ ] クライアント: `matchup()`・`reach()` を `postJson` にする(`speedClient.matchup.test.ts`)
+    - [ ] 画面: `SpeedScreen.tsx`(領域・入力・カード・「これ以上」・連続技リンク〈`onOpenCombo` があるときだけ〉)と `SpeedScreen.css` の書き直し。`App.routing`・`App.masterSources`・`App.tabPersistence` のテストも通る(領域「自分のポケモン」は常に描画)
+    - [ ] 検証: `make web-lint web-test`、`cd web && npm run e2e -- speed`(chromium)
   - [ ] I-speed-4c: iOS の画面(Web と同じ体験)

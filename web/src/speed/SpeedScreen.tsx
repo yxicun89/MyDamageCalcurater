@@ -1,88 +1,56 @@
-// SP3: 素早さ比較の画面(ADR-0604 §4、docs/speed-design.md §5・§6)。
-// 左 = 速い順の全体の表(speed-svc の tiers をそのまま描画)、右 = 自分のポケモン(preset / custom / raw)。
-// 自分の実数値が左の表のどこに入るかを、同速の段の強調か、段の間の境界線で示す(ADR-0604 §1・§4)。
-// 素早さの計算・並び・位置はすべて speed-svc が決める。Web は engine(WASM)・pokedex のマスタを使わない
-// (ADR-0604 §5。ScreenProps.engine・master は構造的に無視する)。
-//
-// 状態の作り(BalanceScreen.tsx と同じ考え方):
-//   - pokemon()・table() はマウント時に1回ずつ呼び、それぞれ独立の状態を持つ(片方のエラーがもう片方の
-//     表示を消さない。ADR-0604 §4)。
-//   - 右の入力(self)から作る PositionRequest の JSON を key にし、key が変わるたびに position() を呼ぶ。
-//     応答は .then の中だけで setState し(react-hooks/set-state-in-effect)、cancelled フラグで
-//     古い応答を無視する(ADR-0604 §4)。
-//   - preset/custom はポケモンを選ぶまで、raw は値を入れるまで呼ばない(mode に要らない項目は送らない。
-//     契約上 400 invalid_request になるため)。
+// I-speed-4b(ADR-0610 §4・§7): 素早さ画面。「相手を選んで、先に動くための最低ライン」と「自分の素早さのこれ以上」を出す。
+// 入力(自分 / 相手 / 場)→ 出力 1(想定ごとのカード)→ 出力 2(「これ以上」)。素早さの値・区間はすべて speed-svc が決め、
+// Web は計算し直さない。表(ADR-0608)・周辺パネル(ADR-0609)は出さない。engine(WASM)・マスタは使わない(ADR-0604 §5)。
 
-import { useEffect, useId, useMemo, useRef, useState, type CSSProperties } from "react";
-import { MIN_RANK, MAX_RANK } from "../domain/calcConditions";
+import { useEffect, useId, useMemo, useState, type ReactElement } from "react";
+import { MAX_RANK, MIN_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { rankStatNameJa } from "../i18n/common";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
-import { uiText } from "../i18n/ui";
-import { PokemonImage } from "../images/PokemonImage";
 import { ToggleChip } from "../screens/ToggleChip";
-import { Icon } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
 import { RankMeter } from "../ui/RankMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";
+import { Stepper } from "../ui/Stepper";
 import "./SpeedScreen.css";
-import { SpeedNeighborhood } from "./SpeedNeighborhoodPanel";
 import type { components } from "./speed.gen";
-import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
-import {
-  DEFAULT_VIEWPORT_HEIGHT,
-  ENTRY_HEIGHT,
-  OVERSCAN_ROWS,
-  ROW_GAP,
-  buildTableLayout,
-  markerPlacement,
-  scrollTopToReveal,
-  visibleRange,
-  type BoundaryItem,
-  type TierItem,
-} from "./speedWindow";
+import type { SpeedClient, SpeedResult } from "./speedClient";
 
 type Schemas = components["schemas"];
+type PresetId = Schemas["PresetId"];
+type NatureId = Schemas["NatureId"];
+type SpeedPokemon = Schemas["SpeedPokemon"];
+
+/**
+ * 「この相手で連続技を計算」で計算画面の連続技へ渡す内容(ADR-0610 §4・§6 Q7)。
+ * speed 画面はダメージ・確定数を出さない。今の振り(speed)があれば素早さの SP・性格・ランク・スカーフも渡す。
+ */
+export interface SpeedComboRequest {
+  /** 攻撃側 = 自分のポケモン。 */
+  readonly attackerPokemonId: string;
+  /** 防御側 = 相手のポケモン。 */
+  readonly defenderPokemonId: string;
+  /** 「今の振り」を入れているときだけ。 */
+  readonly speed?: {
+    readonly sp: number;
+    readonly nature: Schemas["NatureId"];
+    readonly rank: number;
+    readonly scarf: boolean;
+  };
+}
 
 /** 画面の props(App.tsx が app/screens.tsx 経由で注入する。ADR-0604 §2)。 */
 export interface SpeedScreenProps {
   readonly speedClient: SpeedClient;
+  /**
+   * 連続技の画面へ移る口。連続技の画面が画面レジストリ(ADR-0323)に載るまでは渡されず、
+   * 渡されないときは「この相手で連続技を計算」のリンクを出さない(無効表示もしない)。
+   */
+  readonly onOpenCombo?: (request: SpeedComboRequest) => void;
 }
 
-/** pokemon()/table() 呼び出し1本の状態(判別 union)。読み込み中は loading のまま表す。 */
-type FetchState<T> =
-  | { readonly status: "loading" }
-  | { readonly status: "success"; readonly value: T }
-  | { readonly status: "error"; readonly error: { readonly code: string; readonly message: string } };
-
-/** position() 呼び出し1本の状態。idle は送る入力が無い(呼んでいない。preset/custom は未選択、raw は未入力)。 */
-type RequestState<T> =
-  | { readonly status: "idle" }
-  | { readonly status: "loading" }
-  | { readonly status: "success"; readonly value: T }
-  | { readonly status: "error"; readonly error: { readonly code: string; readonly message: string } };
-
-/** 直近に届いた position() の応答と、それを生んだ入力の key(CalcScreen.tsx の CompletedCalc と同じ考え方)。 */
-interface Completed<T> {
-  readonly key: string;
-  readonly result: SpeedResult<T>;
-}
-
-/** key が今の入力(currentKey)と一致する応答が届いていれば成功/失敗、まだなら loading にする。 */
-function deriveRequestState<T>(currentKey: string, completed: Completed<T> | null): RequestState<T> {
-  if (completed === null || completed.key !== currentKey) {
-    return { status: "loading" };
-  }
-  return completed.result.ok
-    ? { status: "success", value: completed.result.value }
-    : { status: "error", error: completed.result.error };
-}
-
-/** 自分のポケモンで選べる調整(preset の3つ。scarf は別入力。ADR-0602 §5)。 */
-const MINIMAL_PRESET_IDS: readonly Schemas["MinimalPresetId"][] = ["uninvested", "neutral-max", "max"];
-
-/** 左の表の6行すべて(ADR-0601 §2 の順)。絞り込みのチェックボックスと table() の既定に使う。 */
-const ALL_PRESET_IDS: readonly Schemas["PresetId"][] = [
+/** 表の順(ADR-0601 §2)の 6 プリセット。想定のチップと「これ以上」の並び。 */
+const PRESET_ORDER: readonly PresetId[] = [
   "uninvested",
   "neutral-max",
   "max",
@@ -90,872 +58,603 @@ const ALL_PRESET_IDS: readonly Schemas["PresetId"][] = [
   "max-plus1",
   "max-plus2",
 ];
+/** 想定の既定(ADR-0610 §2。+1・+2 は足せる)。 */
+const DEFAULT_ASSUMPTIONS: readonly PresetId[] = ["uninvested", "neutral-max", "max", "max-scarf"];
+const NATURES: readonly NatureId[] = ["minus", "neutral", "plus"];
 
-/** 性格補正の3値(ADR-0600 §3)。 */
-const NATURE_IDS: readonly Schemas["NatureId"][] = ["minus", "neutral", "plus"];
-
-/** 右(自分のポケモン)の入力方法の3値(ADR-0602 §2)。 */
-const MODE_IDS: readonly Schemas["PositionRequest"]["mode"][] = ["preset", "custom", "raw"];
-
-/** 右(自分のポケモン)の入力の状態(3つのモードすべての項目を持つが、送るのは mode に要る項目だけ)。 */
-interface SelfState {
-  readonly mode: Schemas["PositionRequest"]["mode"];
-  readonly pokemonId: string;
-  readonly preset: Schemas["MinimalPresetId"];
-  readonly scarf: boolean;
-  /** 自分の追い風・まひ(preset / custom のみ送る。ADR-0607 §1)。 */
-  readonly tailwind: boolean;
-  readonly paralysis: boolean;
-  readonly sp: number;
-  readonly nature: Schemas["NatureId"];
-  readonly rank: number;
-  /** raw の実数値(コントロール入力のため文字列で持つ。空文字は未入力)。 */
-  readonly rawValue: string;
+/** 非同期の応答の置き場。key = その応答を求めた入力。今の入力の key と違えば古い(捨てる)。 */
+interface Settled<T> {
+  readonly key: string;
+  readonly result: SpeedResult<T>;
 }
 
-/** 既定値(ADR-0604 §4 spec-writer 申し送り: preset:"max"・scarf:false・ポケモン未選択)。 */
-function initialSelfState(): SelfState {
-  return {
-    mode: "preset",
-    pokemonId: "",
-    preset: "max",
-    scarf: false,
-    tailwind: false,
-    paralysis: false,
-    sp: 0,
-    nature: "neutral",
-    rank: 0,
-    rawValue: "",
-  };
+/** code から日本語の文言にする(サーバーの英語 message は出さない。issue 307)。 */
+function errorText(code: string): string {
+  const messages: Readonly<Record<string, string>> = speedScreenText.errorByCode;
+  return Object.hasOwn(messages, code)
+    ? (messages[code] ?? speedScreenText.errorFallback)
+    : speedScreenText.errorFallback;
 }
 
-/** 入力欄ごとの範囲外メッセージ(無ければ範囲内)。送信前に画面で止めるための検査(issue 307)。 */
-interface FieldErrors {
-  readonly sp?: string;
-  readonly rank?: string;
-  readonly raw?: string;
-}
-
-/**
- * 今の mode で使う入力欄だけを検査する(判定画面 JudgeScreen の validationMessage と同じ規則: SP 0〜32、
- * ランク -6〜+6、整数)。空欄の扱い:
- *   - custom の SP・ランクは onChange(parseIntOr)が 0 とみなす(従来どおり。欄は 0 に戻り、エラーにしない)。
- *   - raw の実数値は「未入力」で、呼ばずエラーも出さない。
- * raw の実数値は契約の minimum(1)・整数だけをここで見る。上限は speed サービスが式から導く値で
- * 画面に複製しない(契約の説明)ので、超過は API の 400 を日本語にして出す。
- */
-function validateSelf(self: SelfState): FieldErrors {
-  if (self.mode === "custom") {
-    return {
-      sp:
-        self.sp < 0 || self.sp > MAX_SP_PER_STAT
-          ? speedScreenText.spRangeMessage(MAX_SP_PER_STAT)
-          : undefined,
-      rank:
-        self.rank < MIN_RANK || self.rank > MAX_RANK
-          ? speedScreenText.rankRangeMessage(MIN_RANK, MAX_RANK)
-          : undefined,
+/** 入力が変わるたびに呼び直し、古い応答は捨てる(key 方式)。key が null なら呼ばない。 */
+function useSettled<T>(
+  key: string | null,
+  call: (request: unknown) => Promise<SpeedResult<T>>,
+): {
+  readonly loading: boolean;
+  readonly result: SpeedResult<T> | null;
+} {
+  const [settled, setSettled] = useState<Settled<T> | null>(null);
+  useEffect(() => {
+    if (key === null) {
+      return;
+    }
+    let cancelled = false;
+    void call(JSON.parse(key) as unknown).then((result) => {
+      if (!cancelled) {
+        setSettled({ key, result });
+      }
+    });
+    return () => {
+      cancelled = true;
     };
+    // call は呼び出し側で安定させている(client のメソッド)。key が変わったときだけ呼び直す。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (key === null) {
+    return { loading: false, result: null };
   }
-  if (self.mode === "raw") {
-    const trimmed = self.rawValue.trim();
-    if (trimmed === "") {
-      return {};
-    }
-    const value = Number(trimmed);
-    return Number.isInteger(value) && value >= 1 ? {} : { raw: speedScreenText.rawRangeMessage };
-  }
-  return {};
+  return settled?.key === key ? { loading: false, result: settled.result } : { loading: true, result: null };
 }
 
-/** サーバーの英語 message は出さず、code から日本語にする(未知の code は汎用の文言)。 */
-function errorMessage(error: { readonly code: string }): string {
-  const byCode: Readonly<Record<string, string | undefined>> = speedScreenText.errorByCode;
-  return byCode[error.code] ?? speedScreenText.errorFallback;
-}
+export function SpeedScreen({ speedClient, onOpenCombo }: SpeedScreenProps): ReactElement {
+  const [list, setList] = useState<SpeedResult<Schemas["PokemonListResponse"]> | null>(null);
+  const [selfId, setSelfId] = useState("");
+  const [opponentId, setOpponentId] = useState("");
+  const [rank, setRank] = useState(0);
+  const [scarf, setScarf] = useState(false);
+  const [selfTailwind, setSelfTailwind] = useState(false);
+  const [selfParalysis, setSelfParalysis] = useState(false);
+  const [useCurrent, setUseCurrent] = useState(false);
+  const [sp, setSp] = useState(0);
+  const [nature, setNature] = useState<NatureId>("neutral");
+  const [assumptions, setAssumptions] = useState<ReadonlySet<PresetId>>(new Set(DEFAULT_ASSUMPTIONS));
+  const [minimumNotice, setMinimumNotice] = useState(false);
+  const [opponentTailwind, setOpponentTailwind] = useState(false);
+  const [opponentParalysis, setOpponentParalysis] = useState(false);
+  const [trickRoom, setTrickRoom] = useState(false);
+  const ids = useId();
 
-/**
- * self の入力から PositionRequest を作る。mode に要らない項目は含めない(契約上 400 invalid_request の
- * ため)。まだ送れない入力(preset/custom はポケモン未選択、raw は未入力・数でない)は null。
- */
-function buildPositionRequest(self: SelfState, tableTailwind: boolean): Schemas["PositionRequest"] | null {
-  const request = buildBaseRequest(self);
-  if (request === null) {
-    return null;
-  }
-  // 省略は false と同じ応答なので、true のものだけを足す(すべて off なら従来と同じ本文。ADR-0607 §1)。
-  return {
-    ...request,
-    ...(request.mode !== "raw" && self.tailwind ? { tailwind: true } : {}),
-    ...(request.mode !== "raw" && self.paralysis ? { paralysis: true } : {}),
-    ...(tableTailwind ? { tableTailwind: true } : {}),
-  };
-}
-
-/** 場の効果を除いた、mode ごとの本文(buildPositionRequest が場の効果を足す)。 */
-function buildBaseRequest(self: SelfState): Schemas["PositionRequest"] | null {
-  const errors = validateSelf(self);
-  if (errors.sp !== undefined || errors.rank !== undefined || errors.raw !== undefined) {
-    return null;
-  }
-  if (self.mode === "preset") {
-    if (self.pokemonId === "") {
-      return null;
-    }
-    return { mode: "preset", pokemonId: self.pokemonId, preset: self.preset, scarf: self.scarf };
-  }
-  if (self.mode === "custom") {
-    if (self.pokemonId === "") {
-      return null;
-    }
-    return {
-      mode: "custom",
-      pokemonId: self.pokemonId,
-      sp: self.sp,
-      nature: self.nature,
-      rank: self.rank,
-      scarf: self.scarf,
-    };
-  }
-  const trimmed = self.rawValue.trim();
-  if (trimmed === "") {
-    return null;
-  }
-  const value = Number(trimmed);
-  if (!Number.isFinite(value)) {
-    return null;
-  }
-  return self.pokemonId === "" ? { mode: "raw", value } : { mode: "raw", value, pokemonId: self.pokemonId };
-}
-
-/** 数値入力の onChange から整数を読む。空・数でなければ既定値のまま。 */
-function parseIntOr(raw: string, fallback: number): number {
-  if (raw === "") {
-    return fallback;
-  }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isNaN(parsed) ? fallback : parsed;
-}
-
-/**
- * 素早さ比較の画面(ADR-0604 §4)。
- */
-export function SpeedScreen({ speedClient }: SpeedScreenProps) {
-  const [pokemonState, setPokemonState] = useState<FetchState<Schemas["PokemonListResponse"]>>({
-    status: "loading",
-  });
-  // 左の表の絞り込み(道具・ランク。ユーザー確定仕様。docs/plan.md「SP: 素早さ比較」・ADR-0601 §4)。
-  // 既定は全6行選択(= 絞り込みなし)。絞り込みを変えるたびに table() を呼び直すので、position() と同じ
-  // key(presetsKey)方式にする(effect の中で setState を同期的に呼ばない。react-hooks/set-state-in-effect)。
-  const [selectedPresets, setSelectedPresets] = useState<ReadonlySet<Schemas["PresetId"]>>(
-    () => new Set(ALL_PRESET_IDS),
-  );
-
-  // A1/A2: マウント時に pokemon() と table() を1回ずつ呼ぶ(table は presets を省く = 全6行)。
-  // 2つは互いに独立(片方のエラーがもう片方の表示を消さない。ADR-0604 §4)。
   useEffect(() => {
     let cancelled = false;
     void speedClient.pokemon().then((result) => {
-      if (cancelled) {
-        return;
+      if (!cancelled) {
+        setList(result);
       }
-      setPokemonState(
-        result.ok ? { status: "success", value: result.value } : { status: "error", error: result.error },
-      );
     });
     return () => {
       cancelled = true;
     };
   }, [speedClient]);
 
-  // 選択された行だけを ADR-0601 §2 の順で並べたもの。全6行選択なら table() には省略して渡す
-  // (presets: [] は契約上 400 invalid_request になるため、絞り込み UI 側で最低1つを保証する)。
-  const activePresets = ALL_PRESET_IDS.filter((id) => selectedPresets.has(id));
-  // 表の場の状態(追い風・トリックルーム。ADR-0607)。表の呼び直しの key に含める。
-  const [tableTailwind, setTableTailwind] = useState(false);
-  const [trickRoom, setTrickRoom] = useState(false);
-  const presetsKey = `${activePresets.join(",")}|${String(tableTailwind)}|${String(trickRoom)}`;
+  const pokemon: readonly SpeedPokemon[] = list?.ok === true ? list.value.pokemon : [];
+  const selfPokemon = pokemon.find((entry) => entry.pokemonId === selfId);
+  const opponentPokemon = pokemon.find((entry) => entry.pokemonId === opponentId);
 
-  const [completedTable, setCompletedTable] = useState<Completed<Schemas["TableResponse"]> | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const presetsArg = activePresets.length === ALL_PRESET_IDS.length ? undefined : activePresets;
-    // すべて off なら第2引数を渡さない(従来と同じ呼び出し)。
-    const fieldArg: SpeedTableField | undefined =
-      tableTailwind || trickRoom ? { tailwind: tableTailwind, trickRoom } : undefined;
-    void speedClient.table(presetsArg, fieldArg).then((result) => {
-      if (!cancelled) {
-        setCompletedTable({ key: presetsKey, result });
-      }
-    });
-    return () => {
-      cancelled = true;
+  // ---- 出力 1: matchup() ----
+  const matchupKey = useMemo(() => {
+    if (selfId === "" || opponentId === "") {
+      return null;
+    }
+    const request: Schemas["MatchupRequest"] = {
+      self: {
+        pokemonId: selfId,
+        ...(rank === 0 ? {} : { rank }),
+        ...(scarf ? { scarf } : {}),
+        ...(selfTailwind ? { tailwind: true } : {}),
+        ...(selfParalysis ? { paralysis: true } : {}),
+        ...(useCurrent ? { current: { sp, nature } } : {}),
+      },
+      opponent: {
+        pokemonId: opponentId,
+        assumptions: PRESET_ORDER.filter((preset) => assumptions.has(preset)).map((preset) => ({ preset })),
+        ...(opponentTailwind ? { tailwind: true } : {}),
+        ...(opponentParalysis ? { paralysis: true } : {}),
+      },
+      ...(trickRoom ? { trickRoom: true } : {}),
     };
-    // presetsKey が絞り込みの内容そのものを表すので、これだけを見る(activePresets は毎レンダー新しい
-    // 配列参照になるため依存に含めない。position の requestKey と同じ考え方)。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speedClient, presetsKey]);
-
-  // table() は常に何らかの presets で呼ぶので idle にはならない(位置の request===null に相当するものが無い)。
-  const tableState: RequestState<Schemas["TableResponse"]> = deriveRequestState(presetsKey, completedTable);
-
-  /** 絞り込みのチェックボックスの切り替え。最後の1つは外せない(契約上 presets は1つ以上)。 */
-  function toggleFilterPreset(id: Schemas["PresetId"]): void {
-    setSelectedPresets((current) => {
-      if (current.has(id) && current.size === 1) {
-        return current;
-      }
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }
-
-  const [self, setSelf] = useState<SelfState>(initialSelfState);
-
-  function updateSelf(patch: Partial<SelfState>): void {
-    setSelf((current) => ({ ...current, ...patch }));
-  }
-
-  const fieldErrors = validateSelf(self);
-  const request = buildPositionRequest(self, tableTailwind);
-  const requestKey = request === null ? "" : JSON.stringify(request);
-
-  const [completedPosition, setCompletedPosition] = useState<Completed<Schemas["PositionResponse"]> | null>(
-    null,
+    return JSON.stringify(request);
+  }, [
+    selfId,
+    opponentId,
+    rank,
+    scarf,
+    selfTailwind,
+    selfParalysis,
+    useCurrent,
+    sp,
+    nature,
+    assumptions,
+    opponentTailwind,
+    opponentParalysis,
+    trickRoom,
+  ]);
+  const matchup = useSettled<Schemas["MatchupResponse"]>(matchupKey, (request) =>
+    speedClient.matchup(request as Schemas["MatchupRequest"]),
   );
 
-  // A5/A6: 入力の変更ごとに position() を呼び直す。key が変わるたびに前の effect の cleanup(cancelled = true)
-  // が走るので、古い応答は無視される。
-  useEffect(() => {
-    if (request === null) {
+  // ---- 出力 2: reach()(今の振りがあるとき。相手は不要。トリックルームは本文に入れない) ----
+  const reachKey = useMemo(() => {
+    if (selfId === "" || !useCurrent) {
+      return null;
+    }
+    const request: Schemas["PositionRequest"] = {
+      mode: "custom",
+      pokemonId: selfId,
+      sp,
+      nature,
+      rank,
+      scarf,
+      ...(selfTailwind ? { tailwind: true } : {}),
+      ...(selfParalysis ? { paralysis: true } : {}),
+      ...(opponentTailwind ? { tableTailwind: true } : {}),
+    };
+    return JSON.stringify(request);
+  }, [selfId, useCurrent, sp, nature, rank, scarf, selfTailwind, selfParalysis, opponentTailwind]);
+  const reach = useSettled<Schemas["ReachResponse"]>(reachKey, (request) =>
+    speedClient.reach(request as Schemas["PositionRequest"]),
+  );
+
+  function toggleAssumption(preset: PresetId, checked: boolean): void {
+    if (!checked && assumptions.size <= 1) {
+      setMinimumNotice(true);
       return;
     }
-    let cancelled = false;
-    void speedClient.position(request).then((result) => {
-      if (!cancelled) {
-        setCompletedPosition({ key: requestKey, result });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-    // requestKey が送る内容そのものを表すので、これだけを見る(request 自体を依存に含めると
-    // 参照が毎レンダー変わり呼び直しが多重化する)。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [speedClient, requestKey]);
+    setMinimumNotice(false);
+    const next = new Set(assumptions);
+    if (checked) {
+      next.add(preset);
+    } else {
+      next.delete(preset);
+    }
+    setAssumptions(next);
+  }
 
-  const positionState: RequestState<Schemas["PositionResponse"]> =
-    request === null ? { status: "idle" } : deriveRequestState(requestKey, completedPosition);
-
-  const filterMinimumNoticeId = useId();
-  const spErrorId = useId();
-  const rawErrorId = useId();
-
-  const selectedPokemon =
-    pokemonState.status === "success"
-      ? pokemonState.value.pokemon.find((pokemon) => pokemon.pokemonId === self.pokemonId)
-      : undefined;
+  const matchupHeading = trickRoom ? speedScreenText.matchupHeadingTrickRoom : speedScreenText.matchupHeading;
+  const selfHeadingId = `${ids}-self`;
+  const opponentHeadingId = `${ids}-opponent`;
+  const matchupHeadingId = `${ids}-matchup`;
+  const reachHeadingId = `${ids}-reach`;
 
   return (
     <div className="speed-screen">
-      <section className="ui-card speed-table" aria-label={speedScreenText.tableRegionLabel}>
-        <h2 className="speed-heading">
-          <Icon name="speed" />
-          {speedScreenText.tableRegionLabel}
-        </h2>
-        <div
-          role="group"
-          aria-label={speedScreenText.filterGroupLabel}
-          className="speed-table__filter"
-          data-testid="speed-filter"
-        >
-          {ALL_PRESET_IDS.map((id) => {
-            const checked = selectedPresets.has(id);
-            const lastOne = checked && selectedPresets.size === 1;
-            return (
-              <ToggleChip
-                key={id}
-                type="checkbox"
-                label={speedPresetText[id]}
-                checked={checked}
-                ariaDisabled={lastOne}
-                describedBy={lastOne ? filterMinimumNoticeId : undefined}
-                className="speed-table__filter-option"
-                onChange={() => {
-                  // aria-disabled はキーボード操作を止めないため、切り替え側(toggleFilterPreset)にも
-                  // 「最後の1つは外せない」ガードを持たせている(二重のガード)。
-                  toggleFilterPreset(id);
-                }}
-              />
-            );
-          })}
-          {selectedPresets.size === 1 && (
-            <p id={filterMinimumNoticeId} className="speed-screen__notice">
-              {speedScreenText.filterMinimumNotice}
-            </p>
-          )}
-        </div>
+      {list?.ok === false && (
+        <p role="alert" className="speed-screen__error">
+          {errorText(list.error.code)}
+        </p>
+      )}
+      {list === null && <p className="speed-screen__notice">{speedScreenText.pokemonListLoadingNotice}</p>}
 
-        <div role="group" aria-label={speedScreenText.fieldGroupLabel} className="speed-table__filter">
-          <ToggleChip
-            type="checkbox"
-            label={speedScreenText.tableTailwindLabel}
-            checked={tableTailwind}
-            className="speed-table__filter-option"
-            onChange={setTableTailwind}
+      <div className="speed-screen__inputs">
+        <section aria-labelledby={selfHeadingId} className="speed-card">
+          <h2 id={selfHeadingId} className="speed-card__region">
+            {speedScreenText.selfRegionLabel}
+          </h2>
+          <PokemonSelect
+            label={speedScreenText.selfPokemonLabel}
+            pokemon={pokemon}
+            value={selfId}
+            onChange={setSelfId}
           />
+          {selfPokemon !== undefined && <SpeedPokemonCard pokemon={selfPokemon} />}
+          <div className="speed-field">
+            <span className="speed-field__label">{speedScreenText.rankLabel}</span>
+            <RankMeter
+              label={speedScreenText.rankLabel}
+              statName={rankStatNameJa.spe}
+              value={rank}
+              onChange={(value) => {
+                setRank(Math.min(MAX_RANK, Math.max(MIN_RANK, value)));
+              }}
+              asGroup={false}
+            />
+          </div>
+          <div className="speed-chips">
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.scarfLabel}
+              checked={scarf}
+              onChange={setScarf}
+            />
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.selfTailwindLabel}
+              checked={selfTailwind}
+              onChange={setSelfTailwind}
+            />
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.selfParalysisLabel}
+              checked={selfParalysis}
+              onChange={setSelfParalysis}
+            />
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.currentToggleLabel}
+              checked={useCurrent}
+              onChange={setUseCurrent}
+            />
+          </div>
+          <p className="speed-hint">{speedScreenText.currentHint}</p>
+          {useCurrent && (
+            <div className="speed-current">
+              <Stepper
+                label={speedScreenText.spLabel}
+                value={sp}
+                min={0}
+                max={MAX_SP_PER_STAT}
+                onChange={setSp}
+              />
+              <SegmentedControl
+                label={speedScreenText.natureGroupLabel}
+                options={NATURES.map((value) => ({ value, label: speedScreenText.natureLabel[value] }))}
+                value={nature}
+                onChange={setNature}
+              />
+            </div>
+          )}
+        </section>
+
+        <section aria-labelledby={opponentHeadingId} className="speed-card">
+          <h2 id={opponentHeadingId} className="speed-card__region">
+            {speedScreenText.opponentRegionLabel}
+          </h2>
+          <PokemonSelect
+            label={speedScreenText.opponentPokemonLabel}
+            pokemon={pokemon}
+            value={opponentId}
+            onChange={setOpponentId}
+          />
+          {opponentPokemon !== undefined && <SpeedPokemonCard pokemon={opponentPokemon} />}
+          <fieldset className="speed-group">
+            <legend className="speed-field__label">{speedScreenText.assumptionGroupLabel}</legend>
+            <div className="speed-chips">
+              {PRESET_ORDER.map((preset) => (
+                <ToggleChip
+                  key={preset}
+                  type="checkbox"
+                  label={speedPresetText[preset]}
+                  checked={assumptions.has(preset)}
+                  ariaDisabled={assumptions.has(preset) && assumptions.size <= 1}
+                  onChange={(checked) => {
+                    toggleAssumption(preset, checked);
+                  }}
+                />
+              ))}
+            </div>
+          </fieldset>
+          <p className="speed-hint">{speedScreenText.assumptionHint}</p>
+          {minimumNotice && (
+            <p className="speed-hint speed-hint--warn">{speedScreenText.assumptionMinimumNotice}</p>
+          )}
+          <div className="speed-chips">
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.opponentTailwindLabel}
+              checked={opponentTailwind}
+              onChange={setOpponentTailwind}
+            />
+            <ToggleChip
+              type="checkbox"
+              label={speedScreenText.opponentParalysisLabel}
+              checked={opponentParalysis}
+              onChange={setOpponentParalysis}
+            />
+          </div>
+        </section>
+      </div>
+
+      <fieldset className="speed-card speed-field-state">
+        <legend className="speed-card__region">{speedScreenText.fieldGroupLabel}</legend>
+        <div className="speed-chips">
           <ToggleChip
             type="checkbox"
             label={speedScreenText.trickRoomLabel}
             checked={trickRoom}
-            className="speed-table__filter-option"
             onChange={setTrickRoom}
           />
         </div>
+        <p className="speed-hint">{speedScreenText.trickRoomHint}</p>
+      </fieldset>
 
-        {tableState.status === "loading" && (
-          <p className="ui-notice ui-notice--loading speed-screen__notice">{speedScreenText.loadingNotice}</p>
-        )}
-        {tableState.status === "error" && (
-          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
-            {errorMessage(tableState.error)}
-          </p>
-        )}
-        {tableState.status === "success" && (
-          <TierViewport tiers={tableState.value.tiers} positionState={positionState} trickRoom={trickRoom} />
-        )}
-      </section>
-
-      <section className="ui-card speed-self" aria-label={speedScreenText.selfRegionLabel}>
-        <h2 className="speed-heading">
-          <Icon name="speed" />
-          {speedScreenText.selfRegionLabel}
+      <section aria-labelledby={matchupHeadingId} className="speed-card">
+        <h2 id={matchupHeadingId} className="speed-card__heading">
+          {matchupHeading}
         </h2>
-        {pokemonState.status === "error" && (
-          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
-            {errorMessage(pokemonState.error)}
+        {matchupKey === null && <p className="speed-screen__notice">{speedScreenText.introNotice}</p>}
+        {matchup.loading && <p className="speed-screen__notice">{speedScreenText.matchupLoadingNotice}</p>}
+        {matchup.result?.ok === false && (
+          <p role="alert" className="speed-screen__error">
+            {errorText(matchup.result.error.code)}
           </p>
         )}
-
-        <SegmentedControl
-          label={speedScreenText.modeGroupLabel}
-          className="speed-self__modes"
-          options={MODE_IDS.map((mode) => ({ value: mode, label: speedScreenText.modeLabel[mode] }))}
-          value={self.mode}
-          onChange={(mode) => {
-            updateSelf({ mode });
-          }}
-        />
-
-        {selectedPokemon !== undefined && (
-          <PokemonCard
-            nameAsHeading
-            speciesKey={selectedPokemon.pokemonId}
-            name={selectedPokemon.nameJa}
-            types={selectedPokemon.types}
-            className="speed-self__card"
-          />
+        {matchup.result?.ok === true && (
+          <MatchupCards response={matchup.result.value} trickRoom={trickRoom} />
         )}
-
-        <div className="speed-self__field">
-          <span>{speedScreenText.pokemonLabel}</span>
-          <select
-            aria-label={speedScreenText.pokemonLabel}
-            value={self.pokemonId}
-            onChange={(event) => {
-              updateSelf({ pokemonId: event.target.value });
+        {onOpenCombo !== undefined && selfId !== "" && opponentId !== "" && (
+          <button
+            type="button"
+            className="ui-button ui-button--secondary speed-combo"
+            onClick={() => {
+              onOpenCombo({
+                attackerPokemonId: selfId,
+                defenderPokemonId: opponentId,
+                ...(useCurrent ? { speed: { sp, nature, rank, scarf } } : {}),
+              });
             }}
           >
-            <option value="">{speedScreenText.unselectedOption}</option>
-            {pokemonState.status === "success" &&
-              pokemonState.value.pokemon.map((pokemon) => (
-                <option key={pokemon.pokemonId} value={pokemon.pokemonId}>
-                  {pokemon.nameJa}
-                </option>
-              ))}
-          </select>
-        </div>
-
-        {self.mode === "preset" && (
-          <>
-            <SegmentedControl
-              label={speedScreenText.presetGroupLabel}
-              options={MINIMAL_PRESET_IDS.map((preset) => ({
-                value: preset,
-                label: speedPresetText[preset],
-              }))}
-              value={self.preset}
-              onChange={(preset) => {
-                updateSelf({ preset });
-              }}
-            />
-            <ScarfChip self={self} onChange={updateSelf} />
-            <SelfFieldChecks self={self} onChange={updateSelf} />
-          </>
+            {speedScreenText.comboLinkLabel}
+          </button>
         )}
+      </section>
 
-        {self.mode === "custom" && (
-          <>
-            <NumberStepper
-              label={speedScreenText.spLabel}
-              value={self.sp}
-              min={0}
-              max={MAX_SP_PER_STAT}
-              error={fieldErrors.sp}
-              errorId={spErrorId}
-              onChange={(sp) => {
-                updateSelf({ sp });
-              }}
-            />
-            <SegmentedControl
-              label={speedScreenText.natureGroupLabel}
-              options={NATURE_IDS.map((nature) => ({
-                value: nature,
-                label: speedScreenText.natureLabel[nature],
-              }))}
-              value={self.nature}
-              onChange={(nature) => {
-                updateSelf({ nature });
-              }}
-            />
-            <div className="speed-self__field">
-              <span>{speedScreenText.rankLabel}</span>
-              <RankMeter
-                asGroup={false}
-                label={speedScreenText.rankLabel}
-                statName={rankStatNameJa.spe}
-                value={self.rank}
-                onChange={(rank) => {
-                  updateSelf({ rank });
-                }}
-              />
-            </div>
-            <ScarfChip self={self} onChange={updateSelf} />
-            <SelfFieldChecks self={self} onChange={updateSelf} />
-          </>
-        )}
-
-        {self.mode === "raw" && (
-          <div className="speed-self__field">
-            <span>{speedScreenText.rawValueLabel}</span>
-            <input
-              type="number"
-              aria-label={speedScreenText.rawValueLabel}
-              className="speed-self__raw"
-              min={1}
-              aria-invalid={fieldErrors.raw !== undefined}
-              aria-describedby={fieldErrors.raw === undefined ? undefined : rawErrorId}
-              value={self.rawValue}
-              onChange={(event) => {
-                updateSelf({ rawValue: event.target.value });
-              }}
-            />
-            {fieldErrors.raw !== undefined && (
-              <p id={rawErrorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
-                {fieldErrors.raw}
-              </p>
-            )}
-          </div>
-        )}
-
-        {positionState.status === "loading" && (
-          <p className="ui-notice ui-notice--loading speed-screen__notice">
-            {speedScreenText.positionLoadingNotice}
+      <section aria-labelledby={reachHeadingId} className="speed-card">
+        <h2 id={reachHeadingId} className="speed-card__heading">
+          {speedScreenText.reachHeading}
+        </h2>
+        <p className="speed-hint">{speedScreenText.reachIntro}</p>
+        {reachKey === null && <p className="speed-screen__notice">{speedScreenText.reachNeedsCurrent}</p>}
+        {reach.loading && <p className="speed-screen__notice">{speedScreenText.reachLoadingNotice}</p>}
+        {reach.result?.ok === false && (
+          <p role="alert" className="speed-screen__error">
+            {errorText(reach.result.error.code)}
           </p>
         )}
-        {positionState.status === "error" && (
-          <p role="alert" className="ui-notice ui-notice--error speed-screen__error">
-            {errorMessage(positionState.error)}
-          </p>
-        )}
-        {positionState.status === "success" && (
-          <PositionResult value={positionState.value} trickRoom={trickRoom} />
-        )}
-        {tableState.status === "success" && (
-          <SpeedNeighborhood
-            tiers={tableState.value.tiers}
-            ownSpeed={positionState.status === "success" ? positionState.value.speed : null}
-            trickRoom={trickRoom}
-          />
-        )}
+        {reach.result?.ok === true && <ReachList response={reach.result.value} trickRoom={trickRoom} />}
       </section>
     </div>
   );
 }
 
-interface NumberStepperProps {
-  readonly label: string;
-  readonly value: number;
-  readonly min: number;
-  readonly max: number;
-  /** 範囲外のときのメッセージ(あれば aria-invalid と alert を出す)。 */
-  readonly error: string | undefined;
-  readonly errorId: string;
-  readonly onChange: (value: number) => void;
-}
+// ---- 入力の部品 ----
 
-/**
- * 増減ボタン(G-05。見た目は ui-stepper)+ 数値欄。数値欄は ui/Stepper と違い、範囲外の入力も受けて誤りとして出し、
- * 送らない(issue 307。計算画面の SP 欄と同じ考え方)。空欄は 0 とみなす。ボタンは範囲に収めた値へ直す。
- */
-function NumberStepper({ label, value, min, max, error, errorId, onChange }: NumberStepperProps) {
-  // 範囲外の値(誤りとして出している間)からは、どちらのボタンも範囲に収めた値へ直す。
-  const atMin = value === min;
-  const atMax = value === max;
-  const clamp = (next: number): number => Math.min(max, Math.max(min, next));
+function PokemonSelect({
+  label,
+  pokemon,
+  value,
+  onChange,
+}: {
+  readonly label: string;
+  readonly pokemon: readonly SpeedPokemon[];
+  readonly value: string;
+  readonly onChange: (pokemonId: string) => void;
+}): ReactElement {
   return (
-    <div className="speed-self__field">
-      <span>{label}</span>
-      <div className="ui-stepper">
-        <button
-          type="button"
-          className="ui-stepper__button"
-          aria-label={`${label}${uiText.stepperDecrease}`}
-          aria-disabled={atMin ? true : undefined}
-          onClick={() => {
-            if (!atMin) {
-              onChange(clamp(value - 1));
-            }
-          }}
-        >
-          <Icon name="minus" size={16} />
-        </button>
-        <input
-          type="number"
-          className="ui-stepper__input"
-          aria-label={label}
-          min={min}
-          max={max}
-          aria-invalid={error !== undefined}
-          aria-describedby={error === undefined ? undefined : errorId}
-          value={value}
-          onChange={(event) => {
-            onChange(parseIntOr(event.target.value, 0));
-          }}
-        />
-        <button
-          type="button"
-          className="ui-stepper__button"
-          aria-label={`${label}${uiText.stepperIncrease}`}
-          aria-disabled={atMax ? true : undefined}
-          onClick={() => {
-            if (!atMax) {
-              onChange(clamp(value + 1));
-            }
-          }}
-        >
-          <Icon name="plus" size={16} />
-        </button>
-      </div>
-      {error !== undefined && (
-        <p id={errorId} role="alert" className="ui-notice ui-notice--error speed-screen__error">
-          {error}
-        </p>
-      )}
-    </div>
+    <select
+      aria-label={label}
+      className="speed-select"
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    >
+      <option value="">{speedScreenText.unselectedOption}</option>
+      {pokemon.map((entry) => (
+        <option key={entry.pokemonId} value={entry.pokemonId}>
+          {entry.nameJa}
+        </option>
+      ))}
+    </select>
   );
 }
 
-interface ScarfChipProps {
-  readonly self: SelfState;
-  readonly onChange: (patch: Partial<SelfState>) => void;
-}
-
-function ScarfChip({ self, onChange }: ScarfChipProps) {
+function SpeedPokemonCard({ pokemon }: { readonly pokemon: SpeedPokemon }): ReactElement {
   return (
-    <ToggleChip
-      type="checkbox"
-      label={speedScreenText.scarfLabel}
-      checked={self.scarf}
-      className="speed-self__chip"
-      onChange={(scarf) => {
-        onChange({ scarf });
-      }}
+    <PokemonCard
+      speciesKey={pokemon.pokemonId}
+      name={pokemon.nameJa}
+      types={pokemon.types}
+      nameAsHeading
+      className="speed-card__face"
     />
   );
 }
 
-interface TierViewportProps {
-  readonly tiers: readonly Schemas["SpeedTier"][];
-  readonly positionState: RequestState<Schemas["PositionResponse"]>;
+// ---- 出力 1: 想定ごとのカード ----
+
+function MatchupCards({
+  response,
+  trickRoom,
+}: {
+  readonly response: Schemas["MatchupResponse"];
   readonly trickRoom: boolean;
-}
-
-/**
- * 左の表(仮想スクロール。F-06・ADR-0608)。全段の高さを先に計算し(speedWindow.ts)、スクロール位置の周辺だけを
- * DOM に出す。強調・境界は表示中(絞り込み後)の tiers の実数値と自分の実数値を直接比べて決める
- * (`faster`/`tie` は全6行基準なので使わない。2026-09-22 critic 指摘)。右の位置マーカーは、
- * 自分の行(同速の段か境界)の offset からスクロール量を引いた高さに置くので、左の行と同じ高さに揃う。
- */
-function TierViewport({ tiers, positionState, trickRoom }: TierViewportProps) {
-  const ownSpeed: number | null = positionState.status === "success" ? positionState.value.speed : null;
-  const layout = useMemo(() => buildTableLayout(tiers, ownSpeed, trickRoom), [tiers, ownSpeed, trickRoom]);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const [scrollTop, setScrollTop] = useState(0);
-  // 実測できるまで(初回描画前・テスト環境)は仮の高さ。実測は ResizeObserver の通知でだけ更新する。
-  const [measuredHeight, setMeasuredHeight] = useState<number | null>(null);
-  const viewportHeight = measuredHeight ?? DEFAULT_VIEWPORT_HEIGHT;
-
-  useEffect(() => {
-    const element = viewportRef.current;
-    if (element === null || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      if (element.clientHeight > 0) {
-        setMeasuredHeight(element.clientHeight);
-      }
-    });
-    observer.observe(element);
-    return () => {
-      observer.disconnect();
-    };
-  }, []);
-
-  const range = visibleRange(layout.items, scrollTop, viewportHeight, OVERSCAN_ROWS);
-  const anchor = layout.anchorIndex === null ? undefined : layout.items[layout.anchorIndex];
-  const placement = markerPlacement(anchor, scrollTop, viewportHeight);
-
-  function jumpToSelf(): void {
-    if (anchor === undefined) {
-      return;
-    }
-    const target = scrollTopToReveal(anchor, viewportHeight, layout.totalHeight);
-    if (viewportRef.current !== null) {
-      viewportRef.current.scrollTop = target;
-    }
-    setScrollTop(target);
-  }
-
+}): ReactElement {
   return (
     <>
-      {anchor !== undefined && (
-        <button type="button" className="speed-table__jump" onClick={jumpToSelf}>
-          {speedScreenText.jumpToSelfLabel}
-        </button>
+      {response.selfSpeed !== undefined && (
+        <p className="speed-self-speed">{speedScreenText.selfSpeedLabel(response.selfSpeed)}</p>
       )}
-      <div className="speed-table__body">
-        <div
-          ref={viewportRef}
-          role="group"
-          tabIndex={0}
-          aria-label={speedScreenText.viewportLabel}
-          className="speed-table__viewport"
-          data-testid="speed-viewport"
-          onScroll={(event) => {
-            setScrollTop(event.currentTarget.scrollTop);
-          }}
-        >
-          <ul
-            className="ui-rows speed-table__tiers"
-            aria-label={speedScreenText.tiersListLabel}
-            style={{ height: layout.totalHeight }}
-          >
-            {layout.items
-              .slice(range.start, range.end)
-              .map((item) =>
-                item.kind === "boundary" ? (
-                  <BoundaryRow key="speed-boundary" item={item} />
-                ) : (
-                  <TierRow key={item.tier.speed} item={item} setSize={tiers.length} />
-                ),
-              )}
-          </ul>
-        </div>
-        <div className="speed-table__track">
-          {placement !== null && ownSpeed !== null && (
-            <div
-              className="speed-marker"
-              data-testid="speed-marker"
-              data-state={placement.state}
-              aria-hidden="true"
-              style={{ top: placement.top, height: placement.height }}
-            >
-              {placement.state === "above" && speedScreenText.markerAboveHint}
-              {speedScreenText.markerLabel(ownSpeed)}
-              {placement.state === "below" && speedScreenText.markerBelowHint}
-            </div>
-          )}
-        </div>
+      <div className="speed-matchup-list">
+        {response.lines.map((line, index) => (
+          <MatchupCard
+            key={line.assumption.preset ?? `custom-${String(index)}`}
+            line={line}
+            trickRoom={trickRoom}
+          />
+        ))}
       </div>
     </>
   );
 }
 
-/** 行の位置(絶対配置。高さは枠から隙間を引いた値)。 */
-function rowStyle(item: { readonly top: number; readonly height: number }): CSSProperties {
-  return { top: item.top, height: item.height - ROW_GAP };
+/** 一言見出し(ADR-0610 §1・§7。補正なしの最小 SP / 上限 SP から導く)。 */
+function headlineOf(natures: readonly Schemas["NatureLine"][], trickRoom: boolean): string {
+  const neutral = natures.find((entry) => entry.nature === "neutral")?.movesFirst;
+  const plus = natures.find((entry) => entry.nature === "plus")?.movesFirst;
+  if (trickRoom) {
+    return neutral === undefined
+      ? speedScreenText.unreachableTrickRoomNotice
+      : speedScreenText.headlineTrickRoom(neutral.max);
+  }
+  if (neutral !== undefined) {
+    return neutral.min === 0 ? speedScreenText.headlineUninvested : speedScreenText.headlineNeutralMax;
+  }
+  return plus === undefined ? speedScreenText.unreachableNotice : speedScreenText.headlinePlusOnly(plus.min);
 }
 
-interface BoundaryRowProps {
-  readonly item: BoundaryItem;
-}
-
-/** 自分の行が挟まる境界の印(同速が無いとき。ADR-0604 §4)。 */
-function BoundaryRow({ item }: BoundaryRowProps) {
-  const extraProps: Record<string, string> = {};
-  if (item.afterSpeed !== undefined) {
-    extraProps["data-after-speed"] = String(item.afterSpeed);
-  }
-  if (item.beforeSpeed !== undefined) {
-    extraProps["data-before-speed"] = String(item.beforeSpeed);
-  }
+function MatchupCard({
+  line,
+  trickRoom,
+}: {
+  readonly line: Schemas["MatchupLine"];
+  readonly trickRoom: boolean;
+}): ReactElement {
+  const preset = line.assumption.preset;
+  const heading =
+    preset === undefined
+      ? speedScreenText.customCardHeading(line.opponentSpeed)
+      : speedScreenText.cardHeading(preset, line.opponentSpeed);
+  // 下降補正の行はトリックルーム中だけ出す(ADR-0610 §6 Q5)。
+  const shown = line.natures.filter((entry) => trickRoom || entry.nature !== "minus");
   return (
-    <li className="speed-boundary" data-testid="speed-boundary" style={rowStyle(item)} {...extraProps}>
-      <Icon name="speed" size={16} />
-      {speedScreenText.selfBoundaryLabel}
-    </li>
+    <article className="speed-matchup-card" data-testid="speed-matchup-card" data-preset={preset ?? "custom"}>
+      <h3 className="speed-matchup-card__title">{heading}</h3>
+      <p className="speed-matchup-card__headline" data-testid="speed-headline">
+        {headlineOf(line.natures, trickRoom)}
+      </p>
+      {line.current !== undefined && (
+        <p className={`speed-order speed-order--${line.current}`} data-testid="speed-current-order">
+          {speedScreenText.currentOrderLabel[line.current]}
+        </p>
+      )}
+      <ul className="speed-natures">
+        {shown.map((entry) => (
+          <NatureRow key={entry.nature} line={entry} trickRoom={trickRoom} />
+        ))}
+      </ul>
+    </article>
   );
 }
 
-interface TierRowProps {
-  readonly item: TierItem<Schemas["SpeedTier"]>;
-  /** 段の総数(境界を数えない)。画面外の段を描画しないので、aria-setsize で支援技術に伝える。 */
-  readonly setSize: number;
-}
-
-/** 段1つ(速い順の表の1行)。2行以上の段には「同速」を出す(Web で並べ替え直さない。ADR-0601 §3)。 */
-function TierRow({ item, setSize }: TierRowProps) {
-  const { tier, selfTie } = item;
-  const extraProps: Record<string, string> = {};
-  if (selfTie) {
-    extraProps["data-self"] = "tie";
+function NatureRow({
+  line,
+  trickRoom,
+}: {
+  readonly line: Schemas["NatureLine"];
+  readonly trickRoom: boolean;
+}): ReactElement {
+  const { movesFirst, tie } = line;
+  let main: string;
+  if (movesFirst === undefined) {
+    main = trickRoom ? speedScreenText.cannotMoveFirstTrickRoom : speedScreenText.cannotMoveFirst;
+  } else {
+    main = trickRoom
+      ? speedScreenText.movesFirstMax(movesFirst.max)
+      : speedScreenText.movesFirstMin(movesFirst.min);
   }
   return (
     <li
-      className={selfTie ? "speed-tier speed-tier--self" : "speed-tier"}
-      data-testid="speed-tier"
-      data-speed={tier.speed}
-      aria-setsize={setSize}
-      aria-posinset={item.tierIndex + 1}
-      style={rowStyle(item)}
-      {...extraProps}
+      className={`speed-nature speed-nature--${line.nature}`}
+      data-testid="speed-nature-line"
+      data-nature={line.nature}
     >
-      <span className="speed-tier__head">
-        {selfTie && <span className="speed-tier__self-label">{speedScreenText.selfTierLabel}</span>}
-        {selfTie && (
-          <span className="speed-badge speed-badge--self ui-badge" aria-hidden="true">
-            <Icon name="speed" size={12} />
-            <span className="speed-badge__text">{speedScreenText.neighborhoodSelfBadge}</span>
-          </span>
-        )}
-        <span className="speed-tier__speed">{speedScreenText.tierSpeedLabel(tier.speed)}</span>
-        {tier.entries.length > 1 && (
-          <span className="speed-tier__tie ui-badge">{speedScreenText.tieLabel}</span>
-        )}
-      </span>
-      <ul className="speed-tier__entries">
-        {tier.entries.map((entry, index) => (
-          <li
-            key={`${entry.pokemonId}-${entry.preset}-${String(index)}`}
-            className="speed-entry"
-            data-testid="speed-entry"
-            title={`${entry.nameJa}${speedScreenText.entrySeparator}${speedPresetText[entry.preset]}`}
-            style={{ height: ENTRY_HEIGHT }}
-          >
-            <PokemonImage
-              speciesKey={entry.pokemonId}
-              size="thumb"
-              className="speed-entry__image"
-              fallback={
-                <span
-                  className="speed-entry__emblem"
-                  data-testid="type-emblem"
-                  style={{ backgroundColor: `var(--type-${entry.types[0] ?? ""})` }}
-                />
-              }
-            />
-            <span className="speed-entry__name">{entry.nameJa}</span>
-            <span className="speed-entry__preset">
-              {speedScreenText.entrySeparator}
-              {speedPresetText[entry.preset]}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <span className="speed-nature__label">{speedScreenText.natureLabel[line.nature]}</span>
+      <span className="speed-nature__main">{main}</span>
+      {tie !== undefined && (
+        <span className="speed-nature__tie">{speedScreenText.tieAt(tie.min, tie.max)}</span>
+      )}
     </li>
   );
 }
 
-interface SelfFieldChecksProps {
-  readonly self: SelfState;
-  readonly onChange: (patch: Partial<SelfState>) => void;
-}
+// ---- 出力 2: これ以上 ----
 
-/** 自分の追い風・まひ(preset / custom のみ。raw は補正済みの値を入れるので出さない。ADR-0607 §1)。 */
-function SelfFieldChecks({ self, onChange }: SelfFieldChecksProps) {
+function ReachList({
+  response,
+  trickRoom,
+}: {
+  readonly response: Schemas["ReachResponse"];
+  readonly trickRoom: boolean;
+}): ReactElement {
   return (
-    <>
-      <ToggleChip
-        type="checkbox"
-        label={speedScreenText.selfTailwindLabel}
-        checked={self.tailwind}
-        className="speed-self__chip"
-        onChange={(tailwind) => {
-          onChange({ tailwind });
-        }}
-      />
-      <ToggleChip
-        type="checkbox"
-        label={speedScreenText.paralysisLabel}
-        checked={self.paralysis}
-        className="speed-self__chip"
-        onChange={(paralysis) => {
-          onChange({ paralysis });
-        }}
-      />
-    </>
+    <ul className="speed-reach">
+      {response.lines.map((line) => (
+        <ReachRow key={line.preset} line={line} trickRoom={trickRoom} />
+      ))}
+    </ul>
   );
 }
 
-interface PositionResultProps {
-  readonly value: Schemas["PositionResponse"];
-  /** トリックルーム中は faster/slower を行動順に読み替えた行を足す(ADR-0607 §4)。 */
+function ReachRow({
+  line,
+  trickRoom,
+}: {
+  readonly line: Schemas["ReachLine"];
   readonly trickRoom: boolean;
+}): ReactElement {
+  const { preset, slower, tie, faster } = line;
+  const t = speedScreenText;
+  return (
+    <li className="speed-reach__row" data-testid="speed-reach-line" data-preset={preset}>
+      <h3 className="speed-reach__title">{speedPresetText[preset]}</h3>
+      <ReachCell
+        testId="speed-reach-slower"
+        text={
+          slower === undefined
+            ? trickRoom
+              ? t.reachNoneSlowerTrickRoom
+              : t.reachNoneSlower
+            : trickRoom
+              ? t.reachSlowerTrickRoom(preset, slower.max)
+              : t.reachSlower(preset, slower.max)
+        }
+        count={slower === undefined ? undefined : line.slowerCount}
+        example={line.fastestSlower}
+      />
+      {tie !== undefined && (
+        <ReachCell
+          testId="speed-reach-tie"
+          text={t.reachTie(preset, tie.min, tie.max)}
+          count={line.tieCount}
+          example={undefined}
+        />
+      )}
+      <ReachCell
+        testId="speed-reach-faster"
+        text={
+          faster === undefined
+            ? trickRoom
+              ? t.reachNoneFasterTrickRoom
+              : t.reachNoneFaster
+            : trickRoom
+              ? t.reachFasterTrickRoom(preset, faster.min)
+              : t.reachFaster(preset, faster.min)
+        }
+        count={faster === undefined ? undefined : line.fasterCount}
+        example={line.slowestFaster}
+      />
+    </li>
+  );
 }
 
-/** 右の結果(実数値・速い/遅い件数・同速の一覧。応答のまま出す。ADR-0604 §4)。 */
-function PositionResult({ value, trickRoom }: PositionResultProps) {
+function ReachCell({
+  testId,
+  text,
+  count,
+  example,
+}: {
+  readonly testId: string;
+  readonly text: string;
+  readonly count: number | undefined;
+  readonly example: SpeedPokemon | undefined;
+}): ReactElement {
   return (
-    <div className="speed-self__result">
-      <p className="speed-self__speed">{speedScreenText.selfSpeedLabel(value.speed)}</p>
-      <p className="speed-self__count">
-        <Icon name="up" size={16} />
-        {speedScreenText.fasterLabel(value.faster)}
-      </p>
-      <p className="speed-self__count">
-        <Icon name="down" size={16} />
-        {speedScreenText.slowerLabel(value.slower)}
-      </p>
-      {trickRoom && (
-        <>
-          <p>{speedScreenText.movesBeforeLabel(value.slower)}</p>
-          <p>{speedScreenText.movesAfterLabel(value.faster)}</p>
-        </>
+    <div className="speed-reach__cell" data-testid={testId}>
+      <span className="speed-reach__text">{text}</span>
+      {count !== undefined && <span className="speed-reach__count">{speedScreenText.reachCount(count)}</span>}
+      {example !== undefined && (
+        <span className="speed-reach__example">{speedScreenText.reachExample(example.nameJa)}</span>
       )}
-      <div>
-        {/* BalanceScreen と同じく見出し要素は使わない(h1 の直下でレベルを飛ばさないため)。 */}
-        <p className="speed-self__result-label">{speedScreenText.tieLabel}</p>
-        {value.tie.length === 0 ? (
-          <p>{speedScreenText.noTieLabel}</p>
-        ) : (
-          <ul>
-            {value.tie.map((entry, index) => (
-              <li key={`${entry.pokemonId}-${entry.preset}-${String(index)}`}>
-                {entry.nameJa}
-                {speedScreenText.entrySeparator}
-                {speedPresetText[entry.preset]}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
     </div>
   );
 }

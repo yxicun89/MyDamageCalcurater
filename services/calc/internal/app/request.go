@@ -106,3 +106,39 @@ func derefInt(p *int) int {
 	}
 	return *p
 }
+
+// ComboStep は連続技の 1 手の指定(ID は未解決のまま。Hits の nil は engine の既定)。
+type ComboStep struct {
+	MoveID   string
+	Critical *bool
+	Hits     *int
+}
+
+// ComboSpeedField は連続技の素早さに効く場の指定(省略した項目は nil = なし)。
+type ComboSpeedField struct {
+	TrickRoom, SelfTailwind, OpponentTailwind *bool
+}
+
+func (f *ComboSpeedField) engine() engine.ComboSpeedField {
+	if f == nil {
+		return engine.ComboSpeedField{}
+	}
+	return engine.ComboSpeedField{
+		TrickRoom: derefBool(f.TrickRoom), SelfTailwind: derefBool(f.SelfTailwind), OpponentTailwind: derefBool(f.OpponentTailwind),
+	}
+}
+
+// ComboRequest は連続技(POST /api/calc/combo)の入力(ADR-0253)。
+// 手の件数・各手の hits の下限は adapters が列挙の検証より前に見る(ADR-0208 §3)。
+type ComboRequest struct {
+	Format         domain.Enum
+	Attacker       Individual
+	Defender       Individual
+	Steps          []ComboStep
+	OpponentMoveID *string
+	OpponentSpeed  *domain.Enum
+	Field          *domain.Field
+	SpeedField     *ComboSpeedField
+}
+
+func derefBool(p *bool) bool { return p != nil && *p }

@@ -3,6 +3,9 @@
 // WASM 境界は HTTP を通らず OpenAPI の契約ではないので、ここは手書きの型が正(ADR-0300 §2)。
 // ずれは engine/wasmEngine.wasm.test.ts(本物の engine.wasm との結合テスト)が検出する。
 
+import type { components } from "../api/openapi.gen";
+import { comboEngineText } from "../i18n/ja";
+
 /** 対戦形式(engine.Format と同じ文字列)。 */
 export type FormatId = "single" | "double";
 
@@ -79,6 +82,20 @@ export interface Species {
   readonly weightHg?: number;
 }
 
+/**
+ * 技の追加効果のランク変化(WASM 境界の moveEffectDTO と同じ camelCase。ADR-0179 追記 CB-5)。
+ * 公開 API の Move.effect は PascalCase(`{Chance,Target,Stages}`)で、master/onlineSource.ts が写すときにこの形へ直す。
+ * 連続技のランクの累積にだけ使う(単発の計算は読まない)。
+ */
+export interface MoveEffect {
+  /** 発動確率(%)。公開 API は 100 のものだけ返す。 */
+  readonly chance: number;
+  /** ランクが変わる側。self は使った側、target は相手。 */
+  readonly target: "self" | "target";
+  /** 能力ごとの段階(-6..6)。HP は無い。 */
+  readonly stages: Readonly<Partial<Record<Exclude<StatKey, "hp">, number>>>;
+}
+
 /** 技。 */
 export interface Move {
   readonly id: string;
@@ -107,6 +124,11 @@ export interface Move {
    * WASM に渡す。省略は定義なし。
    */
   readonly rule?: Readonly<Record<string, unknown>> | null;
+  /**
+   * 追加効果のランク変化(連続技。CB-6)。**省略・null は「ランク変化なし」**(古いサーバー・確率 100% 未満・効果なしは区別しない。
+   * 連続技は確率 100% の効果だけを扱うため。combo-calc.md §7 Q4)。判定は domain/combo.ts の changesRanks を通す。
+   */
+  readonly effect?: MoveEffect | null;
 }
 
 /** 持ち物の効果(4096 基準の固定小数。CLAUDE.md ドメイン規約)。すべて省略可(省略はengineの既定値)。 */
@@ -450,4 +472,78 @@ export interface CalcEngine {
   calc(request: CalcRequest, signal?: AbortSignal): Promise<EngineResult<CalcResult>>;
   calcBulk(request: BulkRequest, signal?: AbortSignal): Promise<EngineResult<BulkResult>>;
   calcReverse(request: ReverseRequest, signal?: AbortSignal): Promise<EngineResult<ReverseResult>>;
+  /**
+   * 連続技(CB-6)。**省略可**にしてあるのは、既存の fake CalcEngine(画面テストなど約 20 ファイル)を書き換えずに済ませるため。
+   * 本物の実装(createApiEngine / createWasmEngine)は常に持つ(戻り値の型は ComboEngine との交差)。
+   * 呼ぶ側は直接呼ばず、calcComboVia を通す(未提供のときは reject せず engine_unavailable の not ok にする)。
+   */
+  calcCombo?: ComboEngine["calcCombo"];
 }
+
+/**
+ * engine に連続技を依頼する。calcCombo を持たない engine(古い fake・将来の別実装)は例外にせず
+ * engine_unavailable の失敗にする(EngineResult で成否を運ぶ ADR-0011 §5 と同じ)。
+ */
+export function calcComboVia(
+  engine: CalcEngine,
+  request: ComboRequest,
+  signal?: AbortSignal,
+): Promise<EngineResult<ComboResult>> {
+  if (engine.calcCombo === undefined) {
+    return Promise.resolve({
+      ok: false,
+      error: { code: COMBO_UNSUPPORTED_CODE, message: comboEngineText.unsupported },
+    });
+  }
+  return engine.calcCombo(request, signal);
+}
+
+// ---- 連続技(CB-6。docs/plan/combo-calc.md) ----
+
+/** 相手の素早さの扱い(API の ComboOpponentSpeed・WASM の opponentSpeed と同じ語彙)。 */
+export type ComboOpponentSpeed = components["schemas"]["ComboOpponentSpeed"];
+
+/** 行動順に効く場の効果(省略は false)。 */
+export interface ComboSpeedField {
+  readonly trickRoom?: boolean;
+  readonly selfTailwind?: boolean;
+  readonly opponentTailwind?: boolean;
+}
+
+/** 連続技の 1 手。技は ID でなく解決済みの Move(API へ送るときに apiEngine が ID にする)。 */
+export interface ComboStepRequest {
+  readonly move: Move;
+  /** 急所。省略・false は急所なし。 */
+  readonly critical?: boolean;
+  /** 多段の回数(1 以上)。省略は既定の回数。 */
+  readonly hits?: number;
+}
+
+/**
+ * 連続技リクエスト(Web 内部の形)。WASM にはこのまま JSON にして渡せる(engine/wasmapi/combo.go の comboRequest と
+ * キーが 1 対 1)。API には apiEngine が技・持ち物等を ID に写して送る。
+ */
+export interface ComboRequest {
+  readonly format: FormatId;
+  readonly attacker: Individual;
+  readonly defender: Individual;
+  readonly field?: Field;
+  /** 手の並び。1〜3 手(domain/combo.ts の MAX_COMBO_STEPS)。 */
+  readonly steps: readonly ComboStepRequest[];
+  /** 相手の技(攻撃技のみ)。省略は相手の攻撃を計算しない。 */
+  readonly opponentMove?: Move;
+  readonly opponentSpeed?: ComboOpponentSpeed;
+  readonly speedField?: ComboSpeedField;
+  readonly typeChart: TypeChart;
+}
+
+/** 連続技の結果。API の ComboResult と WASM の calcCombo は同じ形(ADR-0253・ADR-0179 追記 CB-5)なので生成型を再利用する。 */
+export type ComboResult = components["schemas"]["ComboResult"];
+
+/** 連続技を計算できる engine。 */
+export interface ComboEngine {
+  calcCombo(request: ComboRequest, signal?: AbortSignal): Promise<EngineResult<ComboResult>>;
+}
+
+/** 連続技を計算できない engine(calcCombo を持たない)のときの code。engine_unavailable と同じ扱いで画面に出す。 */
+export const COMBO_UNSUPPORTED_CODE = "engine_unavailable";

@@ -49,6 +49,10 @@ export interface SpeedClient {
   ): Promise<SpeedResult<Schemas["TableResponse"]>>;
   /** 自分のポケモンの実数値と、表の中の位置(ADR-0602 §3)。 */
   position(request: Schemas["PositionRequest"]): Promise<SpeedResult<Schemas["PositionResponse"]>>;
+  /** 相手を選んで「上を取る最低ライン」(性格ごとの最小 SP)を引く(ADR-0610 §2。POST /matchup)。 */
+  matchup(request: Schemas["MatchupRequest"]): Promise<SpeedResult<Schemas["MatchupResponse"]>>;
+  /** 自分の素早さの「これ以上」(6 プリセットごとの族の区切り)を引く(ADR-0610 §2。POST /reach。本文は position と同じ)。 */
+  reach(request: Schemas["PositionRequest"]): Promise<SpeedResult<Schemas["ReachResponse"]>>;
 }
 
 /** speed API のパス(services/speed/api/openapi.yaml の paths。基点 URL からの相対)。 */
@@ -56,6 +60,8 @@ export const SPEED_PATHS = {
   pokemon: "api/speed/v1/pokemon",
   table: "api/speed/v1/table",
   position: "api/speed/v1/position",
+  matchup: "api/speed/v1/matchup",
+  reach: "api/speed/v1/reach",
 } as const;
 
 /** 通信できない・応答が読めない・エラー本文の形が不正なときの Web 側のコード(ADR-0604 §3)。 */
@@ -167,6 +173,12 @@ export function createSpeedClient(input: CreateSpeedClientInput): SpeedClient {
     },
     position(request) {
       return postJson(SPEED_PATHS.position, request);
+    },
+    matchup(request) {
+      return postJson(SPEED_PATHS.matchup, request);
+    },
+    reach(request) {
+      return postJson(SPEED_PATHS.reach, request);
     },
   };
 }

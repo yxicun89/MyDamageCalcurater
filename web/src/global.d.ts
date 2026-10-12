@@ -22,11 +22,12 @@ interface ImportMetaEnv {
   readonly VITE_API_BASE_URL?: string;
 }
 
-/** engine/cmd/wasm が globalThis.pokecalc に登録する3関数(ADR-0011 §2)。引数・戻り値は JSON 文字列。 */
+/** engine/cmd/wasm が globalThis.pokecalc に登録する関数(ADR-0011 §2、calcCombo は CB-5)。引数・戻り値は JSON 文字列。 */
 interface PokecalcApi {
   calc(requestJSON: string): string;
   calcBulk(requestJSON: string): string;
   calcReverse(requestJSON: string): string;
+  calcCombo(requestJSON: string): string;
 }
 
 /** wasm_exec.js が生成する Go インスタンス(実際に使うのは importObject と run だけ)。 */

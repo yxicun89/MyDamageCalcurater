@@ -1,1313 +1,949 @@
-// SP3: 素早さ比較の画面(ADR-0604 §4・§6、docs/speed-design.md §5・§6)。
-// SpeedClient は fake(props で注入)。engine(WASM)・pokedex のマスタは使わない(ADR-0604 §5)。
-// 確かめること(受け入れ条件):
-//   A1 マウント時に pokemon() と table() を1回ずつ呼ぶ(position はまだ呼ばない)
-//   A2 両方そろうまで「左の表だけ」ローディング(右の入力は先に使える。ADR-0604 §4)
-//   A3 左は tiers を速い順のまま描画し、2行以上の段には「同速」を出す(Web で並べ替え直さない。ADR-0601 §3)
-//   A4 各行にタイプ色のエンブレム(data-testid="type-emblem"、CalcScreen と同じ形)・名前・調整名・実数値を出す
-//   A5 右のモード(preset / custom / raw)で入力欄が変わり、入力のたびに position() を呼び直す
-//   A6 古い応答は無視する(cancelled フラグ。後から届いた前の入力の結果で表示を上書きしない)
-//   A7 tie があれば左の同じ段を強調し、無ければ faster/slower の境界に印を出す(ADR-0604 §4)
-//   A8 エラー(SpeedResult.ok=false)でも表示が壊れない(role=alert を出し、他方の表示を消さない)
+// I-speed-4b(ADR-0610 §4・Web 画面の具体): 素早さ画面の新しい構成。SpeedClient は fake(props で注入)。
+// engine(WASM)・pokedex のマスタは使わない(ADR-0604 §5)。素早さの値・区間はすべて speed-svc が決め、Web は計算し直さない。
+// 確かめること(受け入れ条件 W1〜W12。docs/adr/0610 の「Web 画面の具体」と対応):
+//   W1  表・周辺パネルが画面に無く、table()・position() を呼ばない
+//   W2  マウント時に pokemon() を 1 回呼ぶ。自分と相手を選ぶまで matchup() は呼ばない
+//   W3  自分と相手を選ぶと matchup() を呼ぶ。本文は入力どおり(既定の想定は 4 つを表の順で明示・省略値は送らない)
+//   W4  想定のチップ(既定 4 つ on)。+1・+2 を足せる。最後の 1 つは外せない
+//   W5  想定ごとのカード: 見出し(相手の素早さ)・一言見出し・性格ごとの最低ライン・同速の別表示
+//   W6  どう振っても上を取れないときの表示(同速だけがある場合は同速を併記)
+//   W7  トリックルーム: matchup に trickRoom を送る。「下を取る」の読み替えと上限 SP、下降補正の行はこのときだけ出す
+//   W8  「今の振り」: 入れると self.current を送り、行動順のバッジ(文字つき)と reach() が出る。入れないと reach は呼ばない
+//   W9  「これ以上」: 6 プリセットごとの族の区切り・該当数・境界の例。トリックルーム中は読み替え(reach は呼び直さない)
+//   W10 読み込み中・エラー(code から日本語。matchup と reach と pokemon は互いに独立)・古い応答の無視
+//   W11 連続技へのリンクは onOpenCombo があるときだけ。無ければ出さない(無効表示もしない)
+//   W12 a11y・見た目: 見出しの階層、ランクのメーター(slider)、ポケモンカード、色だけに頼らない、常時アニメーションなし
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
-import { describe, expect, test } from "vitest";
-import { MAX_SP_PER_STAT } from "../domain/requests";
-import { MAX_RANK, MIN_RANK } from "../domain/calcConditions";
+import { readFileSync } from "node:fs";
+import { describe, expect, test, vi } from "vitest";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
-import { SpeedScreen } from "./SpeedScreen";
+import { uiText } from "../i18n/ui";
+import {
+  BIRD,
+  FISH,
+  createFakeSpeedClient,
+  lastOf,
+  matchupResponse,
+  pokemonListResponse,
+  reachResponse,
+  trickRoomMatchupResponse,
+  unreachableMatchupResponse,
+  type FakeSpeedClient,
+} from "../test/fakeSpeedClient";
+import { localPath } from "../test/localPath";
+import { SpeedScreen, type SpeedComboRequest } from "./SpeedScreen";
 import type { components } from "./speed.gen";
-import type { SpeedClient, SpeedResult, SpeedTableField } from "./speedClient";
 
 type Schemas = components["schemas"];
 
-// ---- fake の SpeedClient(呼び出しを記録し、テストが応答を返す。BalanceScreen.test.tsx と同じ形) ----
+// ---- 描画と、よく使う操作 ----
 
-interface PendingCall<A, T> {
-  readonly args: A;
-  resolve(result: SpeedResult<T>): void;
+interface Rendered {
+  readonly user: UserEvent;
+  readonly client: FakeSpeedClient;
 }
 
-interface FakeSpeedClient extends SpeedClient {
-  readonly pokemonCalls: PendingCall<null, Schemas["PokemonListResponse"]>[];
-  readonly tableCalls: PendingCall<readonly Schemas["PresetId"][] | undefined, Schemas["TableResponse"]>[];
-  /** table() の第2引数(場の状態。ADR-0607)。tableCalls と同じ添字で対応する。 */
-  readonly tableFieldArgs: (SpeedTableField | undefined)[];
-  readonly positionCalls: PendingCall<Schemas["PositionRequest"], Schemas["PositionResponse"]>[];
-}
-
-function createFakeSpeedClient(): FakeSpeedClient {
-  const pokemonCalls: FakeSpeedClient["pokemonCalls"] = [];
-  const tableCalls: FakeSpeedClient["tableCalls"] = [];
-  const tableFieldArgs: FakeSpeedClient["tableFieldArgs"] = [];
-  const positionCalls: FakeSpeedClient["positionCalls"] = [];
-  return {
-    pokemonCalls,
-    tableCalls,
-    tableFieldArgs,
-    positionCalls,
-    pokemon() {
-      return new Promise((resolve) => {
-        pokemonCalls.push({ args: null, resolve });
-      });
-    },
-    table(presets, field) {
-      return new Promise((resolve) => {
-        tableFieldArgs.push(field === undefined ? undefined : { ...field });
-        tableCalls.push({ args: presets === undefined ? undefined : [...presets], resolve });
-      });
-    },
-    position(request) {
-      return new Promise((resolve) => {
-        positionCalls.push({ args: structuredClone(request), resolve });
-      });
-    },
-  };
-}
-
-function lastOf<T>(calls: readonly T[], name: string): T {
-  const call = calls.at(-1);
-  if (call === undefined) {
-    throw new Error(`${name} が呼ばれていない`);
-  }
-  return call;
-}
-
-// ---- 架空データ(services/speed/testdata と同じ 9xxx-xxx の形。実マスタは使わない。ADR-0002) ----
-
-const BIRD: Schemas["SpeedPokemon"] = {
-  pokemonId: "9001-000",
-  nameJa: "テストカソウドリ",
-  types: ["fire", "flying"],
-  baseSpeed: 100,
-};
-const FISH: Schemas["SpeedPokemon"] = {
-  pokemonId: "9002-000",
-  nameJa: "テストカソウギョ",
-  types: ["water"],
-  baseSpeed: 80,
-};
-const GRASS: Schemas["SpeedPokemon"] = {
-  pokemonId: "9003-000",
-  nameJa: "テストカソウソウ",
-  types: ["grass"],
-  baseSpeed: 50,
-};
-
-const pokemonListResponse: Schemas["PokemonListResponse"] = {
-  regulationId: "example",
-  pokemon: [BIRD, FISH, GRASS],
-};
-
-function entry(pokemon: Schemas["SpeedPokemon"], preset: Schemas["PresetId"]): Schemas["SpeedTableEntry"] {
-  return { ...pokemon, preset };
-}
-
-/**
- * 段は速い順(300・200・150・100)。200 の段だけ2行(同速)。
- * 行の総数は 1 + 2 + 1 + 1 = 5(境界の計算は「段」ではなく「行」の数で決まる。ADR-0604 §4)。
- */
-const tableResponse: Schemas["TableResponse"] = {
-  regulationId: "example",
-  presets: ["uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"],
-  tiers: [
-    { speed: 300, entries: [entry(BIRD, "max-scarf")] },
-    { speed: 200, entries: [entry(BIRD, "max"), entry(FISH, "max-scarf")] },
-    { speed: 150, entries: [entry(FISH, "max")] },
-    { speed: 100, entries: [entry(GRASS, "uninvested")] },
-  ],
-};
-
-// ---- 描画と、よく使う問い合わせ ----
-
-function renderScreen(): { user: UserEvent; client: FakeSpeedClient } {
+/** 描画し、pokemon() の応答まで返す(一覧がそろった状態から始める)。 */
+async function renderLoaded(onOpenCombo?: (request: SpeedComboRequest) => void): Promise<Rendered> {
   const user = userEvent.setup();
   const client = createFakeSpeedClient();
-  render(<SpeedScreen speedClient={client} />);
+  render(<SpeedScreen speedClient={client} {...(onOpenCombo === undefined ? {} : { onOpenCombo })} />);
+  await act(async () => {
+    lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
+    await Promise.resolve();
+  });
   return { user, client };
 }
 
-/** 左(速い順の表)の領域。 */
-function tableRegion(): HTMLElement {
-  return screen.getByRole("region", { name: speedScreenText.tableRegionLabel });
-}
-
-/** 右(自分のポケモン)の領域。 */
 function selfRegion(): HTMLElement {
   return screen.getByRole("region", { name: speedScreenText.selfRegionLabel });
 }
-
-/** 左の表の段(速い順のまま)。段は data-testid="speed-tier"、実数値は data-speed で確かめる。 */
-function tiers(): HTMLElement[] {
-  return within(tableRegion()).getAllByTestId("speed-tier");
+function opponentRegion(): HTMLElement {
+  return screen.getByRole("region", { name: speedScreenText.opponentRegionLabel });
+}
+/** 出力 1 の領域。名前は見出しと同じで、トリックルーム中は読み替えた見出しになる。 */
+function matchupRegion(): HTMLElement {
+  return (
+    screen.queryByRole("region", { name: speedScreenText.matchupHeading }) ??
+    screen.getByRole("region", { name: speedScreenText.matchupHeadingTrickRoom })
+  );
+}
+function reachRegion(): HTMLElement {
+  return screen.getByRole("region", { name: speedScreenText.reachHeading });
 }
 
-/** 1回だけ解決を流す(BalanceScreen.test.tsx と同じ形)。 */
-async function flush(resolve: () => void): Promise<void> {
+async function chooseSelf({ user }: Rendered, pokemon: Schemas["SpeedPokemon"] = BIRD): Promise<void> {
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: speedScreenText.selfPokemonLabel }),
+    pokemon.pokemonId,
+  );
+}
+async function chooseOpponent({ user }: Rendered, pokemon: Schemas["SpeedPokemon"] = FISH): Promise<void> {
+  await user.selectOptions(
+    screen.getByRole("combobox", { name: speedScreenText.opponentPokemonLabel }),
+    pokemon.pokemonId,
+  );
+}
+async function chooseBoth(rendered: Rendered): Promise<void> {
+  await chooseSelf(rendered);
+  await chooseOpponent(rendered);
+}
+
+/** 「今の振りも入れる」をオンにして SP・性格を入れる。 */
+async function enterCurrent({ user }: Rendered, sp: number, natureLabel: string): Promise<void> {
+  await user.click(within(selfRegion()).getByRole("checkbox", { name: speedScreenText.currentToggleLabel }));
+  fireEvent.change(within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.spLabel }), {
+    target: { value: String(sp) },
+  });
+  await user.click(within(selfRegion()).getByRole("radio", { name: natureLabel }));
+}
+
+async function resolveMatchup(
+  client: FakeSpeedClient,
+  value: Schemas["MatchupResponse"],
+  index?: number,
+): Promise<void> {
+  const call = index === undefined ? lastOf(client.matchupCalls, "matchup") : client.matchupCalls[index];
   await act(async () => {
-    resolve();
+    call?.resolve({ ok: true, value });
+    await Promise.resolve();
+  });
+}
+async function resolveReach(client: FakeSpeedClient, value: Schemas["ReachResponse"]): Promise<void> {
+  await act(async () => {
+    lastOf(client.reachCalls, "reach").resolve({ ok: true, value });
     await Promise.resolve();
   });
 }
 
-/** pokemon() と table() の両方を成功で解決する(左の表が出た状態にする)。 */
-async function resolveInitial(
-  client: FakeSpeedClient,
-  table: Schemas["TableResponse"] = tableResponse,
-): Promise<void> {
-  const pokemonCall = lastOf(client.pokemonCalls, "pokemon");
-  const tableCall = lastOf(client.tableCalls, "table");
-  await flush(() => {
-    pokemonCall.resolve({ ok: true, value: pokemonListResponse });
-  });
-  await flush(() => {
-    tableCall.resolve({ ok: true, value: table });
-  });
+function cards(): HTMLElement[] {
+  return within(matchupRegion()).getAllByTestId("speed-matchup-card");
+}
+function cardFor(preset: Schemas["PresetId"]): HTMLElement {
+  const found = cards().find((card) => card.getAttribute("data-preset") === preset);
+  if (found === undefined) {
+    throw new Error(`${preset} のカードが無い`);
+  }
+  return found;
+}
+function natureRow(card: HTMLElement, nature: Schemas["NatureId"]): HTMLElement {
+  const found = within(card)
+    .queryAllByTestId("speed-nature-line")
+    .find((row) => row.getAttribute("data-nature") === nature);
+  if (found === undefined) {
+    throw new Error(`${nature} の行が無い`);
+  }
+  return found;
+}
+function queryNatureRow(card: HTMLElement, nature: Schemas["NatureId"]): HTMLElement | undefined {
+  return within(card)
+    .queryAllByTestId("speed-nature-line")
+    .find((row) => row.getAttribute("data-nature") === nature);
+}
+function reachRow(preset: Schemas["PresetId"]): HTMLElement {
+  const found = within(reachRegion())
+    .getAllByTestId("speed-reach-line")
+    .find((row) => row.getAttribute("data-preset") === preset);
+  if (found === undefined) {
+    throw new Error(`${preset} の「これ以上」の行が無い`);
+  }
+  return found;
 }
 
-// ---- A1・A2: マウント時の呼び出しと、左だけのローディング ----
+const DEFAULT_ASSUMPTIONS = [
+  { preset: "uninvested" },
+  { preset: "neutral-max" },
+  { preset: "max" },
+  { preset: "max-scarf" },
+] as const;
 
-describe("A1/A2 マウント時の呼び出し", () => {
-  test("pokemon() と table() を1回ずつ呼ぶ(table は presets を省く = 全6行)", () => {
-    const { client } = renderScreen();
-    expect(client.pokemonCalls).toHaveLength(1);
-    expect(client.tableCalls).toHaveLength(1);
-    expect(lastOf(client.tableCalls, "table").args).toBeUndefined();
-  });
+// ---- W1・W2: 構成と最初の呼び出し ----
 
-  test("ポケモンを選ぶまで position() は呼ばない", () => {
-    const { client } = renderScreen();
-    expect(client.positionCalls).toHaveLength(0);
-  });
+describe("W1 表と周辺パネルは画面に無い(ADR-0610 §4)", () => {
+  test("表の領域・仮想スクロール・段・自分の周りが出ず、table()・position() を呼ばない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    await resolveMatchup(rendered.client, matchupResponse);
+    await resolveReach(rendered.client, reachResponse);
 
-  test("両方そろうまで左の表はローディングのまま(右の入力は先に使える)", async () => {
-    const { client } = renderScreen();
-    expect(within(tableRegion()).getByText(speedScreenText.loadingNotice)).toBeInTheDocument();
-
-    // pokemon() だけ届いた段階: 右のポケモンの選択肢は出るが、左はまだローディング。
-    await flush(() => {
-      lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
-    });
-    expect(
-      within(selfRegion()).getByRole("option", { name: BIRD.nameJa, selected: false }),
-    ).toBeInTheDocument();
-    expect(within(tableRegion()).getByText(speedScreenText.loadingNotice)).toBeInTheDocument();
-    expect(within(tableRegion()).queryAllByTestId("speed-tier")).toHaveLength(0);
-
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
-    });
-    expect(within(tableRegion()).queryByText(speedScreenText.loadingNotice)).not.toBeInTheDocument();
-    expect(tiers()).toHaveLength(tableResponse.tiers.length);
+    expect(screen.queryByRole("region", { name: "素早さの表" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("region", { name: "自分の周り" })).not.toBeInTheDocument();
+    expect(screen.queryByTestId("speed-viewport")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("speed-tier")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("speed-marker")).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "自分の周り" })).not.toBeInTheDocument();
+    expect(rendered.client.tableCalls).toHaveLength(0);
+    expect(rendered.client.positionCalls).toHaveLength(0);
   });
 });
 
-// ---- 左の表の絞り込み(道具・ランク。ユーザー確定仕様。docs/plan.md「SP: 素早さ比較」) ----
+describe("W2 最初の呼び出し", () => {
+  test("マウント時に pokemon() を 1 回だけ呼び、読み込み中を出す。matchup・reach はまだ呼ばない", () => {
+    const client = createFakeSpeedClient();
+    render(<SpeedScreen speedClient={client} />);
 
-describe("表の絞り込み", () => {
-  test("チェックを外すと、外した行を除いた presets で table() を呼び直す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    expect(client.tableCalls).toHaveLength(1);
+    expect(client.pokemonCalls).toHaveLength(1);
+    expect(client.matchupCalls).toHaveLength(0);
+    expect(client.reachCalls).toHaveLength(0);
+    expect(screen.getByText(speedScreenText.pokemonListLoadingNotice)).toBeInTheDocument();
+  });
 
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-    await user.click(within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] }));
+  test("一覧がそろうと、自分・相手の選択肢に名前が並び、使い方の一言を出す(カードはまだ無い)", async () => {
+    await renderLoaded();
 
-    expect(client.tableCalls).toHaveLength(2);
-    expect(lastOf(client.tableCalls, "table").args).toEqual([
-      "uninvested",
-      "neutral-max",
-      "max",
-      "max-plus1",
-      "max-plus2",
+    const self = within(selfRegion()).getByRole("combobox", { name: speedScreenText.selfPokemonLabel });
+    expect(within(self).getByRole("option", { name: speedScreenText.unselectedOption })).toBeInTheDocument();
+    expect(within(self).getByRole("option", { name: BIRD.nameJa })).toBeInTheDocument();
+    expect(
+      within(opponentRegion()).getByRole("combobox", { name: speedScreenText.opponentPokemonLabel }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(speedScreenText.introNotice)).toBeInTheDocument();
+    expect(screen.queryByTestId("speed-matchup-card")).not.toBeInTheDocument();
+  });
+
+  test("自分だけ・相手だけでは matchup() を呼ばない", async () => {
+    const rendered = await renderLoaded();
+    await chooseSelf(rendered);
+    expect(rendered.client.matchupCalls).toHaveLength(0);
+    await rendered.user.selectOptions(
+      screen.getByRole("combobox", { name: speedScreenText.selfPokemonLabel }),
+      speedScreenText.unselectedOption,
+    );
+    await chooseOpponent(rendered);
+    expect(rendered.client.matchupCalls).toHaveLength(0);
+  });
+});
+
+// ---- W3・W4: matchup() の本文と想定のチップ ----
+
+describe("W3 matchup() の本文", () => {
+  test("自分と相手を選ぶと 1 回呼ぶ。既定は想定 4 つを表の順で明示し、false・0 の欄は送らない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+
+    expect(rendered.client.matchupCalls).toHaveLength(1);
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args).toEqual({
+      self: { pokemonId: BIRD.pokemonId },
+      opponent: { pokemonId: FISH.pokemonId, assumptions: DEFAULT_ASSUMPTIONS },
+    });
+  });
+
+  test("ランク・スカーフ・追い風・まひ(自分と相手)・トリックルームを入れると、本文にその欄だけを足す", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    const self = within(selfRegion());
+    const opponent = within(opponentRegion());
+
+    await rendered.user.click(
+      self.getByRole("button", { name: `${speedScreenText.rankLabel}${uiText.rankIncreaseSuffix}` }),
+    );
+    await rendered.user.click(
+      self.getByRole("button", { name: `${speedScreenText.rankLabel}${uiText.rankIncreaseSuffix}` }),
+    );
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.scarfLabel }));
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.selfTailwindLabel }));
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.selfParalysisLabel }));
+    await rendered.user.click(
+      opponent.getByRole("checkbox", { name: speedScreenText.opponentTailwindLabel }),
+    );
+    await rendered.user.click(
+      opponent.getByRole("checkbox", { name: speedScreenText.opponentParalysisLabel }),
+    );
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args).toEqual({
+      self: { pokemonId: BIRD.pokemonId, rank: 2, scarf: true, tailwind: true, paralysis: true },
+      opponent: {
+        pokemonId: FISH.pokemonId,
+        assumptions: DEFAULT_ASSUMPTIONS,
+        tailwind: true,
+        paralysis: true,
+      },
+      trickRoom: true,
+    });
+  });
+
+  test("入力を変えるたびに呼び直す(同じ入力では呼び直さない)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    expect(rendered.client.matchupCalls).toHaveLength(1);
+    await rendered.user.click(
+      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.scarfLabel }),
+    );
+    expect(rendered.client.matchupCalls).toHaveLength(2);
+    await chooseOpponent(rendered, FISH);
+    expect(rendered.client.matchupCalls).toHaveLength(2);
+  });
+});
+
+describe("W4 相手の想定のチップ", () => {
+  test("既定は 無振り・準速・最速・最速スカーフ の 4 つが on、+1・+2 は off", async () => {
+    await renderLoaded();
+    const group = within(opponentRegion()).getByRole("group", { name: speedScreenText.assumptionGroupLabel });
+    for (const preset of ["uninvested", "neutral-max", "max", "max-scarf"] as const) {
+      expect(within(group).getByRole("checkbox", { name: speedPresetText[preset] })).toBeChecked();
+    }
+    for (const preset of ["max-plus1", "max-plus2"] as const) {
+      expect(within(group).getByRole("checkbox", { name: speedPresetText[preset] })).not.toBeChecked();
+    }
+  });
+
+  test("+1 を足すと表の順に並べて送り、無振りを外すと送らない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    const group = within(opponentRegion()).getByRole("group", { name: speedScreenText.assumptionGroupLabel });
+
+    await rendered.user.click(within(group).getByRole("checkbox", { name: speedPresetText["max-plus1"] }));
+    await rendered.user.click(within(group).getByRole("checkbox", { name: speedPresetText.uninvested }));
+
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args.opponent.assumptions).toEqual([
+      { preset: "neutral-max" },
+      { preset: "max" },
+      { preset: "max-scarf" },
+      { preset: "max-plus1" },
     ]);
   });
 
-  test("全部選び直すと presets を省いて呼ぶ(全6行)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-    const scarfCheckbox = within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] });
-
-    await user.click(scarfCheckbox);
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
-    });
-    await user.click(scarfCheckbox);
-
-    expect(lastOf(client.tableCalls, "table").args).toBeUndefined();
-  });
-
-  test("最後の1つは外せない(契約上 presets は1つ以上)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-
-    for (const id of ["neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"] as const) {
-      await user.click(within(filter).getByRole("checkbox", { name: speedPresetText[id] }));
-      await flush(() => {
-        lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
-      });
+  test("最後の 1 つは外せない(案内を出し、assumptions は空にならない)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    const group = within(opponentRegion()).getByRole("group", { name: speedScreenText.assumptionGroupLabel });
+    for (const preset of ["uninvested", "neutral-max", "max"] as const) {
+      await rendered.user.click(within(group).getByRole("checkbox", { name: speedPresetText[preset] }));
     }
-    const callsBeforeLast = client.tableCalls.length;
-    const lastCheckbox = within(filter).getByRole("checkbox", { name: speedPresetText.uninvested });
+    const last = within(group).getByRole("checkbox", { name: speedPresetText["max-scarf"] });
+    await rendered.user.click(last);
 
-    // aria-disabled(disabled ではない)。キーボードでは到達できるが、切り替えは無視される(二重のガード)。
-    expect(lastCheckbox).toHaveAttribute("aria-disabled", "true");
-    expect(lastCheckbox).toBeEnabled();
-    expect(within(filter).getByText(speedScreenText.filterMinimumNotice)).toBeInTheDocument();
-    expect(lastCheckbox).toHaveAccessibleDescription(speedScreenText.filterMinimumNotice);
-    await user.click(lastCheckbox);
-    expect(client.tableCalls).toHaveLength(callsBeforeLast);
-    expect(lastCheckbox).toBeChecked();
+    expect(last).toBeChecked();
+    expect(screen.getByText(speedScreenText.assumptionMinimumNotice)).toBeInTheDocument();
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args.opponent.assumptions).toEqual([
+      { preset: "max-scarf" },
+    ]);
   });
 });
 
-// ---- A3・A4: 左の表 ----
+// ---- W5・W6: 出力 1 ----
 
-describe("A3/A4 左の表(段・同速・タイプ色のエンブレム)", () => {
-  test("段を応答の順(速い順)のまま描画する", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    expect(tiers().map((tier) => tier.getAttribute("data-speed"))).toEqual(["300", "200", "150", "100"]);
-  });
+describe("W5 想定ごとのカード(上を取る最低ライン)", () => {
+  test("応答を待つ間は読み込み中。応答が来ると想定の順にカードを出し、見出しは h3 で相手の素早さを言う", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    expect(within(matchupRegion()).getByText(speedScreenText.matchupLoadingNotice)).toBeInTheDocument();
 
-  test("段には実数値を出す", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    const [first] = tiers();
-    expect(first).toBeDefined();
-    expect(first).toHaveTextContent(speedScreenText.tierSpeedLabel(300));
-  });
+    await resolveMatchup(rendered.client, matchupResponse);
 
-  test("2行以上の段には「同速」を出し、1行だけの段には出さない", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    const [fastest, tied] = tiers();
-    expect(fastest).toBeDefined();
-    expect(tied).toBeDefined();
-    expect(within(tied as HTMLElement).getByText(speedScreenText.tieLabel)).toBeInTheDocument();
-    expect(within(fastest as HTMLElement).queryByText(speedScreenText.tieLabel)).not.toBeInTheDocument();
-  });
-
-  test("段の中の行は応答の順のまま、名前と調整の表示名を出す(pokemonId 昇順・プリセット順を並べ替え直さない)", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    const [, tied] = tiers();
-    expect(tied).toBeDefined();
-    const entries = within(tied as HTMLElement).getAllByTestId("speed-entry");
-    expect(entries).toHaveLength(2);
-    expect(entries[0]).toHaveTextContent(BIRD.nameJa);
-    expect(entries[0]).toHaveTextContent(speedPresetText.max);
-    expect(entries[1]).toHaveTextContent(FISH.nameJa);
-    expect(entries[1]).toHaveTextContent(speedPresetText["max-scarf"]);
-  });
-
-  test("各行にタイプ色のエンブレム(1つ目のタイプの色)が出る(画像は必須にしない)", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    const [, tied] = tiers();
-    expect(tied).toBeDefined();
-    const emblems = within(tied as HTMLElement).getAllByTestId("type-emblem");
-    expect(emblems).toHaveLength(2);
-    expect(emblems[0]?.getAttribute("style") ?? "").toContain(`var(--type-${BIRD.types[0] ?? ""})`);
-    expect(emblems[1]?.getAttribute("style") ?? "").toContain(`var(--type-${FISH.types[0] ?? ""})`);
-  });
-});
-
-// ---- A5: 右のモードと position() の呼び直し ----
-
-describe("A5 右のモード切り替えと position()", () => {
-  /** モードのラジオ(セグメントコントロール)を選ぶ。 */
-  async function selectMode(user: UserEvent, label: string): Promise<void> {
-    await user.click(within(selfRegion()).getByRole("radio", { name: label }));
-  }
-
-  test("既定は preset(ポケモン・調整・スカーフの入力が出る)", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    const region = selfRegion();
-    expect(within(region).getByRole("radio", { name: speedScreenText.modeLabel.preset })).toBeChecked();
-    expect(within(region).getByRole("combobox", { name: speedScreenText.pokemonLabel })).toBeInTheDocument();
+    expect(within(matchupRegion()).queryByText(speedScreenText.matchupLoadingNotice)).not.toBeInTheDocument();
+    const all = cards();
+    expect(all.map((card) => card.getAttribute("data-preset"))).toEqual([
+      "uninvested",
+      "neutral-max",
+      "max",
+      "max-scarf",
+    ]);
+    const heading = within(cardFor("max")).getByRole("heading", { level: 3 });
+    expect(heading).toHaveTextContent(speedScreenText.cardHeading("max", 145));
+    // 領域の見出しは h2。
     expect(
-      within(region).getByRole("radiogroup", { name: speedScreenText.presetGroupLabel }),
+      within(matchupRegion()).getByRole("heading", { level: 2, name: speedScreenText.matchupHeading }),
     ).toBeInTheDocument();
-    expect(within(region).getByRole("checkbox", { name: speedScreenText.scarfLabel })).toBeInTheDocument();
-    // custom / raw だけの入力は出さない(契約上、mode に要らない項目は 400 invalid_request)。
-    expect(within(region).queryByRole("spinbutton", { name: speedScreenText.spLabel })).toBeNull();
-    expect(within(region).queryByRole("spinbutton", { name: speedScreenText.rawValueLabel })).toBeNull();
   });
 
-  test("preset: ポケモンを選ぶと position() を呼ぶ(mode に要る項目だけを送る)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
+  test("一言見出し: 補正なし 0 → 無振りで抜ける / 補正なしで足りる → 準速で抜ける / 上昇だけ → 最速なら S○ 以上", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
 
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
+    expect(within(cardFor("uninvested")).getByTestId("speed-headline")).toHaveTextContent(
+      speedScreenText.headlineUninvested,
     );
+    expect(within(cardFor("neutral-max")).getByTestId("speed-headline")).toHaveTextContent(
+      speedScreenText.headlineNeutralMax,
+    );
+    expect(within(cardFor("max")).getByTestId("speed-headline")).toHaveTextContent(
+      speedScreenText.headlinePlusOnly(12),
+    );
+  });
 
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    const expected: Schemas["PositionRequest"] = {
-      mode: "preset",
+  test("性格ごとの最低ライン: 補正なし・上昇を出し、下降は通常の場では出さない(ADR-0610 §6 Q5)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+
+    const neutralMax = cardFor("neutral-max");
+    expect(natureRow(neutralMax, "neutral")).toHaveTextContent(speedScreenText.natureLabel.neutral);
+    expect(natureRow(neutralMax, "neutral")).toHaveTextContent(speedScreenText.movesFirstMin(20));
+    expect(natureRow(neutralMax, "plus")).toHaveTextContent(speedScreenText.natureLabel.plus);
+    expect(natureRow(neutralMax, "plus")).toHaveTextContent(speedScreenText.movesFirstMin(0));
+    expect(queryNatureRow(neutralMax, "minus")).toBeUndefined();
+
+    const max = cardFor("max");
+    expect(natureRow(max, "neutral")).toHaveTextContent(speedScreenText.cannotMoveFirst);
+    expect(natureRow(max, "plus")).toHaveTextContent(speedScreenText.movesFirstMin(12));
+  });
+
+  test("同速は上を取るに含めず、別に併記する(S11 で同速)。同速が無い行には出さない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+
+    const plus = natureRow(cardFor("max"), "plus");
+    expect(plus).toHaveTextContent(speedScreenText.movesFirstMin(12));
+    expect(plus).toHaveTextContent(speedScreenText.tieAt(11, 11));
+    expect(natureRow(cardFor("neutral-max"), "plus")).not.toHaveTextContent(speedScreenText.tieLabel);
+  });
+});
+
+describe("W6 どう振っても上を取れない", () => {
+  test("どの性格でも届かず同速もないカードは「どう振っても上を取れません」と各行の「上を取れません」を出す", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, unreachableMatchupResponse);
+
+    const card = cardFor("max-scarf");
+    expect(within(card).getByTestId("speed-headline")).toHaveTextContent(speedScreenText.unreachableNotice);
+    expect(natureRow(card, "neutral")).toHaveTextContent(speedScreenText.cannotMoveFirst);
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.cannotMoveFirst);
+    expect(within(card).queryByText(new RegExp(speedScreenText.tieLabel))).not.toBeInTheDocument();
+  });
+
+  test("上を取れなくても同速だけある場合は、届かない表示のまま同速の SP を併記する", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+
+    const card = cardFor("max-scarf");
+    expect(within(card).getByTestId("speed-headline")).toHaveTextContent(speedScreenText.unreachableNotice);
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.tieAt(32, 32));
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.cannotMoveFirst);
+  });
+});
+
+// ---- W7: トリックルーム ----
+
+describe("W7 トリックルーム", () => {
+  test("オンにすると trickRoom: true で matchup() を呼び直し、見出しと読み方を切り替える", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    expect(
+      within(matchupRegion()).queryByText(speedScreenText.matchupHeadingTrickRoom),
+    ).not.toBeInTheDocument();
+
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args.trickRoom).toBe(true);
+    await resolveMatchup(rendered.client, trickRoomMatchupResponse);
+
+    expect(screen.getByRole("region", { name: speedScreenText.matchupHeadingTrickRoom })).toBeInTheDocument();
+    const card = cardFor("max");
+    // 一言見出しは補正なしの上限 SP(S28 まで振っても先に動ける)。
+    expect(within(card).getByTestId("speed-headline")).toHaveTextContent(
+      speedScreenText.headlineTrickRoom(28),
+    );
+    expect(natureRow(card, "neutral")).toHaveTextContent(speedScreenText.movesFirstMax(28));
+    expect(natureRow(card, "neutral")).toHaveTextContent(speedScreenText.tieAt(29, 29));
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.movesFirstMax(20));
+  });
+
+  test("トリックルーム中だけ下降補正の行を出す", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+    await resolveMatchup(rendered.client, trickRoomMatchupResponse);
+
+    const card = cardFor("max");
+    expect(natureRow(card, "minus")).toHaveTextContent(speedScreenText.natureLabel.minus);
+    expect(natureRow(card, "minus")).toHaveTextContent(speedScreenText.movesFirstMax(32));
+  });
+
+  test("トリックルーム中に先に動けないときは「どう振っても先に動けません」", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+    await resolveMatchup(rendered.client, { ...unreachableMatchupResponse, trickRoom: true });
+
+    const card = cardFor("max-scarf");
+    expect(within(card).getByTestId("speed-headline")).toHaveTextContent(
+      speedScreenText.unreachableTrickRoomNotice,
+    );
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.cannotMoveFirstTrickRoom);
+  });
+});
+
+// ---- W8: 今の振り ----
+
+describe("W8 今の振り", () => {
+  test("既定では SP・性格の入力は出ず、reach() は呼ばない。「これ以上」の欄は入れ方を案内する", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+
+    expect(
+      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.currentToggleLabel }),
+    ).not.toBeChecked();
+    expect(
+      within(selfRegion()).queryByRole("spinbutton", { name: speedScreenText.spLabel }),
+    ).not.toBeInTheDocument();
+    expect(rendered.client.reachCalls).toHaveLength(0);
+    expect(within(reachRegion()).getByText(speedScreenText.reachNeedsCurrent)).toBeInTheDocument();
+  });
+
+  test("入れると SP・性格の入力が出て、matchup の self.current に載り、reach() を custom の本文で呼ぶ", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+
+    expect(lastOf(rendered.client.matchupCalls, "matchup").args.self).toEqual({
       pokemonId: BIRD.pokemonId,
-      preset: "max",
-      scarf: false,
-    };
-    expect(lastOf(client.positionCalls, "position").args).toEqual(expected);
-  });
-
-  test("preset: 調整・スカーフを変えるたびに position() を呼び直す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const region = selfRegion();
-    await user.selectOptions(
-      within(region).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
+      current: { sp: 20, nature: "plus" },
     });
-    const afterSelect = client.positionCalls.length;
-
-    await user.click(within(region).getByRole("radio", { name: speedPresetText.uninvested }));
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(afterSelect);
-    });
-    expect(lastOf(client.positionCalls, "position").args).toEqual({
-      mode: "preset",
+    expect(lastOf(rendered.client.reachCalls, "reach").args).toEqual({
+      mode: "custom",
       pokemonId: BIRD.pokemonId,
-      preset: "uninvested",
+      sp: 20,
+      nature: "plus",
+      rank: 0,
       scarf: false,
-    } satisfies Schemas["PositionRequest"]);
-
-    await user.click(within(region).getByRole("checkbox", { name: speedScreenText.scarfLabel }));
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "preset",
-        pokemonId: BIRD.pokemonId,
-        preset: "uninvested",
-        scarf: true,
-      } satisfies Schemas["PositionRequest"]);
     });
   });
 
-  test("custom: SP・性格・ランク・スカーフの入力に変わり、その形で position() を呼ぶ", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.custom);
-    const region = selfRegion();
+  test("reach の本文には自分のランク・スカーフ・追い風・まひと、相手側の追い風(tableTailwind)を載せる", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 32, speedScreenText.natureLabel.neutral);
+    const self = within(selfRegion());
+    await rendered.user.click(
+      self.getByRole("button", { name: `${speedScreenText.rankLabel}${uiText.rankIncreaseSuffix}` }),
+    );
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.scarfLabel }));
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.selfTailwindLabel }));
+    await rendered.user.click(self.getByRole("checkbox", { name: speedScreenText.selfParalysisLabel }));
+    await rendered.user.click(
+      within(opponentRegion()).getByRole("checkbox", { name: speedScreenText.opponentTailwindLabel }),
+    );
 
-    expect(within(region).getByRole("spinbutton", { name: speedScreenText.spLabel })).toBeInTheDocument();
+    expect(lastOf(rendered.client.reachCalls, "reach").args).toEqual({
+      mode: "custom",
+      pokemonId: BIRD.pokemonId,
+      sp: 32,
+      nature: "neutral",
+      rank: 1,
+      scarf: true,
+      tailwind: true,
+      paralysis: true,
+      tableTailwind: true,
+    });
+  });
+
+  test("相手を選ばなくても、今の振りを入れれば reach() を呼ぶ(matchup は呼ばない)", async () => {
+    const rendered = await renderLoaded();
+    await chooseSelf(rendered);
+    await enterCurrent(rendered, 10, speedScreenText.natureLabel.minus);
+
+    expect(rendered.client.matchupCalls).toHaveLength(0);
+    expect(lastOf(rendered.client.reachCalls, "reach").args).toMatchObject({ sp: 10, nature: "minus" });
+  });
+
+  test("行動順のバッジは文字で言う(先に動く・同速・後に動く)。自分の素早さも出す", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    await resolveMatchup(rendered.client, {
+      ...matchupResponse,
+      selfSpeed: 167,
+      lines: matchupResponse.lines.map((line, index) => {
+        const order = (["self_first", "speed_tie", "opponent_first"] as const)[index];
+        return order === undefined ? line : { ...line, current: order };
+      }),
+    });
+
+    expect(within(cardFor("uninvested")).getByTestId("speed-current-order")).toHaveTextContent(
+      speedScreenText.currentOrderLabel.self_first,
+    );
+    expect(within(cardFor("neutral-max")).getByTestId("speed-current-order")).toHaveTextContent(
+      speedScreenText.currentOrderLabel.speed_tie,
+    );
+    expect(within(cardFor("max")).getByTestId("speed-current-order")).toHaveTextContent(
+      speedScreenText.currentOrderLabel.opponent_first,
+    );
+    // current が無い想定のカードにはバッジを出さない。
+    expect(within(cardFor("max-scarf")).queryByTestId("speed-current-order")).not.toBeInTheDocument();
+    expect(within(matchupRegion()).getByText(speedScreenText.selfSpeedLabel(167))).toBeInTheDocument();
+  });
+
+  test("今の振りを入れない間はバッジも自分の素早さも出さない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    expect(screen.queryByTestId("speed-current-order")).not.toBeInTheDocument();
+    expect(screen.queryByText(/自分の素早さ/)).not.toBeInTheDocument();
+  });
+});
+
+// ---- W9: 出力 2 ----
+
+describe("W9 これ以上(境界のリスト)", () => {
+  async function withReach(): Promise<Rendered> {
+    const rendered = await renderLoaded();
+    await chooseSelf(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    await resolveReach(rendered.client, reachResponse);
+    return rendered;
+  }
+
+  test("6 プリセットを表の順に 1 行ずつ出す(h2 の見出しは「これ以上」)", async () => {
+    await withReach();
+    const rows = within(reachRegion()).getAllByTestId("speed-reach-line");
+    expect(rows.map((row) => row.getAttribute("data-preset"))).toEqual([
+      "uninvested",
+      "neutral-max",
+      "max",
+      "max-scarf",
+      "max-plus1",
+      "max-plus2",
+    ]);
     expect(
-      within(region).getByRole("radiogroup", { name: speedScreenText.natureGroupLabel }),
+      within(reachRegion()).getByRole("heading", { level: 2, name: speedScreenText.reachHeading }),
     ).toBeInTheDocument();
-    expect(within(region).getByRole("slider", { name: speedScreenText.rankLabel })).toBeInTheDocument();
-    // preset だけの入力は出さない。
-    expect(within(region).queryByRole("radiogroup", { name: speedScreenText.presetGroupLabel })).toBeNull();
-
-    await user.selectOptions(
-      within(region).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await user.click(within(region).getByRole("radio", { name: speedScreenText.natureLabel.plus }));
-
-    await waitFor(() => {
-      const { args } = lastOf(client.positionCalls, "position");
-      expect(args.mode).toBe("custom");
-      expect(args.pokemonId).toBe(BIRD.pokemonId);
-      expect(args.nature).toBe("plus");
-      expect(typeof args.sp).toBe("number");
-      expect(typeof args.rank).toBe("number");
-      expect(args.scarf).toBe(false);
-      // custom では preset / value を送らない(契約: mode に要らない項目は 400)。
-      expect(args.preset).toBeUndefined();
-      expect(args.value).toBeUndefined();
-    });
+    expect(within(reachRegion()).getByText(speedScreenText.reachIntro)).toBeInTheDocument();
   });
 
-  test("raw: 実数値の入力に変わり、{mode: raw, value} だけを送る(ポケモンは任意)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.raw);
-    const region = selfRegion();
-
-    const value = within(region).getByRole("spinbutton", { name: speedScreenText.rawValueLabel });
-    // 実数値を入れるまでは呼ばない。
-    expect(client.positionCalls).toHaveLength(0);
-
-    await user.type(value, "180");
-
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "raw",
-        value: 180,
-      } satisfies Schemas["PositionRequest"]);
-    });
+  test("最速: 102 族まで抜ける・103 族と同速・104 族以上に抜かれる。数と境界の例を添える", async () => {
+    await withReach();
+    const row = reachRow("max");
+    expect(within(row).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachSlower("max", 102),
+    );
+    expect(within(row).getByTestId("speed-reach-slower")).toHaveTextContent(speedScreenText.reachCount(40));
+    expect(within(row).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachExample(BIRD.nameJa),
+    );
+    expect(within(row).getByTestId("speed-reach-tie")).toHaveTextContent(
+      speedScreenText.reachTie("max", 103, 103),
+    );
+    expect(within(row).getByTestId("speed-reach-tie")).toHaveTextContent(speedScreenText.reachCount(1));
+    expect(within(row).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachFaster("max", 104),
+    );
+    expect(within(row).getByTestId("speed-reach-faster")).toHaveTextContent(speedScreenText.reachCount(2));
+    expect(within(row).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachExample(FISH.nameJa),
+    );
   });
 
-  test("結果(実数値・速い/遅い件数・同速)を応答のまま出す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
+  test("同速の族が無い行(準速)は同速を出さない", async () => {
+    await withReach();
+    const row = reachRow("neutral-max");
+    expect(within(row).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachSlower("neutral-max", 117),
     );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
+    expect(within(row).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachFaster("neutral-max", 118),
+    );
+    expect(within(row).queryByTestId("speed-reach-tie")).not.toBeInTheDocument();
+  });
 
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 200, faster: 1, slower: 2, tie: [entry(FISH, "max-scarf")], pokemon: BIRD },
-      });
-    });
+  test("全員抜ける・全員に抜かれる行は「なし」の文を出し、空の区間の文を作らない", async () => {
+    await withReach();
+    const allSlower = reachRow("max-scarf");
+    expect(within(allSlower).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachSlower("max-scarf", 255),
+    );
+    expect(within(allSlower).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachNoneFaster,
+    );
 
-    const region = selfRegion();
-    expect(region).toHaveTextContent(speedScreenText.selfSpeedLabel(200));
-    expect(region).toHaveTextContent(speedScreenText.fasterLabel(1));
-    expect(region).toHaveTextContent(speedScreenText.slowerLabel(2));
-    expect(region).toHaveTextContent(FISH.nameJa);
+    const allFaster = reachRow("max-plus1");
+    expect(within(allFaster).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachNoneSlower,
+    );
+    expect(within(allFaster).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachFaster("max-plus1", 1),
+    );
+  });
+
+  test("トリックルーム中は読み方だけを切り替える(先に動ける・後に動く)。reach() は呼び直さない", async () => {
+    const rendered = await withReach();
+    const calls = rendered.client.reachCalls.length;
+
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+
+    expect(rendered.client.reachCalls).toHaveLength(calls);
+    const row = reachRow("max");
+    expect(within(row).getByTestId("speed-reach-slower")).toHaveTextContent(
+      speedScreenText.reachSlowerTrickRoom("max", 102),
+    );
+    expect(within(row).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachFasterTrickRoom("max", 104),
+    );
+    expect(within(reachRow("max-scarf")).getByTestId("speed-reach-faster")).toHaveTextContent(
+      speedScreenText.reachNoneFasterTrickRoom,
+    );
   });
 });
 
-// ---- A6: 古い応答の無視(cancelled フラグ) ----
+// ---- W10: 読み込み中・エラー・古い応答 ----
 
-describe("A6 古い応答の無視", () => {
-  test("入力を変えた後に届いた前の応答で表示を上書きしない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const pokemonSelect = within(selfRegion()).getByRole("combobox", {
-      name: speedScreenText.pokemonLabel,
-    });
-
-    await user.selectOptions(pokemonSelect, BIRD.pokemonId);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    const staleCall = lastOf(client.positionCalls, "position");
-
-    await user.selectOptions(pokemonSelect, FISH.pokemonId);
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position")).not.toBe(staleCall);
-    });
-    const freshCall = lastOf(client.positionCalls, "position");
-
-    await flush(() => {
-      freshCall.resolve({ ok: true, value: { speed: 150, faster: 3, slower: 1, tie: [], pokemon: FISH } });
-    });
-    await flush(() => {
-      staleCall.resolve({ ok: true, value: { speed: 300, faster: 0, slower: 4, tie: [], pokemon: BIRD } });
-    });
-
-    const region = selfRegion();
-    expect(region).toHaveTextContent(speedScreenText.selfSpeedLabel(150));
-    expect(region).not.toHaveTextContent(speedScreenText.selfSpeedLabel(300));
-  });
-
-  test("入力を変えたら、新しい応答が届くまで前の結果を出したままにしない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const pokemonSelect = within(selfRegion()).getByRole("combobox", {
-      name: speedScreenText.pokemonLabel,
-    });
-
-    await user.selectOptions(pokemonSelect, BIRD.pokemonId);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 300, faster: 0, slower: 4, tie: [], pokemon: BIRD },
-      });
-    });
-    expect(selfRegion()).toHaveTextContent(speedScreenText.selfSpeedLabel(300));
-
-    await user.selectOptions(pokemonSelect, FISH.pokemonId);
-    await waitFor(() => {
-      expect(selfRegion()).not.toHaveTextContent(speedScreenText.selfSpeedLabel(300));
-    });
-    expect(within(selfRegion()).getByText(speedScreenText.positionLoadingNotice)).toBeInTheDocument();
-  });
-});
-
-// ---- A7: 左右の連動(強調・境界線) ----
-
-describe("A7 自分の位置の表示(強調・境界線)", () => {
-  /** ポケモンを1体選び、position() の応答を返す。 */
-  async function positionWith(
-    user: UserEvent,
-    client: FakeSpeedClient,
-    value: Schemas["PositionResponse"],
-  ): Promise<void> {
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({ ok: true, value });
-    });
-  }
-
-  test("tie があれば、同じ実数値の段だけを強調する(境界線は出さない)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    await positionWith(user, client, {
-      speed: 200,
-      faster: 1,
-      slower: 2,
-      tie: [entry(BIRD, "max"), entry(FISH, "max-scarf")],
-      pokemon: BIRD,
-    });
-
-    expect(tiers().map((tier) => tier.getAttribute("data-self"))).toEqual([null, "tie", null, null]);
-    expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
-  });
-
-  test("tie が無ければ、faster 行目の段の直後に境界の印を出す(段ではなく行の数で決める)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    // 実数値 180 は、300(1行)・200(2行)より遅く、150・100 より速い → faster = 3、slower = 2。
-    await positionWith(user, client, { speed: 180, faster: 3, slower: 2, tie: [], pokemon: BIRD });
-
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    // 直前の段(速い側)は 200、直後の段(遅い側)は 150。
-    expect(boundary).toHaveAttribute("data-after-speed", "200");
-    expect(boundary).toHaveAttribute("data-before-speed", "150");
-    expect(tiers().map((tier) => tier.getAttribute("data-self"))).toEqual([null, null, null, null]);
-  });
-
-  test("どの段よりも速いときは、表の先頭に境界の印を出す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    await positionWith(user, client, { speed: 400, faster: 0, slower: 5, tie: [], pokemon: BIRD });
-
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).not.toHaveAttribute("data-after-speed");
-    expect(boundary).toHaveAttribute("data-before-speed", "300");
-  });
-
-  test("どの段よりも遅いときは、表の末尾に境界の印を出す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    await positionWith(user, client, { speed: 50, faster: 5, slower: 0, tie: [], pokemon: BIRD });
-
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).toHaveAttribute("data-after-speed", "100");
-    expect(boundary).not.toHaveAttribute("data-before-speed");
-  });
-
-  test("position の結果が届くまでは、強調も境界線も出さない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-
-    expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
-    expect(tiers().every((tier) => tier.getAttribute("data-self") === null)).toBe(true);
-  });
-
-  // 2026-09-22 critic 指摘: faster/slower は契約上つねに全6行基準だが、絞り込みで表示行数が変わると
-  // 基準が合わなくなる。境界・強調は表示中の tiers の実数値だけで決めること(faster 件数を使わない)。
-
-  test("絞り込み中は、表示中の段の実数値だけで境界を決める(faster 件数は使わない)", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    // max-scarf を外す → 300(BIRD,max-scarf のみ)の段が消え、200 は FISH,max-scarf が抜けて BIRD,max だけになる。
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-    await user.click(within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] }));
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({
-        ok: true,
-        value: {
-          regulationId: "example",
-          presets: ["uninvested", "neutral-max", "max", "max-plus1", "max-plus2"],
-          tiers: [
-            { speed: 200, entries: [entry(BIRD, "max")] },
-            { speed: 150, entries: [entry(FISH, "max")] },
-            { speed: 100, entries: [entry(GRASS, "uninvested")] },
-          ],
-        },
-      });
-    });
-
-    // faster/slower は全6行基準の値(300・200×2行・150・100 に対して 180 は faster=3・slower=2)をそのまま
-    // サーバーから受け取るが、表示は絞り込み後の3段だけなので、200 の直後・150 の直前に境界が来るはず。
-    await positionWith(user, client, { speed: 180, faster: 3, slower: 2, tie: [], pokemon: BIRD });
-
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).toHaveAttribute("data-after-speed", "200");
-    expect(boundary).toHaveAttribute("data-before-speed", "150");
-    expect(tiers().map((tier) => tier.getAttribute("data-self"))).toEqual([null, null, null]);
-  });
-
-  test("同速の段が絞り込みで表示されていなければ、強調せず境界線を出す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-
-    // max-scarf だけに絞り込む → 300(BIRD,max-scarf)・200(FISH,max-scarf)だけが残り、150・100 は消える。
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-    for (const id of ["uninvested", "neutral-max", "max", "max-plus1", "max-plus2"] as const) {
-      await user.click(within(filter).getByRole("checkbox", { name: speedPresetText[id] }));
-      await flush(() => {
-        lastOf(client.tableCalls, "table").resolve({
-          ok: true,
-          value: {
-            regulationId: "example",
-            presets: ["max-scarf"],
-            tiers: [
-              { speed: 300, entries: [entry(BIRD, "max-scarf")] },
-              { speed: 200, entries: [entry(FISH, "max-scarf")] },
-            ],
-          },
-        });
-      });
-    }
-
-    // サーバーは全6行基準で 150 に同速(tie)があると返すが、150 の段は絞り込みで表示されていない。
-    await positionWith(user, client, {
-      speed: 150,
-      faster: 2,
-      slower: 2,
-      tie: [entry(FISH, "max")],
-      pokemon: BIRD,
-    });
-
-    expect(tiers().every((tier) => tier.getAttribute("data-self") === null)).toBe(true);
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).toHaveAttribute("data-after-speed", "200");
-    expect(boundary).not.toHaveAttribute("data-before-speed");
-  });
-});
-
-// ---- A8: エラー ----
-
-describe("A8 エラーでも表示が壊れない", () => {
-  test("gateway の upstream_unavailable は「計算に失敗」ではなく接続できない旨にする", async () => {
-    const { client } = renderScreen();
-    await flush(() => {
-      lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
-    });
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({
-        ok: false,
-        error: { code: "upstream_unavailable", message: "upstream unavailable" },
-      });
-    });
-    const alert = within(tableRegion()).getByRole("alert");
-    // 原因が分かる文言(起動中か一時的に使えない)に更新。「計算に失敗」ではない点は従来どおり。
-    expect(alert).toHaveTextContent("素早さのサーバーが起動中か、一時的に使えません");
-    expect(alert).not.toHaveTextContent("計算に失敗");
-  });
-
-  test("table() が失敗したら左に role=alert を出し、右の入力は使えるままにする", async () => {
-    const { client } = renderScreen();
-    await flush(() => {
-      lastOf(client.pokemonCalls, "pokemon").resolve({ ok: true, value: pokemonListResponse });
-    });
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({
-        ok: false,
-        error: { code: "master_unavailable", message: "pokemon read model is not configured" },
-      });
-    });
-
-    // サーバーの英語 message は出さず、code から日本語にする(issue 307)。
-    expect(within(tableRegion()).getByRole("alert")).toHaveTextContent(
-      speedScreenText.errorByCode.master_unavailable,
-    );
-    expect(within(tableRegion()).getByRole("alert")).not.toHaveTextContent("pokemon read model");
-    expect(within(tableRegion()).queryAllByTestId("speed-tier")).toHaveLength(0);
-    expect(
-      within(selfRegion()).getByRole("radiogroup", { name: speedScreenText.modeGroupLabel }),
-    ).toBeInTheDocument();
-  });
-
-  test("pokemon() が失敗しても、表(table)は出せる", async () => {
-    const { client } = renderScreen();
-    await flush(() => {
-      lastOf(client.pokemonCalls, "pokemon").resolve({
-        ok: false,
-        error: { code: "speed_unavailable", message: "素早さのサーバーに接続できません" },
-      });
-    });
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
-    });
-
-    expect(tiers()).toHaveLength(tableResponse.tiers.length);
-    expect(screen.getByRole("alert")).toHaveTextContent("素早さのサーバーに接続できません");
-  });
-
-  test("position() が失敗しても、左の表と入力は残る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: false,
-        error: { code: "unknown_pokemon", message: "unknown pokemonId: 9001-000" },
-      });
-    });
-
-    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(
-      speedScreenText.errorByCode.unknown_pokemon,
-    );
-    expect(within(selfRegion()).getByRole("alert")).not.toHaveTextContent("unknown pokemonId");
-    expect(tiers()).toHaveLength(tableResponse.tiers.length);
-    expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
-    expect(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-    ).toBeInTheDocument();
-  });
-});
-
-// ---- issue 307: 範囲外入力は画面で止め(API を呼ばない)、API エラーも日本語で出す ----
-// 空欄の扱い(明示): custom の SP・ランクを空にすると 0 とみなして計算する(従来どおり。欄は 0 に戻る)。
-// raw の実数値を空にすると「未入力」で、呼ばずエラーも出さない(従来どおり)。
-
-describe("issue 307 範囲外入力の検査", () => {
-  async function customScreen() {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.custom);
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    return { user, client };
-  }
-
-  async function selectMode(user: UserEvent, label: string): Promise<void> {
-    await user.click(within(selfRegion()).getByRole("radio", { name: label }));
-  }
-
-  function setValue(label: string, text: string): HTMLElement {
-    const input = within(selfRegion()).getByRole("spinbutton", { name: label });
-    // 値を一度に入れる(1文字ずつ打つと途中の範囲内の値が送られ、"-" の途中で 0 に戻る既存の挙動も混ざる)。
-    fireEvent.change(input, { target: { value: text } });
-    return input;
-  }
-
-  test.each([
-    ["SP 0", speedScreenText.spLabel, "0", { sp: 0 }],
-    ["SP 上限", speedScreenText.spLabel, String(MAX_SP_PER_STAT), { sp: MAX_SP_PER_STAT }],
-  ])("境界値 %s は通り、エラーを出さず API を呼ぶ", async (_name, label, text, expected) => {
-    const { client } = await customScreen();
-    const input = setValue(label, text);
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toMatchObject(expected);
-    });
-    expect(input).not.toHaveAttribute("aria-invalid", "true");
-    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
+describe("W10 読み込み中・エラー・古い応答", () => {
+  test("reach の応答を待つ間は「これ以上」の欄に読み込み中を出す", async () => {
+    const rendered = await renderLoaded();
+    await chooseSelf(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    expect(within(reachRegion()).getByText(speedScreenText.reachLoadingNotice)).toBeInTheDocument();
   });
 
   test.each([
-    ["SP 33", speedScreenText.spLabel, "33", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
-    ["SP -1", speedScreenText.spLabel, "-1", speedScreenText.spRangeMessage(MAX_SP_PER_STAT)],
-  ])("%s は入力欄のそばに日本語で出し、API を呼ばない", async (_name, label, text, message) => {
-    const { client } = await customScreen();
-    const before = client.positionCalls.length;
-    const input = setValue(label, text);
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(message);
-    expect(input).toHaveAccessibleDescription(message);
-    // 範囲外の値は1度も送らない(途中の "3" などの範囲内の呼び出しは許す)。
-    for (const call of client.positionCalls.slice(before)) {
-      expect(call.args.sp).not.toBe(Number(text));
-    }
-  });
-
-  // ADR-0357: ランクは数値欄ではなくメーター(-6〜+6 の 13 段)。範囲外の値を作れないので、
-  // 旧「ランク 7 / -7 は日本語で止める」は、「両端で止まり、範囲外を送らない」に付け替えた(境界値の検査は同じ意図)。
-  test.each([
-    ["下限", "{Home}", MIN_RANK],
-    ["上限", "{End}", MAX_RANK],
-  ])("ランクのメーター 境界値 %s は通り、エラーを出さず API を呼ぶ", async (_name, key, expected) => {
-    const { user, client } = await customScreen();
-    within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel }).focus();
-    await user.keyboard(key);
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ rank: expected });
-    });
-    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
-  });
-
-  test.each([
-    ["上", "{End}{ArrowRight}{PageUp}"],
-    ["下", "{Home}{ArrowLeft}{PageDown}"],
-  ])("ランクのメーターは範囲の%sへ越えられず、範囲外の値を API に送らない", async (_name, keys) => {
-    const { user, client } = await customScreen();
-    const before = client.positionCalls.length;
-    const meter = within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel });
-    meter.focus();
-    await user.keyboard(keys);
-    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
-    for (const call of client.positionCalls.slice(before)) {
-      expect(Math.abs(Number(call.args.rank))).toBeLessThanOrEqual(MAX_RANK);
-    }
-    expect(Math.abs(Number(meter.getAttribute("aria-valuenow")))).toBe(MAX_RANK);
-  });
-
-  test("custom の SP を空にすると 0 とみなして計算する(エラーは出さない)", async () => {
-    const { user, client } = await customScreen();
-    setValue(speedScreenText.spLabel, "5");
-    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.spLabel });
-    await user.clear(input);
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ sp: 0 });
-    });
-    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
-  });
-
-  test("範囲外から範囲内へ直すとエラーが消え、API を呼ぶ", async () => {
-    const { client } = await customScreen();
-    const input = setValue(speedScreenText.spLabel, "33");
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    setValue(speedScreenText.spLabel, "32");
-    expect(input).not.toHaveAttribute("aria-invalid", "true");
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toMatchObject({ sp: 32 });
-    });
-  });
-
-  test.each(["0", "-5", "1.5"])("raw の実数値 %s は日本語で止め、API を呼ばない", async (text) => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.raw);
-    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel });
-    // 1文字ずつ打つと途中("1.5" の "1")が範囲内で送られるため、貼り付けで一度に入れる。
-    await user.click(input);
-    await user.paste(text);
-    expect(input).toHaveAttribute("aria-invalid", "true");
-    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(speedScreenText.rawRangeMessage);
-    expect(client.positionCalls).toHaveLength(0);
-  });
-
-  test("raw の実数値が空欄なら未入力: エラーも出さず呼ばない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.raw);
-    const input = within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel });
-    await user.type(input, "5");
-    await user.clear(input);
-    expect(input).not.toHaveAttribute("aria-invalid", "true");
-    expect(within(selfRegion()).queryByRole("alert")).toBeNull();
-  });
-
-  test("raw の実数値が上限超え(サーバーだけが上限を知る)で API が 400 を返したら日本語で出す", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectMode(user, speedScreenText.modeLabel.raw);
-    await user.type(
-      within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel }),
-      "99999",
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: false,
-        error: { code: "invalid_request", message: "request body does not match the given mode" },
+    ["unknown_pokemon", "unknown pokemonId: 9999-000"],
+    ["master_unavailable", "pokemon read model is not configured"],
+    ["upstream_unavailable", "upstream unavailable"],
+    ["speed_unavailable", "network"],
+    ["invalid_request", "invalid matchup"],
+  ] as const)(
+    "matchup のエラー %s は role=alert で code から日本語にし、サーバーの英語は出さない",
+    async (code, message) => {
+      const rendered = await renderLoaded();
+      await chooseBoth(rendered);
+      await act(async () => {
+        lastOf(rendered.client.matchupCalls, "matchup").resolve({ ok: false, error: { code, message } });
+        await Promise.resolve();
       });
-    });
-    const alert = within(selfRegion()).getByRole("alert");
-    expect(alert).toHaveTextContent(speedScreenText.errorByCode.invalid_request);
-    expect(alert).not.toHaveTextContent("request body");
-  });
 
-  test("未知の code でも英語の message は出さず、汎用の日本語にする", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
+      const alert = within(matchupRegion()).getByRole("alert");
+      expect(alert).toHaveTextContent(speedScreenText.errorByCode[code]);
+      expect(alert).not.toHaveTextContent(message);
+      expect(screen.queryByTestId("speed-matchup-card")).not.toBeInTheDocument();
+    },
+  );
+
+  test("未知の code は汎用の文言にする", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await act(async () => {
+      lastOf(rendered.client.matchupCalls, "matchup").resolve({
         ok: false,
         error: { code: "something_new", message: "boom" },
       });
+      await Promise.resolve();
     });
-    expect(within(selfRegion()).getByRole("alert")).toHaveTextContent(speedScreenText.errorFallback);
-    expect(within(selfRegion()).getByRole("alert")).not.toHaveTextContent("boom");
+    expect(within(matchupRegion()).getByRole("alert")).toHaveTextContent(speedScreenText.errorFallback);
+  });
+
+  test("matchup のエラーは「これ以上」を消さず、reach のエラーはカードを消さない(互いに独立)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    await act(async () => {
+      lastOf(rendered.client.matchupCalls, "matchup").resolve({
+        ok: false,
+        error: { code: "internal_error", message: "x" },
+      });
+      await Promise.resolve();
+    });
+    await resolveReach(rendered.client, reachResponse);
+    expect(within(matchupRegion()).getByRole("alert")).toBeInTheDocument();
+    expect(within(reachRegion()).getAllByTestId("speed-reach-line")).toHaveLength(6);
+
+    // 入力を変えて両方呼び直し、今度は matchup が成功・reach が失敗する。
+    await rendered.user.click(
+      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.scarfLabel }),
+    );
+    await resolveMatchup(rendered.client, matchupResponse);
+    await act(async () => {
+      lastOf(rendered.client.reachCalls, "reach").resolve({
+        ok: false,
+        error: { code: "speed_unavailable", message: "x" },
+      });
+      await Promise.resolve();
+    });
+    expect(cards()).toHaveLength(4);
+    expect(within(reachRegion()).getByRole("alert")).toHaveTextContent(
+      speedScreenText.errorByCode.speed_unavailable,
+    );
+  });
+
+  test("pokemon() が失敗したら role=alert を出す(入力欄は壊れない)", async () => {
+    const client = createFakeSpeedClient();
+    render(<SpeedScreen speedClient={client} />);
+    await act(async () => {
+      lastOf(client.pokemonCalls, "pokemon").resolve({
+        ok: false,
+        error: { code: "master_unavailable", message: "x" },
+      });
+      await Promise.resolve();
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(speedScreenText.errorByCode.master_unavailable);
+    expect(screen.getByRole("combobox", { name: speedScreenText.selfPokemonLabel })).toBeInTheDocument();
+  });
+
+  test("古い応答は無視する(後から届いた前の入力の結果で、今の表示を上書きしない)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await rendered.user.click(screen.getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
+    expect(rendered.client.matchupCalls).toHaveLength(2);
+
+    // 新しい(トリックルーム)応答が先に届き、古い(通常の場)応答が後から届く。
+    await resolveMatchup(rendered.client, trickRoomMatchupResponse, 1);
+    await resolveMatchup(rendered.client, matchupResponse, 0);
+
+    expect(screen.getByRole("region", { name: speedScreenText.matchupHeadingTrickRoom })).toBeInTheDocument();
+    expect(cards()).toHaveLength(1);
+  });
+
+  test("入力を空にしたら、前のカードは消える(相手を未選択に戻す)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    await rendered.user.selectOptions(
+      screen.getByRole("combobox", { name: speedScreenText.opponentPokemonLabel }),
+      speedScreenText.unselectedOption,
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("speed-matchup-card")).not.toBeInTheDocument();
+    });
   });
 });
 
-// ---- ADR-0607: 追い風・まひ・トリックルーム ----
-// 確かめること(受け入れ条件):
-//   F1 左に「場の状態」(追い風(相手側)・トリックルーム)、右の preset/custom に「追い風(自分側)」「まひ」がある。既定はすべて off
-//   F2 すべて off なら table() の第2引数は undefined、position() の本文に新しい項目を足さない(従来と同じ呼び出し)
-//   F3 表の追い風・トリックルームを変えると table(presets, {tailwind, trickRoom}) で呼び直す。表の追い風は
-//      position() の tableTailwind にも入る(raw を含む全モード)。トリックルームは position() を呼び直さない
-//   F4 自分の追い風・まひは preset/custom の position() に tailwind / paralysis: true として入る(raw では出さず、送らない)
-//   F5 トリックルーム中は、応答の段の順(遅い順)のまま描画し、境界は「自分より遅い段の後」に引く
-//   F6 トリックルーム中は、結果に「自分より先に動く(= slower)/後に動く(= faster)」を出す
+// ---- W11: 連続技へのリンク ----
 
-describe("ADR-0607 場の状態(追い風・まひ・トリックルーム)", () => {
-  /** 左の「場の状態」のグループ。 */
-  function fieldGroup(): HTMLElement {
-    return within(tableRegion()).getByRole("group", { name: speedScreenText.fieldGroupLabel });
-  }
-
-  /** トリックルーム中の表(サーバーが返す遅い順。tableResponse の段を逆にしたもの)。 */
-  const trickRoomTableResponse: Schemas["TableResponse"] = {
-    ...tableResponse,
-    tiers: [...tableResponse.tiers].reverse(),
-  };
-
-  async function selectBird(user: UserEvent): Promise<void> {
-    await user.selectOptions(
-      within(selfRegion()).getByRole("combobox", { name: speedScreenText.pokemonLabel }),
-      BIRD.pokemonId,
-    );
-  }
-
-  /** トリックルームを on にして、遅い順の表を返す。 */
-  async function enableTrickRoom(user: UserEvent, client: FakeSpeedClient): Promise<void> {
-    await user.click(within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: trickRoomTableResponse });
-    });
-  }
-
-  test("F1 既定はすべて off(左に表の追い風・トリックルーム、右に自分の追い風・まひ)", async () => {
-    const { client } = renderScreen();
-    await resolveInitial(client);
-    expect(
-      within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.tableTailwindLabel }),
-    ).not.toBeChecked();
-    expect(
-      within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.trickRoomLabel }),
-    ).not.toBeChecked();
-    expect(
-      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.selfTailwindLabel }),
-    ).not.toBeChecked();
-    expect(
-      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.paralysisLabel }),
-    ).not.toBeChecked();
+describe("W11 連続技へのリンク(連続技の画面ができるまで出さない。画面レジストリ ADR-0323)", () => {
+  test("onOpenCombo が無いときは、相手を選んでもリンクも無効表示も出さない", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    expect(screen.queryByText(speedScreenText.comboLinkLabel)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: speedScreenText.comboLinkLabel })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: speedScreenText.comboLinkLabel })).not.toBeInTheDocument();
   });
 
-  test("F2 すべて off なら table() の第2引数は undefined、position() の本文は従来の形のまま", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    expect(client.tableFieldArgs).toEqual([undefined]);
-
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    expect(lastOf(client.positionCalls, "position").args).toEqual({
-      mode: "preset",
-      pokemonId: BIRD.pokemonId,
-      preset: "max",
-      scarf: false,
-    } satisfies Schemas["PositionRequest"]);
+  test("onOpenCombo があり、相手を選んでいるときだけボタンを出す", async () => {
+    const onOpenCombo = vi.fn();
+    const rendered = await renderLoaded(onOpenCombo);
+    await chooseSelf(rendered);
+    expect(screen.queryByRole("button", { name: speedScreenText.comboLinkLabel })).not.toBeInTheDocument();
+    await chooseOpponent(rendered);
+    expect(screen.getByRole("button", { name: speedScreenText.comboLinkLabel })).toBeInTheDocument();
   });
 
-  test("F3 表の追い風を on にすると table(undefined, {tailwind: true, trickRoom: false}) で呼び直し、position() に tableTailwind を送る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
+  test("押すと、攻撃側 = 自分・防御側 = 相手のポケモンを渡す(今の振りが無ければ speed は渡さない)", async () => {
+    const onOpenCombo = vi.fn();
+    const rendered = await renderLoaded(onOpenCombo);
+    await chooseBoth(rendered);
+    await rendered.user.click(screen.getByRole("button", { name: speedScreenText.comboLinkLabel }));
 
-    await user.click(
-      within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.tableTailwindLabel }),
-    );
-
-    expect(client.tableCalls).toHaveLength(2);
-    expect(lastOf(client.tableCalls, "table").args).toBeUndefined();
-    expect(client.tableFieldArgs.at(-1)).toEqual({ tailwind: true, trickRoom: false });
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "preset",
-        pokemonId: BIRD.pokemonId,
-        preset: "max",
-        scarf: false,
-        tableTailwind: true,
-      } satisfies Schemas["PositionRequest"]);
-    });
+    expect(onOpenCombo).toHaveBeenCalledTimes(1);
+    expect(onOpenCombo).toHaveBeenCalledWith({
+      attackerPokemonId: BIRD.pokemonId,
+      defenderPokemonId: FISH.pokemonId,
+    } satisfies SpeedComboRequest);
   });
 
-  test("F3 表の追い風は絞り込みと組み合わせて送る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const filter = within(tableRegion()).getByRole("group", { name: speedScreenText.filterGroupLabel });
-    await user.click(within(filter).getByRole("checkbox", { name: speedPresetText["max-scarf"] }));
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: tableResponse });
-    });
-
-    await user.click(
-      within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.tableTailwindLabel }),
+  test("今の振りがあれば、素早さの SP・性格・ランク・スカーフも渡す(ADR-0610 §6 Q7)", async () => {
+    const onOpenCombo = vi.fn();
+    const rendered = await renderLoaded(onOpenCombo);
+    await chooseBoth(rendered);
+    await enterCurrent(rendered, 20, speedScreenText.natureLabel.plus);
+    await rendered.user.click(
+      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.scarfLabel }),
     );
+    await rendered.user.click(screen.getByRole("button", { name: speedScreenText.comboLinkLabel }));
 
-    expect(lastOf(client.tableCalls, "table").args).toEqual([
-      "uninvested",
-      "neutral-max",
+    expect(onOpenCombo).toHaveBeenCalledWith({
+      attackerPokemonId: BIRD.pokemonId,
+      defenderPokemonId: FISH.pokemonId,
+      speed: { sp: 20, nature: "plus", rank: 0, scarf: true },
+    } satisfies SpeedComboRequest);
+  });
+
+  test("素早さ画面はダメージ・確定数を出さない", async () => {
+    const rendered = await renderLoaded(vi.fn());
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    expect(screen.queryByText(/ダメージ|確定/)).not.toBeInTheDocument();
+  });
+});
+
+// ---- W12: a11y・見た目 ----
+
+describe("W12 a11y と見た目の部品", () => {
+  test("選んだポケモンはポケモンカード(名前は h3、タイプバッジつき)で出す", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+
+    expect(within(selfRegion()).getByRole("heading", { level: 3, name: BIRD.nameJa })).toBeInTheDocument();
+    expect(
+      within(opponentRegion()).getByRole("heading", { level: 3, name: FISH.nameJa }),
+    ).toBeInTheDocument();
+    expect(
+      within(selfRegion()).getByRole("heading", { level: 3, name: BIRD.nameJa }).closest(".ui-pokemon-card"),
+    ).not.toBeNull();
+    // 画像が無ければタイプ色のエンブレム。
+    expect(within(selfRegion()).getByTestId("pokemon-icon-emblem")).toBeInTheDocument();
+  });
+
+  test("領域の見出しは h2(自分・相手・場・最低ライン・これ以上)。領域に名前がある", async () => {
+    await renderLoaded();
+    for (const name of [
+      speedScreenText.selfRegionLabel,
+      speedScreenText.opponentRegionLabel,
+      speedScreenText.matchupHeading,
+      speedScreenText.reachHeading,
+    ]) {
+      expect(screen.getByRole("heading", { level: 2, name })).toBeInTheDocument();
+      expect(screen.getByRole("region", { name })).toBeInTheDocument();
+    }
+    expect(screen.getByRole("group", { name: speedScreenText.fieldGroupLabel })).toBeInTheDocument();
+  });
+
+  test("ランクは RankMeter(slider)。同名の group を二重に作らない(asGroup=false)", async () => {
+    await renderLoaded();
+    const slider = within(selfRegion()).getByRole("slider", { name: speedScreenText.rankLabel });
+    expect(slider).toHaveAttribute("aria-valuenow", "0");
+    expect(
+      within(selfRegion()).queryByRole("group", { name: speedScreenText.rankLabel }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("SP は Stepper(増減ボタン + 数値欄。0〜32 に収める)、性格は区切りボタン(radiogroup)", async () => {
+    const rendered = await renderLoaded();
+    await rendered.user.click(
+      within(selfRegion()).getByRole("checkbox", { name: speedScreenText.currentToggleLabel }),
+    );
+    const stepper = within(selfRegion()).getByRole("group", { name: speedScreenText.spLabel });
+    expect(within(stepper).getByRole("spinbutton", { name: speedScreenText.spLabel })).toHaveAttribute(
       "max",
-      "max-plus1",
-      "max-plus2",
+      "32",
+    );
+    expect(within(stepper).getByRole("spinbutton", { name: speedScreenText.spLabel })).toHaveAttribute(
+      "min",
+      "0",
+    );
+    const natureGroup = within(selfRegion()).getByRole("radiogroup", {
+      name: speedScreenText.natureGroupLabel,
+    });
+    expect(
+      within(natureGroup)
+        .getAllByRole("radio")
+        .map((radio) => radio.textContent),
+    ).toEqual([
+      speedScreenText.natureLabel.minus,
+      speedScreenText.natureLabel.neutral,
+      speedScreenText.natureLabel.plus,
     ]);
-    expect(client.tableFieldArgs.at(-1)).toEqual({ tailwind: true, trickRoom: false });
   });
 
-  test("F3 raw でも表の追い風は tableTailwind として送る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.click(
-      within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.tableTailwindLabel }),
-    );
-    await user.click(within(selfRegion()).getByRole("radio", { name: speedScreenText.modeLabel.raw }));
-    await user.type(
-      within(selfRegion()).getByRole("spinbutton", { name: speedScreenText.rawValueLabel }),
-      "180",
-    );
-
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "raw",
-        value: 180,
-        tableTailwind: true,
-      } satisfies Schemas["PositionRequest"]);
-    });
+  test("結果は色だけに頼らない: 性格の行・見出し・行動順はすべて文字を持つ", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+    for (const row of within(matchupRegion()).getAllByTestId("speed-nature-line")) {
+      expect(row.textContent).toMatch(/上昇|補正なし|下降/);
+      expect(row.textContent).toMatch(/S\d|振らなくても|上を取れません/);
+    }
   });
 
-  test("F3 トリックルームは table() だけを呼び直し、position() は呼び直さない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    const positionCallsBefore = client.positionCalls.length;
-
-    await user.click(within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.trickRoomLabel }));
-
-    expect(client.tableFieldArgs.at(-1)).toEqual({ tailwind: false, trickRoom: true });
-    expect(client.positionCalls).toHaveLength(positionCallsBefore);
-  });
-
-  test("F3 両方 off に戻すと table() の第2引数は undefined に戻る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const checkbox = within(fieldGroup()).getByRole("checkbox", { name: speedScreenText.trickRoomLabel });
-    await user.click(checkbox);
-    await flush(() => {
-      lastOf(client.tableCalls, "table").resolve({ ok: true, value: trickRoomTableResponse });
-    });
-    await user.click(checkbox);
-    expect(client.tableFieldArgs.at(-1)).toBeUndefined();
-  });
-
-  test("F4 自分の追い風・まひは preset の position() に tailwind / paralysis: true として入る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectBird(user);
-    const region = selfRegion();
-
-    await user.click(within(region).getByRole("checkbox", { name: speedScreenText.selfTailwindLabel }));
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "preset",
-        pokemonId: BIRD.pokemonId,
-        preset: "max",
-        scarf: false,
-        tailwind: true,
-      } satisfies Schemas["PositionRequest"]);
-    });
-
-    await user.click(within(region).getByRole("checkbox", { name: speedScreenText.paralysisLabel }));
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "preset",
-        pokemonId: BIRD.pokemonId,
-        preset: "max",
-        scarf: false,
-        tailwind: true,
-        paralysis: true,
-      } satisfies Schemas["PositionRequest"]);
-    });
-    // 自分の追い風は表を変えない(table() は呼び直さない)
-    expect(client.tableCalls).toHaveLength(1);
-  });
-
-  test("F4 custom でも tailwind / paralysis を送る", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await user.click(within(selfRegion()).getByRole("radio", { name: speedScreenText.modeLabel.custom }));
-    await selectBird(user);
-    await user.click(within(selfRegion()).getByRole("checkbox", { name: speedScreenText.paralysisLabel }));
-
-    await waitFor(() => {
-      const { args } = lastOf(client.positionCalls, "position");
-      expect(args.mode).toBe("custom");
-      expect(args.paralysis).toBe(true);
-      expect(args.tailwind).toBeUndefined();
-    });
-  });
-
-  test("F4 raw では自分の追い風・まひの欄を出さず、on のまま切り替えても送らない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    const region = selfRegion();
-    await user.click(within(region).getByRole("checkbox", { name: speedScreenText.selfTailwindLabel }));
-    await user.click(within(region).getByRole("checkbox", { name: speedScreenText.paralysisLabel }));
-
-    await user.click(within(region).getByRole("radio", { name: speedScreenText.modeLabel.raw }));
-    expect(within(region).queryByRole("checkbox", { name: speedScreenText.selfTailwindLabel })).toBeNull();
-    expect(within(region).queryByRole("checkbox", { name: speedScreenText.paralysisLabel })).toBeNull();
-
-    await user.type(within(region).getByRole("spinbutton", { name: speedScreenText.rawValueLabel }), "180");
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args).toEqual({
-        mode: "raw",
-        value: 180,
-      } satisfies Schemas["PositionRequest"]);
-    });
-  });
-
-  test("F5 トリックルーム中は応答の段の順(遅い順)のまま描画する", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await enableTrickRoom(user, client);
-    expect(tiers().map((tier) => tier.getAttribute("data-speed"))).toEqual(["100", "150", "200", "300"]);
-  });
-
-  test("F5 トリックルーム中の境界は、自分より遅い段の後・速い段の前に引く", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await enableTrickRoom(user, client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 180, faster: 3, slower: 2, tie: [], pokemon: BIRD },
-      });
-    });
-
-    const boundary = within(tableRegion()).getByTestId("speed-boundary");
-    // 表示の上(先に動く側)は 150、下(後に動く側)は 200。
-    expect(boundary).toHaveAttribute("data-after-speed", "150");
-    expect(boundary).toHaveAttribute("data-before-speed", "200");
-  });
-
-  test("F5 トリックルーム中にどの段よりも遅ければ表の先頭、速ければ末尾に境界を引く", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await enableTrickRoom(user, client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 50, faster: 5, slower: 0, tie: [], pokemon: BIRD },
-      });
-    });
-    let boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).not.toHaveAttribute("data-after-speed");
-    expect(boundary).toHaveAttribute("data-before-speed", "100");
-
-    // 実数値を変える入力(まひ)で position() を呼び直し、どの段よりも速い応答を返す。
-    await user.click(within(selfRegion()).getByRole("checkbox", { name: speedScreenText.paralysisLabel }));
-    await waitFor(() => {
-      expect(lastOf(client.positionCalls, "position").args.paralysis).toBe(true);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 400, faster: 0, slower: 5, tie: [], pokemon: BIRD },
-      });
-    });
-    boundary = within(tableRegion()).getByTestId("speed-boundary");
-    expect(boundary).toHaveAttribute("data-after-speed", "300");
-    expect(boundary).not.toHaveAttribute("data-before-speed");
-  });
-
-  test("F5 トリックルーム中でも同速の段の強調は同じ段", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await enableTrickRoom(user, client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: {
-          speed: 200,
-          faster: 1,
-          slower: 2,
-          tie: [entry(BIRD, "max"), entry(FISH, "max-scarf")],
-          pokemon: BIRD,
-        },
-      });
-    });
-    expect(tiers().map((tier) => tier.getAttribute("data-self"))).toEqual([null, null, "tie", null]);
-    expect(within(tableRegion()).queryByTestId("speed-boundary")).toBeNull();
-  });
-
-  test("F6 トリックルーム中は「先に動く = slower」「後に動く = faster」を出し、off なら出さない", async () => {
-    const { user, client } = renderScreen();
-    await resolveInitial(client);
-    await selectBird(user);
-    await waitFor(() => {
-      expect(client.positionCalls.length).toBeGreaterThan(0);
-    });
-    await flush(() => {
-      lastOf(client.positionCalls, "position").resolve({
-        ok: true,
-        value: { speed: 180, faster: 3, slower: 2, tie: [], pokemon: BIRD },
-      });
-    });
-    expect(selfRegion()).not.toHaveTextContent(speedScreenText.movesBeforeLabel(2));
-
-    await enableTrickRoom(user, client);
-    const region = selfRegion();
-    // 速さの事実(速い/遅い)はそのまま出し、行動順の読み替えを足す
-    expect(region).toHaveTextContent(speedScreenText.fasterLabel(3));
-    expect(region).toHaveTextContent(speedScreenText.slowerLabel(2));
-    expect(region).toHaveTextContent(speedScreenText.movesBeforeLabel(2));
-    expect(region).toHaveTextContent(speedScreenText.movesAfterLabel(3));
+  test("常時動くアニメーションを入れない(CSS に infinite が無い)", () => {
+    const css = readFileSync(localPath("./SpeedScreen.css", import.meta.url), "utf8");
+    expect(css).not.toMatch(/infinite/);
   });
 });
