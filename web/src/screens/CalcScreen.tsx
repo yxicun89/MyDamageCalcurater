@@ -129,6 +129,8 @@ import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import { ComboSection } from "./ComboSection";
+import type { ComboOpenRequest } from "../app/comboOpenRequest";
+import type { SpeedClient } from "../speed/speedClient";
 import { Icon } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -296,6 +298,13 @@ export interface CalcScreenProps {
    * 通常の calcBulk がそのまま走る。同じ token の再描画では戻さない(利用者の変更を消さない)。
    */
   readonly restoreRequest?: FavoriteRestoreRequest;
+  /**
+   * CB-6 段階 C2(ADR-0359 追記): 素早さ画面からの「連続技を開く」要求。token が変わったときだけ(mount 時を含む)
+   * 攻撃側・防御側を入れ、連続技の節を広げる。素早さの SP・性格・ランク・スカーフは計算画面に入力欄が無いので反映しない。
+   */
+  readonly comboRequest?: ComboOpenRequest;
+  /** CB-6 段階 C1: 連続技の素早さの種族の例を引く口。App はオンラインのときだけ渡す(省略は「出さない」)。 */
+  readonly speedClient?: SpeedClient;
 }
 
 /** お気に入りから戻したときの案内(ADR-0333 §2・§4)。 */
@@ -502,6 +511,8 @@ export function CalcScreen({
   recordClient,
   onFavoriteAdded,
   restoreRequest,
+  comboRequest,
+  speedClient,
 }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
@@ -671,6 +682,79 @@ export function CalcScreen({
       controller.abort();
     };
   }, [restoreToken, registerSpeciesResolution]);
+
+  // CB-6 段階 C2: 素早さ画面からの「連続技を開く」要求。token が変わったときだけ攻撃側・防御側を入れ、連続技の節を広げる。
+  // 入れる処理は最新の画面の関数を ref から読む(token 以外の変化では入れ直さない。復元の restoreContextRef と同じ考え方)。
+  const [comboOpenToken, setComboOpenToken] = useState<number | null>(null);
+  const comboOpenContextRef = useRef({
+    master,
+    masterSearch,
+    speciesListAvailable: capabilities.speciesList,
+    speciesFor,
+    selectAttacker,
+    selectDefender,
+    handleAttackerResolved,
+    handleDefenderResolved,
+  });
+  useEffect(() => {
+    comboOpenContextRef.current = {
+      master,
+      masterSearch,
+      speciesListAvailable: capabilities.speciesList,
+      speciesFor,
+      selectAttacker,
+      selectDefender,
+      handleAttackerResolved,
+      handleDefenderResolved,
+    };
+  });
+  const comboRequestToken = comboRequest?.token ?? null;
+  useEffect(() => {
+    if (comboRequestToken === null || comboRequest === undefined) {
+      return;
+    }
+    const controller = new AbortController();
+    // 非同期の途中で中断されたか(型の絞り込みで定数に見えないよう関数にする)。
+    const isAborted = (): boolean => controller.signal.aborted;
+    /** ポケモン ID(= 種族の key)を画面に入れる。引けなければ(安全側に)何も入れない。 */
+    async function applySide(pokemonId: string, side: "attacker" | "defender"): Promise<void> {
+      const context = comboOpenContextRef.current;
+      if (context.speciesFor(context.master.species, pokemonId) !== null) {
+        (side === "attacker" ? context.selectAttacker : context.selectDefender)(pokemonId);
+        return;
+      }
+      if (context.speciesListAvailable || context.masterSearch === undefined) {
+        return;
+      }
+      try {
+        const resolution = await context.masterSearch.resolveSpecies(pokemonId, controller.signal);
+        if (!controller.signal.aborted) {
+          (side === "attacker" ? context.handleAttackerResolved : context.handleDefenderResolved)(resolution);
+        }
+      } catch {
+        // 引けなかったポケモンは入れない(計算画面の他の入力は壊さない)。
+      }
+    }
+    void (async () => {
+      await applySide(comboRequest.attackerPokemonId, "attacker");
+      // 攻撃側の state 更新が描画に反映され、comboOpenContextRef が最新になるのを待ってから防御側を入れる。
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      if (isAborted()) {
+        return;
+      }
+      await applySide(comboRequest.defenderPokemonId, "defender");
+      if (!isAborted()) {
+        setComboOpenToken(comboRequestToken);
+      }
+    })();
+    return () => {
+      controller.abort();
+    };
+    // comboRequest の本体は token と一緒に変わる(token が同じなら同じ要求)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comboRequestToken]);
 
   const attackerSpecies = useMemo(
     () => speciesFor(master.species, attackerKey),
@@ -1463,6 +1547,8 @@ export function CalcScreen({
         moves={markMoves}
         items={displayItems}
         abilities={markAbilities}
+        speedClient={speedClient}
+        openToken={comboOpenToken}
       />
 
       {frequentOpponents.length > 0 && (
