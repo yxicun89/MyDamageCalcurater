@@ -84,6 +84,9 @@ struct CalcScreenView: View {
                 backendBadge
                 if let error = viewModel.error {
                     ErrorBannerView(message: error.message)
+                    if viewModel.canRetryLoad {
+                        LoadRetryButton(identifier: "calcLoadRetry") { await viewModel.retryLoad() }
+                    }
                 }
                 cardsRow
                 presetSegmentedRow

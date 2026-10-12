@@ -235,7 +235,7 @@ final class FavoriteLoadUITests: XCTestCase {
 
         let error = element(app, "favoriteLoadError")
         XCTAssertTrue(error.waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertTrue(error.label.contains("通信に失敗しました"), "label: \(error.label)")
+        XCTAssertTrue(error.label.contains("サーバーに接続できません"), "label: \(error.label)")
         let retry = element(app, "favoriteLoadRetry")
         XCTAssertTrue(retry.isHittable)
         XCTAssertGreaterThanOrEqual(retry.frame.height, Self.minTapSize)

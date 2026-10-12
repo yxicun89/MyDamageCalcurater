@@ -40,15 +40,19 @@ final class AdjustTextTests: XCTestCase {
         XCTAssertEqual(text, "調整に失敗しました")
     }
 
-    func testTransportAndDecodeMapToUnavailable() {
-        for code in [PokeCalcError.Code.transport, PokeCalcError.Code.decode] {
-            XCTAssertEqual(AdjustText.errorMessage(for: PokeCalcError(code: code, message: "URLError -1009")), "調整のサーバーに接続できません", code)
-        }
+    /// 接続できない(transport)と読み取れない(decode)は別の文(ADR-0534。形のずれを「接続できません」にしない)。
+    func testTransportAndDecodeMapToTheirOwnMessages() {
+        XCTAssertEqual(
+            AdjustText.errorMessage(for: PokeCalcError(code: PokeCalcError.Code.transport, message: "URLError -1009")),
+            ServiceFailureKind.offline.message(feature: "調整"))
+        XCTAssertEqual(
+            AdjustText.errorMessage(for: PokeCalcError(code: PokeCalcError.Code.decode, message: "typeMismatch")),
+            ServiceFailureKind.unreadable.message(feature: "調整"))
     }
 
-    func testNonPokeCalcErrorMapsToFallback() {
+    func testNonPokeCalcErrorMapsToUnreadable() {
         struct Other: Error {}
-        XCTAssertEqual(AdjustText.errorMessage(for: Other()), "調整に失敗しました")
+        XCTAssertEqual(AdjustText.errorMessage(for: Other()), ServiceFailureKind.unreadable.message(feature: "調整"))
     }
 
     // MARK: - 欄・選択肢

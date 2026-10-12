@@ -237,7 +237,7 @@ final class SpeedMatchupUITests: XCTestCase {
         pickBoth(app)
         let error = element(app, "speedMatchupError")
         wait(error, "最低ラインの失敗が表示されない")
-        expectLabel(error, contains: "素早さのサーバーに接続できません")
+        expectLabel(error, contains: "素早さのサーバーで問題が起きています")
         XCTAssertFalse(anyElement(app, prefix: "speedCard-").exists, "失敗のときはカードを出さない")
         XCTAssertTrue(element(app, "speedAssumption-max").exists, "入力は残る")
 

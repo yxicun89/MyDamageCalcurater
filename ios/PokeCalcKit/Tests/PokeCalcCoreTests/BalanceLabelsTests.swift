@@ -113,7 +113,7 @@ final class BalanceLabelsTests: XCTestCase {
         )
         XCTAssertEqual(BalanceErrorText.message(forCode: "overloaded"), "サーバーが混み合っています。しばらくしてからもう一度お試しください")
         XCTAssertEqual(BalanceErrorText.message(forCode: "internal_error"), "サーバーでエラーが起きました。しばらくしてからもう一度お試しください")
-        XCTAssertEqual(BalanceErrorText.message(forCode: "balance_unavailable"), "タイプバランスのサーバーに接続できません")
+        XCTAssertEqual(BalanceErrorText.message(forCode: "balance_unavailable"), "サーバーの接続先が設定されていません")
     }
 
     /// 端末 ID・セッション ID の不備(balance 0.8.0 の `missing_header`/`invalid_header`、0.7.0 の `missing_request_context`)。
@@ -138,7 +138,7 @@ final class BalanceLabelsTests: XCTestCase {
     func testScreenErrorMapsTransportAndDecodeToUnavailable() {
         let transport = BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.transport, message: "URLError"))
         XCTAssertEqual(transport.code, "balance_unavailable")
-        XCTAssertEqual(transport.message, "タイプバランスのサーバーに接続できません")
+        XCTAssertEqual(transport.message, ServiceFailureKind.offline.message(feature: "タイプバランス"))
 
         let decode = BalanceScreenError(PokeCalcError(code: PokeCalcError.Code.decode, message: "typeMismatch"))
         XCTAssertEqual(decode.code, "balance_unavailable")
@@ -154,6 +154,6 @@ final class BalanceLabelsTests: XCTestCase {
     func testScreenErrorForNonPokeCalcErrorUsesFallback() {
         struct Other: Error {}
         let error = BalanceScreenError(Other())
-        XCTAssertEqual(error.message, BalanceErrorText.message(forCode: "no_such_code"))
+        XCTAssertEqual(error.message, ServiceFailureKind.unreadable.message(feature: "タイプバランス"))
     }
 }

@@ -5010,3 +5010,37 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 追加テスト: `TeamBalanceIntegrationTests`(10 件。下書き→setParty・空き枠無視・技 0 個・枠を外すと追随・失敗しても編集と保存が止まらない・再計算・limit 5・最初の空き枠・満杯)、
 `BalancePickTilesTests`(5 件。8 件+残り・相性の色の意味)、`MockBalanceServiceTests`(7 件)、`APIBalanceServiceStage3Tests` の `skewedAttackTypes` 3 件、
 `TeamBalanceUITests`(6 件。1 体で結果・タイルで空き枠へ・満杯で押せない・もっと見る・接続できなくても保存できる・AX5 で節とタイルがはみ出さず押せる)。
+
+## 接続先なし・サーバーの失敗の表示(ADR-0534。2026-10-12)
+
+受け入れ条件:
+1. `PokeCalcAPIBaseURL` が空・無し・空白だけ → `AppConfiguration.backend == .unconfigured`(モックではない)。`POKECALC_USE_MOCK=1` → `.mock`(不正な URL より優先は従来どおり)。不正な URL は従来どおりエラー。
+2. 接続先なしで起動すると「サーバーの接続先が設定されていません」を 1 画面で出し、「このアプリについて」は開ける。テスト用データの名前・計算画面には入らない。モックの表示は `POKECALC_USE_MOCK=1` のときだけ。
+3. 失敗は `ServiceFailureKind`(offline / timeout / serverFault / unsupported / unreadable / overloaded / other)に 1 か所で分類する。`URLError.timedOut` → timeout、他の通信失敗 → offline、HTML の 5xx(500・502・503・504)→ serverFault、HTML の 404・501 → unsupported、デコード失敗 → unreadable。JSON の `not_found` は入力の誤り(unsupported ではない)。
+4. 計算・逆算・構築・タイプバランス・素早さ・調整・お気に入り/履歴の文言は分類に従う(同じ分類は同じ文)。5xx を「接続できません」にせず、形のずれを「接続できません」にしない。番号・`code`・サーバーの英語・禁止語を出さない。
+5. タイプバランスの契約外ステータスは `client_transport_error` にしない(`client_unexpected_status` + `statusCode`)。タイプバランスの一覧(ポケモン・技)の失敗に「タイプバランス」の名前を付けない。
+6. 最初の読み込みに失敗した画面は `canRetryLoad == true`、`retryLoad()` で回復する。成功後・二重実行では何もしない。View はそのときだけ「もう一度」(36pt 以上)を出す。
+7. 接続先なしのタイプバランスは「サーバーの接続先が設定されていません」。
+
+追加テスト: `ServiceFailureKindTests`・`ServiceFailureTransportTests`・`ScreenFailureMessageTests`・`LoadRetryTests`(以上 PokeCalcCoreTests)、`UnconfiguredLaunchUITests`。
+UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、起動環境の変更は不要(新規の `UnconfiguredLaunchUITests` だけが環境変数なしで起動する)。
+
+### 既存テストの変更(期待文言・期待値の更新。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `AppConfigurationTests.testBackendSelection`(キー無し・空文字・空白だけ) | 期待 `mock` → `unconfigured` | 決定 1。モック強制の行は不変 |
+| `APIBalanceServiceTests.testUnavailableBalanceServiceFailsWithoutFakeData` | 文言「タイプバランスのサーバーに接続できません」→「サーバーの接続先が設定されていません」 | 接続先なしは接続の失敗ではない(監査 12) |
+| `BalanceViewModelStage3Tests.testThreatsTransportFailureMapsToUnavailable` | 同じ文言 → `ServiceFailureKind.offline` の文言 | 分類の文言にそろえる |
+| `SpeedMatchupViewModelStateTests.testMatchupFailureShowsTheJapaneseMessageAndKeepsTheReach` | `upstream_unavailable` の文言「素早さのサーバーに接続できません」→ serverFault の文言 | 5xx を「接続できません」にしない(監査 3) |
+| `FavoritesScreenUITests`(2 件)・`FavoriteLoadUITests`・`CalcHistoryUITests` | 「通信に失敗しました」→「サーバーに接続できません」 | 接続できない文言の統一 |
+| `SpeedMatchupUITests.testMatchupFailureKeepsInputsAndDoesNotBlockTheCalcScreen` | 「素早さのサーバーに接続できません」→「素早さのサーバーで問題が起きています」 | 同上(モックの失敗は `upstream_unavailable`) |
+| `TeamBalanceUITests.testBalanceUnavailableKeepsEditingAndSaving` | ラベル → 「サーバーの接続先が設定されていません」 | 同上(モックのタイプバランスは接続先なし) |
+
+| `AdjustTextTests`(接続できない/読み取れない・PokeCalcError 以外)・`GlossaryTests.testReplacementWordsAreUsed` | 「調整のサーバーに接続できません」→ 分類の文(offline / unreadable)。`AdjustText.unavailable` は offline の文 | 形のずれを「接続できません」にしない |
+| `BalanceLabelsTests`(3 件)・`BalanceStage3LabelsTests` | transport の文言 → offline の文、`balance_unavailable` → 「サーバーの接続先が設定されていません」、PokeCalcError 以外 → unreadable の文。`code`(`balance_unavailable`)は従来どおり | 同上 |
+| `SpeedMatchupViewModelStateTests.testTransportFailure...` | `SpeedLabels.unavailable` → offline の文 | 同上 |
+| `CalcViewModelTests.CalcScreenErrorTests.testMessagesAreShowableAndDistinguishable` | `.service` の文に code を含む → 含まない(日本語の説明は出す) | 内部コードを画面に出さない |
+
+実装で上の他に文言が変わるテスト(`CalcViewModelTests` の `.service` の `message`、`TeamEditViewModel*`、`AdjustTextTests`、`SpeedLabelsTests`、`BalanceLabelsTests`、`RecordScreenErrorTests`、`GlossaryTests` の `unavailableCode` ほか)は、同じ方針(期待文言の更新だけ・検査対象は減らさない)で更新し、この表に足す。
+`JudgeLabelsTests`・`JudgeViewModelAsyncTests` は判定が撤去済み(対象外)のため触らない。

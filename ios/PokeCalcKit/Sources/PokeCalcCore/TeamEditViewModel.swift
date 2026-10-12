@@ -62,6 +62,8 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     public private(set) var team: Team
     public private(set) var isLoading = false
     public private(set) var error: TeamScreenError?
+    /// 最初の読み込み(`load()`)が失敗した状態か(`canRetryLoad` の元)。
+    private var loadFailed = false
     public private(set) var teamError: TeamFieldError?
 
     // MARK: - 6 つの枠と未保存の判定(F-08。ADR-0522)
@@ -108,6 +110,7 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
     /// `moveOptionsByMember` / `abilityOptionsByMember` を作る。
     public func load() async {
         isLoading = true
+        loadFailed = false
         do {
             let natures = try await service.natures()
             let species = try await service.searchSpecies(query: "", limit: MasterSearch.pageLimit)
@@ -144,9 +147,13 @@ public final class TeamEditViewModel: MasterSpeciesSearchProviding, MasterMoveSe
             error = nil
         } catch {
             self.error = TeamScreenError(error)
+            loadFailed = true
         }
         isLoading = false
     }
+
+    /// 最初の読み込みに失敗していて、いまやり直せる(View は「もう一度」を出し、`load()` を呼び直す。ADR-0534)。
+    public var canRetryLoad: Bool { loadFailed && !isLoading }
 
     // MARK: - メンバーの追加・削除
 

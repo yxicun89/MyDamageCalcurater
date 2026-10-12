@@ -112,6 +112,8 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
     /// 一度でも読んだ種族のメガ情報(`species(key:)` の応答ごとに覚える。ADR-0509 §4)。
     var megaInfo: [String: MegaSpeciesInfo] = [:]
     private var didLoad = false
+    /// 最初の読み込みが失敗した状態か(`canRetryLoad` の元。ADR-0534)。
+    private var loadFailed = false
 
     // 目標方式の状態(F-11。操作は AdjustViewModel+Goals.swift)。
     /// 「目標から振り方を決める」が選ばれているか(`mode` とは別。`selectMode` で外れる)。
@@ -153,12 +155,17 @@ public final class AdjustViewModel: MasterSpeciesSearchProviding {
             syncSpeciesSearch()
             mergeSpecies(species)
             didLoad = true
+            loadFailed = false
         } catch is CancellationError {
             return
         } catch {
+            loadFailed = true
             showAlert(AdjustText.errorMessage(for: error))
         }
     }
+
+    /// 最初の読み込みに失敗している(View は「もう一度」を出し、`load()` を呼び直す。ADR-0534)。
+    public var canRetryLoad: Bool { loadFailed }
 
     // MARK: - 種族の検索(MasterSpeciesSearchProviding。自分・相手の検索シートで共用)
 

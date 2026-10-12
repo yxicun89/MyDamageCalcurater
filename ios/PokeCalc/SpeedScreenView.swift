@@ -129,6 +129,9 @@ private struct SpeedSelfSection: View {
             ) { pickerTarget = .own }
             if case .failed(let failure) = viewModel.pokemonState {
                 ErrorBannerView(message: failure.message, identifier: "speedPokemonError")
+                if viewModel.canRetryLoad {
+                    LoadRetryButton(identifier: "speedPokemonRetry") { await viewModel.retryLoad() }
+                }
             }
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 SpeedCaption(text: SpeedLabels.rank)

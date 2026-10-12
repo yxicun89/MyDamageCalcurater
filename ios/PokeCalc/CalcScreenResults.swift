@@ -290,6 +290,23 @@ struct ErrorBannerView: View {
     }
 }
 
+/// 最初の読み込みに失敗した画面の「もう一度」(ADR-0534)。エラーの帯の下に、`canRetryLoad` のときだけ出す。
+/// 36pt 以上(`PillButtonStyle`)・文言は折り返す(`lineLimit` なし)・動きなし。
+struct LoadRetryButton: View {
+    let identifier: String
+    let action: () async -> Void
+
+    var body: some View {
+        Button {
+            Task { await action() }
+        } label: {
+            PopLabel(title: ServiceFailureText.retryButtonLabel, systemImage: PopSymbol.reload)
+        }
+        .buttonStyle(PillButtonStyle(kind: .secondary))
+        .accessibilityIdentifier(identifier)
+    }
+}
+
 /// 計算画面の文言(複数の View で使うもの)。
 enum CalcScreenLabels {
     /// 持ち物の比較欄の見出し(チップの読み上げ名にも使う)。

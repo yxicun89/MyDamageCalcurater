@@ -43,6 +43,9 @@ struct ReverseScreenView: View {
                 sideSwitch
                 if let error = viewModel.error {
                     ErrorBannerView(message: error.message)
+                    if viewModel.canRetryLoad {
+                        LoadRetryButton(identifier: "reverseLoadRetry") { await viewModel.retryLoad() }
+                    }
                 }
                 cardsRow
                 presetSegmentedRow

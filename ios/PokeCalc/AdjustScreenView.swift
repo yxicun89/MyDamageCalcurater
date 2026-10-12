@@ -49,6 +49,9 @@ struct AdjustScreenView: View {
                 submitButton
                 if let message = viewModel.alertMessage {
                     ErrorBannerView(message: message, identifier: "adjustAlert")
+                    if viewModel.canRetryLoad {
+                        LoadRetryButton(identifier: "adjustLoadRetry") { await viewModel.load() }
+                    }
                 }
                 loadingSlot
                 AdjustResultCardView(viewModel: viewModel)

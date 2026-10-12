@@ -12,13 +12,33 @@
 import Foundation
 import Observation
 
-/// 表示する失敗。`message` は `SpeedLabels.errorMessage(forCode:)`(サーバーの英語 message は出さない)。
+/// 表示する失敗。サーバーが使えない理由は `ServiceFailureKind` に従い(ADR-0534)、入力の誤りなどのコードだけ
+/// `SpeedLabels.errorMessage(forCode:)` から引く(サーバーの英語 message・番号は出さない)。
 public struct SpeedFailure: Equatable, Sendable {
     public let code: String
-    public var message: String { SpeedLabels.errorMessage(forCode: code) }
+    private let kind: ServiceFailureKind
+
+    public var message: String {
+        switch kind {
+        case .other(let otherCode):
+            return SpeedLabels.errorMessage(forCode: otherCode)
+        case .serverFault where code == Self.masterUnavailableCode:
+            // ポケモンのデータを読み込めない旨(原因がより具体的)。
+            return SpeedLabels.errorMessage(forCode: code)
+        default:
+            return kind.message(feature: SpeedLabels.screenName)
+        }
+    }
+
+    private static let masterUnavailableCode = "master_unavailable"
 
     public init(code: String) {
-        self.code = code
+        self.init(PokeCalcError(code: code, message: ""))
+    }
+
+    public init(_ error: any Error) {
+        code = (error as? PokeCalcError)?.code ?? PokeCalcError.Code.decode
+        kind = ServiceFailureKind(error)
     }
 }
 
@@ -148,7 +168,19 @@ public final class SpeedMatchupViewModel {
     }
 
     private static func failure(_ error: any Error) -> SpeedFailure {
-        SpeedFailure(code: (error as? PokeCalcError)?.code ?? PokeCalcError.Code.transport)
+        SpeedFailure(error)
+    }
+
+    /// ポケモン一覧の読み込みに失敗していて、やり直せる(View は「もう一度」を出す。ADR-0534)。
+    public var canRetryLoad: Bool {
+        if case .failed = pokemonState { return true }
+        return false
+    }
+
+    /// 失敗したポケモン一覧の読み込みをやり直す。読み込めているとき・読み込み中は何もしない。
+    public func retryLoad() async {
+        guard canRetryLoad else { return }
+        await load()
     }
 
     // MARK: - 入力の操作(要求が要るものは、先行の要求を cancel して予約する。`settle()` で待てる)

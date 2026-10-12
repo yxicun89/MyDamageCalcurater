@@ -17,11 +17,11 @@ extension APIPokeCalcService: CalcHistoryService {
             let page = try ok.body.json
             return CalcHistoryPage(items: page.items.map(Self.domainHistoryEntry), nextCursor: page.nextCursor)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 

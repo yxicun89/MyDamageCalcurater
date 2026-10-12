@@ -113,8 +113,8 @@ public enum AdjustText {
 
     // MARK: - エラー(code → 日本語。Web の adjustErrorText と同じ語)
 
-    /// 通信できない・応答が読めない(Web の `adjust_unavailable` と同じ文)。
-    public static let unavailable = "調整のサーバーに接続できません"
+    /// 通信できない(分類 `ServiceFailureKind.offline` の文。ADR-0534)。
+    public static let unavailable = ServiceFailureKind.offline.message(feature: screenTitle)
     /// 下のどれにも当たらないコード。
     public static let errorFallback = "調整に失敗しました"
     /// openapi `ErrorCode` → 文言。
@@ -216,14 +216,19 @@ public enum AdjustText {
         return fraction == 0 ? "\(whole)%" : "\(whole).\(fraction)%"
     }
 
-    /// エラーを画面の文に写す。`PokeCalcError` は `errorMessages[code]`(無ければ `errorFallback`)、
-    /// `client_transport_error` / `client_decode_error` は `unavailable`、それ以外の Error は `errorFallback`。
-    /// サーバーの message は使わない。
+    /// エラーを画面の文に写す。サーバーが使えない理由は `ServiceFailureKind` に従い(ADR-0534。feature は「調整」)、
+    /// 入力の誤りなど画面別の文言が要るコードだけ `errorMessages[code]`(無ければ `errorFallback`)。
+    /// サーバーの message・番号は使わない。
     public static func errorMessage(for error: any Error) -> String {
-        guard let error = error as? PokeCalcError else { return errorFallback }
-        if error.code == PokeCalcError.Code.transport || error.code == PokeCalcError.Code.decode { return unavailable }
-        return errorMessages[error.code] ?? errorFallback
+        let kind = ServiceFailureKind(error)
+        if case .other(let code) = kind { return errorMessages[code] ?? errorFallback }
+        // サーバーの障害のうち、原因がより具体的な文言がある code(データの準備中など)はその文言を出す。
+        if case .serverFault = kind, let code = (error as? PokeCalcError)?.code, let specific = errorMessages[code] {
+            return specific
+        }
+        return kind.message(feature: screenTitle)
     }
+
 
     /// 「実数値 H 155 / A 120 / …」。
     public static func statsLine(_ stats: StatBlock) -> String { "実数値 " + statBlockText(stats) }

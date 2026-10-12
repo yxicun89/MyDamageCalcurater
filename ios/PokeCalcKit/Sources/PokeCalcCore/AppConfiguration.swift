@@ -5,8 +5,10 @@ import Network
 
 /// 接続先(ADR-0500 §5)。
 public enum Backend: Equatable, Sendable {
-    /// `MockPokeCalcService`(架空データ)。
+    /// `MockPokeCalcService`(架空データ)。`POKECALC_USE_MOCK=1` のときだけ(ADR-0534)。
     case mock
+    /// 接続先が設定されていない(`PokeCalcAPIBaseURL` が空・無し)。モックに落とさず、設定が無いことを伝える(ADR-0534)。
+    case unconfigured
     /// `APIPokeCalcService`(このベース URL)。
     case api(URL)
 }
@@ -25,7 +27,7 @@ public struct AppConfigurationError: Error, Equatable, Sendable {
 ///
 /// | 設定 | 結果 |
 /// |---|---|
-/// | `PokeCalcAPIBaseURL` が空・無し | モック |
+/// | `PokeCalcAPIBaseURL` が空・無し・空白だけ | 接続先なし(`unconfigured`。モックにしない。ADR-0534) |
 /// | 有効な `https://` の URL(ホストは任意) | その API |
 /// | 有効な `http://` の URL で、ホストが非修飾ドメイン(ドット無し。例 `localhost`)または `.local`
 ///   ドメイン(ATS の `NSAllowsLocalNetworking`。`ios/PokeCalc-Info.plist` 参照) | その API |
@@ -52,7 +54,7 @@ public struct AppConfiguration: Sendable {
         }
 
         guard let rawValue = infoDictionary[Self.apiBaseURLInfoKey] else {
-            self.backend = .mock
+            self.backend = .unconfigured
             return
         }
         guard let rawString = rawValue as? String else {
@@ -60,7 +62,7 @@ public struct AppConfiguration: Sendable {
         }
         let trimmed = rawString.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            self.backend = .mock
+            self.backend = .unconfigured
             return
         }
         guard let url = URL(string: trimmed),

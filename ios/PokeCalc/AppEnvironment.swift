@@ -3,7 +3,7 @@ import PokeCalcCore
 
 /// 起動時に1回だけ作る、画面が使う実行時の状態(ADR-0500 §5・ADR-0507 §2)。
 ///
-/// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらを使うかを決める。画面ごとのサービスは
+/// `AppConfiguration` を1か所(ここ)で読み、モック/API のどちらを使うか(接続先なしは設定エラー)を決める。画面ごとのサービスは
 /// 各 `AppFeature` が `FeatureServices` に登録する(機能を足しても `.ready` の形は変わらない)。
 /// 設定が壊れているときは画面にエラーを出す(クラッシュしない。coding-rules §2)。
 enum AppEnvironment {
@@ -23,6 +23,9 @@ enum AppEnvironment {
             let core: CoreServices
             let backend: FeatureBackend
             switch configuration.backend {
+            case .unconfigured:
+                // 接続先が空のビルドは、黙ってモックに落とさず設定エラーと同じ 1 画面で伝える(ADR-0534)。
+                return .configurationError(ServiceFailureText.notConfigured)
             case .mock:
                 core = CoreServices(
                     pokeCalc: try MockPokeCalcService(),
