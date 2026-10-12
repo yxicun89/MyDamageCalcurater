@@ -5029,6 +5029,7 @@ UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、�
 
 | テスト | 変更 | 理由 |
 |---|---|---|
+| `ServiceFailureTransportTests.testJSONErrorBodyKeepsServerCodeAndStatus`(新規テストの修正) | 内部エラーの本文の code を、計算・マスタは契約どおり `internal`、タイプバランス・素早さは `internal_error` にした | 計算・マスタの契約(api/openapi.yaml)の `ErrorCode` に `internal_error` は無い。テストデータの誤りで、検査(code と statusCode と serverFault)は同じ |
 | `AppConfigurationTests.testBackendSelection`(キー無し・空文字・空白だけ) | 期待 `mock` → `unconfigured` | 決定 1。モック強制の行は不変 |
 | `APIBalanceServiceTests.testUnavailableBalanceServiceFailsWithoutFakeData` | 文言「タイプバランスのサーバーに接続できません」→「サーバーの接続先が設定されていません」 | 接続先なしは接続の失敗ではない(監査 12) |
 | `BalanceViewModelStage3Tests.testThreatsTransportFailureMapsToUnavailable` | 同じ文言 → `ServiceFailureKind.offline` の文言 | 分類の文言にそろえる |

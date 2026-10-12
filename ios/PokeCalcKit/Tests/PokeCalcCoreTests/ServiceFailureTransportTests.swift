@@ -102,10 +102,13 @@ final class ServiceFailureTransportTests: XCTestCase {
 
     /// JSON のエラー本文があるときはサーバーの code を優先し、番号も運ぶ。
     func testJSONErrorBodyKeepsServerCodeAndStatus() async {
-        let body = #"{"code":"internal_error","message":"English server message"}"#
-        for (name, call) in calls {
+        // 計算・マスタの契約の内部エラーの code は `internal`、タイプバランス・素早さは `internal_error`。
+        for (index, entry) in calls.enumerated() {
+            let (name, call) = entry
+            let code = index == 0 ? "internal" : "internal_error"
+            let body = #"{"code":"\#(code)","message":"English server message"}"#
             let error = await failure(call, RecordingTransport(status: 500, json: body))
-            XCTAssertEqual(error?.code, "internal_error", name)
+            XCTAssertEqual(error?.code, code, name)
             XCTAssertEqual(error?.statusCode, 500, name)
             XCTAssertEqual(error.map { ServiceFailureKind($0) }, .serverFault, name)
         }
