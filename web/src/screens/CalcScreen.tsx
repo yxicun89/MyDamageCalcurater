@@ -130,7 +130,7 @@ import { MovePicker } from "./MovePicker";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
-import { ComboSection } from "./ComboSection";
+import { ComboSection, type OpenSpeed } from "./ComboSection";
 import type { ComboOpenRequest } from "../app/comboOpenRequest";
 import type { SpeedClient } from "../speed/speedClient";
 import { Icon } from "../ui/Icon";
@@ -718,6 +718,7 @@ export function CalcScreen({
   // CB-6 段階 C2: 素早さ画面からの「連続技を開く」要求。token が変わったときだけ攻撃側・防御側を入れ、連続技の節を広げる。
   // 入れる処理は最新の画面の関数を ref から読む(token 以外の変化では入れ直さない。復元の restoreContextRef と同じ考え方)。
   const [comboOpenToken, setComboOpenToken] = useState<number | null>(null);
+  const [comboOpenSpeed, setComboOpenSpeed] = useState<OpenSpeed | null>(null);
   const comboOpenContextRef = useRef({
     master,
     masterSearch,
@@ -778,6 +779,7 @@ export function CalcScreen({
       }
       await applySide(comboRequest.defenderPokemonId, "defender");
       if (!isAborted()) {
+        setComboOpenSpeed(comboRequest.speed ?? null);
         setComboOpenToken(comboRequestToken);
       }
     })();
@@ -1588,6 +1590,7 @@ export function CalcScreen({
         abilities={markAbilities}
         speedClient={speedClient}
         openToken={comboOpenToken}
+        openSpeed={comboOpenSpeed}
       />
 
       {frequentOpponents.length > 0 && (
