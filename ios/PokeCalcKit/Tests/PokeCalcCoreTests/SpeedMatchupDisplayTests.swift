@@ -55,16 +55,16 @@ final class SpeedMatchupDisplayTests: XCTestCase {
         guard let card = SpeedMatchupDisplayBuilder.cards(normalMatchup)[safe: 0] else { return XCTFail("card が無い") }
         XCTAssertEqual(card.rows.map(\.id), ["neutral", "plus"], "下降の行はトリックルーム中だけ(ADR-0610 §6 Q5)")
         XCTAssertEqual(card.rows.map(\.natureLabel), ["補正なし", "上昇"])
-        XCTAssertEqual(card.rows.map(\.text), ["S31以上で抜ける", "S18以上で抜ける"])
+        XCTAssertEqual(card.rows.map(\.text), ["S31 以上で抜ける", "S18 以上で抜ける"])
         XCTAssertEqual(card.rows.map(\.isReachable), [true, true])
-        XCTAssertEqual(card.rows.map(\.tieText), [nil, "S17で同速"], "同速は最低ラインと別に出す")
+        XCTAssertEqual(card.rows.map(\.tieText), [nil, "S17 で同速"], "同速は最低ラインと別に出す")
         XCTAssertEqual(card.headline, "準速で抜ける")
     }
 
     func testUnreachableCardSaysSoInWordsOnEveryRow() {
         guard let card = SpeedMatchupDisplayBuilder.cards(normalMatchup)[safe: 1] else { return XCTFail("card が無い") }
-        XCTAssertEqual(card.headline, "最速でも届かない")
-        XCTAssertEqual(card.rows.map(\.text), ["届かない", "届かない"])
+        XCTAssertEqual(card.headline, "どう振っても上を取れません")
+        XCTAssertEqual(card.rows.map(\.text), ["上を取れません", "上を取れません"])
         XCTAssertEqual(card.rows.map(\.isReachable), [false, false], "届かないことを色だけで伝えないための判定")
         XCTAssertEqual(card.rows.map(\.tieText), [nil, nil])
     }
@@ -74,16 +74,16 @@ final class SpeedMatchupDisplayTests: XCTestCase {
         guard let card = SpeedMatchupDisplayBuilder.cards(normalMatchup)[safe: 2] else { return XCTFail("card が無い") }
         guard let neutral = card.rows[safe: 0] else { return XCTFail("行が無い") }
         XCTAssertEqual(neutral.id, "neutral")
-        XCTAssertEqual(neutral.text, "届かない")
+        XCTAssertEqual(neutral.text, "上を取れません")
         XCTAssertFalse(neutral.isReachable)
-        XCTAssertEqual(neutral.tieText, "S32で同速")
-        XCTAssertEqual(card.headline, "最速でも届かない", "同速だけでは「抜ける」と言わない")
+        XCTAssertEqual(neutral.tieText, "S32 で同速")
+        XCTAssertEqual(card.headline, "どう振っても上を取れません", "同速だけでは「抜ける」と言わない")
     }
 
     func testOrderBadgeComesFromTheCurrentTurnOrder() {
         let cards = SpeedMatchupDisplayBuilder.cards(normalMatchup)
         XCTAssertEqual(cards.map(\.order), [.selfFirst, .opponentFirst, .speedTie])
-        XCTAssertEqual(cards.map(\.orderBadge), ["先に動く", "後に動く", "同速"])
+        XCTAssertEqual(cards.map(\.orderBadge), ["今の振りなら先に動く", "今の振りなら後に動く", "今の振りなら同速"])
     }
 
     func testNoCurrentMeansNoOrderBadge() {
@@ -110,10 +110,10 @@ final class SpeedMatchupDisplayTests: XCTestCase {
             trickRoom: true)
         let cards = SpeedMatchupDisplayBuilder.cards(matchup)
         XCTAssertEqual(cards[safe: 0]?.rows.map(\.id), ["minus", "neutral", "plus"], "下降の行はトリックルーム中だけ出る。順は 下降・補正なし・上昇")
-        XCTAssertEqual(cards[safe: 0]?.rows.map(\.text), ["S5まで下を取れる", "S2まで下を取れる", "S0まで下を取れる"])
-        XCTAssertEqual(cards[safe: 0]?.headline, "補正なしなら S2まで下を取れる")
-        XCTAssertEqual(cards[safe: 1]?.headline, "どう振っても下を取れない")
-        XCTAssertEqual(cards[safe: 1]?.rows.map(\.text), ["下を取れない", "下を取れない", "下を取れない"])
+        XCTAssertEqual(cards[safe: 0]?.rows.map(\.text), ["S5 まで振っても先に動ける", "S2 まで振っても先に動ける", "S0 まで振っても先に動ける"])
+        XCTAssertEqual(cards[safe: 0]?.headline, "S2 まで振っても先に動ける")
+        XCTAssertEqual(cards[safe: 1]?.headline, "どう振っても先に動けません")
+        XCTAssertEqual(cards[safe: 1]?.rows.map(\.text), ["先に動けません", "先に動けません", "先に動けません"])
         XCTAssertEqual(cards[safe: 1]?.rows.map(\.isReachable), [false, false, false])
     }
 
@@ -143,9 +143,9 @@ final class SpeedMatchupDisplayTests: XCTestCase {
         XCTAssertEqual(rows.map(\.id), SpeedPresetID.allCases.map(\.rawValue), "6 行・表のプリセットの順")
         XCTAssertEqual(rows.map(\.presetLabel), ["無振り", "準速", "最速", "最速スカーフ", "最速+1", "最速+2"])
         guard let first = rows[safe: 0] else { return XCTFail("行が無い") }
-        XCTAssertEqual(first.slowerText, "無振り 149族まで抜ける")
-        XCTAssertEqual(first.tieText, "無振り 150族と同速")
-        XCTAssertEqual(first.fasterText, "無振り 151族以上に抜かれる")
+        XCTAssertEqual(first.slowerText, "無振り 149 族まで抜ける")
+        XCTAssertEqual(first.tieText, "無振り 150 族と同速")
+        XCTAssertEqual(first.fasterText, "無振り 151 族以上に抜かれる")
         XCTAssertEqual([first.slowerCountLabel, first.tieCountLabel, first.fasterCountLabel], ["3体", "1体", "2体"])
         XCTAssertEqual(first.slowerExample, "例: テストカソウドリ")
         XCTAssertEqual(first.fasterExample, "例: テストデンキネズミ")
@@ -154,28 +154,28 @@ final class SpeedMatchupDisplayTests: XCTestCase {
     /// 要望の「準速○○族以上」: 準速の faster の最小がそのまま「○○族以上に抜かれる」になる。
     func testNeutralMaxRowReadsLikeTheRequestedPhrase() {
         guard let row = SpeedMatchupDisplayBuilder.reachRows(reachResponse, trickRoom: false)[safe: 1] else { return XCTFail("row が無い") }
-        XCTAssertEqual(row.slowerText, "準速 117族まで抜ける")
+        XCTAssertEqual(row.slowerText, "準速 117 族まで抜ける")
         XCTAssertNil(row.tieText, "同速の族が無ければ出さない")
-        XCTAssertEqual(row.fasterText, "準速 118族以上に抜かれる")
+        XCTAssertEqual(row.fasterText, "準速 118 族以上に抜かれる")
         XCTAssertNil(row.slowerExample)
         XCTAssertNil(row.fasterExample)
     }
 
     func testReachRowWithNoGroupsSaysSoInWords() {
         guard let row = SpeedMatchupDisplayBuilder.reachRows(reachResponse, trickRoom: false)[safe: 2] else { return XCTFail("row が無い") }
-        XCTAssertEqual(row.slowerText, "最速 はどの族も抜けない")
+        XCTAssertEqual(row.slowerText, "抜ける族はありません")
         XCTAssertNil(row.tieText)
-        XCTAssertEqual(row.fasterText, "最速 に抜かれる族なし")
+        XCTAssertEqual(row.fasterText, "抜かれる族はありません")
     }
 
     /// reach の応答はトリックルームに依存しない。言い換えだけを画面側で切り替える(ADR-0610 §1)。
     func testReachRowsReadTheOtherWayUnderTrickRoom() {
         let rows = SpeedMatchupDisplayBuilder.reachRows(reachResponse, trickRoom: true)
-        XCTAssertEqual(rows[safe: 0]?.slowerText, "無振り 149族までは後に動く")
-        XCTAssertEqual(rows[safe: 0]?.tieText, "無振り 150族と同速", "同速はトリックルームでも同速")
-        XCTAssertEqual(rows[safe: 0]?.fasterText, "無振り 151族以上には先に動ける")
-        XCTAssertEqual(rows[safe: 2]?.slowerText, "最速 より後に動く族なし")
-        XCTAssertEqual(rows[safe: 2]?.fasterText, "最速 には先に動けない")
+        XCTAssertEqual(rows[safe: 0]?.slowerText, "無振り 149 族までは後に動く")
+        XCTAssertEqual(rows[safe: 0]?.tieText, "無振り 150 族と同速", "同速はトリックルームでも同速")
+        XCTAssertEqual(rows[safe: 0]?.fasterText, "無振り 151 族以上には先に動ける")
+        XCTAssertEqual(rows[safe: 2]?.slowerText, "後に動く族はありません")
+        XCTAssertEqual(rows[safe: 2]?.fasterText, "先に動ける族はありません")
         XCTAssertEqual(rows.map(\.slowerCountLabel), SpeedMatchupDisplayBuilder.reachRows(reachResponse, trickRoom: false).map(\.slowerCountLabel))
     }
 }

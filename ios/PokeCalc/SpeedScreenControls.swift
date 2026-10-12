@@ -82,6 +82,21 @@ struct SpeedPillGroup<Content: View>: View {
     }
 }
 
+/// 説明・案内の一言(小さい文字)。固定高にせず、長い文は折り返す。
+struct SpeedHint: View {
+    let text: String
+    let identifier: String
+
+    var body: some View {
+        Text(text)
+            .font(TextStyleToken.caption.font)
+            .foregroundStyle(ColorToken.textSecondary.color)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
 struct SpeedCaption: View {
     let text: String
 

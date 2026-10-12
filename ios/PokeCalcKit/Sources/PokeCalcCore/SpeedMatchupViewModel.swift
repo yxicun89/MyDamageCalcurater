@@ -1,12 +1,12 @@
 // SpeedMatchupViewModel: 素早さ画面(相手を選んで上を取る最低ライン)の状態(I-speed-4c。ADR-0610 §4)。
 //
 // 入力(自分・相手・場)から matchup / reach の要求を作り、`SpeedService` の応答を `SpeedMatchupDisplayBuilder` で整える。
-// 計算ロジックは持たない。状態の作りは `SpeedViewModel` と同じ流儀:
+// 計算ロジックは持たない。状態の作りは `CalcViewModel` と同じ流儀:
 //  - `@MainActor @Observable`。入力のたびに `LatestTaskRunner` で先行の要求を cancel し、最新の世代の応答だけ反映する。
 //  - ポケモン一覧・matchup・reach は互いに独立(片方の失敗がもう片方の表示を消さない)。
 //  - `CancellationError` は画面のエラーにしない。
 //
-// このクラスは `SpeedViewModel`(表の画面)を置き換えた(ADR-0610 追記「iOS の画面」)。
+// このクラスは旧「素早さの表」の画面の状態を置き換えた(旧型は削除済み。ADR-0610 追記「iOS の画面」)。
 // 公開 API の形(名前・型・引数)は SpeedMatchupViewModel*Tests が固定する。
 
 import Foundation

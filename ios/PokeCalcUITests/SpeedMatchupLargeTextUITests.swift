@@ -7,7 +7,7 @@ import XCTest
 /// モックの数値・文言には依存しない(SpeedMatchupUITests が見る)。
 ///
 /// 文字サイズは起動引数 `-UIPreferredContentSizeCategoryName` で固定する(LargeTextLayoutUITests と同じ)。
-/// spec 時点では View が未実装のため、失敗してよい。
+/// 入力側と出力側の 2 本に分け、各々が既定の 300 秒に収まるようにする(識別子ごとに探し直さず、上から 1 周だけ走査する)。
 @MainActor
 final class SpeedMatchupLargeTextUITests: XCTestCase {
     private static let existenceTimeout: TimeInterval = 5
@@ -31,13 +31,8 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         "speedReach", "speedReachRow-uninvested", "speedReachSlower-uninvested", "speedReachTie-uninvested", "speedReachFaster-uninvested",
     ]
 
-    /// AX5 では識別子ごとにゆっくりスクロールして探すため、1 本で約 520 秒かかる(既定の 300 秒では足りない)。
-    /// run-xcode-tests.sh の上限(600 秒)いっぱいに伸ばす(ADR-0520)。
-    private static let slowTestAllowance: TimeInterval = 600
-
     override func setUpWithError() throws {
         continueAfterFailure = false
-        executionTimeAllowance = Self.slowTestAllowance
     }
 
     // MARK: - 補助
@@ -89,25 +84,40 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         return (0..<query.count).map { query.element(boundBy: $0) }
     }
 
-    /// 要素ごとに、画面の外へ左右にはみ出していないことを確かめる。画面外へ送ってから探すので、見つけるためにスクロールする。
+    /// 画面の一番上へ戻す(自分のポケモンのボタンが見えるまで速く下へ送る)。シートの中では使わない。
+    private func scrollToTop(_ app: XCUIApplication) {
+        let top = element(app, "speedPokemonButton")
+        for _ in 0..<Self.maxScrolls where !(top.exists && top.isHittable) {
+            app.swipeDown()
+        }
+    }
+
+    /// 上端から 1 歩ずつ swipeUp で進め、見えている identifier を全部検査して未確認の集合から消す(1 周だけ走査する)。
+    /// 見えた要素ごとに、画面の外へ左右にはみ出していないことを確かめる。最後まで見えなかった identifier は失敗にする。
     private func assertNoHorizontalOverflow(
-        _ app: XCUIApplication, identifiers: [String], file: StaticString = #filePath, line: UInt = #line
+        _ app: XCUIApplication, identifiers: [String], startFromTop: Bool = true,
+        file: StaticString = #filePath, line: UInt = #line
     ) {
         let windowFrame = app.windows.firstMatch.frame
         XCTAssertGreaterThan(windowFrame.width, 0, "ウィンドウの frame が取得できない", file: file, line: line)
+        if startFromTop { scrollToTop(app) }
+        var pending = identifiers
         var offenders: [String] = []
-        for identifier in identifiers {
-            let target = element(app, identifier)
-            XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "要素が見つからない: \(identifier)", file: file, line: line)
-            scrollUntilHittable(app, target)
-            for (index, found) in matches(app, identifier).enumerated() where found.exists {
-                let frame = found.frame
-                if frame.width == 0 && frame.height == 0 { continue }
-                if frame.minX < -Self.overflowTolerance || frame.maxX > windowFrame.maxX + Self.overflowTolerance {
-                    offenders.append("\(identifier)[\(index)]: frame=\(frame) window=\(windowFrame) label=\(found.label)")
+        for step in 0...Self.maxScrolls {
+            for identifier in pending where element(app, identifier).exists && element(app, identifier).isHittable {
+                for (index, found) in matches(app, identifier).enumerated() where found.exists {
+                    let frame = found.frame
+                    if frame.width == 0 && frame.height == 0 { continue }
+                    if frame.minX < -Self.overflowTolerance || frame.maxX > windowFrame.maxX + Self.overflowTolerance {
+                        offenders.append("\(identifier)[\(index)]: frame=\(frame) window=\(windowFrame) label=\(found.label)")
+                    }
                 }
+                pending.removeAll { $0 == identifier }
             }
+            if pending.isEmpty || step == Self.maxScrolls { break }
+            app.swipeUp(velocity: .slow)
         }
+        XCTAssertTrue(pending.isEmpty, "画面に出なかった要素: \(pending)", file: file, line: line)
         XCTAssertTrue(offenders.isEmpty, "横にはみ出している要素があります:\n" + offenders.joined(separator: "\n"), file: file, line: line)
     }
 
@@ -123,8 +133,21 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
 
     // MARK: - AX5
 
-    /// AX5 で、入力・カード・「これ以上」・ピッカーのシートが横にはみ出さず、固定高にならない(文言が長いと高さが伸びる)。
-    func testSpeedMatchupScreenNoHorizontalOverflowAndGrowsTallerAtAX5() {
+    /// AX5 で、入力欄とピッカーのシートが横にはみ出さない。
+    func testSpeedMatchupInputNoHorizontalOverflowAtAX5() {
+        let app = launchSpeedScreen(contentSizeCategory: Self.ax5ContentSizeCategory)
+        assertNoHorizontalOverflow(app, identifiers: Self.inputIdentifiers)
+
+        // ピッカーのシート(自分・相手で共通)。シートの中は最初から見えているので、上へ戻す操作はしない(閉じてしまうため)。
+        tap(app, "speedOpponentPokemonButton")
+        XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
+        assertNoHorizontalOverflow(
+            app, identifiers: ["speedPokemonSheet", "speedPokemonSearchField", "speedPokemonRow-\(Self.mockOpponent)"],
+            startFromTop: false)
+    }
+
+    /// AX5 で、カードと「これ以上」が横にはみ出さず、固定高にならない(文言が長いと高さが伸びる)。
+    func testSpeedMatchupOutputNoHorizontalOverflowAndGrowsTallerAtAX5() {
         // 既定の文字サイズでの「最低ラインのカード」の高さ(固定高でないことの比較の基準)。
         let normalApp = launchSpeedScreen(contentSizeCategory: Self.defaultContentSizeCategory)
         pick(normalApp, button: "speedPokemonButton", pokemonID: Self.mockSelf)
@@ -135,17 +158,11 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         normalApp.terminate()
 
         let app = launchSpeedScreen(contentSizeCategory: Self.ax5ContentSizeCategory)
-        assertNoHorizontalOverflow(app, identifiers: Self.inputIdentifiers)
         openFullState(app)
         assertNoHorizontalOverflow(app, identifiers: Self.outputIdentifiers)
 
         let ax5Card = element(app, "speedCard-uninvested")
         scrollUntilHittable(app, ax5Card)
         XCTAssertGreaterThan(ax5Card.frame.height, normalHeight, "AX5 ではカードの高さが伸びる(固定高にしない)")
-
-        // ピッカーのシート(自分・相手で共通)。
-        tap(app, "speedOpponentPokemonButton")
-        XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
-        assertNoHorizontalOverflow(app, identifiers: ["speedPokemonSheet", "speedPokemonSearchField", "speedPokemonRow-\(Self.mockOpponent)"])
     }
 }

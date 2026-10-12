@@ -71,7 +71,7 @@ public enum SpeedLabels {
 
     // ---- 結果 ----
     /// 今の振りを入れたときの自分の素早さ(実数値)。
-    public static func selfSpeed(_ speed: Int) -> String { "実数値 \(speed)" }
+    public static func selfSpeed(_ speed: Int) -> String { "自分の素早さ \(speed)" }
 
     // ---- エラー(サーバーの英語 message は出さず、code から日本語にする) ----
     public static let unavailable = "素早さのサーバーに接続できません"

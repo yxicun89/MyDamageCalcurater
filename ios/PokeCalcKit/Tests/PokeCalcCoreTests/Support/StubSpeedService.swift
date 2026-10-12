@@ -86,7 +86,7 @@ enum StubSpeed {
     }
 }
 
-/// `SpeedViewModel` のテスト用 `SpeedService`。呼び出しを記録し、応答はクロージャで決める。
+/// `SpeedMatchupViewModel` のテスト用 `SpeedService`。呼び出しを記録し、応答はクロージャで決める。
 /// `hold` した種類の呼び出しは `release` されるまで返らない(古い応答・cancel の検証用)。
 /// 位置の既定の応答は「呼び出しの順番 × 100 の実数値」(どの要求への応答か区別できる)。
 actor StubSpeedService: SpeedService {

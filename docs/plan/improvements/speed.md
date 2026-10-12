@@ -13,8 +13,8 @@
 - [x] 純粋なロジック `SpeedTableNavigation`(PokeCalcCore)の XCTest と、UI テスト(遅延描画・ジャンプ)を追加
 
 ## 2026-10-11 使用感フィードバック第3回(docs/usability-round3.md の G-04)
-- [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。
-- [x] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。実装済み(SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection。SpeedScreenView の自分のカード内、SpeedResultView の下)。
+- [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。 **(ADR-0610 で置き換え: 周りパネルは表の画面ごと廃止。Web は I-speed-4b、iOS は I-speed-4c)**
+- [x] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。実装済み(SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection。SpeedScreenView の自分のカード内、SpeedResultView の下)。 **(ADR-0610 で置き換え: SpeedNeighborhood 系のコード・テストは I-speed-4c で削除済み)**
 
 ## 2026-10-12 素早さ画面の作り直し(ユーザー要望。ec 経由)
 ユーザーの言葉の要約: 素早さ表は要らないかもしれない(データは持っておいてよい)。相手と自分のポケモンを入れて「この場合ここまですれば上を取れる」を出す形(ダメージ計算の画面のような使い方)。自分の素早さを入れた後の「これ以上」も表なしで分かるように。『準速○○族以上』の表記も入れる。

@@ -75,6 +75,6 @@ final class SpeedLabelsTests: XCTestCase {
         XCTAssertEqual(SpeedLabels.unselected, "未選択")
         XCTAssertEqual(SpeedLabels.sp, "素早さ SP")
         XCTAssertEqual(SpeedLabels.rank, "ランク")
-        XCTAssertEqual(SpeedLabels.selfSpeed(301), "実数値 301")
+        XCTAssertEqual(SpeedLabels.selfSpeed(301), "自分の素早さ 301")
     }
 }

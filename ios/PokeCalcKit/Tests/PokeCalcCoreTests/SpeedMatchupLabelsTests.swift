@@ -9,18 +9,32 @@ final class SpeedMatchupLabelsTests: XCTestCase {
 
     func testHeadingsAndInputLabels() {
         XCTAssertEqual(SpeedMatchupLabels.opponentRegion, "相手のポケモン")
-        XCTAssertEqual(SpeedMatchupLabels.assumptionGroup, "相手の振りの想定")
+        XCTAssertEqual(SpeedMatchupLabels.assumptionGroup, "相手の振り方の想定")
         XCTAssertEqual(SpeedMatchupLabels.currentGroup, "自分の今の振り")
-        XCTAssertEqual(SpeedMatchupLabels.currentToggle, "今の振りを入れる")
-        XCTAssertEqual(SpeedMatchupLabels.matchupRegion, "上を取る最低ライン")
+        XCTAssertEqual(SpeedMatchupLabels.currentToggle, "今の振りも入れる")
+        XCTAssertEqual(SpeedMatchupLabels.matchupRegion, "先に動くための最低ライン")
+        XCTAssertEqual(SpeedMatchupLabels.matchupRegionTrickRoom, "先に動ける上限(トリックルーム中)")
         XCTAssertEqual(SpeedMatchupLabels.reachRegion, "これ以上")
         XCTAssertEqual(SpeedMatchupLabels.comboLink, "この相手で連続技を計算")
     }
 
+    /// 説明・案内の文は Web の `speedScreenText` と同じ(最低 1 つの注記・各ヒント・空状態の案内)。
+    func testHintsMatchTheWebSentences() {
+        XCTAssertEqual(SpeedMatchupLabels.assumptionMinimumNotice, "想定は少なくとも1つ選びます")
+        XCTAssertEqual(SpeedMatchupLabels.currentHint, "入れると、今の素早さで先に動けるかと、「これ以上」の一覧が出ます")
+        XCTAssertEqual(SpeedMatchupLabels.assumptionHint, "相手がどこまで素早さを振っているかは分からないので、いくつか並べて見ます")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomHint, "トリックルーム中は、素早さが低いほうが先に動きます")
+        XCTAssertEqual(SpeedMatchupLabels.matchupHint, "自分と相手のポケモンを選ぶと、相手より先に動くために必要な素早さの振り方を表示します")
+        XCTAssertEqual(SpeedMatchupLabels.reachHint, "「今の振りも入れる」をオンにすると、ここに「これ以上」の一覧が出ます")
+        XCTAssertEqual(SpeedMatchupLabels.matchupLoading, "最低ラインを計算中")
+        XCTAssertEqual(SpeedMatchupLabels.reachLoading, "「これ以上」を計算中")
+        XCTAssertTrue(SpeedMatchupLabels.reachIntro.contains("「100 族」"), "「族」の言葉の説明を画面に出す")
+    }
+
     func testOrderBadgesUseWordsNotOnlyColor() {
-        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.selfFirst), "先に動く")
-        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.opponentFirst), "後に動く")
-        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.speedTie), "同速")
+        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.selfFirst), "今の振りなら先に動く")
+        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.opponentFirst), "今の振りなら後に動く")
+        XCTAssertEqual(SpeedMatchupLabels.orderBadge(.speedTie), "今の振りなら同速")
         XCTAssertEqual(Set(SpeedTurnOrder.allCases.map { SpeedMatchupLabels.orderBadge($0) }).count, 3, "3 つとも別の語")
     }
 
@@ -39,20 +53,20 @@ final class SpeedMatchupLabelsTests: XCTestCase {
     }
 
     func testFirstLine() {
-        XCTAssertEqual(SpeedMatchupLabels.firstLine(SpeedSPRange(min: 31, max: 32)), "S31以上で抜ける")
-        XCTAssertEqual(SpeedMatchupLabels.firstLine(SpeedSPRange(min: 0, max: 32)), "無振りでも抜ける")
-        XCTAssertEqual(SpeedMatchupLabels.firstLine(nil), "届かない")
+        XCTAssertEqual(SpeedMatchupLabels.firstLine(SpeedSPRange(min: 31, max: 32)), "S31 以上で抜ける")
+        XCTAssertEqual(SpeedMatchupLabels.firstLine(SpeedSPRange(min: 0, max: 32)), "振らなくても抜ける")
+        XCTAssertEqual(SpeedMatchupLabels.firstLine(nil), "上を取れません")
     }
 
     func testTrickRoomLine() {
-        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(SpeedSPRange(min: 0, max: 12)), "S12まで下を取れる")
-        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(SpeedSPRange(min: 0, max: 32)), "S32まで下を取れる")
-        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(nil), "下を取れない")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(SpeedSPRange(min: 0, max: 12)), "S12 まで振っても先に動ける")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(SpeedSPRange(min: 0, max: 32)), "S32 まで振っても先に動ける")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomLine(nil), "先に動けません")
     }
 
     func testTieLine() {
-        XCTAssertEqual(SpeedMatchupLabels.tieLine(SpeedSPRange(min: 17, max: 17)), "S17で同速")
-        XCTAssertEqual(SpeedMatchupLabels.tieLine(SpeedSPRange(min: 10, max: 12)), "S10〜S12で同速")
+        XCTAssertEqual(SpeedMatchupLabels.tieLine(SpeedSPRange(min: 17, max: 17)), "S17 で同速")
+        XCTAssertEqual(SpeedMatchupLabels.tieLine(SpeedSPRange(min: 10, max: 12)), "S10〜12 で同速")
     }
 
     // MARK: - 見出し(トリックルームなし)
@@ -85,25 +99,25 @@ final class SpeedMatchupLabelsTests: XCTestCase {
 
     func testHeadlineSaysMaxWithItsSPWhenOnlyTheSpeedUpNatureReaches() {
         XCTAssertEqual(
-            SpeedMatchupLabels.headline(natures: natures(plus: SpeedSPRange(min: 2, max: 32))), "最速なら S2で抜ける")
+            SpeedMatchupLabels.headline(natures: natures(plus: SpeedSPRange(min: 2, max: 32))), "最速なら S2 以上で抜ける")
     }
 
     func testHeadlineSaysUnreachableWhenNothingReaches() {
-        XCTAssertEqual(SpeedMatchupLabels.headline(natures: natures()), "最速でも届かない")
+        XCTAssertEqual(SpeedMatchupLabels.headline(natures: natures()), "どう振っても上を取れません")
     }
 
     // MARK: - 見出し(トリックルーム中)
 
     func testTrickRoomHeadlineSaysMaxWhenEvenTheSpeedUpNatureCanStillMoveAfter() {
         let all = SpeedSPRange(min: 0, max: 32)
-        XCTAssertEqual(SpeedMatchupLabels.trickRoomHeadline(natures: natures(minus: all, neutral: all, plus: all)), "最速でも下を取れる")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomHeadline(natures: natures(minus: all, neutral: all, plus: all)), "最速でも先に動ける")
     }
 
     func testTrickRoomHeadlineSaysNeutralMaxWhenNeutralReaches32() {
         let all = SpeedSPRange(min: 0, max: 32)
         XCTAssertEqual(
             SpeedMatchupLabels.trickRoomHeadline(natures: natures(minus: all, neutral: all, plus: SpeedSPRange(min: 0, max: 20))),
-            "準速でも下を取れる")
+            "準速でも先に動ける")
     }
 
     func testTrickRoomHeadlineSaysTheNeutralLimitOtherwise() {
@@ -111,13 +125,13 @@ final class SpeedMatchupLabelsTests: XCTestCase {
             SpeedMatchupLabels.trickRoomHeadline(
                 natures: natures(
                     minus: SpeedSPRange(min: 0, max: 20), neutral: SpeedSPRange(min: 0, max: 12), plus: SpeedSPRange(min: 0, max: 4))),
-            "補正なしなら S12まで下を取れる")
+            "S12 まで振っても先に動ける")
     }
 
     func testTrickRoomHeadlineFallsBackToTheMinusNatureThenToNothing() {
         XCTAssertEqual(
-            SpeedMatchupLabels.trickRoomHeadline(natures: natures(minus: SpeedSPRange(min: 0, max: 5))), "下降なら S5まで下を取れる")
-        XCTAssertEqual(SpeedMatchupLabels.trickRoomHeadline(natures: natures()), "どう振っても下を取れない")
+            SpeedMatchupLabels.trickRoomHeadline(natures: natures(minus: SpeedSPRange(min: 0, max: 5))), "下降なら S5 まで振っても先に動ける")
+        XCTAssertEqual(SpeedMatchupLabels.trickRoomHeadline(natures: natures()), "どう振っても先に動けません")
     }
 
     // MARK: - 「これ以上」
@@ -125,40 +139,40 @@ final class SpeedMatchupLabelsTests: XCTestCase {
     func testReachSlowerNormal() {
         XCTAssertEqual(
             SpeedMatchupLabels.reachSlower(preset: "最速", range: SpeedBaseSpeedRange(min: 1, max: 102), trickRoom: false),
-            "最速 102族まで抜ける")
+            "最速 102 族まで抜ける")
         XCTAssertEqual(
-            SpeedMatchupLabels.reachSlower(preset: "最速", range: nil, trickRoom: false), "最速 はどの族も抜けない")
+            SpeedMatchupLabels.reachSlower(preset: "最速", range: nil, trickRoom: false), "抜ける族はありません")
     }
 
     func testReachSlowerUnderTrickRoomReadsAsMovingAfter() {
         XCTAssertEqual(
             SpeedMatchupLabels.reachSlower(preset: "最速", range: SpeedBaseSpeedRange(min: 1, max: 102), trickRoom: true),
-            "最速 102族までは後に動く")
+            "最速 102 族までは後に動く")
         XCTAssertEqual(
-            SpeedMatchupLabels.reachSlower(preset: "最速", range: nil, trickRoom: true), "最速 より後に動く族なし")
+            SpeedMatchupLabels.reachSlower(preset: "最速", range: nil, trickRoom: true), "後に動く族はありません")
     }
 
     func testReachTie() {
         XCTAssertEqual(
-            SpeedMatchupLabels.reachTie(preset: "最速", range: SpeedBaseSpeedRange(min: 103, max: 103)), "最速 103族と同速")
+            SpeedMatchupLabels.reachTie(preset: "最速", range: SpeedBaseSpeedRange(min: 103, max: 103)), "最速 103 族と同速")
         XCTAssertEqual(
-            SpeedMatchupLabels.reachTie(preset: "最速", range: SpeedBaseSpeedRange(min: 10, max: 12)), "最速 10〜12族と同速")
+            SpeedMatchupLabels.reachTie(preset: "最速", range: SpeedBaseSpeedRange(min: 10, max: 12)), "最速 10〜12 族と同速")
     }
 
     func testReachFasterNormal() {
         XCTAssertEqual(
             SpeedMatchupLabels.reachFaster(preset: "準速", range: SpeedBaseSpeedRange(min: 119, max: 255), trickRoom: false),
-            "準速 119族以上に抜かれる")
+            "準速 119 族以上に抜かれる")
         XCTAssertEqual(
-            SpeedMatchupLabels.reachFaster(preset: "準速", range: nil, trickRoom: false), "準速 に抜かれる族なし")
+            SpeedMatchupLabels.reachFaster(preset: "準速", range: nil, trickRoom: false), "抜かれる族はありません")
     }
 
     func testReachFasterUnderTrickRoomReadsAsMovingFirst() {
         XCTAssertEqual(
             SpeedMatchupLabels.reachFaster(preset: "準速", range: SpeedBaseSpeedRange(min: 119, max: 255), trickRoom: true),
-            "準速 119族以上には先に動ける")
+            "準速 119 族以上には先に動ける")
         XCTAssertEqual(
-            SpeedMatchupLabels.reachFaster(preset: "準速", range: nil, trickRoom: true), "準速 には先に動けない")
+            SpeedMatchupLabels.reachFaster(preset: "準速", range: nil, trickRoom: true), "先に動ける族はありません")
     }
 
     func testCountAndExample() {

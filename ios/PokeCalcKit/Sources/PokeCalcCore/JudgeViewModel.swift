@@ -3,7 +3,7 @@
 // 自分のポケモン1体と相手候補(1〜`RequestLimits.maxJudgeDefenders` 件)の入力から要求を作り、`JudgeService` の応答を表示用に整える。
 // 計算ロジックは持たない(素早さ・行動順・確定数は judge-svc の応答のまま。勝敗の真偽値に丸めない)。
 //
-// 状態の作り(`SpeedViewModel`・`CalcViewModel` と同じ流儀):
+// 状態の作り(`SpeedMatchupViewModel`・`CalcViewModel` と同じ流儀):
 //  - `@MainActor @Observable`。送信は **ボタンを押したときだけ**(入力のたびに送らない。debounce もしない。ADR-0705 §7)。
 //  - 送信のたびに世代を進め、先行の要求は cancel し、**最新の世代の応答だけ**反映する(cancel を無視するサービスの古い応答も捨てる)。
 //  - `CancellationError` は画面の失敗にしない。判定の失敗・マスタの失敗は計算・構築に影響しない(絶対ルール5)。`load()` は throw しない。

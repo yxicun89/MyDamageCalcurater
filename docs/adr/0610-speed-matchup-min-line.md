@@ -253,12 +253,10 @@ Web(I-speed-4b)と同じ体験・同じ語・同じ規則を iOS で作る。仕
 
 実装は上の §1〜§7 のとおり。実装で決めた点:
 
-- **語の正**: 固定のテスト(`SpeedMatchupLabelsTests`・`SpeedLabelsTests`)に書いた iOS の語を正とする。Web(`web/src/i18n/speed.ts`。feat/speed-web-matchup)との差は次のとおりで、どれも意味は同じ(Web 側を直す必要はない)。
-  - 族の表記: iOS は数字と「族」の間に空白を入れない(「102族まで抜ける」)。Web は「102 族まで抜ける」(日本語の画面の読みやすさ。Web は空白あり)。
-  - 見出し: 「無振りで抜ける」「準速で抜ける」は同じ。Web の「最速なら S18 以上で抜ける」「S12 まで振っても先に動ける」は、iOS では「最速なら S18で抜ける」「補正なしなら S12まで下を取れる」(規則=補正なしの最小 SP から導く、は同じ。空白と語尾だけ違う)。
-  - 端末の語: iOS の失敗文言は「アプリを開き直してください」、Web は「ページを開き直してください」。`upstream_unavailable`(gateway が speed に届かない 503)は iOS が「素早さのサーバーに接続できません」(通信失敗と同じ文言)、Web は原因が分かる別の文言。
-  - 入力欄の名前: iOS は「今の振りを入れる」、Web は「今の振りも入れる」(トグルの語尾)。
-  - 連続技へのリンク・「これ以上」の見出し・想定のチップ名(調整名)は同じ。
+- **語の正**: 画面の文言は Web(`web/src/i18n/speed.ts` の `speedScreenText`・`speedPresetText`)を正とし、iOS は同じ語・同じ空白(「102 族」「S18 以上」)・同じ説明文(想定・今の振り・トリックルーム・「これ以上」の説明と案内)にそろえる。固定は `SpeedMatchupLabelsTests`・`SpeedLabelsTests`・`SpeedMatchupDisplayTests`。iOS 固有で残す差は次の 3 点だけ:
+  - 端末の語: 失敗文言は iOS が「アプリを開き直してください」、Web が「ページを開き直してください」(`missing_header`・`invalid_header`)。
+  - `upstream_unavailable`(gateway が speed に届かない 503): iOS は「素早さのサーバーに接続できません」(通信失敗と同じ文言)、Web は原因が分かる別の文言。
+  - 部品に依存する語: iOS の入力欄は「自分の今の振り」の見出しと「かんたん設定」(無振り / 準速 / 最速のボタン)を持つ(Web は同じ入力を「今の振りも入れる」の中の欄で出す)。
 - **ランク**: 既存の `SpeedStepper`(−/値/+。識別子 `speedRankValue` など)。メーター化は別タスク。
 - **相手の想定のチップ**: 6 つのプリセット。カスタムは ViewModel(`setCustomAssumption`)が持つが、画面の入口は Web の画面と合わせて後続で決める(今は出さない)。
 - **想定が 1 つの注記**: `assumptionMinimumNoticeVisible` はカスタムなしでチップが 1 つだけ残ったとき(外せないとき)だけ true。

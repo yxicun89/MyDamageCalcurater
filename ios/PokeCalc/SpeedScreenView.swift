@@ -160,6 +160,7 @@ private struct SpeedSelfSection: View {
                     identifier: "speedCurrentToggle"
                 ) { viewModel.setCurrentEnabled(viewModel.current == nil) }
             }
+            SpeedHint(text: SpeedMatchupLabels.currentHint, identifier: "speedCurrentHint")
             if let current = viewModel.current {
                 SpeedPillGroup(title: SpeedMatchupLabels.currentPresetGroup) {
                     ForEach(SpeedMinimalPreset.allCases, id: \.self) { preset in
@@ -237,12 +238,9 @@ private struct SpeedOpponentSection: View {
                     ) { viewModel.togglePreset(id) }
                 }
             }
+            SpeedHint(text: SpeedMatchupLabels.assumptionHint, identifier: "speedAssumptionHint")
             if viewModel.assumptionMinimumNoticeVisible {
-                Text(SpeedMatchupLabels.assumptionMinimumNotice)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .multilineTextAlignment(.leading)
-                    .accessibilityIdentifier("speedAssumptionMinimumNotice")
+                SpeedHint(text: SpeedMatchupLabels.assumptionMinimumNotice, identifier: "speedAssumptionMinimumNotice")
             }
         }
     }
@@ -253,10 +251,13 @@ private struct SpeedFieldSection: View {
     let viewModel: SpeedMatchupViewModel
 
     var body: some View {
-        SpeedPillGroup(title: SpeedLabels.fieldGroup) {
-            SpeedPill(title: SpeedLabels.trickRoom, isSelected: viewModel.trickRoom, identifier: "speedTrickRoom") {
-                viewModel.setTrickRoom(!viewModel.trickRoom)
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            SpeedPillGroup(title: SpeedLabels.fieldGroup) {
+                SpeedPill(title: SpeedLabels.trickRoom, isSelected: viewModel.trickRoom, identifier: "speedTrickRoom") {
+                    viewModel.setTrickRoom(!viewModel.trickRoom)
+                }
             }
+            SpeedHint(text: SpeedMatchupLabels.trickRoomHint, identifier: "speedTrickRoomHint")
         }
     }
 }

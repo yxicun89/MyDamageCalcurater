@@ -4,7 +4,7 @@ import XCTest
 
 /// `SpeedMatchupViewModel` の状態遷移(I-speed-4c。ADR-0610 §4): 入力 → 読み込み中 → 結果 / 失敗、トリックルーム、
 /// 失敗の独立(matchup・reach・ポケモン一覧)、キャンセル・古い応答の破棄・debounce。
-/// 方式は `SpeedViewModelAsyncTests` と同じ: debounce は `.zero`(または終わらないほど長い値)を注入し、
+/// 方式(削除済みの旧 `SpeedViewModel` のテストから引き継いだ): debounce は `.zero`(または終わらないほど長い値)を注入し、
 /// スタブの hold/release で順序を作る(待ち時間に依存しない)。
 @MainActor
 final class SpeedMatchupViewModelStateTests: XCTestCase {
@@ -56,7 +56,7 @@ final class SpeedMatchupViewModelStateTests: XCTestCase {
         await viewModel.settle()
         XCTAssertEqual(viewModel.matchupCards.count, 1)
         XCTAssertEqual(viewModel.matchupCards.first?.headline, "準速で抜ける")
-        XCTAssertEqual(viewModel.matchupCards.first?.rows.map(\.text), ["S31以上で抜ける", "S18以上で抜ける"])
+        XCTAssertEqual(viewModel.matchupCards.first?.rows.map(\.text), ["S31 以上で抜ける", "S18 以上で抜ける"])
     }
 
     func testCardsAreEmptyWhileLoadingAndAfterAFailure() async {
@@ -225,14 +225,14 @@ final class SpeedMatchupViewModelStateTests: XCTestCase {
         viewModel.selectSelfPokemon(id: pokemonA)
         viewModel.applyCurrentPreset(.max)
         await viewModel.settle()
-        XCTAssertEqual(viewModel.reachRows[safe: 2]?.slowerText, "最速 102族まで抜ける")
+        XCTAssertEqual(viewModel.reachRows[safe: 2]?.slowerText, "最速 102 族まで抜ける")
 
         viewModel.setTrickRoom(true)
         await viewModel.settle()
         let reachCalls = await stub.reachCalls.count
         XCTAssertEqual(reachCalls, 1, "トリックルームでは reach を取り直さない")
-        XCTAssertEqual(viewModel.reachRows[safe: 2]?.slowerText, "最速 102族までは後に動く")
-        XCTAssertEqual(viewModel.reachRows[safe: 2]?.fasterText, "最速 104族以上には先に動ける")
+        XCTAssertEqual(viewModel.reachRows[safe: 2]?.slowerText, "最速 102 族までは後に動く")
+        XCTAssertEqual(viewModel.reachRows[safe: 2]?.fasterText, "最速 104 族以上には先に動ける")
         XCTAssertEqual(viewModel.reachState.isFailed, false)
     }
 

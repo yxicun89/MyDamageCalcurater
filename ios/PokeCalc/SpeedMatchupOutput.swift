@@ -7,27 +7,15 @@ import SwiftUI
 // 状態の描き分け(案内 / 読み込み中 / 失敗 / 結果)だけを持ち、語の選び方は `SpeedMatchupDisplayBuilder` が決める。
 // 固定高にしない。届かない・同速・行動順は文字で言う(色だけに頼らない)。
 
-private struct SpeedNote: View {
-    let text: String
-    let identifier: String
-
-    var body: some View {
-        Text(text)
-            .font(TextStyleToken.caption.font)
-            .foregroundStyle(ColorToken.textSecondary.color)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier(identifier)
-    }
-}
-
 /// 出力 1: 想定ごとのカード。
 struct SpeedMatchupSection: View {
     let viewModel: SpeedMatchupViewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            PopHeading(title: SpeedMatchupLabels.matchupRegion, systemImage: PopSymbol.speed)
+            PopHeading(
+                title: viewModel.trickRoom ? SpeedMatchupLabels.matchupRegionTrickRoom : SpeedMatchupLabels.matchupRegion,
+                systemImage: PopSymbol.speed)
             content
         }
         .accessibilityElement(children: .contain)
@@ -37,14 +25,14 @@ struct SpeedMatchupSection: View {
     private var content: some View {
         switch viewModel.matchupState {
         case .idle:
-            SpeedNote(text: SpeedMatchupLabels.matchupHint, identifier: "speedMatchupHint")
+            SpeedHint(text: SpeedMatchupLabels.matchupHint, identifier: "speedMatchupHint")
         case .loading:
-            SpeedNote(text: SpeedMatchupLabels.matchupLoading, identifier: "speedMatchupLoading")
+            SpeedHint(text: SpeedMatchupLabels.matchupLoading, identifier: "speedMatchupLoading")
         case .failed(let failure):
             ErrorBannerView(message: failure.message, identifier: "speedMatchupError")
         case .loaded(let matchup):
             if let speed = matchup.selfSpeed {
-                SpeedNote(text: SpeedLabels.selfSpeed(speed), identifier: "speedSelfSpeed")
+                SpeedHint(text: SpeedLabels.selfSpeed(speed), identifier: "speedSelfSpeed")
             }
             ForEach(viewModel.matchupCards) { card in
                 SpeedMatchupCard(card: card)
@@ -148,6 +136,7 @@ struct SpeedReachSection: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
             PopHeading(title: SpeedMatchupLabels.reachRegion, systemImage: PopSymbol.speed)
+            SpeedHint(text: SpeedMatchupLabels.reachIntro, identifier: "speedReachIntro")
             content
         }
         .accessibilityElement(children: .contain)
@@ -157,9 +146,9 @@ struct SpeedReachSection: View {
     private var content: some View {
         switch viewModel.reachState {
         case .idle:
-            SpeedNote(text: SpeedMatchupLabels.reachHint, identifier: "speedReachHint")
+            SpeedHint(text: SpeedMatchupLabels.reachHint, identifier: "speedReachHint")
         case .loading:
-            SpeedNote(text: SpeedMatchupLabels.reachLoading, identifier: "speedReachLoading")
+            SpeedHint(text: SpeedMatchupLabels.reachLoading, identifier: "speedReachLoading")
         case .failed(let failure):
             ErrorBannerView(message: failure.message, identifier: "speedReachError")
         case .loaded:
@@ -181,6 +170,10 @@ private struct SpeedReachRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            Text(row.presetLabel)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .frame(maxWidth: .infinity, alignment: .leading)
             line(row.slowerText, count: row.slowerCountLabel, example: row.slowerExample, id: "speedReachSlower-\(row.id)")
             if let tie = row.tieText {
                 line(tie, count: row.tieCountLabel, example: nil, id: "speedReachTie-\(row.id)")
