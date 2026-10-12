@@ -27,7 +27,6 @@ describe("ルート表", () => {
     ]);
     expect(appText.balanceTabLabel).toBe("タイプバランス");
     expect(appText.speedTabLabel).toBe("素早さ");
-    expect(appText.judgeTabLabel).toBe("判定");
     expect(appText.teamTabLabel).toBe("構築");
     expect(appText.adjustTabLabel).toBe("調整");
   });
@@ -82,7 +81,7 @@ describe("パス → 画面(screenFromPath)", () => {
     ["/calc/extra", "/"],
     ["/Reverse", "/"],
     ["/app/", "/app/"],
-    // ADR-0330: 非表示の画面(判定)の URL は未知のパスと同じ(呼び出し側が既定の画面へ置き換える)。
+    // CB-7: 廃止した画面(判定)の URL は未知のパスと同じ(呼び出し側が既定の画面へ置き換える)。
     ["/judge", "/"],
     ["/judge/", "/"],
     ["/app/judge", "/app/"],

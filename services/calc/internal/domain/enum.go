@@ -86,3 +86,14 @@ func screensFrom(s *Screens) engine.Screens {
 }
 
 func derefBool(p *bool) bool { return p != nil && *p }
+
+// ParseOpponentSpeed は連続技の相手の素早さの扱いを検証する(省略は unknown。ADR-0253)。
+func ParseOpponentSpeed(m *Enum) (engine.OpponentSpeedMode, error) {
+	if m == nil {
+		return engine.OpponentSpeedUnknown, nil
+	}
+	if !m.Known {
+		return "", Errorf(CodeInvalidEnum, "opponentSpeed に未知の値 %q", m.Value)
+	}
+	return engine.OpponentSpeedMode(m.Value), nil
+}

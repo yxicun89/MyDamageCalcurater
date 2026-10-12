@@ -56,6 +56,12 @@ FROM move_mechanism_params
 WHERE move_id IN (sqlc.slice(ids))
 ORDER BY move_id;
 
+-- name: ListMoveEffectsByMoveIDs :many
+SELECT move_id, effect
+FROM move_effects
+WHERE move_id IN (sqlc.slice(ids))
+ORDER BY move_id;
+
 -- name: ListMoveRulesByMoveIDs :many
 SELECT move_id, rule
 FROM move_rules

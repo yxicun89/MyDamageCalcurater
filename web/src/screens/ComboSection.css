@@ -1,0 +1,160 @@
+/*
+ * 計算画面の「連続技」(ADR-0359)。色は必ず tokens.css の CSS 変数(--*)で参照し、16 進の色リテラルを書かない
+ * (web/src/styles/noColorLiterals.test.ts)。動きは操作への反応だけ(常時動くアニメーションを入れない)。
+ */
+
+.calc-combo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.calc-combo__heading {
+  margin: 0;
+  font-size: var(--font-size-heading);
+}
+
+.calc-combo__open,
+.calc-combo__close {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 44px;
+}
+
+.calc-combo__steps,
+.calc-combo__result-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calc-combo__step,
+.calc-combo__result-step {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--bg-glass);
+  padding: var(--space-2) var(--space-3);
+}
+
+.calc-combo__step-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.calc-combo__step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.calc-combo__ordinal {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.calc-combo__move {
+  color: var(--text-primary);
+}
+
+.calc-combo__icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+}
+
+.calc-combo__icon-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.calc-combo__chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+/* ランク変化のチップ。上昇 = brand.primary、下降 = warning(ADR-0357 と同じ意味)。符号は文字でも出す。 */
+.calc-combo__chip--up {
+  border: 1px solid var(--brand-primary);
+  color: var(--brand-primary);
+}
+
+.calc-combo__chip--down {
+  border: 1px solid var(--warning);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+.calc-combo__inputs {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.calc-combo__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-self: stretch;
+}
+
+.calc-combo__results {
+  gap: var(--space-2);
+}
+
+.calc-combo__total {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-heading);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-combo__total-fill {
+  background-color: var(--brand-primary);
+}
+
+.calc-combo__ko,
+.calc-combo__survive {
+  align-self: flex-start;
+  margin: 0;
+}
+
+.calc-combo__speed {
+  margin: 0;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.calc-combo__order {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.calc-combo__opponent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.calc-combo__note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+}

@@ -15,6 +15,9 @@ import {
   type CalcEngine,
   type CalcRequest,
   type CalcResult,
+  type ComboEngine,
+  type ComboRequest,
+  type ComboResult,
   type EngineResult,
   type Field,
   type Individual,
@@ -128,6 +131,7 @@ const CALC_PATHS = {
   calc: "api/calc",
   bulk: "api/calc/bulk",
   reverse: "api/calc/reverse",
+  combo: "api/calc/combo",
 } as const;
 
 /** engine の Field を API の FieldState に写す(天候・地形は同じドメインの値を共有する。省略は省略のまま)。 */
@@ -407,12 +411,171 @@ function isReverseResult(value: unknown): value is Schemas["ReverseResult"] {
   );
 }
 
+// ---- 連続技(CB-6)の応答の検証 ----
+// 写像はしない(API の ComboResult と WASM の calcCombo は同じ形。ADR-0253)ので、画面が読む入れ子の形を
+// 実行時に確かめて、契約外なら engine_unavailable にする(issue 67 と同じ方針)。
+
+/** 配列で、すべての要素が check を満たすか(isArrayOf と違い、型の絞り込みはしない)。 */
+function everyItem(value: unknown, check: (item: unknown) => boolean): boolean {
+  return Array.isArray(value) && value.every(check);
+}
+
+function isComboRanks(value: unknown): boolean {
+  return (
+    isRecord(value) && (["atk", "def", "spa", "spd", "spe"] as const).every((key) => isNumber(value[key]))
+  );
+}
+
+function isComboSpeedRange(value: unknown): boolean {
+  return isRecord(value) && isNumber(value.min) && isNumber(value.max);
+}
+
+function isComboSpeedLine(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.selfSpeed) &&
+    isComboSpeedRange(value.selfFirst) &&
+    isComboSpeedRange(value.opponentFirst)
+  );
+}
+
+function isComboStepResult(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isString(value.moveId) &&
+    isComboRanks(value.selfStartRanks) &&
+    isComboRanks(value.selfEndRanks) &&
+    isComboRanks(value.opponentStartRanks) &&
+    isComboRanks(value.opponentEndRanks) &&
+    (value.damage === null || isCalcResult(value.damage)) &&
+    isNumber(value.selfSpeed) &&
+    isNumber(value.opponentSpeed) &&
+    isNumber(value.selfPriority) &&
+    isNumber(value.opponentPriority) &&
+    isString(value.order) &&
+    isComboSpeedLine(value.line)
+  );
+}
+
+function isComboKoChance(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.chancePercent) &&
+    isBoolean(value.guaranteed) &&
+    isNumber(value.displayChancePercent)
+  );
+}
+
+function isComboTotal(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.minDamage) &&
+    isNumber(value.maxDamage) &&
+    isNumber(value.minPercent) &&
+    isNumber(value.maxPercent) &&
+    isNumber(value.defenderHP) &&
+    isComboKoChance(value.ko) &&
+    everyItem(value.koByStep, isComboKoChance)
+  );
+}
+
+function isComboSpeed(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.firstSelfSpeed) &&
+    isNumber(value.lastSelfSpeed) &&
+    isNumber(value.opponentSpeed) &&
+    isBoolean(value.opponentSpeedKnown)
+  );
+}
+
+function isComboOpponentAction(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.step) &&
+    isString(value.timing) &&
+    isCalcResult(value.damage) &&
+    isNumber(value.surviveChancePercent)
+  );
+}
+
+function isComboOpponentScenario(value: unknown): boolean {
+  return (
+    isRecord(value) && everyItem(value.actions, isComboOpponentAction) && isNumber(value.surviveChancePercent)
+  );
+}
+
+function isComboOpponentAttack(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    isNumber(value.selfHp) &&
+    isNumber(value.minActions) &&
+    isNumber(value.maxActions) &&
+    isComboOpponentScenario(value.fast) &&
+    isComboOpponentScenario(value.slow)
+  );
+}
+
+/** 連続技の応答の形(opponentAttack は相手の技が無いと null)。 */
+function isComboResult(value: unknown): value is ComboResult {
+  return (
+    isRecord(value) &&
+    everyItem(value.steps, isComboStepResult) &&
+    isComboTotal(value.total) &&
+    isComboSpeed(value.speed) &&
+    (value.opponentAttack === null || isComboOpponentAttack(value.opponentAttack)) &&
+    Array.isArray(value.unsupported)
+  );
+}
+
+/** engine の ComboRequest を API の ComboRequest に写す(技は ID に。性格が解決できなければ undefined)。 */
+function mapComboRequest(
+  natures: CreateApiEngineInput["master"]["natures"],
+  request: ComboRequest,
+): Schemas["ComboRequest"] | undefined {
+  const attacker = mapIndividual(natures, request.attacker);
+  const defender = mapIndividual(natures, request.defender);
+  if (attacker === undefined || defender === undefined) {
+    return undefined;
+  }
+  const body: Schemas["ComboRequest"] = {
+    format: request.format,
+    attacker,
+    defender,
+    // critical は API では必須(既定 false)。省略は急所なし。hits は指定があるときだけ。
+    steps: request.steps.map((step) => ({
+      moveId: step.move.id,
+      critical: step.critical === true,
+      ...(step.hits === undefined ? {} : { hits: step.hits }),
+    })),
+  };
+  const field = mapField(request.field);
+  if (field !== undefined) {
+    body.field = field;
+  }
+  if (request.opponentMove !== undefined) {
+    body.opponentMoveId = request.opponentMove.id;
+  }
+  if (request.opponentSpeed !== undefined) {
+    body.opponentSpeed = request.opponentSpeed;
+  }
+  if (request.speedField !== undefined) {
+    // API の 3 項目は応答で必須扱い(既定 false)。省略は false で埋める。
+    body.speedField = {
+      trickRoom: request.speedField.trickRoom === true,
+      selfTailwind: request.speedField.selfTailwind === true,
+      opponentTailwind: request.speedField.opponentTailwind === true,
+    };
+  }
+  return body;
+}
+
 /**
  * 計算の API 実装(ADR-0301)。画面が渡す実体の DTO を実体 → ID に写して POST し、応答を DTO に戻す。
  * 性格が解決できない・engine のカスタムプリセット定義は fetch せずに失敗を返す。通信・応答の失敗は
  * engine_unavailable にし、自動でオフラインへフォールバックしない(切り替えは利用者が選ぶ。ADR-0301 §4)。
  */
-export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
+export function createApiEngine(input: CreateApiEngineInput): CalcEngine & ComboEngine {
   const { baseUrl, fetch: fetchImpl, master, ids } = input;
 
   /**
@@ -578,6 +741,15 @@ export function createApiEngine(input: CreateApiEngineInput): CalcEngine {
         return response;
       }
       return { ok: true, value: mapReverseResult(response.value) };
+    },
+
+    async calcCombo(request: ComboRequest, signal?: AbortSignal): Promise<EngineResult<ComboResult>> {
+      const body = mapComboRequest(master.natures, request);
+      if (body === undefined) {
+        return unknownNatureError();
+      }
+      // 応答は WASM の calcCombo と同じ形なので写さずそのまま返す(検証は isComboResult)。
+      return postJson(CALC_PATHS.combo, body, isComboResult, signal);
     },
   };
 }

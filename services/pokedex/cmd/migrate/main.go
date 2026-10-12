@@ -29,6 +29,7 @@ import (
 	"os"
 	"strings"
 
+	"example.com/pokecalc/services/internal/dbmigrate"
 	"example.com/pokecalc/services/pokedex/db"
 )
 
@@ -36,7 +37,7 @@ import (
 type cliEnv struct {
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
-	Provision      func(rootDSN string, roles []db.RoleGrant) error
+	Provision      func(rootDSN string, roles []dbmigrate.RoleGrant) error
 	Up             func(dsn string) error
 	Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 	DownAll        func(dsn, confirmDatabase string) error
@@ -52,7 +53,7 @@ func productionEnv() cliEnv {
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 		Getenv:    os.Getenv,
-		Provision: db.Provision,
+		Provision: dbmigrate.Provision,
 		Up:        db.Up,
 		Version:   db.Version,
 		DownAll:   db.DownAll,
@@ -89,7 +90,7 @@ func runUp(env cliEnv) int {
 	}
 
 	provisionDSN := env.Getenv("POKEDEX_PROVISION_DSN")
-	var roles []db.RoleGrant
+	var roles []dbmigrate.RoleGrant
 	if provisionDSN != "" {
 		var missing []string
 		roles, missing = rolesFromEnv(env.Getenv, dsn)
@@ -119,11 +120,11 @@ func runUp(env cliEnv) int {
 	return 0
 }
 
-// dataTableRoles は roles のうち表単位の権限(db.ScopeDataTables)のものだけを返す。
-func dataTableRoles(roles []db.RoleGrant) []db.RoleGrant {
-	var out []db.RoleGrant
+// dataTableRoles は roles のうち表単位の権限(dbmigrate.ScopeDataTables)のものだけを返す。
+func dataTableRoles(roles []dbmigrate.RoleGrant) []dbmigrate.RoleGrant {
+	var out []dbmigrate.RoleGrant
 	for _, r := range roles {
-		if r.Scope == db.ScopeDataTables {
+		if r.Scope == dbmigrate.ScopeDataTables {
 			out = append(out, r)
 		}
 	}
@@ -133,7 +134,7 @@ func dataTableRoles(roles []db.RoleGrant) []db.RoleGrant {
 // rolesFromEnv は reader・importer・migrator の順で RoleGrant を組み立てる。migrator の DSN は
 // POKEDEX_DATABASE_DSN(migratorDSN、呼び出し側で既に取得済み)と同じ値を使う(ADR-0110 決定3)。
 // reader・importer の DSN が欠けていれば、欠けた環境変数名だけを返す(値は返さない)。
-func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []db.RoleGrant, missing []string) {
+func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []dbmigrate.RoleGrant, missing []string) {
 	readerDSN := getenv("POKEDEX_READER_DSN")
 	importerDSN := getenv("POKEDEX_IMPORTER_DSN")
 	if readerDSN == "" {
@@ -145,11 +146,11 @@ func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []db.Ro
 	if len(missing) > 0 {
 		return nil, missing
 	}
-	return []db.RoleGrant{
-		{DSN: readerDSN, Privileges: db.ReaderPrivileges},
+	return []dbmigrate.RoleGrant{
+		{DSN: readerDSN, Privileges: dbmigrate.ReaderPrivileges},
 		// importer は schema_migrations を書き換えられないよう、書き込みを表単位にする(issue #312・ADR-0125)。
-		{DSN: importerDSN, Privileges: db.ImporterPrivileges, Scope: db.ScopeDataTables},
-		{DSN: migratorDSN, Privileges: db.MigratorPrivileges},
+		{DSN: importerDSN, Privileges: dbmigrate.ImporterPrivileges, Scope: dbmigrate.ScopeDataTables},
+		{DSN: migratorDSN, Privileges: dbmigrate.MigratorPrivileges},
 	}, nil
 }
 

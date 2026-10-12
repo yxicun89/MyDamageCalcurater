@@ -8,8 +8,9 @@ import type { MasterItem, MasterNature, MasterSpecies } from "../types";
  * (次のオンライン取得で作り直す。ADR-0313 §5)。
  * 2: 種族に isMega・requiredItemId を持つようにした(issue 515、ADR-0320)。
  * 3: 持ち物に roles・isMegaStone、種族に baseSpeciesKey・baseSpeciesNameJa を持つようにした(ADR-0326。版 2 は役割が無いので捨てる)。
+ * 4: 技に effect(確率 100% のランク変化。連続技 CB-6)を持つようにした(版 3 の技は effect が無く「ランク変化なし」と誤読されるので捨てる)。
  */
-export const MASTER_CACHE_SCHEMA_VERSION = 3;
+export const MASTER_CACHE_SCHEMA_VERSION = 4;
 
 /** 保存するマスタ。種族・特性・技は resolveSpecies で解決したものだけを、キー(種族 key・特性 ID・技 ID)で持つ。 */
 export interface MasterCacheRecord {

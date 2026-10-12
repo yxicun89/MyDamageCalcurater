@@ -347,8 +347,8 @@ describe("SP3 素早さのタブ", () => {
   });
 });
 
-// ADR-0330(F-07): 判定は Web で非表示(登録ファイルの hidden: true)。タブに出ず、URL /judge は未知のパスと同じく
-// 既定の画面(計算)へ置き換わり、judge API を呼ばない。判定のコードと単体テスト(web/src/judge/)は残してある。
+// CB-7: 判定は廃止(画面を削除。ADR-0330 の非表示から一歩進めた)。タブに出ず、URL /judge は未知のパスと同じく
+// 既定の画面(計算)へ置き換わり、judge API を呼ばない。判定のコードと単体テストは削除した。
 describe("ADR-0330 判定の非表示", () => {
   test("タブ「判定」は出ない", async () => {
     render(<App engine={createFakeEngine()} />);

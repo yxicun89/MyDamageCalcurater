@@ -6,7 +6,7 @@ package db
 // TEAM_TEST_DSN(root 相当。CREATE USER・GRANT OPTION を持つこと)で、テスト専用の名前の
 // ユーザー(record_t_*)を作り、終わったら DROP USER する。パスワードは毎回乱数で作り、
 // ログ・エラー文に出さない。pokedex-svc の grants_mysql_test.go(実 MySQL 向け)と同じ構成を
-// TiDB・2ロール(app・migrator)向けに書き直したもの(services/pokedex/db/grants.go の
+// TiDB・2ロール(app・migrator)向けに書き直したもの(services/internal/dbmigrate/grants.go の
 // Provision/RoleGrant は import して再利用するため、検査対象のロジック自体は共通)。
 
 import (
@@ -22,7 +22,7 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	pokedexdb "example.com/pokecalc/services/pokedex/db"
+	"example.com/pokecalc/services/internal/dbmigrate"
 )
 
 // TiDB のエラー番号(MySQL 互換のエラー番号をそのまま返す。権限・認証)。
@@ -71,16 +71,16 @@ func roleDSN(rootCfg *mysql.Config, user, pass string) string {
 }
 
 type testRoleSet struct {
-	app, migrator pokedexdb.RoleGrant
+	app, migrator dbmigrate.RoleGrant
 }
 
-func (s testRoleSet) all() []pokedexdb.RoleGrant { return []pokedexdb.RoleGrant{s.app, s.migrator} }
+func (s testRoleSet) all() []dbmigrate.RoleGrant { return []dbmigrate.RoleGrant{s.app, s.migrator} }
 
 func newTestRoles(t *testing.T, rootCfg *mysql.Config) testRoleSet {
 	t.Helper()
 	return testRoleSet{
-		app:      pokedexdb.RoleGrant{DSN: roleDSN(rootCfg, testAppUser, randomPassword(t)), Privileges: pokedexdb.AppPrivileges},
-		migrator: pokedexdb.RoleGrant{DSN: roleDSN(rootCfg, testMigratorUser, randomPassword(t)), Privileges: pokedexdb.MigratorPrivileges},
+		app:      dbmigrate.RoleGrant{DSN: roleDSN(rootCfg, testAppUser, randomPassword(t)), Privileges: dbmigrate.AppPrivileges},
+		migrator: dbmigrate.RoleGrant{DSN: roleDSN(rootCfg, testMigratorUser, randomPassword(t)), Privileges: dbmigrate.MigratorPrivileges},
 	}
 }
 
@@ -126,7 +126,7 @@ func openAs(t *testing.T, dsn string) (*sql.DB, error) {
 	return conn, conn.Ping()
 }
 
-func mustOpenAs(t *testing.T, g pokedexdb.RoleGrant) *sql.DB {
+func mustOpenAs(t *testing.T, g dbmigrate.RoleGrant) *sql.DB {
 	t.Helper()
 	conn, err := openAs(t, g.DSN)
 	if err != nil {
@@ -220,13 +220,13 @@ func TestProvisionIsIdempotent(t *testing.T) {
 	roles := newTestRoles(t, cfg)
 
 	for i := 1; i <= 2; i++ {
-		if err := pokedexdb.Provision(dsn, roles.all()); err != nil {
+		if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 			t.Fatalf("%d 回目の Provision: %v", i, err)
 		}
 	}
 	for _, c := range []struct {
 		user  string
-		grant pokedexdb.RoleGrant
+		grant dbmigrate.RoleGrant
 	}{
 		{testAppUser, roles.app},
 		{testMigratorUser, roles.migrator},
@@ -246,7 +246,7 @@ func TestMigratorCanCreateTableAppCannot(t *testing.T) {
 	dropTestUsers(t, root)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := pokedexdb.Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 

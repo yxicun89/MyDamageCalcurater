@@ -17,7 +17,6 @@ const targets = [
   ["api/openapi.yaml", "src/api/openapi.gen.ts"],
   ["services/balance/api/openapi.yaml", "src/api/balance.gen.ts"],
   ["services/speed/api/openapi.yaml", "src/speed/speed.gen.ts"],
-  ["services/judge/api/openapi.yaml", "src/judge/judge.gen.ts"],
 ];
 
 const lockfile = join(webRoot, "package-lock.json");

@@ -1,6 +1,6 @@
 // Package app は calc-svc のユースケース層(ADR-0811・ADR-0252)。
 //
-// 計算(Calc)・一括(Bulk)・逆算(Reverse)の 1 操作の手順を持つ:
+// 計算(Calc)・一括(Bulk)・逆算(Reverse)・連続技(Combo。イベントは発行しない。ADR-0253)の 1 操作の手順を持つ:
 //
 //	列挙の検証(invalid_enum)→ ID の解決(unknown_*)→ 入力の検証(invalid_input)→ 締め切りの確認
 //	→ engine 呼び出し → イベント発行

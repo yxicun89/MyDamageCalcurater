@@ -53,6 +53,8 @@ import {
   type CalcConditions,
 } from "../domain/calcConditions";
 import { abilityNamesLabel } from "../domain/abilityLabels";
+import { canBeComboStep } from "../domain/combo";
+import { buildComboDefenders } from "../domain/comboView";
 import { formatEffectiveness, formatKO, formatPercentRange } from "../domain/format";
 import {
   itemIdAfterSpeciesChange,
@@ -62,7 +64,7 @@ import {
   type MegaItemLock,
 } from "../domain/mega";
 import { itemAfterRoleChange, itemsForRole, itemsWithStoneLabels, megaStoneLabel } from "../domain/itemRoles";
-import { damagingLearnsetMoves, firstDamagingMove, isStatusMove } from "../domain/moves";
+import { damagingLearnsetMoves, firstDamagingMove, isStatusMove, learnsetMoves } from "../domain/moves";
 import { MAX_ITEM_VARIANTS } from "../domain/requestLimits";
 import {
   buildBulkRequest,
@@ -126,6 +128,9 @@ import { MovePicker } from "./MovePicker";
 import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
+import { ComboSection } from "./ComboSection";
+import type { ComboOpenRequest } from "../app/comboOpenRequest";
+import type { SpeedClient } from "../speed/speedClient";
 import { Icon } from "../ui/Icon";
 import { PokemonCard } from "../ui/PokemonCard";
 import { SegmentedControl } from "../ui/SegmentedControl";
@@ -293,6 +298,13 @@ export interface CalcScreenProps {
    * 通常の calcBulk がそのまま走る。同じ token の再描画では戻さない(利用者の変更を消さない)。
    */
   readonly restoreRequest?: FavoriteRestoreRequest;
+  /**
+   * CB-6 段階 C2(ADR-0359 追記): 素早さ画面からの「連続技を開く」要求。token が変わったときだけ(mount 時を含む)
+   * 攻撃側・防御側を入れ、連続技の節を広げる。素早さの SP・性格・ランク・スカーフは計算画面に入力欄が無いので反映しない。
+   */
+  readonly comboRequest?: ComboOpenRequest;
+  /** CB-6 段階 C1: 連続技の素早さの種族の例を引く口。App はオンラインのときだけ渡す(省略は「出さない」)。 */
+  readonly speedClient?: SpeedClient;
 }
 
 /** お気に入りから戻したときの案内(ADR-0333 §2・§4)。 */
@@ -499,6 +511,8 @@ export function CalcScreen({
   recordClient,
   onFavoriteAdded,
   restoreRequest,
+  comboRequest,
+  speedClient,
 }: CalcScreenProps) {
   // P4-16b(ADR-0304 A-2・A-9・A-10): 使える機能。capabilities を省いたマスタ(オフライン相当)は全部使える。
   const capabilities = masterCapabilities(master);
@@ -668,6 +682,79 @@ export function CalcScreen({
       controller.abort();
     };
   }, [restoreToken, registerSpeciesResolution]);
+
+  // CB-6 段階 C2: 素早さ画面からの「連続技を開く」要求。token が変わったときだけ攻撃側・防御側を入れ、連続技の節を広げる。
+  // 入れる処理は最新の画面の関数を ref から読む(token 以外の変化では入れ直さない。復元の restoreContextRef と同じ考え方)。
+  const [comboOpenToken, setComboOpenToken] = useState<number | null>(null);
+  const comboOpenContextRef = useRef({
+    master,
+    masterSearch,
+    speciesListAvailable: capabilities.speciesList,
+    speciesFor,
+    selectAttacker,
+    selectDefender,
+    handleAttackerResolved,
+    handleDefenderResolved,
+  });
+  useEffect(() => {
+    comboOpenContextRef.current = {
+      master,
+      masterSearch,
+      speciesListAvailable: capabilities.speciesList,
+      speciesFor,
+      selectAttacker,
+      selectDefender,
+      handleAttackerResolved,
+      handleDefenderResolved,
+    };
+  });
+  const comboRequestToken = comboRequest?.token ?? null;
+  useEffect(() => {
+    if (comboRequestToken === null || comboRequest === undefined) {
+      return;
+    }
+    const controller = new AbortController();
+    // 非同期の途中で中断されたか(型の絞り込みで定数に見えないよう関数にする)。
+    const isAborted = (): boolean => controller.signal.aborted;
+    /** ポケモン ID(= 種族の key)を画面に入れる。引けなければ(安全側に)何も入れない。 */
+    async function applySide(pokemonId: string, side: "attacker" | "defender"): Promise<void> {
+      const context = comboOpenContextRef.current;
+      if (context.speciesFor(context.master.species, pokemonId) !== null) {
+        (side === "attacker" ? context.selectAttacker : context.selectDefender)(pokemonId);
+        return;
+      }
+      if (context.speciesListAvailable || context.masterSearch === undefined) {
+        return;
+      }
+      try {
+        const resolution = await context.masterSearch.resolveSpecies(pokemonId, controller.signal);
+        if (!controller.signal.aborted) {
+          (side === "attacker" ? context.handleAttackerResolved : context.handleDefenderResolved)(resolution);
+        }
+      } catch {
+        // 引けなかったポケモンは入れない(計算画面の他の入力は壊さない)。
+      }
+    }
+    void (async () => {
+      await applySide(comboRequest.attackerPokemonId, "attacker");
+      // 攻撃側の state 更新が描画に反映され、comboOpenContextRef が最新になるのを待ってから防御側を入れる。
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, 0);
+      });
+      if (isAborted()) {
+        return;
+      }
+      await applySide(comboRequest.defenderPokemonId, "defender");
+      if (!isAborted()) {
+        setComboOpenToken(comboRequestToken);
+      }
+    })();
+    return () => {
+      controller.abort();
+    };
+    // comboRequest の本体は token と一緒に変わる(token が同じなら同じ要求)。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [comboRequestToken]);
 
   const attackerSpecies = useMemo(
     () => speciesFor(master.species, attackerKey),
@@ -1209,6 +1296,65 @@ export function CalcScreen({
       : { status: "error", error: completed.result.error };
   }
 
+  // CB-6 段階 B(ADR-0359): 連続技。攻撃側・防御側・場・条件・ランクは上の値をそのまま渡す(別の入力欄を作らない)。
+  // 防御側は一括計算の行(振り × 持ち物 × 特性)から選ぶ。結果が成功のときだけ選択肢ができる。
+  const comboConditionParts = useMemo(() => conditionRequestParts(conditions), [conditions]);
+  const comboAttacker = useMemo(
+    () =>
+      attackerSpecies === null || !attackerStats.ok
+        ? null
+        : buildIndividual(attackerSpecies, {
+            sp: attackerStats.sp,
+            nature: attackerStats.nature,
+            item: attackerItem,
+            ability: attackerAbility,
+            ...(comboConditionParts.status === undefined ? {} : { status: comboConditionParts.status }),
+            ...(comboConditionParts.ranks === undefined ? {} : { ranks: comboConditionParts.ranks }),
+          }),
+    [attackerSpecies, attackerStats, attackerItem, attackerAbility, comboConditionParts],
+  );
+  const comboRows = outcome.status === "success" ? outcome.result.rows : undefined;
+  const comboDefenders = useMemo(
+    () =>
+      defenderSpecies === null || comboRows === undefined
+        ? []
+        : buildComboDefenders({
+            species: defenderSpecies,
+            rows: comboRows,
+            items: master.items,
+            candidateAbilities: defenderAbilities,
+            abilityNames: markAbilities,
+            hasAbilityChoice: defenderAbilityOptions.length > 1,
+            ...(comboConditionParts.defenderOverride === undefined
+              ? {}
+              : { ranks: comboConditionParts.defenderOverride.ranks }),
+          }),
+    [
+      defenderSpecies,
+      comboRows,
+      master.items,
+      defenderAbilities,
+      markAbilities,
+      defenderAbilityOptions.length,
+      comboConditionParts,
+    ],
+  );
+  // 追加の手の候補: 攻撃側の覚える技のうち、攻撃技またはランクを変える変化技。相手の技の候補: 防御側の覚える攻撃技。
+  const comboExtraMoves = useMemo(
+    () =>
+      attackerSpecies === null
+        ? []
+        : learnsetMoves(attackerSpecies, movesFor(master.moves, attackerKey)).filter(canBeComboStep),
+    [attackerSpecies, master.moves, attackerKey, movesFor],
+  );
+  const comboOpponentMoves = useMemo(
+    () =>
+      defenderSpecies === null
+        ? []
+        : damagingLearnsetMoves(defenderSpecies, movesFor(master.moves, defenderKey)),
+    [defenderSpecies, master.moves, defenderKey, movesFor],
+  );
+
   return (
     <div className="calc-screen">
       {restoreNotice !== null && <RestoreNoticeView notice={restoreNotice} />}
@@ -1381,6 +1527,28 @@ export function CalcScreen({
         defenderHasAbilityChoice={defenderAbilityOptions.length > 1}
         pulsingKeys={pulsingKeys}
         onKoAnimationEnd={handleKoAnimationEnd}
+      />
+
+      <ComboSection
+        engine={engine}
+        typeChart={master.typeChart}
+        types={master.typeChart.types}
+        attacker={comboAttacker}
+        mainMove={move}
+        mainHits={hits}
+        mainCritical={conditions.critical}
+        onMainCriticalChange={(critical) => {
+          setConditions({ ...conditions, critical });
+        }}
+        extraCandidates={comboExtraMoves}
+        opponentCandidates={comboOpponentMoves}
+        defenders={comboDefenders}
+        field={comboConditionParts.field}
+        moves={markMoves}
+        items={displayItems}
+        abilities={markAbilities}
+        speedClient={speedClient}
+        openToken={comboOpenToken}
       />
 
       {frequentOpponents.length > 0 && (

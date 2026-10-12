@@ -4,7 +4,7 @@
 // 3ユーザーを冪等に作成・パスワード同期・権限のリセット/付与する。呼び出し側(cmd/migrate)が
 // パスワードそのものを Secret の値から作ることは無い(scripts/up.sh が openssl rand -hex で
 // 生成した値が DSN に埋め込まれているだけ)。
-package db
+package dbmigrate
 
 import (
 	"database/sql"
@@ -14,8 +14,6 @@ import (
 	"strings"
 
 	"github.com/go-sql-driver/mysql"
-
-	"example.com/pokecalc/services/internal/dbmigrate"
 )
 
 // 権限セット定数(ADR-0110 決定1)。CLI(cmd/migrate)と実 DB テスト(grants_mysql_test.go)が
@@ -44,7 +42,7 @@ const (
 	// ScopeDatabase は `db`.* に Privileges をそのまま付ける(reader・migrator・record/team の app)。
 	ScopeDatabase GrantScope = iota
 	// ScopeDataTables は SELECT だけを `db`.* に付け、それ以外(INSERT/UPDATE/DELETE)は
-	// migration の管理表(dbmigrate.MigrationsTable)を除く、いまある表ごとに付ける(importer。issue #312)。
+	// migration の管理表(MigrationsTable)を除く、いまある表ごとに付ける(importer。issue #312)。
 	// 表の一覧は DB の information_schema(= 適用済みの migration)から引き、コードに列挙しない。
 	// 新しい表は migrate up の後にもう一度 Provision するまで書き込めない(cmd/migrate が up の後に流す)。
 	ScopeDataTables
@@ -221,7 +219,7 @@ func Provision(rootDSN string, roles []RoleGrant) error {
 func dataTables(conn *sql.DB, dbName string) ([]string, error) {
 	rows, err := conn.Query(`SELECT table_name FROM information_schema.tables
 		WHERE table_schema = ? AND table_type = 'BASE TABLE' AND table_name <> ? ORDER BY table_name`,
-		dbName, dbmigrate.MigrationsTable)
+		dbName, MigrationsTable)
 	if err != nil {
 		return nil, fmt.Errorf("db: 表の一覧を読めない: %w", err)
 	}

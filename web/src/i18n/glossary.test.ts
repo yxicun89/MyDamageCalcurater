@@ -284,7 +284,7 @@ describe("禁止語が画面の文言に出てこない(用語集と i18n の一
 
 describe("変えない語(対戦の標準用語)が画面の文言に残っている", () => {
   const glossary = readGlossary();
-  const literals = allLiterals().filter((literal) => literal.file !== "judge.ts");
+  const literals = allLiterals();
 
   test.each(glossary.keep)("「%s」がどれかの文言にある(言い換えすぎない)", (word) => {
     expect(literals.some((literal) => literal.text.includes(word))).toBe(true);

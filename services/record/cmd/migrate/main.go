@@ -23,7 +23,7 @@ import (
 	"os"
 	"strings"
 
-	pokedexdb "example.com/pokecalc/services/pokedex/db"
+	"example.com/pokecalc/services/internal/dbmigrate"
 	recorddb "example.com/pokecalc/services/record/db"
 )
 
@@ -31,7 +31,7 @@ import (
 type cliEnv struct {
 	Stdout, Stderr io.Writer
 	Getenv         func(string) string
-	Provision      func(rootDSN string, roles []pokedexdb.RoleGrant) error
+	Provision      func(rootDSN string, roles []dbmigrate.RoleGrant) error
 	Up             func(dsn string) error
 	Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 	DownAll        func(dsn, confirmDatabase string) error
@@ -46,7 +46,7 @@ func productionEnv() cliEnv {
 		Stdout:    os.Stdout,
 		Stderr:    os.Stderr,
 		Getenv:    os.Getenv,
-		Provision: pokedexdb.Provision,
+		Provision: dbmigrate.Provision,
 		Up:        recorddb.Up,
 		Version:   recorddb.Version,
 		DownAll:   recorddb.DownAll,
@@ -102,7 +102,7 @@ func runUp(env cliEnv) int {
 // rolesFromEnv は app・migrator の順で RoleGrant を組み立てる。migrator の DSN は
 // RECORD_DATABASE_DSN(migratorDSN、呼び出し側で既に取得済み)と同じ値を使う(ADR-0211 §4)。
 // app の DSN が欠けていれば、欠けた環境変数名だけを返す(値は返さない)。
-func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []pokedexdb.RoleGrant, missing []string) {
+func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []dbmigrate.RoleGrant, missing []string) {
 	appDSN := getenv("RECORD_APP_DSN")
 	if appDSN == "" {
 		missing = append(missing, "RECORD_APP_DSN")
@@ -110,9 +110,9 @@ func rolesFromEnv(getenv func(string) string, migratorDSN string) (roles []poked
 	if len(missing) > 0 {
 		return nil, missing
 	}
-	return []pokedexdb.RoleGrant{
-		{DSN: appDSN, Privileges: pokedexdb.AppPrivileges},
-		{DSN: migratorDSN, Privileges: pokedexdb.MigratorPrivileges},
+	return []dbmigrate.RoleGrant{
+		{DSN: appDSN, Privileges: dbmigrate.AppPrivileges},
+		{DSN: migratorDSN, Privileges: dbmigrate.MigratorPrivileges},
 	}, nil
 }
 
