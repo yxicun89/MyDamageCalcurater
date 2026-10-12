@@ -3,7 +3,11 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { apiBaseUrl } from "./api/config";
 import { createBrowserMasterCacheStore } from "./master/cache/browserStore";
-import { countSavedSpecies, createCachedMasterSources } from "./master/cache/cachedSources";
+import {
+  countSavedSpecies,
+  createCachedMasterSources,
+  listSavedSpeciesKeys,
+} from "./master/cache/cachedSources";
 import { createOnlineMasterSource } from "./master/onlineSource";
 import type { MasterSources } from "./master/types";
 import "./styles/tokens.css";
@@ -33,6 +37,8 @@ createRoot(container).render(
       }
       // ADR-0358: オフライン表示の「保存済み: ○匹」。
       savedSpeciesCount={() => countSavedSpecies(masterCacheStore)}
+      // ADR-0358 段 3: 「オフライン用にポケモンのデータを保存」が保存済みを飛ばすための key。
+      savedSpeciesKeys={() => listSavedSpeciesKeys(masterCacheStore)}
     />
   </StrictMode>,
 );
