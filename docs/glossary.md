@@ -75,7 +75,6 @@
 
 | ファイル | キー | 禁止語 | 理由 |
 |---|---|---|---|
-| `judge.ts` | `*` | `*` | 判定は非表示(F-07)で、判定レーンの担当。表示を戻すときにこの用語集にそろえる |
 | `about.ts` | `aboutText.dataSources.detail` | `API` | データの出典の固有名詞(PokeAPI) |
 | `ja.ts` | `apiEngineText.invalidPreset` | `プリセット` | 画面の操作では起きない開発者向けのエラー |
 | `ja.ts` | `apiEngineText.invalidPreset` | `API` | 同上 |

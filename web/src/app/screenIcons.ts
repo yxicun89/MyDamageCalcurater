@@ -8,7 +8,6 @@ const SCREEN_ICONS: Readonly<Record<string, IconName>> = {
   reverse: "reverse",
   balance: "balance",
   speed: "speed",
-  judge: "judge",
   team: "team",
   favorites: "favorites",
   adjust: "adjust",

@@ -13,7 +13,6 @@ import { abilityFieldLabel, itemFieldLabel, pokemonFieldLabel, speciesPlaceholde
 export { statLetterJa } from "./common";
 export * from "./balance";
 export * from "./speed";
-export * from "./judge";
 export * from "./team";
 export * from "./adjust";
 export * from "./about";
@@ -280,7 +279,6 @@ export const appText = {
   /** SP3: 素早さ比較のタブ(ADR-0604 §2)。 */
   speedTabLabel: "素早さ",
   /** JD5: 判定(抜けて倒せるか・返り討ちに遭うか)のタブ(ADR-0705 §1)。 */
-  judgeTabLabel: "判定",
   /** P5-5 PR-A1: 構築ビルダーのタブ(ADR-0309 §1)。 */
   teamTabLabel: "構築",
   /** AJ6: 調整(指数・16n・SP 配分・最小 SP・技を覚えるポケモン)のタブ(ADR-0319 §1)。 */

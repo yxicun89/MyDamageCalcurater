@@ -27,7 +27,6 @@ COPY web ./web
 COPY api/openapi.yaml ./api/openapi.yaml
 COPY services/balance/api/openapi.yaml ./services/balance/api/openapi.yaml
 COPY services/speed/api/openapi.yaml ./services/speed/api/openapi.yaml
-COPY services/judge/api/openapi.yaml ./services/judge/api/openapi.yaml
 COPY --from=wasm /out/engine.wasm ./web/public/engine.wasm
 COPY --from=wasm /out/wasm_exec.js ./web/public/wasm_exec.js
 
