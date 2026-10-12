@@ -39,7 +39,9 @@ struct FavoritesFeature: AppFeature {
                             frequentOpponentsService: context.core.frequentOpponents, favoritesService: service,
                             restoring: favorite == nil ? calc : nil, restoringFavorite: favorite,
                             // 記録の画面に積む計算は、戻ると破棄されるので離れたら取り消す(ADR-0531 §2)。
-                            lifetime: .pushed))
+                            lifetime: .pushed,
+                            comboService: context.services.resolve((any ComboCalcService).self),
+                            speedService: context.services.resolve((any SpeedService).self)))
                 }))
     }
 }

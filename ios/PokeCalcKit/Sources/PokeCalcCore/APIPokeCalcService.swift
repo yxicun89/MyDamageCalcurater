@@ -325,7 +325,8 @@ public struct APIPokeCalcService: PokeCalcService {
     private static func domainMove(_ move: Components.Schemas.Move) -> Move {
         Move(
             id: move.id, nameJa: move.nameJa, type: domainPokeType(move._type),
-            category: domainMoveCategory(move.category), power: move.power, priority: move.priority ?? 0
+            category: domainMoveCategory(move.category), power: move.power, priority: move.priority ?? 0,
+            effect: domainMoveRankEffect(move.effect?.value1.additionalProperties.value)
         )
     }
 
@@ -348,7 +349,7 @@ public struct APIPokeCalcService: PokeCalcService {
         )
     }
 
-    private static func domainCalcResult(_ result: Components.Schemas.CalcResult) -> CalcResult {
+    static func domainCalcResult(_ result: Components.Schemas.CalcResult) -> CalcResult {
         CalcResult(
             rolls: result.rolls, minDamage: result.minDamage, maxDamage: result.maxDamage,
             minPercent: result.minPercent, maxPercent: result.maxPercent, defenderHP: result.defenderHP,
@@ -457,13 +458,13 @@ public struct APIPokeCalcService: PokeCalcService {
         .init(hp: block.hp, atk: block.atk, def: block.def, spa: block.spa, spd: block.spd, spe: block.spe)
     }
 
-    private static func generatedRankBlock(_ ranks: RankBlock) -> Components.Schemas.RankBlock {
+    static func generatedRankBlock(_ ranks: RankBlock) -> Components.Schemas.RankBlock {
         .init(atk: ranks.atk, def: ranks.def, spa: ranks.spa, spd: ranks.spd, spe: ranks.spe)
     }
 
     /// 場(issue #274。ADR-0501「issue #274」4章)。`BulkCalcRequest.field` が既定でないときだけ
     /// `generatedBulkCalcRequest` から呼ばれる。
-    private static func generatedFieldState(_ field: FieldState) -> Components.Schemas.FieldState {
+    static func generatedFieldState(_ field: FieldState) -> Components.Schemas.FieldState {
         .init(
             weather: generatedWeather(field.weather),
             terrain: generatedTerrain(field.terrain),

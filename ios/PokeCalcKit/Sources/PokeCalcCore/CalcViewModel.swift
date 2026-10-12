@@ -458,11 +458,18 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     // MARK: - 計算結果
 
     public private(set) var rows: [BulkRowDisplay] = []
+    /// 画面に出している結果の元になった要求と応答(連続技の材料。`comboContext`。失敗・行なしでは nil)。
+    private var lastBulkCalc: LastBulkCalc?
     /// 全行に共通する未対応の印の注記(結果の上に1回だけ出す。無ければ nil。ADR-0501「P6-17」)。
     /// `rows` と同じ時に書き換える(失敗で `rows` を空にするときは nil に戻す)。
     public private(set) var unsupportedNotice: String?
     public private(set) var isLoading = false
     public private(set) var error: CalcScreenError?
+
+    private struct LastBulkCalc {
+        let request: BulkCalcRequest
+        let result: BulkCalcResult
+    }
 
     /// 「最新の要求だけを反映する」ための通し番号(規則7)。`beginInput()` が入力操作のたびに進め、
     /// その操作から生まれる `species(key:)` / `calcBulk` の応答・失敗はすべて同じ番号で判定する
@@ -776,6 +783,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         }
         self.error = CalcScreenError(error)
         rows = []
+        lastBulkCalc = nil
         unsupportedNotice = nil
         isLoading = false
     }
@@ -972,6 +980,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     private func discardResult(token: Int, error pokeCalcError: PokeCalcError?) {
         guard token == latestRequestToken else { return }
         rows = []
+        lastBulkCalc = nil
         unsupportedNotice = nil
         isLoading = false
         error = pokeCalcError.map { CalcScreenError($0) }
@@ -1078,6 +1087,7 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         do {
             let result = try await service.calcBulk(request)
             guard token == latestRequestToken else { return }
+            lastBulkCalc = LastBulkCalc(request: request, result: result)
             applyBulkResult(result)
             error = nil
             isLoading = false
@@ -1167,5 +1177,30 @@ extension CalcViewModel {
     fileprivate func applyAttackerItemLock(previous: MegaItemLock) {
         attackerItemId = MegaItemLock.itemIdAfterSpeciesChange(
             previous: previous, next: attackerItemLock, currentItemId: attackerItemId)
+    }
+}
+
+// MARK: - 連続技の材料(CB-8。ADR-0535)
+
+extension CalcViewModel {
+    /// 連続技へ渡す計算画面の値(攻撃側・技・急所・場・防御側の振りの選択肢・覚える技)。
+    /// 単発の計算が失敗中・結果の行なし・技なしのときは nil(連続技の節を出さない)。
+    public var comboContext: ComboContext? {
+        guard error == nil, !rows.isEmpty, let last = lastBulkCalc, let move = selectedMove else { return nil }
+        let displayItems = ItemDisplayName.displayItems(itemOptions, megaStoneNames: megaStoneNames)
+        let abilityNames = Dictionary(
+            defenderAbilityOptions.map { ($0.id, $0.nameJa) }, uniquingKeysWith: { _, latest in latest })
+        return ComboContext(
+            attacker: last.request.attacker, mainMove: move, mainCritical: last.request.critical,
+            field: last.request.field,
+            defenders: ComboDefenderOptions.make(
+                rows: last.result.rows, rowIDs: rows.map(\.id), defenderSpeciesKey: last.request.defenderSpeciesKey,
+                defenderRanks: last.request.defenderRanks, items: displayItems, abilityNames: abilityNames,
+                natures: natureOptions),
+            attackerLearnset: attackerLearnsetIds, defenderSpeciesKey: last.request.defenderSpeciesKey,
+            natures: natureOptions,
+            markNames: UnsupportedMarkNames(
+                moves: Array(moveDictionary.values), items: displayItems,
+                abilities: attackerAbilityOptions + defenderAbilityOptions))
     }
 }

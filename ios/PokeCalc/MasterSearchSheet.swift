@@ -189,7 +189,7 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
 }
 
 /// 検索シートの行・案内文言の共通部品(種族シート・技シートの両方から使う)。
-private enum MasterSearchRow {
+enum MasterSearchRow {
     /// 案内文言(prompt/truncated/noMatch のいずれか。一致していれば何も出さない。ADR 4章・8章)。
     static func hint(query: String, isEmpty: Bool, reachedLimit: Bool) -> String? {
         if query.isEmpty { return MasterSearchLabels.prompt }
@@ -234,7 +234,7 @@ private enum MasterSearchRow {
 }
 
 /// 技のタイプを示す丸いアイコン(タイプ色の円 + タイプ名の頭文字。画像を使わない)。
-private struct MoveTypeEmblem: View {
+struct MoveTypeEmblem: View {
     let type: PokeType
     private static let side: CGFloat = 28
 

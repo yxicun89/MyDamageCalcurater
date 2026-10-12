@@ -5040,3 +5040,64 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `JudgeScreenUITests`(17)・`JudgeSpeedNotesUITests`(8)・`JudgeHiddenUITests`(2) | 判定画面の削除 |
 | `LargeTextLayoutUITests`: `testJudgeScreenNoHorizontalOverflowAtAX5`・`testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5`・`testJudgeSpeedNotesAndStatusNoHorizontalOverflowAtAX5`・`testJudgeStatusOptionSheetNoHorizontalOverflowAtAX5`・`testJudgeOptionSheetNoHorizontalOverflowAtAX5` | 判定画面の AX5 検査。画面の削除 |
 | `AppNavigationUITests` の「`openJudgeScreen` が無い」の 1 行・`UITestNavigation` の `openJudgeScreen` | 入口が存在しなくなったため |
+
+## 連続技(CB-8 / I-ios-20。ADR-0535。2026-10-12。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+計算画面の結果の下に「連続技」の節を足す(docs/plan/combo-calc.md §4-3 案 A。Web の ADR-0359・CB-6 と同じ構成・語)。
+iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早さ画面 → 計算タブの導線は今回の対象外(ADR-0535「今回は対象外」。I-ios-21)。
+
+### 受け入れ条件
+
+| ID | 条件(検証するテスト) |
+|---|---|
+| AC-i1 | 起動直後(手がメインだけ)の計算画面に「連続技」の見出しと「次の技」ボタンだけが出て、要求を送らない。「次の技」で広がり、手のリスト(1手目 = 上の技欄の技・「上の技欄の技」の印)・「追加の技」・相手の振り・相手の技・相手の素早さ・自分の素早さ・素早さの場(折りたたみ)・注記が出る。手がメインだけで相手の技も無いときだけ「閉じる」で戻せる(`ComboViewModelTests`・`CalcComboUITests`) |
+| AC-i2 | 「追加の技」の候補は攻撃側の覚える技を `moves(ids:)` で引いた攻撃技とランクを変える変化技(`Move.effect`)だけで、タイプ順。手は最大 3 つ(`RequestLimits.maxComboSteps`。契約の `ComboRequest.steps.maxItems` と `check-request-limits.sh` で照合)。上限では「追加の技」の代わりに「手は最大3つまでです」(`ComboViewModelTests`・`ComboDomainTests`・`check-request-limits.sh`) |
+| AC-i3 | 追加の手は外せる・上へ/下へで並べ替えられる(メインより前にも置ける)。メインは外せない。端の手の上へ/下へは押せない。攻撃側を変えて覚えなくなった追加の手は表示と要求から外れる(`ComboViewModelTests`) |
+| AC-i4 | 計算するのは手が 2 件以上、または相手の技を選んだときだけ。要求は計算画面の攻撃側(ランク・やけど・特性・持ち物込み)・場・選んだ防御側の振り・手(急所は true のときだけ・メインの急所は計算画面の「急所」)・相手の技(選んだときだけ)・相手の素早さ(切り替えたときだけ `from_defender`)・素早さの場(1 つでも true のときだけ)で、別の入力欄を持たない(UC-5)。計算画面の入力(振りの行・攻撃側・場)が変わると引き直す(`ComboViewModelTests`・`CalcViewModelComboContextTests`・`APIPokeCalcServiceComboTests`) |
+| AC-i5 | 防御側の振りは計算画面の結果の行(振り × 持ち物 × 特性)から選ぶ。キーは結果の行の ID と同じ。選んでいた振りが無くなったら先頭に戻し「選んでいた相手の振りがなくなったので、先頭の振りに戻しました」を出す(`ComboDefenderOptionsTests`・`ComboViewModelTests`) |
+| AC-i6 | 自分の素早さ(I-web-32 相当): SP は未入力なら個体の値・0〜min(32, 66 − 素早さ以外の SP) に丸める。性格補正は「計算画面の性格のまま / 素早さ上がる(×1.1)/ 素早さ補正なし / 素早さ下がる(×0.9)」で、Web と同じ置き換え規則で性格 ID を引き直す(引けなければ計算せず案内)。ランクは `RankMeterView`(field `comboSelfSpeed`)。既定のままなら攻撃側の個体をそのまま送る(`ComboDomainTests`・`ComboViewModelTests`) |
+| AC-i7 | 結果: 各手(「N手目」・技名・ランクのチップ「攻撃 +1」「相手の素早さ -1」・ダメージ % 幅 / 変化技は「ダメージなし」・行動順「先に動く / 相手が先 / 同速」。決まらないときは出さない)、「合計 a〜b%」とバー、「N 手で倒す 51.6%」/「N 手で倒す(確定)」/「倒せない」、「素早さ 120 → 180」、相手の素早さが分からないときは最後の手の線「179 以下を抜く / 180 は同速 / 181 以上は相手が先」、分かるときは「相手の素早さ 150」、相手の技を選んだときは「耐える 87.5%」(fast を主。0/100 を予約)・「相手の行動 1〜2回」・「1回ぶん 25.0〜31.7%」、注記「場は全手で同じ状態が続きます。命中は考えません。」(`ComboResultDisplayTests`・`CalcComboUITests`) |
+| AC-i8 | 素早さの基本値の例: 相手の素早さが分からず、トリックルームでないときだけ、最後の手の自分の素早さで `SpeedService.reach`(raw)を引き、準速の行だけを「準速 c 族以上には抜かれる(例: ○○)」「準速 a 族までは抜ける(例: ○○)」「準速 b 族とは同速」で 1〜3 行出す。失敗・サービス無しは何も出さない(`ComboDomainTests`・`ComboViewModelTests`) |
+| AC-i9 | 印: 単発と同じ「この結果は正確でない可能性があります(未対応: …)」。連続技だけの理由は「技を変えられない持ち物」「2手目以降も相手が満タンとして計算」「素早さへの影響を判定できない」(`ComboResultDisplayTests`・`APIPokeCalcServiceComboTests`) |
+| AC-i10 | 失敗: 節の中だけに「連続技を計算できませんでした(<計算画面の失敗の文言>)」(`comboError`)と「もう一度」(`comboRetry`)。もう一度で同じ要求を送り直す。単発の結果の行・計算画面のエラー表示は変わらない。キャンセルは表示しない。古い要求の応答は捨てる(`ComboViewModelTests`・`CalcComboUITests`) |
+| AC-i11 | API: 要求本文は契約どおり(省略できる項目はキーを作らない)。応答の全項目をドメインに写す(`damage` の null・`opponentAttack` の null・未知でない連続技の印)。400/503 の JSON はその `code`、接続できないは `client_transport_error`、形の違いは `client_decode_error`、キャンセルは `CancellationError`。公開 `Move.effect`(PascalCase)を `Move.effect` に写し、確率 100 以外・語彙外は nil(`APIPokeCalcServiceComboTests`) |
+| AC-i12 | モック: 架空データで決め打ちの結果を要求の形(手の数・変化技・相手の技・相手の素早さ)に合わせて返す。手 0 件・4 件以上・ランクの変わらない変化技の手・変化技の相手の技は `invalid_input`、知らない技・種族は `not_found`。`POKECALC_MOCK_COMBO=fail` で常に失敗、`fail-once` で 1 回だけ失敗(`MockPokeCalcServiceComboTests`) |
+| AC-i13 | 見た目: タップ領域 36pt 以上、AX5 で節の中身が横にはみ出さずタップできる、`lineLimit` 無し、常時アニメーション無し、パレット K のトークンだけ、画像を使わない、用語集の禁止語を使わない(`CalcComboUITests`・`GlossaryTests` に連続技の文言を追加) |
+
+### 識別子(UI テスト)
+
+節 `comboSection`・開く `comboOpenButton`・閉じる `comboCloseButton`・手の行 `comboStep-<0始まりの位置>`・急所 `comboStepCritical-<位置>`・
+上へ `comboStepUp-<位置>`・下へ `comboStepDown-<位置>`・外す `comboStepRemove-<位置>`・追加の技 `comboAddPicker`(シートの行 `comboAddMove-<技ID>`)・
+上限の案内 `comboMaxStepsNotice`・相手の振り `comboDefenderPicker`・振りが戻った案内 `comboDefenderReset`・相手の技 `comboOpponentMovePicker`(シートの行 `comboOpponentMove-<技ID>`・選ばない `comboOpponentMoveNone`)・
+相手の素早さ `comboOpponentSpeedToggle`・自分の素早さ `comboSelfSpeedSP`・`comboSelfSpeedNature`・`rankMeter-comboSelfSpeed`・素早さの場 `comboSpeedFieldToggle`・`comboTrickRoom`・`comboSelfTailwind`・`comboOpponentTailwind`・
+計算中 `comboLoading`・失敗 `comboError`・もう一度 `comboRetry`・結果 `comboResult`・各手の結果 `comboResultStep-<位置>`・合計 `comboTotal`・バー `comboTotalBar`・倒す確率 `comboKO`・
+素早さ `comboSpeedSummary`・線 `comboSpeedLine`・相手の素早さ `comboOpponentSpeed`・例 `comboSpeedExample`・耐える `comboSurvive`・行動回数 `comboActions`・1回ぶん `comboPerHit`・印 `comboUnsupportedNotice`・注記 `comboNote`。
+
+### PokeCalcCore の型の形(テストが固定する。実装者はこの名前・ラベルで作る)
+
+- `Move.effect: MoveRankEffect?`(init の末尾に `effect: MoveRankEffect? = nil`)。`MoveRankEffect(target: MoveEffectTarget, stages: RankBlock)`、`MoveEffectTarget.user`(契約 `self`)/ `.opponent`(契約 `target`)。
+- `ComboMoveRules.changesRanks(_:)`・`canBeStep(_:)`・`canBeOpponentMove(_:)`。`RequestLimits.maxComboSteps = 3`。
+- 要求: `ComboStepInput(moveId:critical:hits:)`・`ComboOpponentSpeed { unknown, fromDefender }`・`ComboSpeedField(trickRoom:selfTailwind:opponentTailwind:)`(既定 false)・
+  `ComboRequest(format:attacker:defender:field:steps:opponentMoveId:opponentSpeed:speedField:)`(`opponentMoveId` 既定 nil・`opponentSpeed` 既定 `.unknown`・`speedField` 既定 `ComboSpeedField()`)。
+- 応答: `ComboResult(steps:total:speed:opponentAttack:unsupported:)`・`ComboStepResult(moveId:selfStartRanks:selfEndRanks:opponentStartRanks:opponentEndRanks:damage:selfSpeed:opponentSpeed:selfPriority:opponentPriority:order:line:)`・
+  `ComboTurnOrder { selfFirst, opponentFirst, speedTie, dependsOnOpponentSpeed }`・`ComboSpeedLine(selfSpeed:selfFirst:opponentFirst:)`・`ComboSpeedRange(min:max:)`(`isEmpty`)・
+  `ComboKOChance(chancePercent:guaranteed:displayChancePercent:)`・`ComboTotal(minDamage:maxDamage:minPercent:maxPercent:defenderHP:ko:koByStep:)`・
+  `ComboSpeedSummary(firstSelfSpeed:lastSelfSpeed:opponentSpeed:opponentSpeedKnown:)`・`ComboOpponentAttack(selfHp:minActions:maxActions:fast:slow:)`・
+  `ComboOpponentScenario(actions:surviveChancePercent:)`・`ComboOpponentAction(step:timing:damage:surviveChancePercent:)`・`ComboOpponentTiming { beforeSelf, afterSelf }`・
+  `ComboMark { case calc(UnsupportedMark); case combo(target: UnsupportedTarget, reason: ComboMarkReason, id: String) }`・`ComboMarkReason { choiceLocked, defenderFullHPAssumed, speedUndetermined }`。
+- サービス: `protocol ComboCalcService: Sendable { func calcCombo(_ request: ComboRequest) async throws -> ComboResult }`。`APIPokeCalcService`・`MockPokeCalcService` が準拠。
+  `MockPokeCalcService.init(comboScenario: MockComboScenario)`(既存の `init()` は `.normal`)。`MockComboScenario(environmentValue:)`・`MockComboScenario.environmentKey = "POKECALC_MOCK_COMBO"`。
+- 画面の材料: `ComboDefenderOption(key:label:individual:)`・`ComboDefenderOptions.make(rows:rowIDs:defenderSpeciesKey:defenderRanks:items:abilityNames:natures:)`・
+  `ComboContext(attacker:mainMove:mainCritical:field:defenders:attackerLearnset:defenderSpeciesKey:natures:)`・`CalcViewModel.comboContext: ComboContext?`。
+- 自分の素早さ: `ComboSelfSpeedNature { keep, plus, neutral, minus }`・`ComboSelfSpeedInput(sp:nature:rank:)`(`.default`)・`ComboSelfSpeed.maxSP(for:)`・`clampSP(_:for:)`・`apply(_:to:natures:) throws`。
+- 表示: `ComboText`(文言)・`ComboRankChip(text:direction:)`(`ComboRankChip.Direction { up, down }`)・`ComboRankChips.chips(for:)`・`ComboResultDisplay(result:stepMoves:names:trickRoom:)`。
+- 画面の状態: `ComboViewModel(comboService:master:speedService:)`。状態・操作の名前は `ComboViewModelTests` の冒頭の一覧。
+
+### 既存テストの変更
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `GlossaryTests.screenStrings` | 連続技の文言(`ComboText`)を検査対象に追加 | 新しい画面の文言も禁止語を使わないことを確かめる(検査を強める変更) |
+| `ios/scripts/check-request-limits.sh` | `check ComboRequest steps maxComboSteps` を追加 | 手の上限の写しを契約と照合する(検査を強める変更) |
+
+既存のテストは削除・緩和していない。モックの `test-move-status-a` に効果を足すため、モックの技一覧の件数・名前は変わらない(項目が 1 つ増えるだけ)。

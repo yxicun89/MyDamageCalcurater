@@ -20,6 +20,10 @@ struct CalcScreenView: View {
     @State private var favoriteLoadTarget: FavoriteLoadTarget?
     private let service: any PokeCalcService
     private let favoritesService: (any FavoritesService)?
+    /// 連続技の計算(CB-8。ADR-0535)。nil なら「連続技」の節を出さない。
+    private let comboService: (any ComboCalcService)?
+    /// 連続技の「素早さの基本値の例」を引く素早さ API。nil なら例を出さない。
+    private let speedService: (any SpeedService)?
     private let backendDescription: String
     /// 計算履歴の行から開いたときの、復元する計算(ADR-0519)。nil は通常の起動(既定の入力)。
     private let restoring: CalcHistoryCalc?
@@ -40,7 +44,8 @@ struct CalcScreenView: View {
         service: any PokeCalcService, teamStore: any TeamStore, backendDescription: String,
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
         favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil,
-        restoringFavorite: RestoringFavorite? = nil, lifetime: ScreenLifetime = .retained
+        restoringFavorite: RestoringFavorite? = nil, lifetime: ScreenLifetime = .retained,
+        comboService: (any ComboCalcService)? = nil, speedService: (any SpeedService)? = nil
     ) {
         self.lifetime = lifetime
         _viewModel = State(
@@ -50,6 +55,8 @@ struct CalcScreenView: View {
         _favoritePin = State(initialValue: FavoritePinViewModel(service: favoritesService))
         self.service = service
         self.favoritesService = favoritesService
+        self.comboService = comboService
+        self.speedService = speedService
         self.backendDescription = backendDescription
         self.restoring = restoring
         self.restoringFavorite = restoringFavorite
@@ -102,6 +109,9 @@ struct CalcScreenView: View {
                 CalcConditionsSection(viewModel: viewModel)
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
+                if let comboService {
+                    ComboSectionView(calc: viewModel, combo: comboService, master: service, speed: speedService)
+                }
                 if favoritePin.isAvailable {
                     FavoritePinSection(calc: viewModel, pin: favoritePin)
                 }
