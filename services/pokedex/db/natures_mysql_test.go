@@ -174,7 +174,7 @@ func TestSearchMovesAndItemsOrderIsNameJaNotID(t *testing.T) {
 // AC-P2: LIKE の特殊文字(%)がエスケープされ、リテラルとして一致すること。
 // MySQL 既定のエスケープ文字 \ に依存している(クエリに ESCAPE 句が無い)ので、
 // NO_BACKSLASH_ESCAPES が有効な環境では壊れる。それを実 MySQL で確かめる(critic の軽微指摘)。
-// httpapi.likeEscaper と同じ変換を手元で行い、DB 層(LIKE そのもの)だけを見る。
+// domain の likeEscaper と同じ変換を手元で行い、DB 層(LIKE そのもの)だけを見る。
 //
 // 2件の名前を用意する: 「literal」は名前に文字どおりの % を含み、「gap」は同じ位置に
 // 別の文字(丸)を置く(% を含まない)。「% off」をエスケープした前方一致は literal だけに

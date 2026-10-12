@@ -14,7 +14,7 @@ import (
 	"reflect"
 	"testing"
 
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/domain"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 
@@ -44,7 +44,7 @@ func TestSearchSpeciesMegaRule(t *testing.T) {
 	}
 	search := func(query string) []string {
 		t.Helper()
-		pattern, megaPattern := httpapi.SpeciesSearchPatterns(query)
+		pattern, megaPattern := domain.SpeciesSearchPatterns(query)
 		rows, err := q.SearchSpecies(ctx, store.SearchSpeciesParams{RegulationID: reg.ID, Pattern: pattern, MegaPattern: megaPattern, Limit: 200})
 		if err != nil {
 			t.Fatalf("SearchSpecies(%q): %v", query, err)

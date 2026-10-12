@@ -20,9 +20,9 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/pokedex/importer"
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/readmodel"
-	"example.com/pokecalc/services/pokedex/internal/readtx"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readmodel"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
 	"example.com/pokecalc/services/pokedex/internal/store"
 )
 

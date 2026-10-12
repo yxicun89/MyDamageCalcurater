@@ -23,9 +23,9 @@ import (
 	"github.com/go-sql-driver/mysql"
 
 	"example.com/pokecalc/services/pokedex/db"
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/readmodel"
-	"example.com/pokecalc/services/pokedex/internal/readtx"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readmodel"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
 )
 
 // 環境変数の名前と既定値(k8s のマニフェスト・Makefile と共有する。ADR-0105 §1・AC-K0)。
