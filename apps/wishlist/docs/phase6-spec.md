@@ -82,6 +82,40 @@ public enum GenreLabel {
 - 識別子(`genreName-…`)は名前の `Text` に `accessibilityIdentifier` で付ける。ボタンに `.accessibilityLabel(name)` を付けると中の `Text` が隠れて XCUITest から見えなくなることがある。そのときは `.accessibilityElement(children: .contain)` にするか、識別子を持つ `Text` を `.accessibilityHidden(false)` にする(ボタン自身の `genreChip-…` の識別子とラベルは変えない)
 - Xcode プロジェクトに新しい `.swift` を足す場合は `project.pbxproj` も更新する(WishlistCore は SwiftPM なので不要)
 
+## 6-3 選んだボタンが列の端で見切れない
+
+6-1 で選んだボタンが「絵柄 + 名前」に伸びるようになり、横に流れる列(ホームの絞り込み。iOS は追加・編集の `GenreChooser` も)の右端に近いジャンル(ポケモングッズ、METAL BUILD・ROBOT魂 など)を押すと、伸びた名前が列の右端で切れて見えない不具合が出た(375px 幅の Playwright 確認で発見)。列が自動で動かないのが原因。追加・編集の Web は `.genre-pick` が折り返すので対象外。
+
+- **AC-6-3-1** Web: 初回表示(マウント時)では `scrollIntoView` を呼ばない(読み込みでページが跳ねない)
+- **AC-6-3-2** Web: 選択が変わったとき、新しく選ばれた `GenreButton` の要素が `element.scrollIntoView({ block: "nearest", inline: "nearest", behavior })` を呼ぶ。`behavior` は `prefers-reduced-motion: reduce` のとき `"auto"`、それ以外は `"smooth"`。`block: "nearest"` なので、列が見えているときにページは縦に動かない
+- **AC-6-3-3** Web: 上は `GenreButton` の共通部品で行うので、ホームの絞り込みでテストされていれば追加・編集にも効く(折り返す列では何も動かない)
+- **AC-6-3-4** iOS: ホームのチップ列(`HomeView.genreButtons`)と `GenreChooser` の横並びを `ScrollViewReader` で包み、選択が変わったら `proxy.scrollTo(<選ばれた id>, anchor: nil)` を呼ぶ。`accessibilityReduceMotion` が false のときだけ `withAnimation` の中で呼ぶ。各ボタンに `.id(...)` を付ける(「すべて」と各ジャンルで衝突しない値)
+- **AC-6-3-5** 見た目(目視。verify.md §6・§8): 375px 幅 / iPhone SE 幅で最後のジャンルを選ぶと、丸薬が全部(収まらなければ `…` つき)列の中に見える。「視差効果を減らす」では動きが滑らかにならず切り替わる
+- **AC-6-3-6** iOS: 丸薬の名前は Dynamic Type を `xxxLarge` までで止める(丸薬の高さが 52 で固定のため。止めないと最大の文字サイズで「デュ…」しか見えなかった。読み上げの名前は全文のまま)
+- **AC-6-3-7** iOS: 名前が出ているときの余白を Web の丸薬(左 14・絵柄・8・名前・右 16)にそろえる(絵柄の 52pt の枠のせいで、絵柄の左右に余計な空きが出ていた)
+
+### 6-3 の確認(2026-10-12。手元の k3d の実データ・ジャンル 5 つ)
+
+- Web(Playwright・375px): 直す前は「ポケモングッズ」「METAL BUILD・ROBOT魂」を押すと丸薬の右端が 401px で切れていた。直した後は 359px で列の中。「METAL BUILD・ROBOT魂」は `…` で省略。`prefers-reduced-motion: reduce` で遷移 0s。ページの横スクロールは出ない。編集画面で明るい色(ポケモングッズ `#f2b705`)の上は濃い文字
+- iOS(iPhone 17e・幅 390pt。一時的な XCUITest で押して撮影し、コミットしない): 5 つとも丸薬が画面内(右端 ≤ 390)。文字サイズ標準と最大(AX5)の両方で 1 行・`…` 省略・高さ 52 のまま
+
+### 6-3 テスト一覧
+
+| 番号 | テスト |
+|---|---|
+| AC-6-3-1 | `web/src/App.genrescroll.test.tsx` 「AC-6-3-1 初回表示では scrollIntoView を呼ばない」 |
+| AC-6-3-2 | 同 「AC-6-3-2 ジャンルを押すと…smooth で scrollIntoView される」 |
+| AC-6-3-2 (reduce) | 同 「AC-6-3-2 prefers-reduced-motion: reduce のときは behavior が auto」 |
+| AC-6-3-3 | 目視(追加・編集の折り返す列) |
+| AC-6-3-4〜7 | 目視(上の「6-3 の確認」)。XCUITest のフィクスチャ(`WishlistFixtures`)のジャンルは 2 つ(`genreChip-1`・`-2`)で、電話幅の列があふれないため、枠外の判定を書いても何も確かめられない。ジャンルが 8 つ前後ある実データで verify.md §8 の手順を行う |
+
+**実装者への注意(6-3)**
+
+- Web: `GenreButton` の `selected` が false から true に変わった副作用(`useEffect`、`useRef` で前回の値を覚える)で呼ぶ。マウント時に最初から `selected` のボタンでは呼ばない。`window.matchMedia` が無い環境(jsdom の既定)でも落ちないようにする(`window.matchMedia?.(...)`)。`scrollIntoView` が無い環境も同様に守る(`el.scrollIntoView?.(...)`)
+- 追加・編集で 6-1 の `Register`・`Edit` が開くときにも最初から選ばれたボタンがあるが、マウント時は呼ばない(AC-6-3-1)
+- iOS: `HomeView` と `Shared/GlassStyle.swift` の `GenreChooser` はそれぞれ ScrollView の中身を `ScrollViewReader { proxy in … }` で包む。`onChange(of: selection)` で `proxy.scrollTo` を呼ぶ。`GenreIconButton`/`GenrePill` の識別子・ラベルは変えない
+- 既存の 6-1 のテストは変えない
+
 ## リスク・未決
 
 - 選ばれたボタンの地がジャンル色のとき、白い名前の読みやすさがジャンル色しだい(黄色 `#f2b705` では白との対比が足りない)。ユーザーが色を自由に選べるため、実装者は名前の文字色を地の明るさで白 / 濃い色に切り替えるかを判断してよい(切り替えるなら ADR は不要、この文書に追記する)。絵柄の線も同じ色にそろえること
