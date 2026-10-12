@@ -90,7 +90,7 @@ func (c adjGoalsCase) httpBody() map[string]any {
 	return b
 }
 
-// engineInput は同じ入力を engine.SPGoalsInput にする(ceiling の省略は 32、場は parseField(nil) と同じ零値)。
+// engineInput は同じ入力を engine.SPGoalsInput にする(ceiling の省略は 32、場は domain.ParseField(nil) と同じ零値)。
 func (c adjGoalsCase) engineInput(t *testing.T, f *fakeStore) engine.SPGoalsInput {
 	t.Helper()
 	ceiling := engine.Stats{HP: 32, Atk: 32, Def: 32, SpA: 32, SpD: 32, Spe: 32}
