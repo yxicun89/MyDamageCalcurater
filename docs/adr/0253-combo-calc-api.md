@@ -78,3 +78,17 @@ main で calc-svc がヘキサゴナルの形(ADR-0811・ADR-0252)に移った�
 列挙(`opponentSpeed` は `domain.ParseOpponentSpeed`)→ ID 解決 → 個体の検証 → メガの持ち物 → 締め切り → `engine.CalcCombo` の手順は
 `app.Service.Combo` が持つ。`ErrInvalidComboInput`・`ErrInvalidSpeedInput` → `invalid_input` の写しは `domain.FromEngine` の表に足した。
 失敗の順番・応答の形は変えていない(`combo_test.go` はそのまま通る)。
+
+## 追記(2026-10-12 CB-4b: API と WASM の一致テスト)
+
+CB-5(WASM の `calcCombo`)が main に入ったので、AC-18 の代用(応答のキーの集合だけの固定)を値まで比べるテストで補った。
+
+- `services/calc/internal/adapters/httpapi/combo_parity_test.go`: `comboCases()`(単発・変化技を含む手・多段の回数・相手の技あり・
+  相手の素早さ unknown / from_defender・トリックルーム / 追い風・未対応の印・開始時のランク)を、`POST /api/calc/combo` と
+  `wasmapi.CalcCombo`(ID を fake のマスタで解決した実体を渡す。parity_test.go と同じ流儀)に通し、応答を `reflect.DeepEqual`(キーも値も)で比べる。
+  網羅の前提(印・相手の技・トリックルーム・多段が実際に含まれる)も別テストで固定した。
+- `engine/wasmapi/combo_test.go`: 公開 API が返す PascalCase の `Move.effect`(`{"Chance":100,"Target":"self","Stages":{...}}`)を
+  そのまま技 DTO の `effect` に渡すと受理され、camelCase のときと同じ結果になる(自分/相手への効果の両方)。encoding/json のキーの
+  大文字小文字を区別しない照合に依る。
+- 結果: 食い違いは見つからなかった。API・WASM とも実装は変更していない。
+  先のキー集合のテスト `TestCalcComboResponseKeysMatchWasmShape` は構造の変更を早く気づく目的で残す。

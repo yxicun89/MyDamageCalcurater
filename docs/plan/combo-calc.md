@@ -289,7 +289,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 | CB-6 | 【段階 A 実装済み 2026-10-12: エンジン層〈calcCombo の API/WASM・公開 Move.effect・要求の組み立て〉。段階 B〈計算画面の「+ 次の技」〉は未着手】Web: 案 A(§4-3)。素早さ表の例は `POST /api/speed/v1/position` の raw を呼ぶ | Web | CB-4(オフラインは CB-5) | 中〜大(結果の表示と入力で 2 つに分けてよい) | 0356 |
 | CB-7 | 判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |
 | CB-8 | iOS: 案 A を `CalcScreenView` に | iOS | CB-4 | 中 | 0531 |
-| CB-4b | 後続: CB-5 が main に入ったら、同じ入力を `POST /api/calc/combo` と `wasmapi` の `calcCombo` に通して値を突き合わせるテスト(AC-18。parity_test.go の流儀)と、公開 `Move.effect`(PascalCase)をそのまま WASM の技の `effect` に渡して受け付けるテストを足す | API / データ(engine) | CB-4・CB-5 | 小 | 0252 に追記 |
+| CB-4b | 【実装済み 2026-10-12】 CB-5 が main に入ったら、同じ入力を `POST /api/calc/combo` と `wasmapi` の `calcCombo` に通して値を突き合わせるテスト(AC-18。parity_test.go の流儀)と、公開 `Move.effect`(PascalCase)をそのまま WASM の技の `effect` に渡して受け付けるテストを足す | API / データ(engine) | CB-4・CB-5 | 小 | 0253 に追記 |
 
 順序: CB-1 と CB-2 は並行できる → CB-3 → CB-4 と CB-5 は並行 → CB-6・CB-8 → CB-7。
 CB-7 で CI のワークフロー(`.github/workflows/`)を変えるなら、その PR は人間がマージする(CLAUDE.md「人間の確認が必要なこと」)。

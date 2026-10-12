@@ -343,3 +343,44 @@ func TestCalcComboDeterministicNoTrailingNewline(t *testing.T) {
 		t.Errorf("result は object: %v", err)
 	}
 }
+
+// 公開 API(pokedex)の Move.effect は PascalCase({"Chance":100,"Target":"self","Stages":{...}})で返る。
+// それをそのまま技 DTO の effect に渡して受理され、camelCase で渡したときと同じ結果になる(ADR-0253。CB-4b)。
+func TestCalcComboAcceptsPublicPascalCaseMoveEffect(t *testing.T) {
+	camel := baseCombo()
+	pascal := baseCombo()
+	// 公開 API の JSON をそのまま JSON 文字列として差し込む(キーの大文字小文字だけが違う)。
+	var publicEffect map[string]any
+	if err := json.Unmarshal([]byte(`{"Chance":100,"Target":"self","Stages":{"atk":1,"spe":1}}`), &publicEffect); err != nil {
+		t.Fatal(err)
+	}
+	m := danceMove()
+	m["effect"] = publicEffect
+	pascal["steps"].([]any)[0].(map[string]any)["move"] = m
+
+	want := callCombo(t, camel)
+	got := callCombo(t, pascal)
+	if strings.Contains(got, `"error":{`) {
+		t.Fatalf("PascalCase の effect が受理されない: %s", got)
+	}
+	if got != want {
+		t.Errorf("PascalCase と camelCase で結果が違う:\n%s\n%s", got, want)
+	}
+	// 効果が実際に読まれている(ランクが累積している)ことで、無視されて一致した場合を除く。
+	v := decodeCombo(t, got)
+	if v.Steps[0].SelfEndRanks != (comboRanksView{Atk: 1, Spe: 1}) {
+		t.Errorf("effect が読まれていない: %+v", v.Steps[0].SelfEndRanks)
+	}
+	// 相手側の技(opponentMove)の effect も同じ。ランクを下げる技(Target=target)を PascalCase で。
+	pascalFoe := baseCombo()
+	foe := danceMove()
+	foe["effect"] = map[string]any{"Chance": 100, "Target": "target", "Stages": map[string]any{"spe": -1}}
+	pascalFoe["steps"].([]any)[0].(map[string]any)["move"] = foe
+	camelFoe := baseCombo()
+	cf := danceMove()
+	cf["effect"] = map[string]any{"chance": 100, "target": "target", "stages": map[string]any{"spe": -1}}
+	camelFoe["steps"].([]any)[0].(map[string]any)["move"] = cf
+	if a, b := callCombo(t, pascalFoe), callCombo(t, camelFoe); a != b || strings.Contains(a, `"error":{`) {
+		t.Errorf("target 効果の PascalCase が camelCase と違う:\n%s\n%s", a, b)
+	}
+}
