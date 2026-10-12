@@ -187,9 +187,11 @@ final class CalcDefenderRanksUITests: XCTestCase {
 
         let meter = element(app, "rankMeter-calcDefender")
         scrollUntilHittable(app, meter)
+        let startY = meter.frame.minY
         let start = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         start.press(forDuration: 0.05, thenDragTo: meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: -6)))
         XCTAssertEqual(meter.value as? String, "±0", "縦に動かしても値は変わらない")
+        XCTAssertNotEqual(meter.frame.minY, startY, "メーターの上から始めた縦スワイプでも画面はスクロールする")
 
         scrollUntilHittable(app, meter)
         let left = meter.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

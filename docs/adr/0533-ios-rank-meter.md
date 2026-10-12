@@ -9,7 +9,7 @@
 1. **共通 SwiftUI 部品 `RankMeterView`**(`ios/PokeCalc/RankMeterView.swift`)。13 段(左 6 = 下降・中央 0・右 6 = 上昇)。
    純粋ロジック(段↔値、ドラッグ位置→段、増減のクランプ、符号付き文字、読み上げ、識別子)は `RankMeterLogic`(PokeCalcCore)に置き XCTest で固定する。
 2. **色**: 上昇 = `brandPrimary`、下降 = `warning`、0 の目印 = `textPrimary`(太い縦棒)、未到達の段の枠 = `textSecondary`。赤は使わない。値は `+2` / `-3` / `±0` の文字でも併記する。
-3. **操作**: トラックのタップ(`SpatialTapGesture`)・ドラッグで最寄りの段。ドラッグは 10pt 動いてから、水平が優勢のときだけ値を変え、縦が優勢なら捨てる(ScrollView の縦スクロールを奪わない。Web の `touch-action: pan-y` 相当。判定は `RankMeterLogic.isHorizontalDrag`)、− / + ボタン(36pt 以上、両端で無効)。
+3. **操作**: トラックのタップ(`SpatialTapGesture`)・ドラッグで最寄りの段。ドラッグは UIKit のパン(`RankHorizontalPan`)で、最初の動きが水平優勢のときだけ始め、縦が優勢なら始めない(ScrollView の縦スクロールを奪わない。Web の `touch-action: pan-y` 相当。判定は `RankMeterLogic.isHorizontalDrag`)、− / + ボタン(36pt 以上、両端で無効)。
    VoiceOver ではトラック全体を 1 つの adjustable 要素にし(`accessibilityAdjustableAction` で ±1)、label は欄のステータス名(「攻撃」)、value は「+2」(0 は「±0」)。
    Web の `aria-valuetext`「攻撃 +2」は `RankMeterLogic.spokenText` に持つ(label + value を続けて読むと同じ読み上げになる)。
    − / + の名前は「<欄の名前>を上げる / 下げる」(例「防御側のランクを上げる」)。
@@ -30,3 +30,4 @@ iOS の計算・素早さ・判定の画面とそのテスト。API・engine・W
 
 素早さ画面は speed レーンが「相手を選んで先に動く最低ライン」の構成に作り直した(#757)。自分の側のランク行は、新しい `SpeedSelfSection` の中で同じ `RankMeterView`(field `speed`)に置き換えた。識別子・読み上げは本文のとおり。
 
+追記(ゲートの失敗と対処。2026-10-12): `SpeedMatchupLargeTextUITests.testSpeedMatchupInputNoHorizontalOverflowAtAX5` が「画面に出なかった要素」で落ちた。原因は本物で、ランクのメーターの `DragGesture` が ScrollView の縦スクロールを奪い、画面中央(slow swipe の開始点)がメーターに当たると 30 回スワイプしても進まなかった。対処はアプリ側: ドラッグを `RankHorizontalPan`(`UIGestureRecognizerRepresentable` の UIPanGestureRecognizer。最初の速度が水平優勢のときだけ begin。判定は `RankMeterLogic.isHorizontalDrag`)に替え、縦は始まらせない。期待は変えていない。`CalcDefenderRanksUITests` の縦スワイプ試験に「メーターの上から始めても画面がスクロールする」検査を追加。他の3件(`AdjustGoalsUITests.testUnavailableGoals…`・`AdjustScreenUITests.testUnsupportedMarkNoticeIsShown`・`CalcAttackerStatsUITests.testSelectingSpecialMove…`)は単独では再現せず、修正後の上記クラス一式(48 件)と合わせて成功した(同じ原因の可能性が高い:スクロールが進まない)。

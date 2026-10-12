@@ -1,6 +1,7 @@
 import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
+import UIKit
 
 // 能力ランク(-6...+6)の入力メーター(ADR-0533。Web の ADR-0357 と段数・色の意味・読み上げをそろえる)。
 // 左 6 段 = 下降(warning)・中央 = 0(太い目印)・右 6 段 = 上昇(brandPrimary)。赤は弱点と紛れるので使わない。
@@ -20,16 +21,12 @@ struct RankMeterView: View {
     let value: Int
     let onChange: (Int) -> Void
 
-    /// 今のドラッグが水平優勢か(nil = 未判定)。ドラッグの間だけ持つ。
-    @State private var dragIsHorizontal: Bool?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// ボタンとトラックのタップ領域の一辺。受け入れ条件は 36pt 以上だが、描画の丸めで 35.99999… になると
     /// XCUITest の `frame` 検査で落ちるため 1pt 余裕を持つ(旧ランクのボタンも 37。ADR-0501「issue #274」5)。
     private static let minTapSide: CGFloat = 37
-    /// ドラッグとみなす最小の移動量(これ未満はタップ。縦スクロールとの切り分けのため)。
-    private static let dragMinimumDistance: CGFloat = 10
     private static let segmentSpacing: CGFloat = 2
     private static let segmentHeight: CGFloat = 20
     private static let zeroMarkerWidth: CGFloat = 4
@@ -81,20 +78,10 @@ struct RankMeterView: View {
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .contentShape(Rectangle())
-            // タップは別ジェスチャで受ける。ドラッグは一定距離動いてから、水平が優勢のときだけ値を変える
-            // (縦が優勢なら捨てて、ScrollView の縦スクロールを奪わない。Web の touch-action: pan-y に相当)。
+            // タップは別ジェスチャで受ける。ドラッグは UIKit のパンで、最初の動きが水平優勢のときだけ始める
+            // (縦が優勢なら始めず、ScrollView の縦スクロールを奪わない。Web の touch-action: pan-y に相当)。
             .gesture(SpatialTapGesture().onEnded { tap in select(atX: tap.location.x, width: proxy.size.width) })
-            .simultaneousGesture(
-                DragGesture(minimumDistance: Self.dragMinimumDistance)
-                    .onChanged { drag in
-                        if dragIsHorizontal == nil {
-                            dragIsHorizontal = RankMeterLogic.isHorizontalDrag(dx: Double(drag.translation.width), dy: Double(drag.translation.height))
-                        }
-                        guard dragIsHorizontal == true else { return }
-                        select(atX: drag.location.x, width: proxy.size.width)
-                    }
-                    .onEnded { _ in dragIsHorizontal = nil }
-            )
+            .gesture(RankHorizontalPan { x in select(atX: x, width: proxy.size.width) })
         }
         .frame(minWidth: Self.trackMinWidth, maxWidth: .infinity)
         .frame(height: Self.minTapSide)
@@ -177,6 +164,36 @@ struct RankMeterView: View {
         // 操作時だけの短い反応。「視差効果を減らす」では動かさない(常時アニメーションは入れない)。
         withAnimation(reduceMotion ? nil : .easeOut(duration: MotionToken.pressDuration)) {
             onChange(next)
+        }
+    }
+}
+
+/// 水平方向のパンだけを受けるジェスチャ。最初の動きが縦優勢なら始まらず、親の ScrollView の縦スクロールがそのまま効く
+/// (SwiftUI の `DragGesture` は ScrollView 内で縦スクロールを奪うため UIKit のパンを使う。ADR-0533)。
+struct RankHorizontalPan: UIGestureRecognizerRepresentable {
+    /// パン中の指の位置(このビュー内の x)。
+    let onLocation: (CGFloat) -> Void
+
+    func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+    func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+        let recognizer = UIPanGestureRecognizer()
+        recognizer.delegate = context.coordinator
+        return recognizer
+    }
+
+    func handleUIGestureRecognizerAction(_ recognizer: UIPanGestureRecognizer, context: Context) {
+        switch recognizer.state {
+        case .began, .changed: onLocation(context.converter.localLocation.x)
+        default: break
+        }
+    }
+
+    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+        func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+            guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+            let velocity = pan.velocity(in: pan.view)
+            return RankMeterLogic.isHorizontalDrag(dx: Double(velocity.x), dy: Double(velocity.y))
         }
     }
 }
