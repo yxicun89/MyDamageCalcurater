@@ -74,7 +74,6 @@ services/pokedex/internal/store/querier.go
 web/src/api/openapi.gen.ts
 web/src/api/balance.gen.ts
 web/src/speed/speed.gen.ts
-web/src/judge/judge.gen.ts
 # iOS の生成物は対象(ios/scripts/openapi-targets.sh)が増えても漏れないよう、まとめて無視する
 ios/PokeCalcKit/Sources/*/Generated
 ios/.gen-stamps/
