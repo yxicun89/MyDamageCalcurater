@@ -573,9 +573,8 @@ func TestCalcComboContractHelperIsNotVacuous(t *testing.T) {
 	}
 }
 
-// AC-18 の代用(ADR-0253「AC-18」): WASM の calcCombo(engine/wasmapi/combo.go。CB-5 のブランチで先行)が main に入るまで、
-// 応答のキーの集合が CB-5 の DTO と同じであることを固定する(値の一致は K1 の engine.CalcCombo との比較で見る)。
-// wasmapi.CalcCombo が main に入ったら parity_test.go の流儀で同じ入力の JSON を突き合わせるテストに置き換える。
+// AC-18 の補助(ADR-0253): 応答のキーの集合が WASM の calcCombo の DTO と同じであることを固定する。
+// 値まで比べる本体は combo_parity_test.go。
 func TestCalcComboResponseKeysMatchWasmShape(t *testing.T) {
 	h := NewHandler(newComboStore(t), nil)
 	rec := post(t, h, pathCombo, mustJSON(t, comboCases()[3].httpBody()), true) // 相手の技あり・from_defender・3 手
