@@ -4985,3 +4985,5 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 
 追記(ドラッグ方針): タップは `SpatialTapGesture`、ドラッグは 10pt 以上かつ水平優勢のときだけ値を変える。新規 UITest `testDefenderRankMeterVerticalSwipeKeepsValueAndHorizontalDragChangesIt`(縦に動かしても ±0・水平ドラッグで +6)と `RankMeterLogicTests.testHorizontalDragDecision`。既存の 37pt・タップ位置の検査は不変。
 
+追記(素早さ画面の新レイアウトへの適用): speed レーンの素早さ画面の作り直し(#757)に合わせ、自分の側の「ランク」行を `RankMeterView`(field `speed`)に置き換えた。ViewModel の `rank`/`setRank` は不変。main 側の新しい `SpeedScreenUITests` には旧ランクの識別子が無かったため、`testRankMeterPlusChangesValueAndStopsAtTheEnds`(±0・ラベル「素早さ」・+1・+6 で + が無効)を新画面向けに追加した。
+

@@ -25,3 +25,8 @@
 
 iOS の計算・素早さ・判定の画面とそのテスト。API・engine・Web は変えない。
 未使用になった `JudgeLabels.rankIncrement/rankDecrement` は削除。`CalcConditionLabels.rank*Increment/Decrement` は `DefenderRankLabelsTests` が固定する文言なので残す。
+
+## 追記: 素早さ画面の新レイアウト(2026-10-12)
+
+素早さ画面は speed レーンが「相手を選んで先に動く最低ライン」の構成に作り直した(#757)。自分の側のランク行は、新しい `SpeedSelfSection` の中で同じ `RankMeterView`(field `speed`)に置き換えた。識別子・読み上げは本文のとおり。
+

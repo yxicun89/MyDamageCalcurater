@@ -13,8 +13,8 @@
 - [x] 純粋なロジック `SpeedTableNavigation`(PokeCalcCore)の XCTest と、UI テスト(遅延描画・ジャンプ)を追加
 
 ## 2026-10-11 使用感フィードバック第3回(docs/usability-round3.md の G-04)
-- [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。
-- [x] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。実装済み(SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection。SpeedScreenView の自分のカード内、SpeedResultView の下)。
+- [x] **I-speed-3(Web・G-04)**: 素早さ表の「自分の周り」パネル(スクロール不要・折りたたみなし・前後の直近3段・端の合計・トリックルームは先に動く側/後に動く側)。ADR-0609。実装済み(speedNeighborhood.ts・SpeedNeighborhoodPanel.tsx。SpeedScreen の自分のカード `.speed-self` の結果の下に配置)。iOS は後続 PR。 **(ADR-0610 で置き換え: 周りパネルは表の画面ごと廃止。Web は I-speed-4b、iOS は I-speed-4c)**
+- [x] **I-speed-3-ios(iOS・G-04)**: 「自分の周り」パネルの iOS 版。ADR-0527。実装済み(SpeedNeighborhoodBuilder.build・SpeedViewModel.neighborhood・SpeedNeighborhoodSection。SpeedScreenView の自分のカード内、SpeedResultView の下)。 **(ADR-0610 で置き換え: SpeedNeighborhood 系のコード・テストは I-speed-4c で削除済み)**
 
 ## 2026-10-12 素早さ画面の作り直し(ユーザー要望。ec 経由)
 ユーザーの言葉の要約: 素早さ表は要らないかもしれない(データは持っておいてよい)。相手と自分のポケモンを入れて「この場合ここまですれば上を取れる」を出す形(ダメージ計算の画面のような使い方)。自分の素早さを入れた後の「これ以上」も表なしで分かるように。『準速○○族以上』の表記も入れる。
@@ -22,9 +22,16 @@
 - [ ] **I-speed-4(speed-svc・Web・iOS)**: 「相手を選んで上を取る最低ライン」と「これ以上(族の区切り)」の画面にし、表と周辺パネルを画面から外す。設計は ADR-0610(提案。§6 Q1〜Q7 はユーザー確認待ち)、決定は `docs/ai-shared/decisions/2026-10-12-speed-matchup-min-line.md`。
   - [x] 仕様と失敗するテスト(spec-writer): `services/speed/internal/speed/matchup_test.go`・`engine_parity_test.go`、`services/speed/internal/httpapi/matchup_test.go`、契約 0.7.0(`POST /api/speed/v1/matchup`・`/reach`)、スタブ(`matchup.go` 2 つ)
   - [x] I-speed-4a: speed のコア(MovesFirstLines・Matchup・Reach)と HTTP(matchup・reach。ミドルウェア登録)。上のテストを通す(2026-10-12。`Speed` は元から engine.EffectiveStat 経由で、engine_parity_test が engine.FinalSpeed との一致を守る)
+  - [x] I-speed-4c: iOS の画面(Web と同じ体験)。ブランチ `feat/speed-ios-matchup`。設計は ADR-0610 追記「iOS の画面」
+    - [x] 仕様と失敗するテスト(spec-writer): PokeCalcKit の `APISpeedMatchupTests`・`MockSpeedMatchupTests`・`SpeedMatchupLabelsTests`・`SpeedMatchupDisplayTests`・`SpeedMatchupViewModelInputTests`・`SpeedMatchupViewModelStateTests`、UI テスト `SpeedMatchupUITests`(3 本)・`SpeedMatchupLargeTextUITests`(AX5 1 本)、スタブ(`SpeedMatchupTypes`・`SpeedMatchupLabels`・`SpeedMatchupDisplay`・`SpeedMatchupViewModel`・`APISpeedService` / `MockSpeedService` の matchup・reach)
+    - [x] API クライアント: `APISpeedService.matchup` / `reach`(生成クライアント)
+    - [x] ラベル・表示の整形: `SpeedMatchupLabels`(関数)・`SpeedMatchupDisplayBuilder`
+    - [x] `SpeedMatchupViewModel`(入力 → 要求 → 状態・トリックルーム・失敗・キャンセル)
+    - [x] モック: `MockSpeedService.matchup` / `reach`(`MockSpeedMatchupTests` の手計算に合わせる)
+    - [x] View: 新しい `SpeedScreenView`(自分・相手・場の入力、カード、「これ以上」)。表・周辺パネル・旧入力を外し、旧型・旧テストを整理(ADR-0610 追記 §5・§6)
+    - [x] 旧 UI テストの書き換え(ADR-0610 追記 §6)・`make ios-test` 成功
   - [x] I-speed-4b: Web の画面(入力 = 自分・相手・場、出力 1・2、連続技へのリンク。表・周辺パネルを外す)。具体は ADR-0610 §7(2026-10-12。SpeedScreen・speedClient の matchup/reach。vitest 全件・lint・typecheck 成功。e2e の「キーボード」1 件だけ macOS の select が ArrowDown でポップアップを開く挙動で赤〈テストの前提が Linux 向け〉)
     - [x] 仕様と失敗するテスト(spec-writer): `web/src/speed/SpeedScreen.test.tsx`(W1〜W12)・`SpeedScreen.images.test.tsx`・`speedClient.matchup.test.ts`・`e2e/speed.spec.ts`(書き換え)、フェイク `web/src/test/fakeSpeedClient.ts`、文言 `web/src/i18n/speed.ts`、スタブ(`SpeedScreen.tsx`・`speedClient.ts` の matchup / reach)。旧画面専用のコード・テスト(speedWindow・speedNeighborhood・SpeedNeighborhoodPanel・旧 SpeedScreen*.test)は削除済み
     - [ ] クライアント: `matchup()`・`reach()` を `postJson` にする(`speedClient.matchup.test.ts`)
     - [ ] 画面: `SpeedScreen.tsx`(領域・入力・カード・「これ以上」・連続技リンク〈`onOpenCombo` があるときだけ〉)と `SpeedScreen.css` の書き直し。`App.routing`・`App.masterSources`・`App.tabPersistence` のテストも通る(領域「自分のポケモン」は常に描画)
     - [ ] 検証: `make web-lint web-test`、`cd web && npm run e2e -- speed`(chromium)
-  - [ ] I-speed-4c: iOS の画面(Web と同じ体験)

@@ -5,8 +5,8 @@ import XCTest
 /// ここでは「詳細を開くと防御側のランクが B ±0 で出る」「上げ下げで表示が変わる」「上下限でボタンが無効になる」
 /// 「操作しても結果の行が出続ける」「ボタンが 36pt 以上」「攻撃側のランクと混ざらない」だけを見る。
 /// 要求の中身は `CalcViewModelDefenderRanksTests` / `APIPokeCalcServiceDefenderRanksTests` で固定している。
-/// identifier は追加のみ: rankMeterMinus-calcDefender / rankMeter-calcDefender / rankMeterPlus-calcDefender
-/// (攻撃側の calcAttackerRank* と同じ流儀。既存の identifier は変えない)。
+/// ランクは 13 段のメーター(ADR-0533)。identifier は rankMeterMinus-calcDefender / rankMeter-calcDefender(値は読み上げ値「+2」)/
+/// rankMeterPlus-calcDefender(攻撃側は calcAttacker)。旧 calcDefenderRank* は無くなった。
 @MainActor
 final class CalcDefenderRanksUITests: XCTestCase {
     private static let defaultPhysicalRowIDs = ["none@-", "hp@-", "hb_boost@-", "hb@-", "hb_full@-"]
