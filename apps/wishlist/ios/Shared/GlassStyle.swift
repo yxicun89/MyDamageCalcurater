@@ -200,7 +200,55 @@ struct OutlineButtonStyle: ButtonStyle {
     }
 }
 
-/// ジャンルの絵柄のボタン(選ぶ場面)。選択は `genreColor` 地+白の線画、非選択は白地+ジャンル色の線画。
+/// ジャンルのボタンの共通の見た目(phase6-spec 6-2)。選ばれているときだけ絵柄の隣に名前を出す丸薬になる。
+/// 名前は `GenreLabel.visibleName` が決め、1 行・`GenreLabel.maxNameWidth` で末尾を省略する。ボタンの高さは変えない。
+struct GenrePill<Glyph: View>: View {
+    let name: String
+    let selected: Bool
+    let background: Color
+    let foreground: Color
+    let size: CGFloat
+    let radius: CGFloat
+    let nameIdentifier: String
+    let buttonIdentifier: String
+    @ViewBuilder let glyph: (Color) -> Glyph
+    let action: () -> Void
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    var body: some View {
+        let shown = GenreLabel.visibleName(name, selected: selected)
+        Button(action: action) {
+            HStack(spacing: 8) {
+                glyph(selected ? foreground : background)
+                    .frame(width: size, height: size)
+                    .fixedSize()
+                if let shown {
+                    Text(shown)
+                        .font(.subheadline.weight(.bold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: GenreLabel.maxNameWidth, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .foregroundStyle(foreground)
+                        .accessibilityIdentifier(nameIdentifier)
+                }
+            }
+            .padding(.horizontal, shown == nil ? 0 : 14)
+            .frame(minWidth: size, minHeight: size, maxHeight: size)
+            .background(selected ? background : Palette.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Palette.line, lineWidth: selected ? 0 : 1))
+        }
+        .buttonStyle(.plain)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.12), value: selected)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(name)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityIdentifier(buttonIdentifier)
+    }
+}
+
+/// ジャンルのボタン(選ぶ場面)。選択は `genreColor` 地+(地の明るさで白か濃い色の)線画と名前、非選択は白地+ジャンル色の線画。
 struct GenreIconButton: View {
     let genre: Genre
     let selected: Bool
@@ -209,17 +257,12 @@ struct GenreIconButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            GlyphIcon(icon: genre.icon, color: selected ? .white : Color(hex: genre.color), size: size * 0.45)
-                .frame(width: size, height: size)
-                .background(selected ? Color(hex: genre.color) : Palette.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Palette.line, lineWidth: selected ? 0 : 1))
-                .scaleEffect(selected ? 1.08 : 1)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(genre.name)
-        .accessibilityAddTraits(selected ? .isSelected : [])
-        .accessibilityIdentifier("genreChoice-\(genre.id)")
+        GenrePill(
+            name: genre.name, selected: selected, background: Color(hex: genre.color),
+            foreground: GenreContrast.prefersDarkText(onHex: genre.color) ? Palette.fg : .white,
+            size: size, radius: radius, nameIdentifier: "genreChoiceName-\(genre.id)",
+            buttonIdentifier: "genreChoice-\(genre.id)",
+            glyph: { GlyphIcon(icon: genre.icon, color: $0, size: size * 0.45) }, action: action)
     }
 }
 

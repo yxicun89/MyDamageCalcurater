@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import type { Genre, Item } from "../api/types";
 import type { ApiClient } from "../lib/api";
 import { isHttpUrl } from "../lib/deeplink";
-import { GenreGlyph, UiIcon, genreColorProps } from "./icons";
+import { GenreButton } from "./GenreButton";
+import { UiIcon, genreColorProps } from "./icons";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
 interface Props {
@@ -233,19 +234,18 @@ export function Register({ genres, initialGenreId, client, onClose, onCreated }:
       />
       <div className="genre-pick" role="group" aria-label="ジャンル">
         {sorted.map((g) => (
-          <button
+          <GenreButton
             key={g.id}
-            type="button"
-            className="genre-button large"
-            aria-label={g.name}
-            aria-pressed={genreId === g.id}
-            {...genreColorProps(g.color)}
+            className="large"
+            name={g.name}
+            icon={g.icon}
+            color={g.color}
+            glyphSize={28}
+            selected={genreId === g.id}
             onClick={() => {
               setGenreId(g.id);
             }}
-          >
-            <GenreGlyph icon={g.icon} size={28} />
-          </button>
+          />
         ))}
       </div>
       <ErrorText message={error} />

@@ -190,10 +190,15 @@ svg {
   scrollbar-width: none;
 }
 .genre-button {
-  width: 52px;
+  min-width: 52px;
   height: 52px;
   min-height: 52px;
   padding: 0;
+  gap: 8px;
+  transition:
+    background-color 0.12s,
+    color 0.12s,
+    border-color 0.12s;
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -208,13 +213,29 @@ svg {
   border-color: var(--accent);
   color: var(--on-accent);
 }
+.genre-button:has(.genre-name) {
+  padding: 0 16px 0 14px;
+}
+.genre-name {
+  max-width: 140px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
 .genre-button.large {
-  width: 60px;
+  min-width: 60px;
   height: 60px;
   min-height: 60px;
   border-radius: 18px;
 }
-.genre-pick .genre-button[aria-pressed="true"],
+.genre-pick .genre-button[aria-pressed="true"] {
+  background: var(--genre-color, var(--accent));
+  border-color: var(--genre-color, var(--accent));
+  color: var(--on-genre, #ffffff);
+}
 .icon-pick .genre-button[aria-pressed="true"] {
   background: var(--genre-color, var(--accent));
   border-color: var(--genre-color, var(--accent));
@@ -324,6 +345,9 @@ svg {
     animation: none;
   }
   button {
+    transition: none;
+  }
+  .genre-button {
     transition: none;
   }
 }
@@ -859,7 +883,7 @@ svg {
   box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--genre-color, #1d5fd1) 35%, transparent);
 }
 .genre-button.compact {
-  width: 48px;
+  min-width: 48px;
   height: 48px;
   min-height: 48px;
 }

@@ -77,8 +77,8 @@ final class WishlistUITests: XCTestCase {
         _ = requireExists(app, "genreName-2")
         XCTAssertFalse(element(app, "genreName-all").exists, "選び直したら前の名前は消える")
         XCTAssertFalse(element(app, "genreName-1").exists)
-        XCTAssertEqual(element(app, "genreChip-2").label, "S.H.Figuarts", "名前が出ても accessibilityLabel はジャンル名のまま")
-        XCTAssertEqual(element(app, "genreChip-1").label, "デュエマ", "名前が出ていないボタンにも accessibilityLabel はある")
+        XCTAssertEqual(element(app, "genreChip-2").label, "デュエマ", "名前が出ても accessibilityLabel はジャンル名のまま")
+        XCTAssertEqual(element(app, "genreChip-1").label, "S.H.Figuarts", "名前が出ていないボタンにも accessibilityLabel はある")
     }
 
     /// AC-IOS-UI-03: タップで詳細シートが出て、サイトのタイルがジャンルの順に並ぶ。サマリは「まだ価格情報はありません」。

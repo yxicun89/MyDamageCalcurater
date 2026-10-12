@@ -15,7 +15,8 @@ API 契約は変えない(`api/openapi.yaml` の変更なし・`make gen` 不要
 - 文字: 太さ 700、サイズ 14px 前後(iOS は `.subheadline.weight(.bold)` 程度。Dynamic Type に追従)。1 行(`white-space: nowrap` / `lineLimit(1)`)
 - 最大幅: 名前の部分に 140px(Web は `max-width: 140px`、iOS は `GenreLabel.maxNameWidth`)。超えたら末尾を `…` で省略(`text-overflow: ellipsis` / `truncationMode(.tail)`)。375px 幅でも、選ばれたボタン + 隣のボタンが横スクロールの行に収まり、行全体が縦に折り返さない
 - 横スクロール: ホームの絞り込みは今まで通り横スクロール。選ばれたボタンが画面の外にあるときは見える位置までスクロールしなくてよい(今と同じ)
-- 追加・編集の `.genre-pick` は折り返す配置(`flex-wrap`)のまま。選ばれたボタンは幅が広がるだけで、高さ(60 / 48)は変えない。今ある選択中の拡大(`scale(1.08)`)は、幅が広がるので外してよい
+- 追加・編集の `.genre-pick` は折り返す配置(`flex-wrap`)のまま。選ばれたボタンは幅が広がるだけで、高さ(60 / 48)は変えない。今ある選択中の拡大(`scale(1.08)`)は外した(Web の `.genre-pick`・iOS の `GenreIconButton`。絵柄を選ぶ `.icon-pick` は対象外なので残す)
+- 文字色の切り替え(実装で確定。2026-10-12): 追加・編集(地がジャンル色)では、名前と絵柄の線を、地の相対輝度(WCAG)で白 `#ffffff` と濃い色 `#0e1a2b` のうち対比の高いほうにする。黄 `#f2b705`・橙・黄緑・白に近い色は濃い色になる。純粋な関数: Web `web/src/lib/contrast.ts` の `onColor`(CSS 変数 `--on-genre`)、iOS `GenreContrast.prefersDarkText`。ホームの絞り込みは地が強調色なので常に白
 - 動き: 選択の切り替えに幅・色の短い遷移(150ms 以下)を付けてよい。`prefers-reduced-motion: reduce`(iOS は `accessibilityReduceMotion`)のときは遷移なし。常時動くものは無し
 
 ## 6-1 Web

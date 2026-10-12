@@ -2,7 +2,8 @@ import { useRef } from "react";
 import type { Genre, Item } from "../api/types";
 import { resolveImageUrl } from "../lib/api";
 import { formatYen } from "../lib/price";
-import { GenreGlyph, UiIcon, colorOf, genreColorProps } from "./icons";
+import { GenreButton } from "./GenreButton";
+import { UiIcon, colorOf, genreColorProps } from "./icons";
 
 const LONG_PRESS_MS = 500;
 
@@ -120,31 +121,25 @@ export function Home(p: Props) {
         </button>
       </header>
       <nav className="genre-nav" aria-label="ジャンル">
-        <button
-          type="button"
-          className="genre-button"
-          aria-label="すべて"
-          aria-pressed={p.genreFilter === null}
+        <GenreButton
+          name="すべて"
+          icon="all"
+          selected={p.genreFilter === null}
           onClick={() => {
             p.onFilter(null);
           }}
-        >
-          <GenreGlyph icon="all" />
-        </button>
+        />
         {genres.map((g) => (
-          <button
+          <GenreButton
             key={g.id}
-            type="button"
-            className="genre-button"
-            aria-label={g.name}
-            aria-pressed={p.genreFilter === g.id}
-            {...genreColorProps(g.color)}
+            name={g.name}
+            icon={g.icon}
+            color={g.color}
+            selected={p.genreFilter === g.id}
             onClick={() => {
               p.onFilter(g.id);
             }}
-          >
-            <GenreGlyph icon={g.icon} />
-          </button>
+          />
         ))}
       </nav>
       {p.loadError !== null && (

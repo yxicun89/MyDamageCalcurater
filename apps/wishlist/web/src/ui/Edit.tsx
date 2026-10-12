@@ -1,7 +1,8 @@
 import { useState } from "react";
 import type { Genre, Item, ItemUpdate } from "../api/types";
 import { resolveImageUrl, type ApiClient } from "../lib/api";
-import { GenreGlyph, colorOf, genreColorProps } from "./icons";
+import { GenreButton } from "./GenreButton";
+import { colorOf, genreColorProps } from "./icons";
 import { ErrorText, Modal, errorMessage } from "./Modal";
 
 interface Props {
@@ -93,19 +94,18 @@ export function Edit({ item, genres, client, baseUrl, onClose, onUpdated }: Prop
       </div>
       <div className="genre-pick" role="group" aria-label="ジャンル">
         {sorted.map((g) => (
-          <button
+          <GenreButton
             key={g.id}
-            type="button"
-            className="genre-button compact"
-            aria-label={g.name}
-            aria-pressed={genreId === g.id}
-            {...genreColorProps(g.color)}
+            className="compact"
+            name={g.name}
+            icon={g.icon}
+            color={g.color}
+            glyphSize={24}
+            selected={genreId === g.id}
             onClick={() => {
               setGenreId(g.id);
             }}
-          >
-            <GenreGlyph icon={g.icon} size={24} />
-          </button>
+          />
         ))}
       </div>
       <label className="field">
