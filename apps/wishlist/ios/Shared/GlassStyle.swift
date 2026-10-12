@@ -220,12 +220,15 @@ struct GenrePill<Glyph: View>: View {
         let shown = GenreLabel.visibleName(name, selected: selected)
         Button(action: action) {
             HStack(spacing: 8) {
+                // 名前が出ているときは絵柄の枠を詰め、余白を Web の丸薬(左 14・絵柄・8・名前・右 16)にそろえる
                 glyph(selected ? foreground : background)
-                    .frame(width: size, height: size)
+                    .frame(width: shown == nil ? size : nil, height: size)
                     .fixedSize()
                 if let shown {
                     Text(shown)
                         .font(.subheadline.weight(.bold))
+                        // 丸薬の高さは固定なので、文字の拡大はここで止める(読み上げの名前は全文のまま)
+                        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: GenreLabel.maxNameWidth, alignment: .leading)
@@ -233,7 +236,8 @@ struct GenrePill<Glyph: View>: View {
                         .accessibilityIdentifier(nameIdentifier)
                 }
             }
-            .padding(.horizontal, shown == nil ? 0 : 14)
+            .padding(.leading, shown == nil ? 0 : 14)
+            .padding(.trailing, shown == nil ? 0 : 16)
             .frame(minWidth: size, minHeight: size, maxHeight: size)
             .background(selected ? background : Palette.surface, in: RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: radius, style: .continuous).strokeBorder(Palette.line, lineWidth: selected ? 0 : 1))

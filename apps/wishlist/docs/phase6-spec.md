@@ -91,6 +91,13 @@ public enum GenreLabel {
 - **AC-6-3-3** Web: 上は `GenreButton` の共通部品で行うので、ホームの絞り込みでテストされていれば追加・編集にも効く(折り返す列では何も動かない)
 - **AC-6-3-4** iOS: ホームのチップ列(`HomeView.genreButtons`)と `GenreChooser` の横並びを `ScrollViewReader` で包み、選択が変わったら `proxy.scrollTo(<選ばれた id>, anchor: nil)` を呼ぶ。`accessibilityReduceMotion` が false のときだけ `withAnimation` の中で呼ぶ。各ボタンに `.id(...)` を付ける(「すべて」と各ジャンルで衝突しない値)
 - **AC-6-3-5** 見た目(目視。verify.md §6・§8): 375px 幅 / iPhone SE 幅で最後のジャンルを選ぶと、丸薬が全部(収まらなければ `…` つき)列の中に見える。「視差効果を減らす」では動きが滑らかにならず切り替わる
+- **AC-6-3-6** iOS: 丸薬の名前は Dynamic Type を `xxxLarge` までで止める(丸薬の高さが 52 で固定のため。止めないと最大の文字サイズで「デュ…」しか見えなかった。読み上げの名前は全文のまま)
+- **AC-6-3-7** iOS: 名前が出ているときの余白を Web の丸薬(左 14・絵柄・8・名前・右 16)にそろえる(絵柄の 52pt の枠のせいで、絵柄の左右に余計な空きが出ていた)
+
+### 6-3 の確認(2026-10-12。手元の k3d の実データ・ジャンル 5 つ)
+
+- Web(Playwright・375px): 直す前は「ポケモングッズ」「METAL BUILD・ROBOT魂」を押すと丸薬の右端が 401px で切れていた。直した後は 359px で列の中。「METAL BUILD・ROBOT魂」は `…` で省略。`prefers-reduced-motion: reduce` で遷移 0s。ページの横スクロールは出ない。編集画面で明るい色(ポケモングッズ `#f2b705`)の上は濃い文字
+- iOS(iPhone 17e・幅 390pt。一時的な XCUITest で押して撮影し、コミットしない): 5 つとも丸薬が画面内(右端 ≤ 390)。文字サイズ標準と最大(AX5)の両方で 1 行・`…` 省略・高さ 52 のまま
 
 ### 6-3 テスト一覧
 
@@ -100,7 +107,7 @@ public enum GenreLabel {
 | AC-6-3-2 | 同 「AC-6-3-2 ジャンルを押すと…smooth で scrollIntoView される」 |
 | AC-6-3-2 (reduce) | 同 「AC-6-3-2 prefers-reduced-motion: reduce のときは behavior が auto」 |
 | AC-6-3-3 | 目視(追加・編集の折り返す列) |
-| AC-6-3-4,5 | 目視。XCUITest のフィクスチャ(`WishlistFixtures`)のジャンルは 2 つ(`genreChip-1`・`-2`)で、電話幅の列があふれないため、枠外の判定を書いても何も確かめられない。ジャンルが 8 つ前後ある実データで verify.md §8 の手順を行う |
+| AC-6-3-4〜7 | 目視(上の「6-3 の確認」)。XCUITest のフィクスチャ(`WishlistFixtures`)のジャンルは 2 つ(`genreChip-1`・`-2`)で、電話幅の列があふれないため、枠外の判定を書いても何も確かめられない。ジャンルが 8 つ前後ある実データで verify.md §8 の手順を行う |
 
 **実装者への注意(6-3)**
 
