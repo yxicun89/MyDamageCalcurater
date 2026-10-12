@@ -32,7 +32,6 @@ var unmigrated = []string{
 	"gateway",
 	"judge",
 	"speed",
-	"team",
 }
 
 // layers は、形をそろえるときに必ず置く 3 つのフォルダ。

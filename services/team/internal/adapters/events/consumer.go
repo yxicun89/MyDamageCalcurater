@@ -16,7 +16,7 @@ import (
 	"log/slog"
 
 	"example.com/pokecalc/services/internal/calcevents"
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/app"
 )
 
 // Action は1件のメッセージの処理後にすべきこと。
@@ -52,11 +52,11 @@ const SubjectFilter = calcevents.SubjectPrefix + "*"
 
 // Handler は team-svc の計算イベント消費本体。ゼロ値は使わない(NewHandler で作る)。
 type Handler struct {
-	store store.Store
+	store app.Store
 }
 
 // NewHandler は Store を使う Handler を作る。
-func NewHandler(st store.Store) *Handler {
+func NewHandler(st app.Store) *Handler {
 	return &Handler{store: st}
 }
 
@@ -83,7 +83,7 @@ func (h *Handler) Handle(ctx context.Context, eventID string, data []byte) Actio
 
 	outcome, err := h.store.TouchDeviceFromEvent(ctx, ev.DeviceID, ev.OccurredAt)
 	if err != nil {
-		if errors.Is(err, store.ErrUnavailable) {
+		if errors.Is(err, app.ErrUnavailable) {
 			slog.Warn("team-svc: DB に届かない。再配送させる", "eventId", eventID, "error", err)
 			return Nak
 		}
@@ -92,9 +92,9 @@ func (h *Handler) Handle(ctx context.Context, eventID string, data []byte) Actio
 	}
 
 	switch outcome {
-	case store.Skipped:
+	case app.Skipped:
 		slog.Debug("team-svc: 24時間以内のイベントなので last_seen_at を進めない", "eventId", eventID, "deviceId", ev.DeviceID)
-	case store.Tombstoned:
+	case app.Tombstoned:
 		slog.Debug("team-svc: 墓石より前のイベントを破棄する", "eventId", eventID, "deviceId", ev.DeviceID)
 	}
 	return Ack

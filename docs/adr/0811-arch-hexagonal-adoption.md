@@ -42,5 +42,6 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S3b | calc の調整(`adjust.go`)の手順を app へ(ADR-0252 追記 S3b) | 2026-10-12 完了(データレーンが代行) |
 | S4 | record のお気に入り・計算履歴・失効ジョブを domain・app・adapters へ(判断は ADR-0254。G6 を解消) | 2026-10-12 完了(record を未移行の一覧から外した。データレーンが代行) |
 | S5 | pokedex の検索・内部 API・readiness・read model を domain・app・adapters へ(判断は ADR-0180。importer は対象外) | 2026-10-12 完了(pokedex を未移行の一覧から外した) |
-| S2・S6〜S9 | judge・team・gateway・balance・speed の移行 | 未着手 |
+| S6 | team の構築の検証・手順・失効ジョブを domain・app・adapters へ(判断は ADR-0255) | 2026-10-12 完了(team を未移行の一覧から外した。データレーンが代行) |
+| S2・S7〜S9 | judge・gateway・balance・speed の移行 | 未着手 |
 | W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |

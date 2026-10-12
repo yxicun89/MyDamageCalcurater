@@ -1,7 +1,10 @@
-// Package store は team-svc のデータアクセス層の契約(型とインターフェース)を持つ。
-// TiDB への実装(SQL・接続・上限の設定値)は同じパッケージの `tidb.go`(`//go:build tidb` の
-// テストは `tidb_test.go`)。httpapi と events はこのインターフェースだけに依存し、単体テストは
-// 架空の実装(fake)で差し替える。record-svc の `services/record/internal/store` と同じ流儀。
+package app
+
+// team DB のポート(ADR-0811・ADR-0255)。旧 internal/store/store.go の契約(型とインターフェース)を
+// 使う側の app で宣言する。TiDB への実装は adapters/store(`tidb.go`。`//go:build tidb` のテストは
+// `tidb_test.go`)で、adapters/store はここの型を同じ名前の別名として持つ(既存の呼び名 store.Store などを保つ)。
+// adapters/httpapi と adapters/events はこのインターフェースだけに依存し、単体テストは架空の実装(fake)で差し替える。
+// record-svc の `services/record/internal/app/ports.go` と同じ流儀。
 //
 // 規則(ADR-0209 §6・ADR-0213。このインターフェースを実装するときの絶対条件):
 //   - すべてのメソッドは deviceID を必ず受け取り、SQL は必ず `WHERE device_id = ?` を持つ。
@@ -14,76 +17,45 @@
 //     (ADR-0213 §3)。
 //   - **計算イベントの中身を保存するメソッドを足さない**(ADR-0209 §4・ADR-0213 §5)。team-svc が
 //     イベントから行うのは devices.last_seen_at の更新だけで、個体・ダメージは読み捨てる。
-//   - TiDB に届かない失敗は ErrUnavailable で包んで返す(httpapi が 503 store_unavailable に写す)。
-package store
+//   - TiDB に届かない失敗は ErrUnavailable で包んで返す(adapters/httpapi が 503 store_unavailable に写す)。
 
 import (
 	"context"
 	"errors"
 	"time"
+
+	"example.com/pokecalc/services/team/internal/domain"
 )
 
 // MaxTeamsPerDevice は1端末が持てる構築の上限(契約の createTeam の description と同じ値。
 // ADR-0213 §2)。CreateTeam はこれに達している端末からの作成を ErrTeamLimitReached で断る。
 const MaxTeamsPerDevice = 100
 
-// MaxMembersPerTeam / MaxMovesPerMember は構築の形の上限(契約の maxItems と同じ値。
-// requirements.md §2・ADR-0213 §3。iOS の TeamLimits と同じ)。
+// MaxMembersPerTeam / MaxMovesPerMember は構築の形の上限(domain の定数の別名。契約の maxItems と同じ値)。
 const (
-	MaxMembersPerTeam = 6
-	MaxMovesPerMember = 4
+	MaxMembersPerTeam = domain.MaxMembersPerTeam
+	MaxMovesPerMember = domain.MaxMovesPerMember
 )
 
 // ErrUnavailable は team DB(TiDB)に届かない・クエリが実行できない失敗。実装はこれで包んで返し、
-// httpapi は 503 `store_unavailable`(ADR-0209 §5.3)に写す。DB のエラー文はログにだけ残し、
+// adapters/httpapi は 503 `store_unavailable`(ADR-0209 §5.3)に写す。DB のエラー文はログにだけ残し、
 // クライアントへは出さない(ADR-0105 §2 と同じ扱い)。
 var ErrUnavailable = errors.New("team DB に届かない")
 
 // ErrNotFound は「その端末がその ID の構築を持っていない」。他端末のものか実在しないかを
-// **区別しない**(区別すると存在の有無が漏れる。ADR-0209 §6-2)。httpapi は 404 `not_found` に写す。
+// **区別しない**(区別すると存在の有無が漏れる。ADR-0209 §6-2)。adapters/httpapi は 404 `not_found` に写す。
 var ErrNotFound = errors.New("この端末の構築に無い")
 
-// ErrTeamLimitReached は MaxTeamsPerDevice に達している端末からの作成。httpapi は
+// ErrTeamLimitReached は MaxTeamsPerDevice に達している端末からの作成。adapters/httpapi は
 // 400 `invalid_input` に写す(ADR-0213 §2)。
 var ErrTeamLimitReached = errors.New("1端末が持てる構築の上限に達した")
 
-// StatBlock は能力ポイント(SP)の6ステータス(api.StatBlock と同じ形。ADR-0213 §3)。
-// 値の範囲(各 0..32・合計 66 以下)の検証は httpapi の責務で、store は受けた値をそのまま保存する。
-type StatBlock struct {
-	HP  int
-	Atk int
-	Def int
-	Spa int
-	Spd int
-	Spe int
-}
-
-// Member は構築の1体。ID(種族・技・持ち物・特性・性格)はマスタに実在するか検証せずそのまま持つ
-// (ADR-0213 §3)。パーティの何番目かは Team.Members の並び順そのもので、slot は持たない
-// (DB の team_members.slot は保存時に添字から決める)。
-type Member struct {
-	SpeciesKey string
-	// Nickname は未設定なら nil(空文字は httpapi が nil に正規化する)。利用者の自由入力なので
-	// **ログに出さない**(ADR-0209 §3)。
-	Nickname *string
-	// MoveIDs は最大 MaxMovesPerMember 個で、同一メンバー内で重複しない(検証は httpapi)。
-	MoveIDs   []string
-	ItemID    *string
-	AbilityID *string
-	NatureID  string
-	SP        StatBlock
-	// TeraType は api.PokeType の文字列(未設定なら nil)。
-	TeraType *string
-}
-
-// Team は保存済みの構築1件。ID と時刻はサーバー(store)が決める。
-type Team struct {
-	ID        string
-	Name      string
-	Members   []Member
-	CreatedAt time.Time
-	UpdatedAt time.Time
-}
+// 構築の形(StatBlock・Member・Team)は domain の型そのもの(検証が domain にあり、通った値をそのまま保存する)。
+type (
+	StatBlock = domain.StatBlock
+	Member    = domain.Member
+	Team      = domain.Team
+)
 
 // Deleted は1回の全削除で消した行数(api.TeamDeletionResult.Deleted と同じ内訳)。
 type Deleted struct {
@@ -91,13 +63,13 @@ type Deleted struct {
 	TeamMembers int
 }
 
-// PurgeResult は PurgeDevice の結果(record-svc の store.PurgeResult と同じ形)。
+// PurgeResult は PurgeDevice の結果(record-svc の app.PurgeResult と同じ形)。
 type PurgeResult struct {
 	// PurgedAt は墓石の時刻。PurgeDevice を呼ぶたびに現在時刻へ更新する(ADR-0209 §5.2 AC-P1b)。
 	PurgedAt time.Time
 	// Deleted はこの呼び出しで消した行数(冪等なので2回目は全て 0)。
 	Deleted Deleted
-	// Remaining が true なら1回の上限に達して残りがある(httpapi は status: partial を返す)。
+	// Remaining が true なら1回の上限に達して残りがある(adapters/httpapi は status: partial を返す)。
 	Remaining bool
 }
 
@@ -160,4 +132,10 @@ type Store interface {
 	// 1回で消す行数には上限があり、達したら PurgeResult.Remaining = true で返す(残りは次の呼び出し)。
 	// すでに何も無い端末でもエラーにせず、Deleted が全て 0 の結果を返す(404 にしない。§5.2)。
 	PurgeDevice(ctx context.Context, deviceID string, now time.Time) (PurgeResult, error)
+}
+
+// Pinger は Store の実装が任意で持つ到達確認(Store には含めない。TiDB の実装が持ち、fake は持たない)。
+// Ready はこれがあれば使い、無ければ読み取り専用の ListTeams で確かめる。
+type Pinger interface {
+	Ping(ctx context.Context) error
 }

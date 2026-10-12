@@ -24,9 +24,9 @@ import (
 
 	"github.com/go-sql-driver/mysql"
 
-	"example.com/pokecalc/services/team/internal/events"
-	"example.com/pokecalc/services/team/internal/httpapi"
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/adapters/events"
+	"example.com/pokecalc/services/team/internal/adapters/httpapi"
+	"example.com/pokecalc/services/team/internal/adapters/store"
 )
 
 // HTTP タイムアウトと shutdown timeout(calc-svc・pokedex-svc・record-svc と同じ考え方の値)。

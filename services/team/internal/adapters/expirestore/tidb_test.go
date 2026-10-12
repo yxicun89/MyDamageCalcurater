@@ -1,16 +1,18 @@
 //go:build tidb
 
-package expire_test
+package expirestore_test
 
-// team の失効ジョブの TiDB 実装の実 SQL を検査する(ADR-0220 §4。make test-db だけ。TEAM_TEST_DSN が必須)。
+// team の失効ジョブの TiDB 実装(expirestore.NewTiDB)の実 SQL を検査する(ADR-0220 §4。make test-db だけ。TEAM_TEST_DSN が必須)。
 // 各テストは乱数の端末 ID を使い、自分の端末の行だけを検査する(record の tidb_test.go と同じ方針)。
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
 	"errors"
+	"log/slog"
 	"os"
 	"strings"
 	"testing"
@@ -19,8 +21,23 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 
 	teamdb "example.com/pokecalc/services/team/db"
-	"example.com/pokecalc/services/team/internal/expire"
+	"example.com/pokecalc/services/team/internal/adapters/expirestore"
+	"example.com/pokecalc/services/team/internal/app/expire"
 )
+
+// 以下 3 つは app/expire の expire_test.go の写し(ADR-0255 でパッケージを分ける前は共有していた)。
+
+const day = 24 * time.Hour
+
+// ADR-0211 §7 の既定値。
+var defaultPolicy = expire.Policy{
+	Retention:             540 * day,
+	DeviceRowExpiry:       30 * day,
+	PurgeJournalRetention: 90 * day,
+	BatchLimit:            1000,
+}
+
+func discardLogger() *slog.Logger { return slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)) }
 
 func testDB(t *testing.T) *sql.DB {
 	t.Helper()
@@ -127,7 +144,7 @@ func runUntilDone(t *testing.T, st expire.Store, p expire.Policy, now time.Time)
 
 func TestTiDBExpireTeamsBoundaryAndMembers(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	ago := func(d time.Duration) time.Time { return now.Add(-d) }
 
@@ -174,7 +191,7 @@ func TestTiDBExpireTeamsBoundaryAndMembers(t *testing.T) {
 
 func TestTiDBExpirePurgeJournalBoundary(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	keep, gone := newID(t, "k-"), newID(t, "g-")
 	exec(t, db, `INSERT INTO purge_journal (device_id, requested_at) VALUES (?, ?)`, keep, now.Add(-90*day))
@@ -193,7 +210,7 @@ func TestTiDBExpirePurgeJournalBoundary(t *testing.T) {
 // AC-E6(team): 構築が無くなった端末の devices 行は、orphaned_since から D を超え、last_seen・墓石も D を超えたら消える。
 func TestTiDBExpireOrphanDevices(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	longAgo := now.Add(-400 * day)
 
@@ -227,7 +244,7 @@ func TestTiDBExpireOrphanDevices(t *testing.T) {
 
 func TestTiDBExpireBatchLimitCountsTeams(t *testing.T) {
 	db := testDB(t)
-	st := expire.NewTiDB(db)
+	st := expirestore.NewTiDB(db)
 	now := dbNow()
 	runUntilDone(t, st, defaultPolicy, now) // 他のテストの残りを先に掃除する
 

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/adapters/store"
 )
 
 // captureLogs は slog の既定ロガーをバッファに差し替え、テストの終わりに戻す。

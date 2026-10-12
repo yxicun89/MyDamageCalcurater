@@ -13,7 +13,8 @@ import (
 	"unicode/utf8"
 
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/adapters/store"
+	"example.com/pokecalc/services/team/internal/domain"
 )
 
 // teamIDPattern は契約の TeamId(UUID の正準形)。
@@ -96,10 +97,10 @@ func TestCreateTeamValidatesInput(t *testing.T) {
 	// critic 指摘 重要2: DB の列幅(species_key VARCHAR(16)・item_id VARCHAR(64))を超える入力は
 	// INSERT 失敗による 503 store_unavailable ではなく、ここで 400 invalid_input にすること。
 	speciesKeyTooLong := memberJSON()
-	speciesKeyTooLong["speciesKey"] = strings.Repeat("9", maxSpeciesKeyRunes+1)
+	speciesKeyTooLong["speciesKey"] = strings.Repeat("9", domain.MaxSpeciesKeyRunes+1)
 
 	itemIDTooLong := memberJSON()
-	itemIDTooLong["itemId"] = strings.Repeat("i", maxIDRunes+1)
+	itemIDTooLong["itemId"] = strings.Repeat("i", domain.MaxIDRunes+1)
 
 	tests := []struct {
 		name string
@@ -153,7 +154,7 @@ func TestCreateTeamAcceptsBoundaryValues(t *testing.T) {
 // TestCreateTeamValidatesInput が固定済み。構築名0文字は ADR-0229 で既定名になる〈team_name_default_test.go〉)。
 func TestCreateTeamAcceptsNameAndNicknameLowerBoundary(t *testing.T) {
 	m := memberJSON()
-	m["nickname"] = strings.Repeat("ね", maxNicknameRunes) // ちょうど24文字
+	m["nickname"] = strings.Repeat("ね", domain.MaxNicknameRunes) // ちょうど24文字
 
 	st := newFakeStore()
 	created := decodeTeam(t, serve(t, NewHandler(st), http.MethodPost, pathTeams,
@@ -161,8 +162,8 @@ func TestCreateTeamAcceptsNameAndNicknameLowerBoundary(t *testing.T) {
 	if created.Name != "あ" {
 		t.Errorf("name = %q, want %q", created.Name, "あ")
 	}
-	if len(created.Members) != 1 || created.Members[0].Nickname == nil || utf8.RuneCountInString(*created.Members[0].Nickname) != maxNicknameRunes {
-		t.Errorf("members = %+v, want ニックネームちょうど%d文字が通る", created.Members, maxNicknameRunes)
+	if len(created.Members) != 1 || created.Members[0].Nickname == nil || utf8.RuneCountInString(*created.Members[0].Nickname) != domain.MaxNicknameRunes {
+		t.Errorf("members = %+v, want ニックネームちょうど%d文字が通る", created.Members, domain.MaxNicknameRunes)
 	}
 }
 

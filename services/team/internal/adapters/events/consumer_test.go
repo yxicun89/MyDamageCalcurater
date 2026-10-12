@@ -41,7 +41,7 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
-	"example.com/pokecalc/services/team/internal/store"
+	"example.com/pokecalc/services/team/internal/adapters/store"
 )
 
 const (
