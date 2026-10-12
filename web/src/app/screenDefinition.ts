@@ -9,6 +9,8 @@ import type { MasterData, MasterSource, MasterSpeciesSearch } from "../master/ty
 import type { components } from "../api/openapi.gen";
 import type { FavoriteRestoreRequest } from "../favorites/favoriteCalc";
 import type { RecordClient } from "../record/recordClient";
+import type { SpeedComboRequest } from "../speed/SpeedScreen";
+import type { ComboOpenRequest } from "./comboOpenRequest";
 import type { NavGroup } from "./navGroups";
 
 type Favorite = components["schemas"]["Favorite"];
@@ -47,6 +49,10 @@ export interface ScreenEnvironment {
   readonly favoriteRestore?: FavoriteRestoreRequest;
   /** I-web-8(ADR-0333 §3): お気に入りの「計算に使う」。App が要求の token を進め、計算タブへ移す。 */
   readonly onUseFavorite?: (favorite: Favorite) => void;
+  /** CB-6 段階 C2(ADR-0359 追記): 計算画面に渡す、素早さ画面からの「連続技を開く」要求(token が変わったときだけ適用する)。 */
+  readonly comboOpenRequest?: ComboOpenRequest;
+  /** CB-6 段階 C2: 素早さ画面の「この相手で連続技を計算」。App が要求の token を進め、計算タブへ移す。 */
+  readonly onOpenCombo?: (request: SpeedComboRequest) => void;
   /** issue 276(ADR-0411): オンラインのマスタの取得口(API 専用の画面は計算モードに関係なくこれを使う)。 */
   readonly onlineMasterSource: MasterSource;
 }

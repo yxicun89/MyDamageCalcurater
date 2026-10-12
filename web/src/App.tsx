@@ -38,7 +38,9 @@ import { AboutScreen } from "./AboutScreen";
 import { aboutText, appText } from "./i18n/ja";
 import { isSearchableMasterSource } from "./master/capabilities";
 import { exampleMasterSource } from "./master/exampleSource";
+import type { ComboOpenRequest } from "./app/comboOpenRequest";
 import type { FavoriteRestoreRequest } from "./favorites/favoriteCalc";
+import type { SpeedComboRequest } from "./speed/SpeedScreen";
 import { createRecordClient, type RecordClient } from "./record/recordClient";
 import { createTeamClient } from "./team/teamClient";
 import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
@@ -149,6 +151,8 @@ export function App({
   // I-web-8(ADR-0333 §3): お気に入りから計算画面へ入力を戻す要求。token を進めた要求を置き、計算タブへ移す
   // (計算画面は token が変わったときだけ適用する)。
   const [favoriteRestore, setFavoriteRestore] = useState<FavoriteRestoreRequest | undefined>(undefined);
+  // CB-6 段階 C2: 素早さ画面からの「連続技を開く」要求(お気に入りの復元要求と同じ token 方式)。
+  const [comboOpenRequest, setComboOpenRequest] = useState<ComboOpenRequest | undefined>(undefined);
 
   // 計算モード(オフライン = WASM / オンライン = API)。既定はオフラインで、選択は localStorage に覚える
   // (ADR-0301 §4)。マウント時に一度だけ読み、以後はこの state が正(他タブでの変更は追わない)。
@@ -324,6 +328,12 @@ export function App({
   /** お気に入りの「計算に使う」: 復元の要求を置いて(token +1)計算タブへ移る。 */
   function openFavoriteInCalc(favorite: Favorite): void {
     setFavoriteRestore((previous) => ({ token: (previous?.token ?? 0) + 1, favorite }));
+    navigateToTab("calc");
+  }
+
+  /** 素早さ画面の「この相手で連続技を計算」: 要求を置いて(token +1)計算タブへ移る。 */
+  function openComboInCalc(request: SpeedComboRequest): void {
+    setComboOpenRequest((previous) => ({ ...request, token: (previous?.token ?? 0) + 1 }));
     navigateToTab("calc");
   }
 
@@ -558,6 +568,8 @@ export function App({
                   onFavoriteAdded={bumpFavoritesReloadToken}
                   favoriteRestore={favoriteRestore}
                   onUseFavorite={openFavoriteInCalc}
+                  comboOpenRequest={comboOpenRequest}
+                  onOpenCombo={openComboInCalc}
                   recordClient={recordClient}
                   mode={mode}
                   retryMasterLoad={retryMasterLoad}
@@ -610,6 +622,8 @@ interface AppTabPanelProps {
   readonly onFavoriteAdded: () => void;
   readonly favoriteRestore: FavoriteRestoreRequest | undefined;
   readonly onUseFavorite: (favorite: Favorite) => void;
+  readonly comboOpenRequest: ComboOpenRequest | undefined;
+  readonly onOpenCombo: (request: SpeedComboRequest) => void;
   readonly recordClient: RecordClient | undefined;
   readonly mode: CalcMode;
   readonly retryMasterLoad: () => void;
@@ -637,6 +651,8 @@ function AppTabPanel({
   onFavoriteAdded,
   favoriteRestore,
   onUseFavorite,
+  comboOpenRequest,
+  onOpenCombo,
   recordClient,
   mode,
   retryMasterLoad,
@@ -678,6 +694,8 @@ function AppTabPanel({
                   onFavoriteAdded,
                   favoriteRestore,
                   onUseFavorite,
+                  comboOpenRequest,
+                  onOpenCombo,
                   onlineMasterSource,
                 })}
               </div>

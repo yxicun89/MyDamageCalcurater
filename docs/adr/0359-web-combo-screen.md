@@ -33,3 +33,31 @@
 - 連続技は防御側を**満 HP** として計算する(「対戦の状態」の残り HP は渡さない。印 `defender_full_hp_assumed` はエンジンが付ける)。
 - 連続技の節は、計算画面の一括計算(防御側の選択肢の出どころ)が成功しているときだけ出る。単発が失敗中は連続技も出ない。
 - 計算中の案内は `role="status"` にした。手の削除・閉じるの後のフォーカス移動、`li` の名前の扱い、防御側の選択が消えたときの通知は段階 C で直す。
+
+## 追記: 段階 C(2026-10-12。C1 素早さの種族の例・C2 素早さ画面からの導線・C3 a11y)
+
+**C1 素早さの種族の例**
+
+- 連続技の結果で相手の素早さが不明(`opponentSpeedKnown` が偽)のとき、最後の手の自分の素早さ(`speed.lastSelfSpeed`)で `speedClient.reach({mode: "raw", value})` を呼ぶ。
+  呼び出しは `web/src/speed/speedClient.ts` のクライアント 1 か所(新しい経路は作らない)。ComboSection 内の `SpeedExample` が持ち、値が変わるたびに引き直す。古い応答は捨てる(求めた素早さが今の値と違えば出さない。cleanup の cancelled。`reach` は signal を取らないので abort はしない)。
+- 出すのは 6 プリセットのうち**準速**(`neutral-max`。SP 32・補正なし)の行だけ。「準速 c 族以上には抜かれる(例: 速い側で最も遅い 1 体)」(`faster.min`・`slowestFaster`)、「準速 a 族までは抜ける(例: 遅い側で最も速い 1 体)」(`slower.max`・`fastestSlower`)、同速の区間があれば「準速 b 族とは同速」(区間は 〜 でつなぐ)。空の区間の行は出さない(1〜3 行)。区間と名前は API の値のまま(Web で計算し直さない。`domain/comboView.ts` の `speedExampleLines`)。
+- **出さない場合**: speedClient が無い(オフライン)・reach が失敗・準速の行が無い・トリックルーム中(`reach` は向きを入れ替えないので「抜ける」が逆になる。ADR-0610 §1)。注記も出さない。連続技の結果・単発の計算は壊さない(絶対ルール 5)。
+- speedClient は `calc.screen.tsx` の `createClient: createSpeedClient` で作り(作るだけで通信しない)、`env.recordClient` がある(= オンライン。App が計算モードがオンラインのときだけ渡す)ときだけ CalcScreen → ComboSection に渡す。ScreenEnvironment にモードの項目は足さない。
+
+**C2 素早さ画面 → 連続技**
+
+- `ScreenEnvironment` に `onOpenCombo`(素早さ画面へ)と `comboOpenRequest`(計算画面へ。`app/comboOpenRequest.ts` の `ComboOpenRequest` = `SpeedComboRequest` + token)を足した。App は `openFavoriteInCalc` と同じ流儀で token を進めて計算タブへ移る。`speed.screen.tsx` は `onOpenCombo` を渡す(ADR-0610 §7 の宿題を解消)。マスタ読み込み失敗中の素早さ画面には渡さない(リンクを出さない)。
+- ポケモン ID は計算画面の種族の key と同じ形(`9001-000`)なので、そのまま `selectAttacker` / `selectDefender`(オンラインは `masterSearch.resolveSpecies` → `handleAttackerResolved` / `handleDefenderResolved`)で入れる。引けないポケモンは入れない(安全側)。token が変わったときだけ適用し、同じ token の再描画では利用者の変更を消さない。入れ終えたら連続技の節を広げる(`openToken`。「次の技」を押した状態)。
+- 要求の `speed`(SP・性格・ランク・スカーフ)は**反映しない**。計算画面の攻撃側の入力は攻撃・特攻だけで、素早さの SP・性格・ランクの入力欄が無い(連続技は攻撃側の素早さ SP 0 で計算する)。反映するには計算画面に素早さの入力を足す必要があり、別タスク(持ち越し)。
+
+**C3 a11y**
+
+- 追加の手を外した後はフォーカスを「追加の技」のピッカーへ(ピッカーが使えないときは最後の手の操作ボタン)、「閉じる」の後は「次の技」ボタンへ移す(消えたボタンにフォーカスを残さない)。描画後の effect で消費する。
+- 選んでいた防御側の振りが一括計算の更新で無くなり先頭へ戻ったとき、`role="status"` で「選んでいた相手の振りがなくなったので、先頭の振りに戻しました」と知らせる。
+- 手の `li` の `aria-label` は変えていない(既存テストが listitem 名で引く)。
+
+## 追記(段階 C の critic への対応)
+
+- 素早さの例は、トリックルーム中は出さない。ADR-0610 §3 の「意味を反転して言い換える」は連続技の例では採らない(`reach` は向きを入れ替えないため、誤解を招くより出さない方を選ぶ)。
+- 例の行の並びは「以上には抜かれる → までは抜ける → 同速」(速い側から)。
+- 素早さ画面から開く要求は、攻撃側を入れた後に 1 フレーム待ってから防御側を入れる(state 更新の反映と `comboOpenContextRef` の更新を待つため)。
