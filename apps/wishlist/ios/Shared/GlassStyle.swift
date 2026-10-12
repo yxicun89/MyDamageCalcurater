@@ -229,7 +229,6 @@ struct GenrePill<Glyph: View>: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: GenreLabel.maxNameWidth, alignment: .leading)
-                        .fixedSize(horizontal: true, vertical: false)
                         .foregroundStyle(foreground)
                         .accessibilityIdentifier(nameIdentifier)
                 }
