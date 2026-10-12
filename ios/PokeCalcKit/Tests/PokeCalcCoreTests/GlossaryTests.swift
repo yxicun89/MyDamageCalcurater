@@ -115,6 +115,7 @@ final class GlossaryTests: XCTestCase {
         XCTAssertEqual(MegaItemText.stoneName(baseSpeciesNameJa: "テストアルファ"), "テストアルファ専用のメガストーン")
         XCTAssertEqual(SpeedLabels.mode(.preset), "定番の振り方")
         XCTAssertTrue(DeviceDataText.explanation.joined().contains("番号"))
-        XCTAssertEqual(AdjustText.unavailable, "調整のサーバーに接続できません")
+        XCTAssertEqual(AdjustText.unavailable, ServiceFailureKind.offline.message(feature: "調整"))
+        XCTAssertEqual(ServiceFailureKind.offline.message(feature: "計算"), "サーバーに接続できません。インターネットの接続を確かめて、もう一度お試しください")
     }
 }

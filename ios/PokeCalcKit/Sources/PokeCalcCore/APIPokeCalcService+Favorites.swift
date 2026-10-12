@@ -14,11 +14,11 @@ extension APIPokeCalcService: FavoritesService {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainFavorite)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -38,9 +38,9 @@ extension APIPokeCalcService: FavoritesService {
         case .badRequest(let error), .internalServerError(let error):
             throw try Self.domainError(error)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -56,9 +56,9 @@ extension APIPokeCalcService: FavoritesService {
         case .badRequest(let error), .notFound(let error):
             throw try Self.domainError(error)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 

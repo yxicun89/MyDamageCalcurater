@@ -22,7 +22,7 @@ public struct APISpeedService: SpeedService {
     /// `URLSession` の既定 transport で組み立てる(アプリは `PokeCalcSpeedAPI` を直接 import しない)。
     /// `baseURL` は gateway(`/api/speed/*` を speed-svc へ中継する。root の API と同じ接続先)。
     public init(baseURL: URL, identity: ClientIdentity) {
-        self.init(client: Client(serverURL: baseURL, transport: URLSessionTransport()), identity: identity)
+        self.init(client: Client(serverURL: baseURL, transport: ClientFailureMapping.makeTransport()), identity: identity)
     }
 
     // MARK: - SpeedService
@@ -35,13 +35,13 @@ public struct APISpeedService: SpeedService {
         case .ok(let ok):
             return try Self.domainPokemonList(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 503)
         case .internalServerError(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 500)
         case .undocumented(let status, let payload):
-            throw await Self.undocumentedError(status: status, payload: payload)
+            throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -59,13 +59,13 @@ public struct APISpeedService: SpeedService {
         case .ok(let ok):
             return try Self.domainTable(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 503)
         case .internalServerError(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 500)
         case .undocumented(let status, let payload):
-            throw await Self.undocumentedError(status: status, payload: payload)
+            throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -79,17 +79,17 @@ public struct APISpeedService: SpeedService {
         case .ok(let ok):
             return try Self.domainPosition(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 400)
         case .contentTooLarge(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 413)
         case .unprocessableContent(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 422)
         case .serviceUnavailable(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 503)
         case .internalServerError(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 500)
         case .undocumented(let status, let payload):
-            throw await Self.undocumentedError(status: status, payload: payload)
+            throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -105,17 +105,17 @@ public struct APISpeedService: SpeedService {
         case .ok(let ok):
             return try Self.domainMatchup(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 400)
         case .contentTooLarge(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 413)
         case .unprocessableContent(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 422)
         case .serviceUnavailable(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 503)
         case .internalServerError(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 500)
         case .undocumented(let status, let payload):
-            throw await Self.undocumentedError(status: status, payload: payload)
+            throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -130,17 +130,17 @@ public struct APISpeedService: SpeedService {
         case .ok(let ok):
             return try Self.domainReach(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 400)
         case .contentTooLarge(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 413)
         case .unprocessableContent(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 422)
         case .serviceUnavailable(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 503)
         case .internalServerError(let response):
-            throw try Self.domainError(response.body.json)
+            throw try Self.domainError(response.body.json, status: 500)
         case .undocumented(let status, let payload):
-            throw await Self.undocumentedError(status: status, payload: payload)
+            throw await ClientFailureMapping.undocumentedError(status: status, payload: payload)
         }
     }
 
@@ -152,46 +152,13 @@ public struct APISpeedService: SpeedService {
         } catch is CancellationError {
             throw CancellationError()
         } catch {
-            if Self.isCancellation(error) { throw CancellationError() }
-            if Self.isDecodingFailure(error) {
-                throw PokeCalcError(code: PokeCalcError.Code.decode, message: "\(error)")
-            }
-            throw PokeCalcError(code: PokeCalcError.Code.transport, message: "\(error)")
+            if ClientFailureMapping.isCancellation(error) { throw CancellationError() }
+            throw ClientFailureMapping.pokeCalcError(from: error)
         }
     }
 
-    private static func isCancellation(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        if clientError.underlyingError is CancellationError { return true }
-        if let urlError = clientError.underlyingError as? URLError, urlError.code == .cancelled { return true }
-        return false
-    }
-
-    private static func isDecodingFailure(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        return clientError.underlyingError is DecodingError
-    }
-
-    private static func domainError(_ error: Components.Schemas._Error) -> PokeCalcError {
-        PokeCalcError(code: error.code.rawValue, message: error.message)
-    }
-
-    /// 本文を読む上限(エラー本文は小さい。ゲートウェイの HTML などを無制限に読まない)。
-    private static let undocumentedBodyLimit = 64 * 1024
-
-    /// 契約外のステータス。本文が `{code,message}` ならその code(gateway の 404/405。ADR-0802)、読めなければ専用のコード。
-    private static func undocumentedError(status: Int, payload: UndocumentedPayload) async -> PokeCalcError {
-        struct Body: Decodable {
-            let code: String
-            let message: String
-        }
-        if let httpBody = payload.body,
-            let data = try? await Data(collecting: httpBody, upTo: undocumentedBodyLimit),
-            let body = try? JSONDecoder().decode(Body.self, from: data)
-        {
-            return PokeCalcError(code: body.code, message: body.message)
-        }
-        return PokeCalcError(code: PokeCalcError.Code.unexpectedStatus, message: "HTTP \(status)")
+    private static func domainError(_ error: Components.Schemas._Error, status: Int? = nil) -> PokeCalcError {
+        PokeCalcError(code: error.code.rawValue, message: error.message, statusCode: status)
     }
 
     // MARK: - ドメイン → 生成型

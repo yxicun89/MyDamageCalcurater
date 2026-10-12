@@ -295,7 +295,7 @@ final class BalanceViewModelStage3Tests: XCTestCase {
         _ = await viewModel.addThreat(speciesKey: StubMaster.beta.key)
         await settleAll(viewModel)
 
-        XCTAssertEqual(viewModel.threatsError?.message, "タイプバランスのサーバーに接続できません")
+        XCTAssertEqual(viewModel.threatsError?.message, ServiceFailureKind.offline.message(feature: "タイプバランス"))
     }
 
     func testStaleThreatsResponsesAreIgnored() async {

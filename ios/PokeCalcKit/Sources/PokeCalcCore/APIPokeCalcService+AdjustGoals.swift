@@ -19,13 +19,13 @@ extension APIPokeCalcService: AdjustGoalsService {
         case .ok(let ok):
             return Self.domainGoalsResult(try ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 

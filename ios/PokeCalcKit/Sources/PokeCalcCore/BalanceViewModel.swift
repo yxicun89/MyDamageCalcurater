@@ -117,6 +117,8 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
 
     // MARK: - 第3段: 特性名(応答に出たポケモンの `species(key:)` から引く。引けなければ nil)
 
+    /// 最初の読み込み(`load()`)が失敗した状態か(`canRetryLoad` の元)。
+    private var loadFailed = false
     private var abilityNames: [String: String] = [:]
     private var abilityNameResolvedPokemon: Set<String> = []
 
@@ -163,10 +165,23 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
             moveSearchReachedLimit = moveSearch.reachedLimit
             for move in moves { moveDictionary[move.id] = move }
             masterError = nil
+            loadFailed = false
         } catch {
-            if !(error is CancellationError) { masterError = BalanceScreenError(error) }
+            if !(error is CancellationError) {
+                masterError = BalanceScreenError(error, feature: BalanceScreenText.masterFeature)
+                loadFailed = true
+            }
         }
         isLoadingMaster = false
+    }
+
+    /// 最初の読み込みに失敗していて、いまやり直せる(View は「もう一度」を出す。ADR-0534)。
+    public var canRetryLoad: Bool { loadFailed && !isLoadingMaster }
+
+    /// 失敗した最初の読み込みをやり直す。読み込めているとき・読み込み中は何もしない。
+    public func retryLoad() async {
+        guard canRetryLoad else { return }
+        await load()
     }
 
     /// 一度でも見た技(技名の表示用)。無ければ nil(View は ID をそのまま出す)。
@@ -220,7 +235,7 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         do {
             detail = try await master.species(key: speciesKey)
         } catch {
-            if !(error is CancellationError) { masterError = BalanceScreenError(error) }
+            if !(error is CancellationError) { masterError = BalanceScreenError(error, feature: BalanceScreenText.masterFeature) }
             return false
         }
         // 待っている間に別の追加で上限に達した場合を取りこぼさない。
@@ -327,7 +342,7 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
                 )
                 loaded.append((member, detail))
             } catch {
-                if !(error is CancellationError) { masterError = BalanceScreenError(error) }
+                if !(error is CancellationError) { masterError = BalanceScreenError(error, feature: BalanceScreenText.masterFeature) }
                 return nil
             }
         }
@@ -489,7 +504,7 @@ public final class BalanceViewModel: MasterSpeciesSearchProviding, MasterMoveSea
         do {
             detail = try await master.species(key: speciesKey)
         } catch {
-            if !(error is CancellationError) { masterError = BalanceScreenError(error) }
+            if !(error is CancellationError) { masterError = BalanceScreenError(error, feature: BalanceScreenText.masterFeature) }
             return false
         }
         guard threatMembers.count < TeamLimits.maxMembers else {

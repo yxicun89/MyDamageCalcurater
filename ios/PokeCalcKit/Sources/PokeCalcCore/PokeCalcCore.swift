@@ -6,6 +6,8 @@
 //   PokeCalcError.swift        唯一のエラー型
 //   ClientIdentity.swift       端末ID・セッションID(§5)
 //   AppConfiguration.swift     起動時の接続先設定(§5)
+//   ServiceFailureKind.swift   サーバーが使えない理由の分類と固定文(全画面で共通。ADR-0534)
+//   ClientFailureMapping.swift 生成クライアントの失敗 → PokeCalcError(接続できない・時間切れ・番号。ADR-0534)
 //   APIPokeCalcService.swift   生成クライアントでの実装。生成型 ↔ ドメインの写像はここに閉じる
 //   MockPokeCalcService.swift  架空データ(Resources/*.json)での実装(§4)。ダメージは計算しない
 //   MockFixtures.swift         MockPokeCalcService が読む JSON の decode 用の型

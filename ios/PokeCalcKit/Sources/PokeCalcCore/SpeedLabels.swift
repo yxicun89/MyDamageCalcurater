@@ -74,6 +74,8 @@ public enum SpeedLabels {
     public static func selfSpeed(_ speed: Int) -> String { "自分の素早さ \(speed)" }
 
     // ---- エラー(サーバーの英語 message は出さず、code から日本語にする) ----
+    /// 失敗の文言に入れる機能名(`ServiceFailureKind.message(feature:)`。ADR-0534)。
+    public static let screenName = "素早さ"
     public static let unavailable = "素早さのサーバーに接続できません"
     public static let errorFallback = "素早さの計算に失敗しました"
 

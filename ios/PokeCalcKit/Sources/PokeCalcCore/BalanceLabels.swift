@@ -68,6 +68,8 @@ public enum BalanceLabels {
 public enum BalanceScreenText {
     /// 構築編集の中の節の見出し(Web の teamBalanceText.heading と同じ)。
     public static let screenTitle = "タイプバランス"
+    /// ポケモン・技の一覧(マスタ側のサーバー)の失敗の機能名。タイプバランスのサーバーの障害と取り違えない(ADR-0534)。
+    public static let masterFeature = "ポケモンの一覧"
     public static let abilityLabel = "特性"
     public static let noAbilityOption = "なし"
     public static let noneLabel = "なし"
@@ -190,30 +192,33 @@ public enum BalanceErrorText {
         case "internal_error":
             return "サーバーでエラーが起きました。しばらくしてからもう一度お試しください"
         case unavailableCode:
-            return "タイプバランスのサーバーに接続できません"
+            return ServiceFailureText.notConfigured
         default:
             return fallback
         }
     }
 }
 
-/// タイプバランス画面が出すエラー。`message` は常に `BalanceErrorText` から引く。
+/// タイプバランス画面が出すエラー。サーバーが使えない理由は `ServiceFailureKind` に従い(ADR-0534)、
+/// 入力の誤りなど画面別の文言が要るコードだけ `BalanceErrorText` から引く。
 public struct BalanceScreenError: Equatable, Sendable {
     public let code: String
-    public var message: String { BalanceErrorText.message(forCode: code) }
+    public let message: String
 
-    /// `PokeCalcError` の通信失敗・デコード失敗は `balance_unavailable`、サービスのコードはそのコード。
-    /// それ以外のエラーは未知のコード(汎用文言)。
-    public init(_ error: any Error) {
-        guard let pokeCalcError = error as? PokeCalcError else {
-            code = "client_unexpected_error"
-            return
-        }
-        switch pokeCalcError.code {
-        case PokeCalcError.Code.transport, PokeCalcError.Code.decode:
-            code = BalanceErrorText.unavailableCode
-        default:
-            code = pokeCalcError.code
+    /// `feature` は「〜のサーバーで問題が起きています」に入る機能名(既定はタイプバランス。一覧の失敗は `masterFeature`)。
+    public init(_ error: any Error, feature: String = BalanceScreenText.screenTitle) {
+        let sourceCode = (error as? PokeCalcError)?.code ?? "client_unexpected_error"
+        // 接続できない・時間切れ・読み取れないは「タイプバランスが使えない」1 つのコードにまとめる(従来どおり)。
+        let unavailableSources = [PokeCalcError.Code.transport, PokeCalcError.Code.timeout, PokeCalcError.Code.decode]
+        code = unavailableSources.contains(sourceCode) ? BalanceErrorText.unavailableCode : sourceCode
+        switch ServiceFailureKind(error) {
+        case .other(let otherCode):
+            message = BalanceErrorText.message(forCode: otherCode)
+        case .serverFault where sourceCode == "master_unavailable":
+            // サーバーのデータを読み込めない旨(原因がより具体的)。
+            message = BalanceErrorText.message(forCode: sourceCode)
+        case let kind:
+            message = kind.message(feature: feature)
         }
     }
 }

@@ -21,7 +21,7 @@ public struct APIPokeCalcService: PokeCalcService {
     /// アプリ(View 層)は `PokeCalcAPI` / `OpenAPIURLSession` に直接依存せず、この1つの
     /// 初期化子だけで API 実装を作れる(ADR-0500 §1「View 以外はパッケージに置く」)。
     public init(baseURL: URL, identity: ClientIdentity) {
-        self.init(client: Client(serverURL: baseURL, transport: URLSessionTransport()), identity: identity)
+        self.init(client: Client(serverURL: baseURL, transport: ClientFailureMapping.makeTransport()), identity: identity)
     }
 
     // MARK: - 検索・マスタ参照
@@ -37,11 +37,11 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainSpeciesSummary)
         case .badRequest(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -56,16 +56,16 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try Self.domainSpeciesDetail(ok.body.json)
         case .badRequest(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 400)
         case .notFound(let response):
             // 404 は他の操作の `Components.Responses._Error` と違い、getSpecies だけの inline body
             // (`#/paths/.../404` を `#/responses/Error` の参照ではなく直接定義しているため。ADR-0105 の
             // openapi 更新で追加。他の 404(natures 等)は `.default` 経由のまま)。
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 404)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -80,11 +80,11 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainMove)
         case .badRequest(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -100,11 +100,11 @@ public struct APIPokeCalcService: PokeCalcService {
             return try Self.domainMove(ok.body.json)
         case .notFound(let response):
             // 404 は species(key:) と同じ inline body(ADR-0501「issue #68 の残り」2章)。
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 404)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -132,9 +132,9 @@ public struct APIPokeCalcService: PokeCalcService {
             case .ok(let ok):
                 result.append(contentsOf: try ok.body.json.map(Self.domainMove))
             case .serviceUnavailable(let response):
-                throw try Self.domainErrorFromSchema(response.body.json)
-            case .default(_, let error):
-                throw try Self.domainError(error)
+                throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+            case .default(let status, let error):
+                throw try Self.domainError(error, status: status)
             }
         }
         return result
@@ -151,11 +151,11 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try ok.body.json.map { Self.domainItem($0) }
         case .badRequest(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -169,9 +169,9 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try ok.body.json.map(Self.domainNature)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -188,13 +188,13 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try Self.domainCalcResult(ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -209,13 +209,13 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try Self.domainBulkCalcResult(ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -231,13 +231,13 @@ public struct APIPokeCalcService: PokeCalcService {
         case .ok(let ok):
             return try Self.domainReverseResult(ok.body.json)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -255,42 +255,22 @@ public struct APIPokeCalcService: PokeCalcService {
             // 呼び出し側(Swift Concurrency)がキャンセルとして扱えるようにそのまま投げ直す。
             throw CancellationError()
         } catch {
-            if Self.isCancellation(error) {
+            if ClientFailureMapping.isCancellation(error) {
                 throw CancellationError()
             }
-            if Self.isDecodingFailure(error) {
-                // 応答は受け取れたが期待した形にデコードできない。接続できない(`transport`)とは
-                // 原因が違う(契約のずれ・サーバー側のバグ等)ので、別のコードで区別する。
-                throw PokeCalcError(code: PokeCalcError.Code.decode, message: "\(error)")
-            }
-            throw PokeCalcError(code: PokeCalcError.Code.transport, message: "\(error)")
+            throw ClientFailureMapping.pokeCalcError(from: error)
         }
     }
 
-    /// `Client` は transport/デコードの失敗を `OpenAPIRuntime.ClientError` に包んで投げる。
-    /// 元の原因(`underlyingError`)を見て、キャンセルとデコード失敗をここで区別する。
-    private static func isCancellation(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        if clientError.underlyingError is CancellationError { return true }
-        // URLSession 経由のキャンセルは CancellationError ではなく URLError(.cancelled) として届く。
-        if let urlError = clientError.underlyingError as? URLError, urlError.code == .cancelled { return true }
-        return false
-    }
-
-    private static func isDecodingFailure(_ error: any Error) -> Bool {
-        guard let clientError = error as? ClientError else { return false }
-        return clientError.underlyingError is DecodingError
-    }
-
-    static func domainError(_ response: Components.Responses._Error) throws -> PokeCalcError {
-        try Self.domainErrorFromSchema(response.body.json)
+    static func domainError(_ response: Components.Responses._Error, status: Int? = nil) throws -> PokeCalcError {
+        try Self.domainErrorFromSchema(response.body.json, status: status)
     }
 
     /// 503 は5つの pokedex 操作では `Components.Responses._Error` ではなく、そのパスだけの
     /// inline body(`Output.ServiceUnavailable.Body.json: Components.Schemas._Error`)で届く
     /// (openapi の `#/responses/Error` を再利用していないため)。同じ形なので写像は共通にする。
-    static func domainErrorFromSchema(_ error: Components.Schemas._Error) -> PokeCalcError {
-        PokeCalcError(code: error.code.rawValue, message: error.message)
+    static func domainErrorFromSchema(_ error: Components.Schemas._Error, status: Int? = nil) -> PokeCalcError {
+        PokeCalcError(code: error.code.rawValue, message: error.message, statusCode: status)
     }
 
     // MARK: - 応答 → ドメイン
@@ -693,13 +673,13 @@ extension APIPokeCalcService: DeviceDataService {
         case .ok(let ok):
             return Self.domainDeletionProgress(try ok.body.json.status)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -713,13 +693,13 @@ extension APIPokeCalcService: DeviceDataService {
         case .ok(let ok):
             return Self.domainDeletionProgress(try ok.body.json.status)
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .internalServerError(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 500)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 
@@ -750,11 +730,11 @@ extension APIPokeCalcService: FrequentOpponentsService {
                     lastCalculatedAt: $0.lastCalculatedAt)
             }
         case .badRequest(let error):
-            throw try Self.domainError(error)
+            throw try Self.domainError(error, status: 400)
         case .serviceUnavailable(let response):
-            throw try Self.domainErrorFromSchema(response.body.json)
-        case .default(_, let error):
-            throw try Self.domainError(error)
+            throw try Self.domainErrorFromSchema(response.body.json, status: 503)
+        case .default(let status, let error):
+            throw try Self.domainError(error, status: status)
         }
     }
 }
