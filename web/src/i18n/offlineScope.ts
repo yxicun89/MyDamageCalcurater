@@ -13,3 +13,26 @@ export const offlineScopeText = {
   /** 押せないタブに出す理由(表示と aria-describedby)。 */
   onlineOnlyReason: "オンラインのみ",
 } as const;
+
+/** ADR-0358 段 3: 「オフライン用にポケモンのデータを保存」(このアプリについて)の文言。iOS は同じ言い方にそろえる。 */
+export const offlinePreloadText = {
+  sectionHeading: "オフライン用のデータ",
+  explanation:
+    "オンラインのうちに、全ポケモンのデータをこの端末に保存します。保存すると、オフラインでも好きなポケモンを選んで計算・逆算できます。データはこの端末の中だけに置かれ、サーバーには送りません。",
+  startButton: "オフライン用にポケモンのデータを保存",
+  resumeButton: "続きから保存する",
+  stopButton: "中断する",
+  /** オフライン(計算する場所がこの端末)のときにボタンを押せない理由。 */
+  offlineReason: "計算する場所を「サーバー(オンライン)」にすると保存できます。",
+  progress: (done: number, total: number): string => `保存中 ${String(done)} / ${String(total)}`,
+  preparing: "ポケモンの一覧を取得しています",
+  completed: (count: number): string => `保存済み: ${String(count)}匹。オフラインで使えます`,
+  aborted: (count: number): string =>
+    `中断しました。保存済み: ${String(count)}匹。もう一度押すと続きから保存します`,
+  /** サーバーに接続できない・応答がおかしいとき。 */
+  failedServer: (count: number): string =>
+    `サーバーに接続できません。保存済み: ${String(count)}匹。もう一度押すと続きから保存します`,
+  /** 端末に書けないとき(容量不足・プライベートブラウズなど)。 */
+  failedStorage: (count: number): string =>
+    `この端末に保存できませんでした(空き容量が足りない可能性があります)。保存済み: ${String(count)}匹。空き容量を確保してから、もう一度押すと続きから保存します`,
+} as const;

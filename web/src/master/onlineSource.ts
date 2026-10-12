@@ -347,12 +347,12 @@ export function createOnlineMasterSource(input: CreateOnlineMasterSourceInput): 
   }
 
   const search: MasterSpeciesSearch = {
-    async searchSpecies(query, signal) {
+    async searchSpecies(query, signal, limit = SPECIES_SEARCH_LIMIT) {
       const trimmed = query.trim();
       if (trimmed.length < SPECIES_SEARCH_MIN_LENGTH) {
         return [];
       }
-      const raw = await getJson(PATHS.species, { q: trimmed, limit: String(SPECIES_SEARCH_LIMIT) }, signal);
+      const raw = await getJson(PATHS.species, { q: trimmed, limit: String(limit) }, signal);
       return (raw as Schemas["SpeciesSummary"][]).map(mapSpeciesSummary);
     },
     async resolveSpecies(key, signal) {

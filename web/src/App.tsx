@@ -98,6 +98,11 @@ export interface AppProps {
    * 本番は main.tsx が MasterCacheStore から作って渡す。省くと 0 匹として案内する。
    */
   readonly savedSpeciesCount?: () => Promise<number>;
+  /**
+   * ADR-0358 段 3: 保存済みのポケモンの key を読む口(「オフライン用にポケモンのデータを保存」が保存済みを飛ばす)。
+   * 本番は main.tsx が MasterCacheStore から作って渡す。省くと保存の節を出さない。
+   */
+  readonly savedSpeciesKeys?: () => Promise<ReadonlySet<string>>;
 }
 
 /** masterSource.load() の結果(成功/失敗のどちらか)。読み込み中は state を持たず null のまま表す。 */
@@ -125,6 +130,7 @@ export function App({
   masterSources,
   imageFetch = globalThis.fetch,
   savedSpeciesCount,
+  savedSpeciesKeys,
 }: AppProps) {
   // 既定のオフライン(WASM)エンジンはマウント時に1回だけ作る(呼び出しのたびに作り直すと、計算のたびに
   // 読み込み状態がリセットされる)。createWasmEngine 自体は engine.wasm を読まない(初回の計算まで遅延)。
@@ -453,6 +459,14 @@ export function App({
   const currentGroupId = groupIdOf(tab);
   const currentScreenIds = NAV_TABS.find((navTab) => navTab.group.id === currentGroupId)?.screenIds ?? [tab];
 
+  // ADR-0358 段 3: 事前保存の節に渡す口。保存済み件数の表示(OfflineScopeNotice)は、保存が終わったら取り直す。
+  const [savedCountToken, setSavedCountToken] = useState(0);
+  const preloadSource = modeMasterSources?.online;
+  const offlinePreload =
+    savedSpeciesKeys !== undefined && preloadSource !== undefined && isSearchableMasterSource(preloadSource)
+      ? { source: preloadSource, loadSavedKeys: savedSpeciesKeys }
+      : undefined;
+
   // 文書のタイトル(「<画面名> | pokecalc」)。タブの切り替え・popstate に追従し、マスタ読み込み中も設定する。
   useEffect(() => {
     document.title = aboutOpen ? aboutDocumentTitle() : documentTitle(tab);
@@ -473,6 +487,11 @@ export function App({
             focusOnMount={focusAbout}
             recordClient={recordApiClient}
             teamClient={teamClient}
+            offlinePreload={offlinePreload}
+            online={mode === "online"}
+            onPreloadSaved={() => {
+              setSavedCountToken((token) => token + 1);
+            }}
             onTeamDataDeleted={() => {
               setTeamReloadToken((token) => token + 1);
               bumpFavoritesReloadToken();
@@ -480,7 +499,7 @@ export function App({
           />
         )}
         <div hidden={aboutOpen}>
-          {mode === "offline" && <OfflineScopeNotice loadCount={savedSpeciesCount} />}
+          {mode === "offline" && <OfflineScopeNotice key={savedCountToken} loadCount={savedSpeciesCount} />}
           {currentMasterLoad === null && <p>{appText.loading}</p>}
           {currentMasterLoad !== null && (
             <div className="app-tabs">
