@@ -28,7 +28,6 @@ enum UITestNavigation {
         "openCalcScreen": TabID.damage,
         "openReverseScreen": TabID.damage,
         "openAdjustScreen": TabID.damage,
-        "openJudgeScreen": TabID.damage,
         "openTeamListScreen": TabID.team,
         "openSpeedScreen": TabID.speed,
         "openFavoritesScreen": TabID.records,
@@ -36,7 +35,7 @@ enum UITestNavigation {
 
     /// タブを開いたあと、さらに入口 ID のボタンを押す画面(タブ内の区切り・一覧の行)。
     static let entriesInsideTab: Set<String> = [
-        "openCalcScreen", "openReverseScreen", "openAdjustScreen", "openJudgeScreen",
+        "openCalcScreen", "openReverseScreen", "openAdjustScreen",
     ]
 }
 

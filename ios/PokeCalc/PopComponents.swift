@@ -135,7 +135,6 @@ enum PopSymbol {
     static let reverse = "arrow.uturn.backward.circle"
     static let speed = "hare"
     static let balance = "chart.pie"
-    static let judge = "checkmark.seal"
     static let team = "person.3"
     static let favorites = "star"
     static let adjust = "slider.horizontal.3"
@@ -158,7 +157,6 @@ enum PopSymbol {
         case "calc": return calc
         case "reverse": return reverse
         case "speed": return speed
-        case "judge": return judge
         case "team": return team
         case "favorites": return favorites
         case "adjust": return adjust

@@ -62,7 +62,6 @@ final class AppNavigationUITests: XCTestCase {
             XCTAssertGreaterThanOrEqual(app.buttons[entry].frame.height, 36, "区切り \(entry) のタップの高さ")
         }
         XCTAssertTrue(app.buttons["openCalcScreen"].isSelected, "最初は計算が選ばれている")
-        XCTAssertFalse(app.buttons["openJudgeScreen"].exists, "判定は既定で出さない")
     }
 
     /// 最大の文字(AX5)でも、区切りのボタンは画面の幅に収まり(はみ出さない)、押せる高さを保つ。タブも出る。

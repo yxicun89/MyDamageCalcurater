@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # アプリをシミュレータにビルド・インストールし、モックで起動する(手順書 docs/runbooks/ios.md 用)。
 #
-#   ios/scripts/sim-run.sh <シミュレータ名> <画面: root | calc | reverse | team | speed | judge> <外観: light | dark> <文字サイズ>
+#   ios/scripts/sim-run.sh <シミュレータ名> <画面: root | calc | reverse | team | speed> <外観: light | dark> <文字サイズ>
 #
 # 文字サイズは simctl の content_size(large が標準。extra-extra-large・accessibility-large など)。
 # 画面を直接開く環境変数は ios/PokeCalc/Features/*Feature.swift の openAtLaunchEnvironmentKey と同じ(ADR-0507)。
 set -euo pipefail
 
 if [ "$#" -ne 4 ]; then
-  echo "usage: $0 <simulator> <root|calc|reverse|team|speed|judge> <light|dark> <content_size>" >&2
+  echo "usage: $0 <simulator> <root|calc|reverse|team|speed> <light|dark> <content_size>" >&2
   exit 2
 fi
 simulator="$1"
@@ -35,8 +35,7 @@ case "$screen" in
   team) open_key="POKECALC_OPEN_TEAM_LIST_SCREEN_AT_LAUNCH" ;;
   adjust) open_key="POKECALC_OPEN_ADJUST_SCREEN_AT_LAUNCH" ;;
   speed) open_key="POKECALC_OPEN_SPEED_SCREEN_AT_LAUNCH" ;;
-  judge) open_key="POKECALC_OPEN_JUDGE_SCREEN_AT_LAUNCH" ;;
-  *) echo "画面は root / calc / reverse / team / adjust / speed / judge のどれか: ${screen}" >&2; exit 2 ;;
+  *) echo "画面は root / calc / reverse / team / adjust / speed のどれか: ${screen}" >&2; exit 2 ;;
 esac
 
 xcrun simctl boot "$simulator" 2>/dev/null || true
@@ -54,10 +53,6 @@ xcrun simctl ui "$simulator" content_size "$content_size"
 xcrun simctl terminate "$simulator" "$bundle_id" 2>/dev/null || true
 
 launch_env=(SIMCTL_CHILD_POKECALC_USE_MOCK=1)
-# 判定の入口は既定で非表示(F-07)。判定画面を開くときだけ環境変数で出す。
-if [ "$screen" = "judge" ]; then
-  launch_env+=("SIMCTL_CHILD_POKECALC_SHOW_JUDGE=1")
-fi
 if [ -n "$open_key" ]; then
   launch_env+=("SIMCTL_CHILD_${open_key}=1")
 fi
