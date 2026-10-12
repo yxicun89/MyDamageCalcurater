@@ -194,7 +194,7 @@ final class APIPokeCalcServiceComboTests: XCTestCase {
 
     func testErrorResponsesCarryTheServerCode() async throws {
         let cases: [(status: Int, code: String)] = [
-            (400, "invalid_input"), (400, "unknown_move"), (500, "internal_error"), (503, "master_unavailable"),
+            (400, "invalid_input"), (400, "unknown_move"), (500, "internal"), (503, "master_unavailable"),
         ]
         for testCase in cases {
             let transport = RecordingTransport(
