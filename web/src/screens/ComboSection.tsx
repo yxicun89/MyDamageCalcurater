@@ -9,6 +9,7 @@ import {
   comboKoText,
   formatSurviveChance,
   rankChipsOf,
+  speedExampleLines,
   speedLineText,
   type ComboDefenderOption,
   type RankChip,
@@ -35,6 +36,8 @@ import {
 } from "../engine/types";
 import { comboScreenText, isComboMarkReason } from "../i18n/combo";
 import { unsupportedText } from "../i18n/ja";
+import type { SpeedClient, SpeedResult } from "../speed/speedClient";
+import type { components as SpeedComponents } from "../speed/speed.gen";
 import { Icon } from "../ui/Icon";
 import { MovePicker } from "./MovePicker";
 import { ToggleChip } from "./ToggleChip";
@@ -79,6 +82,14 @@ export interface ComboSectionProps {
   readonly moves: readonly Move[];
   readonly items: readonly Item[];
   readonly abilities: readonly Ability[];
+  /**
+   * 素早さの種族の例(段階 C1)を引く speed API の口。オフライン(計算モード)では渡されず、そのときは例を出さない。
+   */
+  readonly speedClient?: SpeedClient;
+  /**
+   * 素早さ画面から「連続技を開く」要求を受けた印(段階 C2)。値が変わったとき(null → 数値を含む)に節を広げる。
+   */
+  readonly openToken?: number | null;
 }
 
 /** 連続技の印 1 件の文言。連続技だけの理由は専用の語、それ以外は単発の印と同じ書式。 */
@@ -151,8 +162,14 @@ export function ComboSection({
   moves,
   items,
   abilities,
+  speedClient,
+  openToken = null,
 }: ComboSectionProps): ReactElement | null {
   const headingId = useId();
+  const sectionRef = useRef<HTMLElement>(null);
+  // 手の削除・閉じるの後に、消えたボタンの代わりにフォーカスを移す先(段階 C3)。描画後の effect で消費する。
+  const pendingFocusRef = useRef<"after-remove" | "after-close" | null>(null);
+  const [handledOpenToken, setHandledOpenToken] = useState<number | null>(null);
   const speedFieldBodyId = useId();
   const nextKeyRef = useRef(1);
   const [open, setOpen] = useState(false);
@@ -163,6 +180,12 @@ export function ComboSection({
   const [speedFieldOpen, setSpeedFieldOpen] = useState(false);
   const [speedField, setSpeedField] = useState<ComboSpeedField>({});
   const [completed, setCompleted] = useState<CompletedCombo | null>(null);
+
+  // 素早さ画面からの要求(段階 C2): token が変わったときだけ広げる(レンダー中の state 調整。計算画面の復元と同じ考え方)。
+  if (openToken !== null && openToken !== handledOpenToken) {
+    setHandledOpenToken(openToken);
+    setOpen(true);
+  }
 
   const moveById = useMemo(() => new Map(extraCandidates.map((move) => [move.id, move])), [extraCandidates]);
   // 攻撃側を変えて覚えなくなった追加の手は外れる(状態は触らず、毎レンダー導く)。
@@ -246,6 +269,25 @@ export function ComboSection({
     };
   }, [engine, request]);
 
+  // 手の削除・閉じるの後のフォーカス(段階 C3)。hooks なので早期 return より前に置く。
+  useEffect(() => {
+    const pending = pendingFocusRef.current;
+    if (pending === null) {
+      return;
+    }
+    pendingFocusRef.current = null;
+    const root = sectionRef.current;
+    if (root === null) {
+      return;
+    }
+    const target =
+      pending === "after-close"
+        ? root.querySelector<HTMLElement>(".calc-combo__open")
+        : (root.querySelector<HTMLElement>(".calc-combo__add button:not(:disabled)") ??
+          root.querySelector<HTMLElement>(".calc-combo__step:last-child button:not(:disabled)"));
+    target?.focus();
+  });
+
   if (attacker === null || mainMove === null || defenders.length === 0) {
     return null;
   }
@@ -276,6 +318,7 @@ export function ComboSection({
   }
 
   function removeEntry(index: number): void {
+    pendingFocusRef.current = "after-remove";
     setRawEntries(entries.filter((_, i) => i !== index));
   }
 
@@ -289,11 +332,14 @@ export function ComboSection({
     setSpeedField({ ...speedField, ...patch });
   }
 
+  // 選んでいた振りが無くなり、先頭に戻って計算しているとき(段階 C3)。
+  const defenderWasReset = defenderKey !== "" && !defenders.some((option) => option.key === defenderKey);
+
   const current =
     request !== null && completed !== null && completed.request === request ? completed.result : null;
 
   return (
-    <section className="calc-combo" aria-labelledby={headingId}>
+    <section ref={sectionRef} className="calc-combo" aria-labelledby={headingId}>
       <h2 id={headingId} className="calc-combo__heading">
         {comboScreenText.sectionLabel}
       </h2>
@@ -387,17 +433,19 @@ export function ComboSection({
           </ul>
 
           {canAdd ? (
-            <MovePicker
-              label={comboScreenText.addPickerLabel}
-              labelClassName="calc-screen__label"
-              triggerClassName="calc-screen__move"
-              moves={extraCandidates}
-              types={types}
-              value=""
-              onChange={addStep}
-              showUnselected
-              disabled={extraCandidates.length === 0}
-            />
+            <div className="calc-combo__add">
+              <MovePicker
+                label={comboScreenText.addPickerLabel}
+                labelClassName="calc-screen__label"
+                triggerClassName="calc-screen__move"
+                moves={extraCandidates}
+                types={types}
+                value=""
+                onChange={addStep}
+                showUnselected
+                disabled={extraCandidates.length === 0}
+              />
+            </div>
           ) : (
             <p className="calc-screen__notice">{comboScreenText.maxStepsNotice(MAX_COMBO_STEPS)}</p>
           )}
@@ -406,6 +454,7 @@ export function ComboSection({
               type="button"
               className="ui-button ui-button--secondary calc-combo__close"
               onClick={() => {
+                pendingFocusRef.current = "after-close";
                 setOpen(false);
               }}
             >
@@ -414,6 +463,11 @@ export function ComboSection({
           )}
 
           <div className="calc-combo__inputs">
+            {defenderWasReset && (
+              <p role="status" className="calc-screen__notice">
+                {comboScreenText.defenderReset}
+              </p>
+            )}
             {defenders.length > 1 && (
               <label className="calc-combo__field">
                 <span className="calc-screen__label">{comboScreenText.defenderLabel}</span>
@@ -512,6 +566,7 @@ export function ComboSection({
               moves={moves}
               items={items}
               abilities={abilities}
+              speedClient={speedField.trickRoom === true ? undefined : speedClient}
             />
           )}
           <p className="calc-screen__notice calc-combo__note">{comboScreenText.note}</p>
@@ -528,12 +583,21 @@ interface ComboResultViewProps {
   readonly moves: readonly Move[];
   readonly items: readonly Item[];
   readonly abilities: readonly Ability[];
+  /** 素早さの種族の例を引く口(無い・トリックルーム中は例を出さない)。 */
+  readonly speedClient: SpeedClient | undefined;
 }
 
 /** 最大100%の一括表示予算(単発のダメージバーと同じ)。 */
 const TOTAL_BAR_MAX_PERCENT = 100;
 
-function ComboResultView({ result, stepMoves, moves, items, abilities }: ComboResultViewProps): ReactElement {
+function ComboResultView({
+  result,
+  stepMoves,
+  moves,
+  items,
+  abilities,
+  speedClient,
+}: ComboResultViewProps): ReactElement {
   const { total, speed, opponentAttack } = result;
   const lastStep = result.steps.at(-1);
   const markLabels = result.unsupported.map((mark) => comboMarkLabel(mark, moves, items, abilities));
@@ -583,7 +647,12 @@ function ComboResultView({ result, stepMoves, moves, items, abilities }: ComboRe
       {speed.opponentSpeedKnown ? (
         <p className="calc-screen__notice">{comboScreenText.opponentSpeed(speed.opponentSpeed)}</p>
       ) : (
-        lastStep !== undefined && <p className="calc-screen__notice">{speedLineText(lastStep.line)}</p>
+        <>
+          {lastStep !== undefined && <p className="calc-screen__notice">{speedLineText(lastStep.line)}</p>}
+          {speedClient !== undefined && (
+            <SpeedExample speedClient={speedClient} selfSpeed={speed.lastSelfSpeed} />
+          )}
+        </>
       )}
       {opponentAttack !== null && (
         <div className="calc-combo__opponent">
@@ -601,5 +670,54 @@ function ComboResultView({ result, stepMoves, moves, items, abilities }: ComboRe
         </div>
       )}
     </div>
+  );
+}
+
+/** 直近に届いた reach の応答と、それを求めた自分の素早さ(今の値と違えば古い応答として捨てる)。 */
+interface SettledReach {
+  readonly selfSpeed: number;
+  readonly result: SpeedResult<SpeedComponents["schemas"]["ReachResponse"]>;
+}
+
+/**
+ * 素早さの種族の例(段階 C1)。相手の素早さが不明のときだけ描かれ、最後の手の自分の素早さで speed API の reach(raw)を引く。
+ * 失敗・古い応答は何も出さない(連続技の結果を壊さない)。
+ */
+function SpeedExample({
+  speedClient,
+  selfSpeed,
+}: {
+  readonly speedClient: SpeedClient;
+  readonly selfSpeed: number;
+}): ReactElement | null {
+  const [settled, setSettled] = useState<SettledReach | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void speedClient.reach({ mode: "raw", value: selfSpeed }).then((result) => {
+      if (!cancelled) {
+        setSettled({ selfSpeed, result });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [speedClient, selfSpeed]);
+
+  if (settled === null || settled.selfSpeed !== selfSpeed || !settled.result.ok) {
+    return null;
+  }
+  const lines = speedExampleLines(settled.result.value.lines);
+  if (lines.length === 0) {
+    return null;
+  }
+  return (
+    <ul aria-label={comboScreenText.speedExample.listLabel} className="calc-combo__speed-example">
+      {lines.map((line) => (
+        <li key={line} className="calc-screen__notice">
+          {line}
+        </li>
+      ))}
+    </ul>
   );
 }
