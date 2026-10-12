@@ -28,3 +28,9 @@
 ## 影響
 
 Web: 計算・素早さ・判定の画面、`components.css`、i18n(`uiText.rank*Suffix`、`rankStatNameJa`)。API・engine の変更なし。
+
+## 追記: ±0(未入力)でも操作できると分かる見た目(2026-10-13。I-web-35。ユーザーの画面確認「±0 のとき白と黒の枠だけで寂しい」)
+
+- 値の入っていない段(`data-state="off"`)を、左右で色味を変えた薄い目盛にする。下降側(左 6)= `--warning` の 16% 塗り + 70% の枠、上昇側(右 6)= `--brand-primary` の 16% 塗り + 70% の枠(`color-mix(in srgb, var(--token) N%, transparent)`。色はトークンだけでライト/ダーク両対応)。段に `data-side="down|zero|up"` を足した。
+- 中央の 0 の目印は `--text-primary` の太い縦棒のまま、左右に 2px の余白を足して強調。「±0」は右の値ラベル(従来どおり)。
+- 値が入った段の濃い塗り・aria(role=slider・aria-valuetext)・キーボードは不変。無効時は従来の opacity 0.6 で控えめ。常時アニメーションなし。

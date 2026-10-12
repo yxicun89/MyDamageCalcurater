@@ -180,6 +180,7 @@ export function RankMeter({
             aria-hidden="true"
             className="ui-rank__segment"
             data-state={segmentState(step, current)}
+            data-side={step < 0 ? "down" : step > 0 ? "up" : "zero"}
           />
         ))}
       </div>
