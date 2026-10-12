@@ -4,7 +4,16 @@
 // 返ってきた値は加工せずに表示する(ADR-0300 §8)。失敗してもこの節の中だけに案内し、単発の計算結果は壊さない(絶対ルール 5)。
 
 import { useEffect, useId, useMemo, useRef, useState, type ReactElement } from "react";
-import { MAX_COMBO_STEPS, buildComboRequest, canBeOpponentMove } from "../domain/combo";
+import {
+  DEFAULT_SELF_SPEED,
+  MAX_COMBO_STEPS,
+  applySelfSpeed,
+  buildComboRequest,
+  canBeOpponentMove,
+  maxSelfSpeedSp,
+  type SelfSpeedInput,
+  type SelfSpeedNature,
+} from "../domain/combo";
 import {
   comboKoText,
   formatSurviveChance,
@@ -39,6 +48,7 @@ import { unsupportedText } from "../i18n/ja";
 import type { SpeedClient, SpeedResult } from "../speed/speedClient";
 import type { components as SpeedComponents } from "../speed/speed.gen";
 import { Icon } from "../ui/Icon";
+import { RankMeter } from "../ui/RankMeter";
 import { MovePicker } from "./MovePicker";
 import { ToggleChip } from "./ToggleChip";
 import "./ComboSection.css";
@@ -90,6 +100,19 @@ export interface ComboSectionProps {
    * 素早さ画面から「連続技を開く」要求を受けた印(段階 C2)。値が変わったとき(null → 数値を含む)に節を広げる。
    */
   readonly openToken?: number | null;
+  /**
+   * 素早さ画面の「今の振り」(段階 C2 の続き・I-web-32)。openToken が変わったときに自分の素早さの入力へ反映する。
+   * scarf は連続技に指定する項目が無いので反映せず、案内だけ出す。
+   */
+  readonly openSpeed?: OpenSpeed | null;
+}
+
+/** 素早さ画面から渡る自分の素早さ(SpeedComboRequest.speed と同じ形。性格は素早さの補正)。 */
+export interface OpenSpeed {
+  readonly sp: number;
+  readonly nature: Exclude<SelfSpeedNature, "keep">;
+  readonly rank: number;
+  readonly scarf: boolean;
 }
 
 /** 連続技の印 1 件の文言。連続技だけの理由は専用の語、それ以外は単発の印と同じ書式。 */
@@ -164,6 +187,7 @@ export function ComboSection({
   abilities,
   speedClient,
   openToken = null,
+  openSpeed = null,
 }: ComboSectionProps): ReactElement | null {
   const headingId = useId();
   const sectionRef = useRef<HTMLElement>(null);
@@ -179,12 +203,18 @@ export function ComboSection({
   const [opponentSpeedFromDefender, setOpponentSpeedFromDefender] = useState(false);
   const [speedFieldOpen, setSpeedFieldOpen] = useState(false);
   const [speedField, setSpeedField] = useState<ComboSpeedField>({});
+  const [selfSpeed, setSelfSpeed] = useState<SelfSpeedInput>(DEFAULT_SELF_SPEED);
+  const [scarfIgnored, setScarfIgnored] = useState(false);
   const [completed, setCompleted] = useState<CompletedCombo | null>(null);
 
   // 素早さ画面からの要求(段階 C2): token が変わったときだけ広げる(レンダー中の state 調整。計算画面の復元と同じ考え方)。
   if (openToken !== null && openToken !== handledOpenToken) {
     setHandledOpenToken(openToken);
     setOpen(true);
+    if (openSpeed !== null) {
+      setSelfSpeed({ sp: openSpeed.sp, nature: openSpeed.nature, rank: openSpeed.rank });
+      setScarfIgnored(openSpeed.scarf);
+    }
   }
 
   const moveById = useMemo(() => new Map(extraCandidates.map((move) => [move.id, move])), [extraCandidates]);
@@ -222,15 +252,20 @@ export function ComboSection({
   }, [entries, mainMove, mainCritical, mainHits, moveById]);
 
   const shouldCalc = (steps?.length ?? 0) >= 2 || opponentMove !== undefined;
+  // 自分の素早さの入力を攻撃側の個体に重ねる(既定のままなら同じ個体。I-web-32)。
+  const comboAttacker = useMemo(
+    () => (attacker === null ? null : applySelfSpeed(attacker, selfSpeed)),
+    [attacker, selfSpeed],
+  );
   const request = useMemo(() => {
-    if (!shouldCalc || steps === null || attacker === null || defender === undefined) {
+    if (!shouldCalc || steps === null || comboAttacker === null || defender === undefined) {
       return null;
     }
     const opponentSpeed: ComboOpponentSpeed | undefined = opponentSpeedFromDefender
       ? "from_defender"
       : undefined;
     return buildComboRequest({
-      attacker,
+      attacker: comboAttacker,
       defender: defender.individual,
       steps,
       typeChart,
@@ -242,7 +277,7 @@ export function ComboSection({
   }, [
     shouldCalc,
     steps,
-    attacker,
+    comboAttacker,
     defender,
     typeChart,
     field,
@@ -326,6 +361,11 @@ export function ComboSection({
     setRawEntries(
       entries.map((entry) => (entry.kind === "extra" && entry.key === key ? { ...entry, critical } : entry)),
     );
+  }
+
+  function updateSelfSpeed(patch: Partial<SelfSpeedInput>): void {
+    setSelfSpeed({ ...selfSpeed, ...patch });
+    setScarfIgnored(false);
   }
 
   function updateSpeedField(patch: Partial<ComboSpeedField>): void {
@@ -503,6 +543,57 @@ export function ComboSection({
               checked={opponentSpeedFromDefender}
               onChange={setOpponentSpeedFromDefender}
             />
+            <fieldset className="calc-combo__self-speed">
+              <legend className="calc-screen__label">{comboScreenText.selfSpeed.legend}</legend>
+              <label className="calc-combo__field">
+                <span className="calc-screen__label">{comboScreenText.selfSpeed.spLabel}</span>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={maxSelfSpeedSp(attacker)}
+                  step={1}
+                  value={selfSpeed.sp}
+                  onChange={(event) => {
+                    const parsed = Number.parseInt(event.target.value, 10);
+                    updateSelfSpeed({ sp: Number.isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                  }}
+                />
+              </label>
+              <label className="calc-combo__field">
+                <span className="calc-screen__label">{comboScreenText.selfSpeed.natureLabel}</span>
+                <select
+                  value={selfSpeed.nature}
+                  onChange={(event) => {
+                    updateSelfSpeed({ nature: event.target.value as SelfSpeedNature });
+                  }}
+                >
+                  {(["keep", "plus", "neutral", "minus"] as const).map((choice) => (
+                    <option key={choice} value={choice}>
+                      {comboScreenText.selfSpeed.natureOptions[choice]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <RankMeter
+                label={comboScreenText.selfSpeed.rankLabel}
+                statName={comboScreenText.selfSpeed.rankStatName}
+                value={selfSpeed.rank}
+                onChange={(rank) => {
+                  updateSelfSpeed({ rank });
+                }}
+                decreaseLabel={comboScreenText.selfSpeed.rankDownLabel}
+                increaseLabel={comboScreenText.selfSpeed.rankUpLabel}
+              />
+              {selfSpeed.nature !== "keep" && (
+                <p className="calc-screen__notice">{comboScreenText.selfSpeed.natureNote}</p>
+              )}
+              {scarfIgnored && (
+                <p className="calc-screen__notice" role="status">
+                  {comboScreenText.selfSpeed.scarfIgnored}
+                </p>
+              )}
+            </fieldset>
             <button
               type="button"
               className="ui-button ui-button--secondary calc-conditions__toggle"

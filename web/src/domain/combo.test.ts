@@ -1,13 +1,16 @@
 // CB-6: 連続技の組み立て(buildComboRequest)とランク変化の判定(changesRanks ほか)。
 
 import { describe, expect, test } from "vitest";
-import type { Individual, Move, Species, TypeChart } from "../engine/types";
+import type { Individual, Move, Species, StatKey, TypeChart } from "../engine/types";
 import {
+  DEFAULT_SELF_SPEED,
   MAX_COMBO_STEPS,
+  applySelfSpeed,
   buildComboRequest,
   canBeComboStep,
   canBeOpponentMove,
   changesRanks,
+  maxSelfSpeedSp,
   rankEffectOf,
 } from "./combo";
 
@@ -128,5 +131,54 @@ describe("buildComboRequest", () => {
     const steps = ["a", "b", "c", "d"].map((id) => ({ move: move(id) }));
     const request = buildComboRequest({ ...base, steps });
     expect(request.steps.map((step) => step.move.id)).toEqual(["a", "b", "c"]);
+  });
+});
+
+describe("applySelfSpeed(連続技の自分の素早さ。I-web-32)", () => {
+  const withNature = (plus: StatKey | "", minus: StatKey | ""): Individual => ({
+    ...individual,
+    nature: { plus, minus },
+    sp: { ...individual.sp, atk: 32 },
+  });
+
+  test("既定(SP 0・性格そのまま・ランク 0)は個体をそのまま返す(今の挙動と同一)", () => {
+    const base = withNature("atk", "spa");
+    expect(applySelfSpeed(base, DEFAULT_SELF_SPEED)).toBe(base);
+  });
+
+  test("SP と ランクを素早さだけ上書きする(他の SP・ランクは残す)", () => {
+    const base: Individual = { ...withNature("", ""), ranks: { atk: 2, def: 0, spa: 0, spd: 0, spe: 0 } };
+    const result = applySelfSpeed(base, { sp: 20, nature: "keep", rank: 1 });
+    expect(result.sp).toEqual({ ...base.sp, spe: 20 });
+    expect(result.ranks).toEqual({ atk: 2, def: 0, spa: 0, spd: 0, spe: 1 });
+  });
+
+  test("ランクが無い個体にランクを足すと他は 0", () => {
+    const result = applySelfSpeed(withNature("", ""), { sp: 0, nature: "keep", rank: -2 });
+    expect(result.ranks).toEqual({ atk: 0, def: 0, spa: 0, spd: 0, spe: -2 });
+  });
+
+  test("SP は 1 能力 32 と合計 66 に収める", () => {
+    const base: Individual = { ...individual, sp: { ...individual.sp, atk: 32, spa: 30 } };
+    expect(applySelfSpeed(base, { sp: 99, nature: "keep", rank: 0 }).sp.spe).toBe(4);
+    expect(maxSelfSpeedSp(base)).toBe(4);
+    expect(maxSelfSpeedSp(individual)).toBe(32);
+  });
+
+  test.each([
+    ["atk", "spa", "plus", "spe", "spa"],
+    ["", "", "plus", "spe", "spa"],
+    ["spe", "atk", "plus", "spe", "atk"],
+    ["atk", "spe", "plus", "spe", "spa"],
+    ["spa", "def", "plus", "spe", "def"],
+    ["atk", "spa", "minus", "atk", "spe"],
+    ["", "", "minus", "def", "spe"],
+    ["spe", "atk", "minus", "def", "spe"],
+    ["atk", "spe", "neutral", "", ""],
+    ["spe", "atk", "neutral", "", ""],
+    ["atk", "spa", "neutral", "atk", "spa"],
+  ] as const)("性格 +%s -%s に素早さ %s を指定 → +%s -%s", (plus, minus, choice, expectPlus, expectMinus) => {
+    const result = applySelfSpeed(withNature(plus, minus), { sp: 0, nature: choice, rank: 0 });
+    expect(result.nature).toEqual({ plus: expectPlus, minus: expectMinus });
   });
 });
