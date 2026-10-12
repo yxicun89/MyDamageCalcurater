@@ -134,7 +134,7 @@ ADR-0334。名前は iOS と共有する。`-ink` で終わる名前と `type-` 
 | `.ui-notice` + `.ui-notice--empty` / `.ui-notice--error` / `.ui-notice--loading` / `.ui-notice--info` | 角丸の囲み。empty は surface.card、error は danger.soft、loading・info は info.soft |
 | `.ui-icon` | インライン SVG のアイコン(色は文字色に従う。縮まない) |
 | `.ui-segmented` / `.ui-segmented__option` / `.ui-segmented__option--selected` | 区切りボタン(`SegmentedControl`。G-05)。枠は text.secondary、選択中は brand.primary / on.primary + チェックの印。最小 44px |
-| `.ui-rank` / `.ui-rank__track` / `.ui-rank__segment` / `.ui-rank__value` | 能力ランクのメーター(`RankMeter`。ADR-0357)。13 段(左 6 = 下降・中央 0・右 6 = 上昇)。上昇は `brand.primary`、下降は `warning`、0 は常に見える太い目印。値は符号付きの文字でも出す(色だけに頼らない) |
+| `.ui-rank` / `.ui-rank__track` / `.ui-rank__segment` / `.ui-rank__value` | 能力ランクのメーター(`RankMeter`。ADR-0357)。13 段(左 6 = 下降・中央 0・右 6 = 上昇)。上昇は `brand.primary`、下降は `warning`、0 は常に見える太い目印。未入力の段も下降側は `warning`・上昇側は `brand.primary` の薄い目盛(`data-side`。ADR-0357 追記)。値は符号付きの文字でも出す(色だけに頼らない) |
 | `.ui-stepper` / `.ui-stepper__button` / `.ui-stepper__input` | 増減ボタン(`Stepper`。G-05)。− / + は 44px の丸、数値欄は中央寄せ・等幅数字 |
 | `.ui-tile` / `.ui-tile--selected` / `.ui-tile--empty` | タイル(`Tile`。G-05)。選択中は brand.primary の 2px の枠 + チェック、空き枠は破線 + 「+」 |
 | `.ui-pokemon-card` / `.ui-pokemon-card--small` | ポケモンカード(`PokemonCard`。G-05)。画像かエンブレム + 名前 + タイプバッジ + 持ち物。押せるときは 1 つのボタン |

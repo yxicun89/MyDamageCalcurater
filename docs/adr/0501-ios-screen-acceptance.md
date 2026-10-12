@@ -5140,3 +5140,76 @@ iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早
 | `ComboViewModelTests` | 取り消された候補の読み込みを次の文脈で読み直すテストを追加 | critic 指摘(検査の追加) |
 
 既存のテストは削除・緩和していない。モックの `test-move-status-a` に効果を足すため、モックの技一覧の件数・名前は変わらない(項目が 1 つ増えるだけ)。
+
+## G-05 このアプリについて・お気に入り・履歴の作り直し(ADR-0536。2026-10-12)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0348/0349)に追う。対象は
+`AboutView`・`FavoritesScreenView`(お気に入り・計算履歴・よく計算する相手)・`FavoriteLoadViews`(読み込みの入口・シート・復元の案内)・`FavoritePinSection`。
+識別子は不変(下の「新しい識別子」を足すだけ)。API・engine・Web は触らない。
+
+### 現状の洗い出し(文で説明している箇所・部品の語が違う箇所)
+
+| 画面・部品 | 今 | 直す |
+|---|---|---|
+| お気に入りの空 | 「お気に入りはまだありません。計算画面の「お気に入りに追加」から追加できます。」(2 文) | 「お気に入りはまだありません」+ アイコン(`ContentUnavailableView`)+「計算へ」ボタン |
+| 計算履歴の空 | 「計算履歴はまだありません。計算すると、新しい順にここに並びます。」 | 「計算履歴はまだありません」+ アイコン + 「計算へ」 |
+| よく計算する相手の空 | 「計算した相手がまだありません。計算すると、よく計算する相手がここに並びます。」 | 「計算した相手がまだありません」+ アイコン |
+| 上限の文 | 「お気に入りは最大100件までです。」(`limitNote`。上限のとき) | 件数の数値 `3/100件`(`favoritesCount`。`limitNote` は削除) |
+| 旧お気に入りの案内 | 「攻撃側・防御側の個体だけ(計算の条件は保存されていません)。計算画面の「お気に入りから読み込む」で使えます。」 | 短い印「個体だけ(計算の条件なし)」 |
+| 履歴の補足 | 見出しの下に常時の 2 文(`CalcHistoryLabels.note`) | 見出しの横の「説明」ボタンの奥(`calcHistoryHelpButton`) |
+| 読み込みシートの注記 | シート上部に常時の注記(`loadNote`) | 見出しの横の「説明」ボタンの奥(`favoriteLoadHelpButton`) |
+| 復元の案内 | 「…の計算を開きました」+ 常時の限界の 2 文(`restoreLimitNote`) | 1 行 + 「説明」ボタンの奥(`favoriteRestoreHelpButton`) |
+| 行の語 | 「外す」「計算に使う」の別々の押す場所 | 見える文字「削除」「使う」。行全体が使うボタン。読み上げ名は従来の長い名前 |
+| 削除 | 1 段階で即削除 | 2 段階(確認の文 → 「削除する」/「やめる」)。確定に警告の触覚 |
+| 読み込み中 | `ProgressView`(回り続ける) | 静止したアイコン + 一言(`PopNoticeView(.loading)`) |
+| 読み込みの入口 | 「お気に入りから攻撃側を選ぶ」(長い・矢印は SF Symbols の直書き) | 「攻撃側のお気に入り」(`PopSymbol` 経由のアイコン) |
+| シートの閉じる | 文字ボタン「閉じる」 | アイコンだけ(`PopSymbol.close`・読み上げ「閉じる」・36pt 以上) |
+| シートの空 | 文だけ | `ContentUnavailableView`(アイコン + 一言 + 「閉じる」) |
+| シートの行 | 名前 + 副の文字 | 画像かエンブレム + 名前 + 副の情報 |
+| 追加の結果 | 文字だけの状態 | アイコン + 一言(完了・情報・注意)。文は 1 文まで |
+| このアプリについて | 非公式の注記は見出し無し。「データの扱い」の見出しにごみ箱。説明は 3 つの段落(各 2 文)。確認に見出し・アイコン無し | 3 節をカードにし見出しアイコン(注意・情報・丸の i)。説明は 1 文ずつの箇条(6 本)。確認に注意アイコン・「削除する」にごみ箱 |
+
+既に方針どおりで変えないもの: 見出しのアイコン + 名前(`PopHeading`)、危険ボタン + ごみ箱、削除に確認を挟む作法、エラー・失敗の文(文を置いてよい)、
+再読み込みのアイコン付きボタン(36pt 以上)、`lineLimit` 無し、ポケモン画像(`SpeciesImageView`)、非公式の注記と出典 4 件の文面、`PillButtonStyle` の押下の縮み(視差効果を減らすで 0 秒)。
+
+### 受け入れ条件
+
+1. 文の整理: 上の表の「直す」どおり。常に画面に出る文字(見出し・空の状態・ボタン・件数・印)は「。」を含まない(`G05AboutFavoritesTextTests.testAlwaysVisibleStringsAreNotSentences`)。
+   補足の文(`CalcHistoryLabels.note`・`loadNote`・`restoreLimitNote`)は文面を変えず「説明」ボタンの奥(最初は出ない。ボタンを押すと出る)。
+2. 共通の語: `CommonPartsText.help` = 「説明」、`close` = 「閉じる」。行の見える文字は「使う」「削除」、読み上げ名は「「X」を計算に使う」「「X」を削除」。削除の確認は
+   `removeConfirmMessage`・`removeConfirmAction`(削除する)・`removeCancelAction`(やめる)。
+3. アイコン: `PopSymbolNames` の割り当て(close/open/history/help/up/down/minus)が design.md の表どおりで、SF Symbols に実在し、互いに重ならない。View は `PopSymbol` 経由で使い名前を直書きしない。
+   「このアプリについて」の見出しは 非公式 = 警告、出典 = 情報、データの扱い = 丸の i(`PopSymbol.about`)。
+4. 空の状態は `ContentUnavailableView`(アイコン + 一言)。お気に入り・計算履歴の空に「計算へ」ボタン(36pt 以上)があり、押すと計算画面へ移る。
+5. お気に入りの行は 1 つのボタン(行の幅の半分以上を押せる)。件数が `n/100件`。削除は 2 段階で、やめると行が残り、確定すると行が消える。確認のボタンも 36pt 以上。
+6. 読み込み中に回り続ける表示(`ProgressView`)を使わない(`G05ScreenSourceRulesTests`・UITest の `activityIndicators` が 0)。常時アニメ・`lineLimit`・色のリテラル・SF Symbols 名の直書きが無い。
+7. 「このアプリについて」: 文面不変。説明は 1 文ずつ 6 本の箇条(`DeviceDataText.explanationBullets`。連結すると既存の `explanation` と同じ)。確認が 2 段階のまま、確認の見出し(`deviceDataConfirmHeading`)・
+   「削除する」・「キャンセル」が 36pt 以上。VoiceOver の初期フォーカスは「キャンセル」。
+8. 新しい部品(件数・説明ボタン・空の「計算へ」・確認)を含め、AX5 で横にはみ出さず、タップが 36pt 以上。
+
+### 新しい識別子
+
+`favoritesCount`・`favoritesEmptyCalcButton`・`calcHistoryEmptyCalcButton`・`calcHistoryHelpButton`・`calcHistoryNote`(説明の中)・`favoriteDeleteConfirm-<id>`・
+`favoriteDeleteConfirmButton-<id>`・`favoriteDeleteCancelButton-<id>`・`favoriteLoadHelpButton`・`favoriteRestoreHelpButton`・`favoriteRestoreLimitNote`(説明の中)・`deviceDataConfirmHeading`。
+既存の識別子(`favoriteUseButton-<id>` ほか)は付け替えない。
+
+### 追加したテスト
+
+`G05AboutFavoritesTextTests`・`G05ScreenSourceRulesTests`(以上 PokeCalcCoreTests)、`PopSymbolNamesTests`(PokeCalcDesignTests)、`AboutFavoritesG05UITests`。
+`GlossaryTests` の対象文言に新しい語を足した(追加のみ)。骨組みとして `PokeCalcCore/G05Text.swift`・`PokeCalcDesign/PopSymbolNames.swift`(値は空。実装者が入れる)を置いた。
+
+### 既存テストの変更(新しい語・手順への更新。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `FavoriteLoadLabelsTests.testTitlesAndNotesPerSide` | `loadTitle` 「お気に入りから攻撃側(防御側)を選ぶ」→「攻撃側(防御側)のお気に入り」。`loadCloseButton == CommonPartsText.close` を追加 | 短いラベル(決定 8)・共通の語 |
+| `FavoriteLoadLabelsTests.testExistingFixedLabelsAreUnchanged` | `emptyFavorites` を 1 文に | 空の状態は一言(決定 1) |
+| `FavoriteCalcRestoreTests.testLabels` | `useButton` 「計算に使う」→「使う」(読み上げ名の検査は不変) | 見える文字は短く(決定 2) |
+| `RecordScreenErrorTests.testLimitMessageEmbedsContractLimit` | `limitNote` が上限を含む → `countText` が `/100件` で終わる(`addFavoriteInvalid` の検査は不変) | 上限の文を件数の数値に(決定 1) |
+| `FavoritesScreenUITests`(削除の 3 件: 一覧の削除・最後の 1 件・AX5) | 削除の後に `favoriteDeleteConfirmButton-<id>` を押す手順を足す。検査は同じ | 削除は 2 段階(決定 6) |
+| `FavoriteCalcRestoreUITests.testUseButtonOpensCalcScreenWithRestoredInputsAndResult` | 限界の文は案内に出ない → 「説明」ボタンを押すと `favoriteRestoreLimitNote` に出る | 補足は説明ボタンの奥(決定 1) |
+| `FavoriteLoadUITests`(注記の 2 件) | 注記は最初は出ず、`favoriteLoadHelpButton` を押すと `favoriteLoadNote` に出る | 同上 |
+| `LargeTextLayoutUITests` の読み込みシートの AX5 | はみ出し検査の対象 `favoriteLoadNote` → `favoriteLoadHelpButton` | 注記は説明の奥に移ったため |
+
+`FavoritesScreenUITests.testDefaultShowsEmptyFavoritesAndOpponentHistory` ほか、行・識別子・label を見る既存の UITest は変えない(識別子・label は不変)。
+実装で上の他に文言・手順が変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。

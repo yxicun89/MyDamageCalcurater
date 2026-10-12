@@ -76,7 +76,8 @@ final class RecordScreenErrorTests: XCTestCase {
 
     func testLimitMessageEmbedsContractLimit() {
         XCTAssertTrue(FavoritesLabels.addFavoriteInvalid.contains("\(RequestLimits.maxFavorites)"))
-        XCTAssertTrue(FavoritesLabels.limitNote.contains("\(RequestLimits.maxFavorites)"))
+        // G-05(ADR-0536): 上限は文(limitNote)ではなく件数の数値で出す。
+        XCTAssertTrue(FavoritesLabels.countText(0).hasSuffix("/\(RequestLimits.maxFavorites)件"))
     }
 
     // MARK: - ラベルの正規化

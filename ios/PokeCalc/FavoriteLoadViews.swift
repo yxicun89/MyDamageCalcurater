@@ -30,7 +30,7 @@ struct FavoriteLoadEntryRows: View {
                     .foregroundStyle(ColorToken.textPrimary.color)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Image(systemName: "chevron.right")
+                PopIcon(PopSymbol.forward)
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
@@ -62,6 +62,7 @@ struct FavoriteLoadSheet: View {
     let side: FavoriteLoadSide
     let onSelect: (Favorite) -> Void
     @State private var picker: FavoriteLoadPickerViewModel
+    @State private var showsNote = false
     @Environment(\.dismiss) private var dismiss
 
     init(
@@ -76,23 +77,36 @@ struct FavoriteLoadSheet: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingToken.x3) {
-                HStack(alignment: .top, spacing: SpacingToken.x3) {
+                HStack(alignment: .center, spacing: SpacingToken.x2) {
                     Text(FavoritesLabels.loadTitle(for: side))
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .accessibilityAddTraits(.isHeader)
-                    Button(FavoritesLabels.loadCloseButton) { dismiss() }
-                        .buttonStyle(PillButtonStyle())
-                        .accessibilityIdentifier("favoriteLoadClose")
+                    // 注記は「説明」ボタンの奥(最初は出さない)。シートの中なので吹き出しではなく、その場で開く
+                    // (吹き出しは下の行と閉じるボタンを覆うため)。
+                    Button {
+                        showsNote.toggle()
+                    } label: {
+                        PopHelpLabel(title: CommonPartsText.help, systemImage: PopSymbol.help)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityAddTraits(showsNote ? .isSelected : [])
+                    .accessibilityIdentifier("favoriteLoadHelpButton")
+                    // 閉じるはアイコンだけ(読み上げ名は用語集の「閉じる」)。
+                    PopIconButton(
+                        systemImage: PopSymbol.close, label: CommonPartsText.close, identifier: "favoriteLoadClose"
+                    ) { dismiss() }
                 }
-                Text(FavoritesLabels.loadNote(for: side))
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("favoriteLoadNote")
+                if showsNote {
+                    Text(FavoritesLabels.loadNote(for: side))
+                        .font(TextStyleToken.caption.font)
+                        .foregroundStyle(ColorToken.textSecondary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("favoriteLoadNote")
+                }
                 content
             }
             .padding(SpacingToken.x4)
@@ -106,10 +120,8 @@ struct FavoriteLoadSheet: View {
     private var content: some View {
         switch picker.loadState {
         case .idle, .loading:
-            ProgressView()
-                .frame(maxWidth: .infinity)
-                .accessibilityLabel(FavoritesLabels.loadLoading)
-                .accessibilityIdentifier("favoriteLoadLoading")
+            // 静止したアイコン + 一言(回り続ける表示は置かない)。
+            PopNoticeView(kind: .loading, message: FavoritesLabels.loadLoading, identifier: "favoriteLoadLoading")
         case .failed(let error):
             ErrorBannerView(message: error.message(for: .loadFavorites), identifier: "favoriteLoadError")
             Button(FavoritesLabels.retryButton) { Task { await picker.load() } }
@@ -117,12 +129,13 @@ struct FavoriteLoadSheet: View {
                 .accessibilityIdentifier("favoriteLoadRetry")
         case .loaded:
             if picker.isEmpty {
-                Text(FavoritesLabels.emptyFavorites)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("favoriteLoadEmpty")
+                ContentUnavailableView {
+                    PopEmptyLabel(message: FavoritesLabels.emptyFavorites, identifier: "favoriteLoadEmpty")
+                } actions: {
+                    Button(FavoritesLabels.loadCloseButton) { dismiss() }
+                        .buttonStyle(PillButtonStyle())
+                        .accessibilityIdentifier("favoriteLoadEmptyClose")
+                }
             }
             ForEach(picker.rows) { row in
                 rowButton(row)
@@ -135,17 +148,21 @@ struct FavoriteLoadSheet: View {
             onSelect(row.favorite)
             dismiss()
         } label: {
-            VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                Text(row.title)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let subtitle = row.subtitle {
-                    Text(subtitle)
-                        .font(TextStyleToken.caption.font)
-                        .foregroundStyle(ColorToken.textSecondary.color)
+            HStack(alignment: .center, spacing: SpacingToken.x2) {
+                SpeciesImageView(speciesKey: row.favorite.individual.speciesKey, name: row.title, types: [])
+                VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                    Text(row.title)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
                         .fixedSize(horizontal: false, vertical: true)
+                    if let subtitle = row.subtitle {
+                        Text(subtitle)
+                            .font(TextStyleToken.caption.font)
+                            .foregroundStyle(ColorToken.textSecondary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(SpacingToken.x3)
@@ -177,18 +194,25 @@ struct FavoriteRestoreNoticeView: View {
     let title: String
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+        HStack(alignment: .center, spacing: SpacingToken.x2) {
+            // 案内の 1 行(文は結合して 1 要素)。説明ボタンは結合の外に置く(別のボタンとして押せるように)。
             Text(FavoritesLabels.restoredNotice(title: title))
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
-            Text(FavoritesLabels.restoreLimitNote)
-                .font(TextStyleToken.caption.font)
-                .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityElement(children: .combine)
+                .accessibilityIdentifier("favoriteRestoreNotice")
+            PopHelpButton(
+                title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "favoriteRestoreHelpButton"
+            ) {
+                Text(FavoritesLabels.restoreLimitNote)
+                    .font(TextStyleToken.caption.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("favoriteRestoreLimitNote")
+            }
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, SpacingToken.x1)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("favoriteRestoreNotice")
     }
 }

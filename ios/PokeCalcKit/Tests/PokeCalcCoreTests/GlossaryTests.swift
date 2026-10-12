@@ -70,6 +70,15 @@ final class GlossaryTests: XCTestCase {
             MegaItemText.lockedReason, MegaItemText.missingReason, MegaItemText.compareDisabledReason,
             MegaItemText.clearedNotice, MegaItemText.correctedNotice("テスト石"),
         ])
+        // G-05(ADR-0536): お気に入り・履歴・このアプリについての、作り直しで足した文言。
+        add("G05Favorites", [
+            AboutText.unofficialHeading, AboutText.dataSourcesHeading, CommonPartsText.help, CommonPartsText.close,
+            FavoritesLabels.emptyFavorites, FavoritesLabels.emptyHistory, CalcHistoryLabels.emptyHistory,
+            FavoritesLabels.countText(3), FavoritesLabels.removeConfirmMessage(title: "テスト"),
+            FavoritesLabels.removeConfirmAction, FavoritesLabels.removeCancelAction,
+            FavoritesLabels.removeAccessibilityLabel(title: "テスト"), FavoritesLabels.legacyFavoriteHint,
+            FavoritesLabels.loadTitle(for: .attacker), FavoritesLabels.loadTitle(for: .defender),
+        ])
         add("FavoriteLoad", [
             FavoritesLabels.loadSpeciesMissingNotice, FavoritesLabels.loadUnavailableNotice,
         ])

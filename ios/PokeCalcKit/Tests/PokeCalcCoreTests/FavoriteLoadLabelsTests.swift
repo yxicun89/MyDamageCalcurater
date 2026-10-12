@@ -6,13 +6,15 @@ import XCTest
 final class FavoriteLoadLabelsTests: XCTestCase {
 
     func testTitlesAndNotesPerSide() {
-        XCTAssertEqual(FavoritesLabels.loadTitle(for: .attacker), "お気に入りから攻撃側を選ぶ")
-        XCTAssertEqual(FavoritesLabels.loadTitle(for: .defender), "お気に入りから防御側を選ぶ")
+        // G-05(ADR-0536): 見える名前は短くする(旧: 「お気に入りから攻撃側を選ぶ」)。
+        XCTAssertEqual(FavoritesLabels.loadTitle(for: .attacker), "攻撃側のお気に入り")
+        XCTAssertEqual(FavoritesLabels.loadTitle(for: .defender), "防御側のお気に入り")
         XCTAssertEqual(
             FavoritesLabels.loadNote(for: .attacker), "攻撃側には、種族・性格・能力ポイント・特性・持ち物を読み込みます。技は変わりません。")
         XCTAssertEqual(
             FavoritesLabels.loadNote(for: .defender), "防御側には、種族と特性だけを読み込みます。性格・能力ポイント・持ち物は使いません。")
         XCTAssertEqual(FavoritesLabels.loadCloseButton, "閉じる")
+        XCTAssertEqual(FavoritesLabels.loadCloseButton, CommonPartsText.close, "閉じるは共通の部品の語(用語集)")
     }
 
     func testDroppedNamesCoverEveryCase() {
@@ -58,7 +60,8 @@ final class FavoriteLoadLabelsTests: XCTestCase {
     func testExistingFixedLabelsAreUnchanged() {
         XCTAssertEqual(FavoritesLabels.pinAttackerButton, "攻撃側をお気に入りに追加")
         XCTAssertEqual(FavoritesLabels.pinDefenderButton, "防御側をお気に入りに追加")
-        XCTAssertEqual(FavoritesLabels.emptyFavorites, "お気に入りはまだありません。計算画面の「お気に入りに追加」から追加できます。")
+        // G-05(ADR-0536): 空の状態は一言だけ(旧: 追加のしかたの 2 文目つき)。
+        XCTAssertEqual(FavoritesLabels.emptyFavorites, "お気に入りはまだありません")
         XCTAssertEqual(FavoritesLabels.retryButton, "再読み込み")
         XCTAssertEqual(FavoritesLabels.unknownSpecies, "不明なポケモン")
         XCTAssertEqual(TeamLoadLabels.entryTitle, "構築から選ぶ")

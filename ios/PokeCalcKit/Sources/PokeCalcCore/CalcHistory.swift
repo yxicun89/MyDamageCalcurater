@@ -79,7 +79,7 @@ public enum CalcHistory {
 
 public enum CalcHistoryLabels {
     public static let sectionTitle = "計算履歴"
-    public static let emptyHistory = "計算履歴はまだありません。計算すると、新しい順にここに並びます。"
+    public static let emptyHistory = "計算履歴はまだありません"
     public static let loadMoreButton = "もっと見る"
     public static let loadingMore = "続きを読み込んでいます…"
     public static let unknownMove = "不明な技"

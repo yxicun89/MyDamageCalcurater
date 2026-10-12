@@ -94,6 +94,10 @@ final class FavoriteLoadUITests: XCTestCase {
         let app = launchCalc()
         openSheet(app, side: "attacker")
 
+        // G-05(ADR-0536): 注記は「説明」ボタンの奥(最初は出ていない)。
+        XCTAssertTrue(element(app, "favoriteLoadSheet").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(element(app, "favoriteLoadNote").exists, "注記は出し続けない")
+        element(app, "favoriteLoadHelpButton").tap()
         let note = element(app, "favoriteLoadNote")
         XCTAssertTrue(note.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(note.label.contains("技は変わりません"), "label: \(note.label)")
@@ -120,6 +124,8 @@ final class FavoriteLoadUITests: XCTestCase {
     func testDefenderSheetNoteSaysOnlySpeciesAndAbility() {
         let app = launchCalc()
         openSheet(app, side: "defender")
+        XCTAssertTrue(element(app, "favoriteLoadSheet").waitForExistence(timeout: Self.existenceTimeout))
+        element(app, "favoriteLoadHelpButton").tap()  // G-05(ADR-0536): 注記は「説明」ボタンの奥
         let note = element(app, "favoriteLoadNote")
         XCTAssertTrue(note.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(note.label.contains("種族と特性だけ"), "label: \(note.label)")

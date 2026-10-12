@@ -205,7 +205,8 @@ final class FavoriteCalcRestoreTests: XCTestCase {
     }
 
     func testLabels() {
-        XCTAssertEqual(FavoritesLabels.useButton, "計算に使う")
+        // G-05(ADR-0536): 見える文字は短い「使う」。読み上げ名は従来どおり「…を計算に使う」(下の行)。
+        XCTAssertEqual(FavoritesLabels.useButton, "使う")
         XCTAssertEqual(FavoritesLabels.useAccessibilityLabel(title: "見出し"), "「見出し」を計算に使う")
         XCTAssertEqual(FavoritesLabels.restoredNotice(title: "見出し"), "「見出し」の計算を開きました")
         XCTAssertEqual(FavoritesLabels.legacyFavoriteHint.isEmpty, false)

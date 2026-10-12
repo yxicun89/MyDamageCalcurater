@@ -14,6 +14,12 @@ struct FavoritesScreenView: View {
     @State private var calcHistory: CalcHistoryViewModel
     @State private var history: OpponentHistoryViewModel
     @State private var restoreTarget: CalcHistoryRestoreTarget?
+    /// 削除の確認中のお気に入り(1 段目を押した行)。
+    @State private var pendingDeleteID: String?
+    /// 削除を確定した回数(警告の触覚の引き金。操作したときだけ鳴る)。
+    @State private var deleteConfirmCount = 0
+    /// 空の状態の「計算へ」(ダメージタブへ移る)。
+    private let openCalc: () -> Void
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// 履歴の行・お気に入りの計算を復元した計算画面を作る(この画面は計算画面の部品を知らない)。
     /// 第2引数が非 nil ならお気に入りから開く(復元の案内を出す)。
@@ -22,8 +28,10 @@ struct FavoritesScreenView: View {
     init(
         favoritesService: (any FavoritesService)?, calcHistoryService: (any CalcHistoryService)?,
         frequentOpponentsService: any FrequentOpponentsService, resolver: any PokeCalcService,
+        openCalc: @escaping () -> Void = {},
         calcScreen: @escaping (CalcHistoryCalc, RestoringFavorite?) -> AnyView
     ) {
+        self.openCalc = openCalc
         _favorites = State(initialValue: FavoritesViewModel(service: favoritesService, resolver: resolver))
         _calcHistory = State(initialValue: CalcHistoryViewModel(service: calcHistoryService, resolver: resolver))
         _history = State(
@@ -69,11 +77,20 @@ struct FavoritesScreenView: View {
 
     private var favoritesSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            sectionHeading(FavoritesLabels.favoritesSectionTitle, systemImage: PopSymbol.favorites)
+            headerRow {
+                sectionHeading(FavoritesLabels.favoritesSectionTitle, systemImage: PopSymbol.favorites)
+            } trailing: {
+                if favorites.loadState == .loaded && !favorites.items.isEmpty {
+                    Text(FavoritesLabels.countText(favorites.items.count))
+                        .font(TextStyleToken.caption.font)
+                        .foregroundStyle(ColorToken.textSecondary.color)
+                        .accessibilityIdentifier("favoritesCount")
+                }
+            }
             // 読み込み中は、見出しだけだと子が1つになり `.contain` の識別子が見出しに畳まれる(P6-25 で判明)ので、
-            // 読み込み中の目印を常に子に足す。
+            // 読み込み中の目印を常に子に足す。静止したアイコン + 一言(回り続ける表示は置かない)。
             if favorites.loadState == .idle || favorites.loadState == .loading {
-                ProgressView().popNotice(.loading).accessibilityIdentifier("favoritesLoading")
+                PopNoticeView(kind: .loading, message: FavoritesLabels.loadLoading, identifier: "favoritesLoading")
             }
             if let actionError = favorites.actionError {
                 ErrorBannerView(message: actionError.message(for: .removeFavorite), identifier: "favoritesActionError")
@@ -83,13 +100,14 @@ struct FavoritesScreenView: View {
                 retryButton(identifier: "favoritesRetryButton") { await favorites.load() }
             }
             if favorites.loadState == .loaded && favorites.items.isEmpty {
-                PopNoticeView(kind: .empty, message: FavoritesLabels.emptyFavorites, identifier: "favoritesEmpty")
+                ContentUnavailableView {
+                    PopEmptyLabel(message: FavoritesLabels.emptyFavorites, identifier: "favoritesEmpty")
+                } actions: {
+                    goToCalcButton(identifier: "favoritesEmptyCalcButton")
+                }
             }
             ForEach(Array(favorites.items.enumerated()), id: \.element.id) { index, row in
                 favoriteRow(row, index: index)
-            }
-            if favorites.isAtLimit {
-                captionText(FavoritesLabels.limitNote)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -102,46 +120,21 @@ struct FavoritesScreenView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x2))
             : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x3))
         return VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            layout {
-                HStack(alignment: .center, spacing: SpacingToken.x2) {
-                    speciesIcon(key: row.favorite.individual.speciesKey, name: row.title)
-                    VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                        Text(row.title)
-                            .font(TextStyleToken.body.font)
-                            .foregroundStyle(ColorToken.textPrimary.color)
-                            .fixedSize(horizontal: false, vertical: true)
-                        if let subtitle = row.subtitle {
-                            captionText(subtitle)
-                        }
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    Task { await favorites.remove(id: row.id) }
-                } label: {
-                    PopLabel(title: FavoritesLabels.removeButton, systemImage: PopSymbol.delete)
-                }
-                .buttonStyle(PillButtonStyle(kind: .danger))
-                .disabled(favorites.removingIDs.contains(row.id))
-                .accessibilityLabel("\(FavoritesLabels.removeButton) \(row.title)")
-                .accessibilityIdentifier("favoriteDeleteButton-\(row.id)")
-            }
-            if let calc = row.favorite.calc {
-                // 保存した計算をそのまま開く(履歴の行と同じく計算画面へ push。結果はすぐ出る)。
-                Button {
-                    restoreTarget = CalcHistoryRestoreTarget(
-                        id: "favorite-\(row.id)", calc: calc,
-                        favorite: RestoringFavorite(favorite: row.favorite, title: row.title))
-                } label: {
-                    PopLabel(title: FavoritesLabels.useButton, systemImage: PopSymbol.calc)
-                }
-                .buttonStyle(PillButtonStyle(kind: .primary))
-                .accessibilityLabel(FavoritesLabels.useAccessibilityLabel(title: row.title))
-                .accessibilityHint(FavoritesLabels.restoreLimitNote)
-                .accessibilityIdentifier("favoriteUseButton-\(row.id)")
+            if pendingDeleteID == row.id {
+                deleteConfirmation(row)
             } else {
-                captionText(FavoritesLabels.legacyFavoriteHint)
-                    .accessibilityIdentifier("favoriteLegacyHint-\(row.id)")
+                layout {
+                    favoriteMain(row)
+                    Button {
+                        pendingDeleteID = row.id
+                    } label: {
+                        PopLabel(title: FavoritesLabels.removeButton, systemImage: PopSymbol.delete)
+                    }
+                    .buttonStyle(PillButtonStyle(kind: .danger))
+                    .disabled(favorites.removingIDs.contains(row.id))
+                    .accessibilityLabel(FavoritesLabels.removeAccessibilityLabel(title: row.title))
+                    .accessibilityIdentifier("favoriteDeleteButton-\(row.id)")
+                }
             }
         }
         .padding(SpacingToken.x3)
@@ -149,23 +142,113 @@ struct FavoritesScreenView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel([row.title, row.subtitle].compactMap { $0 }.joined(separator: " "))
         .accessibilityIdentifier("favoriteRow-\(row.id)")
+        .sensoryFeedback(.warning, trigger: deleteConfirmCount)
+    }
+
+    /// 行の主な部分: 計算つきは 1 つのボタン(行を押すと計算に使う)、旧お気に入りは短い印つきの静的な行。
+    @ViewBuilder
+    private func favoriteMain(_ row: FavoriteRow) -> some View {
+        let content = HStack(alignment: .center, spacing: SpacingToken.x2) {
+            speciesIcon(key: row.favorite.individual.speciesKey, name: row.title)
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                Text(row.title)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let subtitle = row.subtitle {
+                    captionText(subtitle)
+                }
+                if row.favorite.calc == nil {
+                    captionText(FavoritesLabels.legacyFavoriteHint)
+                        .accessibilityIdentifier("favoriteLegacyHint-\(row.id)")
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        if let calc = row.favorite.calc {
+            // 保存した計算をそのまま開く(履歴の行と同じく計算画面へ push。結果はすぐ出る)。
+            Button {
+                restoreTarget = CalcHistoryRestoreTarget(
+                    id: "favorite-\(row.id)", calc: calc,
+                    favorite: RestoringFavorite(favorite: row.favorite, title: row.title))
+            } label: {
+                HStack(spacing: SpacingToken.x2) {
+                    content
+                    PopLabel(title: FavoritesLabels.useButton, systemImage: PopSymbol.forward)
+                        .font(TextStyleToken.caption.font)
+                        .foregroundStyle(ColorToken.brandPrimary.color)
+                }
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(FavoritesLabels.useAccessibilityLabel(title: row.title))
+            .accessibilityHint(FavoritesLabels.restoreLimitNote)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityIdentifier("favoriteUseButton-\(row.id)")
+        } else {
+            content.frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 削除の 2 段目: 確認の文(取り消せない操作なので文を置く)→「削除する」/「やめる」。
+    private func deleteConfirmation(_ row: FavoriteRow) -> some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+                PopIcon(PopSymbol.warning).foregroundStyle(ColorToken.danger.color)
+                Text(FavoritesLabels.removeConfirmMessage(title: row.title))
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityIdentifier("favoriteDeleteConfirm-\(row.id)")
+            }
+            Button {
+                pendingDeleteID = nil
+                deleteConfirmCount += 1
+                Task { await favorites.remove(id: row.id) }
+            } label: {
+                PopLabel(title: FavoritesLabels.removeConfirmAction, systemImage: PopSymbol.delete)
+            }
+            .buttonStyle(PillButtonStyle(kind: .danger))
+            .accessibilityIdentifier("favoriteDeleteConfirmButton-\(row.id)")
+            Button(FavoritesLabels.removeCancelAction) { pendingDeleteID = nil }
+                .buttonStyle(PillButtonStyle())
+                .accessibilityIdentifier("favoriteDeleteCancelButton-\(row.id)")
+        }
     }
 
     // MARK: - 計算履歴(新しい順。ADR-0230・ADR-0519)
 
     private var calcHistorySection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            sectionHeading(CalcHistoryLabels.sectionTitle, systemImage: PopSymbol.history)
+            headerRow {
+                sectionHeading(CalcHistoryLabels.sectionTitle, systemImage: PopSymbol.history)
+            } trailing: {
+                // 補足の文は「説明」ボタンの奥(最初は出さない)。
+                PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "calcHistoryHelpButton") {
+                    Text(CalcHistoryLabels.note)
+                        .font(TextStyleToken.caption.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("calcHistoryNote")
+                }
+            }
             // 読み込み中は見出しだけだと子が1つになり `.contain` の識別子が見出しに畳まれるので、目印を常に子に足す。
             if (calcHistory.loadState == .idle || calcHistory.loadState == .loading) && calcHistory.rows.isEmpty {
-                ProgressView().accessibilityIdentifier("calcHistoryLoading")
+                PopNoticeView(kind: .loading, message: CalcHistoryLabels.loading, identifier: "calcHistoryLoading")
             }
             if case .failed(let error) = calcHistory.loadState {
                 ErrorBannerView(message: error.message(for: .loadHistory), identifier: "calcHistoryError")
                 retryButton(identifier: "calcHistoryRetryButton") { await calcHistory.load() }
             }
             if calcHistory.isEmpty {
-                PopNoticeView(kind: .empty, message: CalcHistoryLabels.emptyHistory, identifier: "calcHistoryEmpty")
+                ContentUnavailableView {
+                    PopEmptyLabel(message: CalcHistoryLabels.emptyHistory, identifier: "calcHistoryEmpty")
+                } actions: {
+                    goToCalcButton(identifier: "calcHistoryEmptyCalcButton")
+                }
             }
             ForEach(Array(calcHistory.rows.enumerated()), id: \.element.id) { index, row in
                 calcHistoryRow(row, index: index)
@@ -175,14 +258,14 @@ struct FavoritesScreenView: View {
             }
             if calcHistory.hasMore {
                 if calcHistory.isLoadingMore {
-                    ProgressView().accessibilityIdentifier("calcHistoryLoadingMore")
+                    PopNoticeView(
+                        kind: .loading, message: CalcHistoryLabels.loadingMore, identifier: "calcHistoryLoadingMore")
                 } else {
                     Button { Task { await calcHistory.loadMore() } } label: { PopLabel(title: CalcHistoryLabels.loadMoreButton, systemImage: PopSymbol.reload) }
                         .buttonStyle(PillButtonStyle())
                         .accessibilityIdentifier("calcHistoryLoadMoreButton")
                 }
             }
-            captionText(CalcHistoryLabels.note)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
@@ -237,7 +320,9 @@ struct FavoritesScreenView: View {
                 retryButton(identifier: "opponentHistoryRetryButton") { await history.load() }
             }
             if history.loadState == .loaded && history.items.isEmpty {
-                PopNoticeView(kind: .empty, message: FavoritesLabels.emptyHistory, identifier: "opponentHistoryEmpty")
+                ContentUnavailableView {
+                    PopEmptyLabel(message: FavoritesLabels.emptyHistory, identifier: "opponentHistoryEmpty")
+                }
             }
             ForEach(Array(history.items.enumerated()), id: \.element.id) { index, row in
                 historyRow(row, index: index)
@@ -295,6 +380,28 @@ struct FavoritesScreenView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
         }
+    }
+
+    /// 見出しと右端の部品(件数・説明ボタン)の 1 行。大きい文字では縦に積む。
+    private func headerRow<Leading: View, Trailing: View>(
+        @ViewBuilder _ leading: () -> Leading, @ViewBuilder trailing: () -> Trailing
+    ) -> some View {
+        let layout = isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x1))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x2))
+        return layout {
+            leading()
+            if !isAccessibilitySize { Spacer(minLength: 0) }
+            trailing()
+        }
+    }
+
+    private func goToCalcButton(identifier: String) -> some View {
+        Button(action: openCalc) {
+            PopLabel(title: FavoritesLabels.goToCalcButton, systemImage: PopSymbol.calc)
+        }
+        .buttonStyle(PillButtonStyle(kind: .primary))
+        .accessibilityIdentifier(identifier)
     }
 
     private func captionText(_ text: String) -> some View {
