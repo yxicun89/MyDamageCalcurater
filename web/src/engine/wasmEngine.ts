@@ -12,6 +12,9 @@ import {
   type CalcEngine,
   type CalcRequest,
   type CalcResult,
+  type ComboEngine,
+  type ComboRequest,
+  type ComboResult,
   type EngineResult,
   type ReverseRequest,
   type ReverseResult,
@@ -25,7 +28,7 @@ export interface WasmLoader {
   instantiate(importObject: WebAssembly.Imports): Promise<WebAssembly.Instance>;
 }
 
-type BoundaryFunction = "calc" | "calcBulk" | "calcReverse";
+type BoundaryFunction = "calc" | "calcBulk" | "calcReverse" | "calcCombo";
 
 /** globalThis.pokecalcReady のポーリング間隔(ミリ秒)。Go の起動は数十〜数百msなので十分細かい。 */
 const READY_POLL_INTERVAL_MS = 5;
@@ -159,7 +162,7 @@ function parseEnvelope<T>(responseJSON: string): EngineResult<T> {
  * WASM 実装の CalcEngine(ADR-0300 §2)。loader はブラウザ(browserWasmLoader)と
  * Node の結合テスト(ファイルから読む loader)で差し替える。
  */
-export function createWasmEngine(loader: WasmLoader): CalcEngine {
+export function createWasmEngine(loader: WasmLoader): CalcEngine & ComboEngine {
   // 読み込みは1つの createWasmEngine の呼び出しごとに独立して持つ(モジュール全体で共有しない)。
   let loading: Promise<void> | null = null;
 
@@ -214,5 +217,9 @@ export function createWasmEngine(loader: WasmLoader): CalcEngine {
       callBoundary<BulkResult>("calcBulk", request, signal),
     calcReverse: (request: ReverseRequest, signal?: AbortSignal) =>
       callBoundary<ReverseResult>("calcReverse", request, signal),
+    // 連続技(CB-6)。ComboRequest は境界の DTO(engine/wasmapi/combo.go)とキーが 1 対 1 なのでそのまま JSON にする。
+    // 古い engine.wasm(calcCombo 未登録)は api[fn] が関数でなく TypeError になり、engine_unavailable になる。
+    calcCombo: (request: ComboRequest, signal?: AbortSignal) =>
+      callBoundary<ComboResult>("calcCombo", request, signal),
   };
 }

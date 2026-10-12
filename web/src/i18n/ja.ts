@@ -353,6 +353,11 @@ export const apiEngineText = {
   invalidPreset: "カスタムの防御側プリセット定義は API に送れません",
 } as const;
 
+/** 連続技を計算できない engine(calcCombo を持たない実装)のときの message(engine/types.ts の calcComboVia)。 */
+export const comboEngineText = {
+  unsupported: "この計算エンジンは連続技に対応していません",
+} as const;
+
 /**
  * 取り消した計算(REQUEST_ABORTED_CODE)の message(issue 113、ADR-0300 §11)。
  * 画面は取り消しをエラーとして出さないので利用者には見えないが、封筒の message を空にしない
