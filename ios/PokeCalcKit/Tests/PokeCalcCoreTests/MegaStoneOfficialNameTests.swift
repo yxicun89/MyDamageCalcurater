@@ -185,20 +185,6 @@ final class MegaStoneOfficialNameTests: XCTestCase {
         XCTAssertEqual(request.itemCandidates, [Self.official.id])
     }
 
-    // MARK: - 判定
-
-    func testJudgeCandidateShowsOfficialName() async throws {
-        let viewModel = JudgeHarness.makeViewModel(master: Mega.makeOfficialService())
-        await viewModel.load()
-        await viewModel.setSpecies(JudgeHarness.alpha, for: .attacker)
-
-        await viewModel.setSpecies(SpeciesSummary(detail: Mega.megaOfficial), for: .candidate(0))
-
-        XCTAssertEqual(viewModel.itemLock(for: .candidate(0)), .locked(itemId: Self.official.id, displayName: Self.officialName))
-        XCTAssertEqual(viewModel.itemLabel(for: Self.official.id), Self.officialName)
-        XCTAssertEqual(viewModel.draft(for: .candidate(0))?.itemId, Self.official.id)
-    }
-
     // MARK: - 調整
 
     func testAdjustOwnItemShowsOfficialName() async {

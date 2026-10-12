@@ -55,11 +55,11 @@ final class FeatureCatalogTests: XCTestCase {
     func testValidateRejectsDuplicateOrder() {
         XCTAssertThrowsError(
             try FeatureCatalog.validate([
-                FeatureSpec(id: "calc", order: 100), FeatureSpec(id: "judge", order: 700),
+                FeatureSpec(id: "calc", order: 100), FeatureSpec(id: "about", order: 700),
                 FeatureSpec(id: "speed", order: 700),
             ])
         ) { error in
-            XCTAssertEqual(error as? FeatureCatalogError, .duplicateOrder(order: 700, ids: ["judge", "speed"]))
+            XCTAssertEqual(error as? FeatureCatalogError, .duplicateOrder(order: 700, ids: ["about", "speed"]))
         }
     }
 
@@ -127,7 +127,7 @@ final class FeatureCatalogTests: XCTestCase {
     func testErrorDescriptionsNameTheCause() {
         XCTAssertTrue(FeatureCatalogError.duplicateID("calc").description.contains("calc"))
         XCTAssertTrue(
-            FeatureCatalogError.duplicateOrder(order: 700, ids: ["judge", "speed"]).description.contains("judge, speed"))
+            FeatureCatalogError.duplicateOrder(order: 700, ids: ["about", "speed"]).description.contains("about, speed"))
         XCTAssertTrue(
             FeatureCatalogError.missingService(featureID: "adjust", service: "AdjustService").description
                 .contains("AdjustService"))

@@ -165,36 +165,6 @@ check_speed sp maximum maxPerStat
 check_speed rank minimum min
 check_speed rank maximum max
 
-# --- 判定(P6-25。ADR-0504 §2): services/judge/api/openapi.yaml の範囲と、定数(RequestLimits・SPLimits・RankLimits)が一致するか ---
-# 判定の画面も SP の最大・ランクの範囲は SPLimits / RankLimits を使い、複製しない。候補数・技 ID の長さは RequestLimits に写しを持つ。
-judge_openapi="$repo_root/services/judge/api/openapi.yaml"
-
-check_judge() {
-  local label="$1" contract="$2" ios="$3" ios_name="$4"
-  if [ -z "$contract" ] || [ -z "$ios" ]; then
-    echo "ios-check-request-limits: judge の $label または $ios_name が見つからない" >&2
-    status=1
-  elif [ "$contract" != "$ios" ]; then
-    echo "ios-check-request-limits: judge の $label=$contract と $ios_name=$ios が違う" >&2
-    status=1
-  fi
-}
-
-check_judge "OutspeedAndKoRequest.defenders.maxItems" \
-  "$(schema_property_value "$judge_openapi" OutspeedAndKoRequest defenders maxItems)" "$(swift_limit maxJudgeDefenders)" maxJudgeDefenders
-check_judge "OutspeedAndKoRequest.defenders.minItems" \
-  "$(schema_property_value "$judge_openapi" OutspeedAndKoRequest defenders minItems)" "$(swift_limit minJudgeDefenders)" minJudgeDefenders
-check_judge "MoveId.maxLength" \
-  "$(schema_value "$judge_openapi" MoveId maxLength)" "$(swift_limit maxJudgeMoveIdLength)" maxJudgeMoveIdLength
-# 能力ポイント(StatBlock の6項目)とランク(RankBlock の5項目)は、1つでも契約とずれたら気づけるよう全項目を見る。
-for stat in hp atk def spa spd spe; do
-  check_judge "StatBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" StatBlock "$stat" maximum)" "$(domain_limit maxPerStat)" maxPerStat
-done
-for stat in atk def spa spd spe; do
-  check_judge "RankBlock.$stat.minimum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" minimum)" "$(domain_limit min)" RankLimits.min
-  check_judge "RankBlock.$stat.maximum" "$(schema_property_value "$judge_openapi" RankBlock "$stat" maximum)" "$(domain_limit max)" RankLimits.max
-done
-
 # --- お気に入り(ADR-0227・ADR-0509): api/openapi.yaml の件数・ラベル長と RequestLimits が一致するか ---
 # paths.<path>.<method>.responses の 200 の配列の maxItems(`listFavorites`)。見つからなければ空。
 contract_response_max_items() {

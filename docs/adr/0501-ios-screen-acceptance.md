@@ -5045,3 +5045,33 @@ UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、�
 
 実装で上の他に文言が変わるテスト(`CalcViewModelTests` の `.service` の `message`、`TeamEditViewModel*`、`AdjustTextTests`、`SpeedLabelsTests`、`BalanceLabelsTests`、`RecordScreenErrorTests`、`GlossaryTests` の `unavailableCode` ほか)は、同じ方針(期待文言の更新だけ・検査対象は減らさない)で更新し、この表に足す。
 `JudgeLabelsTests`・`JudgeViewModelAsyncTests` は判定が撤去済み(対象外)のため触らない。
+
+## 判定の撤去(ADR-0715。2026-10-12)
+
+ユーザー方針「判定画面ではなくダメージ計算の拡張」に基づき、judge-svc の廃止(ADR-0715)に先立って iOS の判定機能を**機能ごと**撤去した
+(ADR-0504 の判定画面・F-07 の非表示・ADR-0512 の素早さの反映表示を含む)。以下のテストは「弱めて通す」のではなく、検査の対象(判定の画面・ViewModel・API 実装・契約同期)
+が無くなったため削除した。計算・素早さ・調整の検査は不変。素早さの式・行動順は engine(ADR-0179)にある。
+
+撤去したもの: `Judge*` の画面 5 ファイルと `JudgeFeature`、`PokeCalcCore` の `Judge*`・`APIJudgeService`・`MockJudgeService`・`JudgeSpeedValueMiddleware`、
+生成物 `PokeCalcJudgeAPI`(`Package.swift` の product・target・依存)と `openapi-generator-config.judge.yaml`・`openapi-targets.sh` の 1 行、
+`RequestLimits` の判定の 3 定数と `check-request-limits.sh` の判定の節、`PopSymbol.judge`、`sim-run.sh` の `judge` 画面、README の判定の記述。
+`FeatureVisibility` は仕組み(環境変数で出す)だけ残し、既定の非表示 ID は空にした。能力ランクのメーター(`RankMeterView`)は他の画面が使うので残した。
+
+### 削除したテスト(全件)
+
+| テスト(ファイル。件数) | 理由 |
+|---|---|
+| `APIJudgeServiceTests`(19)・`APIJudgeServiceStatusTests`(6)・`APIJudgeServiceUnknownSpeedValuesTests`(13) | `APIJudgeService` の削除 |
+| `JudgeContractSyncTests`(4)・`JudgeContractSyncSpeedTests`(6) | `services/judge/api/openapi.yaml` を読む契約同期。契約と生成物を廃止(ADR-0715 の順序: 先に消す) |
+| `JudgeLabelsTests`(10)・`JudgeLabelsSpeedNotesTests`(8) | `JudgeLabels` の削除 |
+| `JudgeResultDisplayTests`(15)・`JudgeResultDisplaySpeedNotesTests`(8) | `JudgeResultDisplay` の削除 |
+| `JudgeViewModelAsyncTests`(16)・`InputTests`(18)・`ItemRolesTests`(3)・`MasterTests`(10)・`RequestTests`(17)・`StatusTests`(11)・`TeamTests`(9) | `JudgeViewModel` の削除 |
+| `MockJudgeServiceTests`(13)・`MockJudgeServiceSpeedNotesTests`(6) | `MockJudgeService` の削除 |
+| `Support/JudgeTestHarness`・`Support/StubJudgeService`(テストの補助) | 上のテストのみが使用 |
+| `MegaStoneOfficialNameTests.testJudgeCandidateShowsOfficialName` | 判定の ViewModel を使う 1 件。同じ検査は計算・逆算・調整の各 1 件が残る |
+| `FeatureVisibilityTests`: `testJudgeIsHiddenByDefault`・`testJudgeIsShownOnlyWhenTheEnvironmentIsOne`・`testTheShowKeyOfAnotherFeatureDoesNotShowJudge` | 判定が既定の非表示でなくなったため。同じ仕組みの検査を `speed` を非表示に指定した形(`testCustomHiddenSetIsRespected`・`testShowEnvironmentKeyUsesTheUppercasedID`・`testNothingIsHiddenByDefault`)に書き換えて保った(「1 以外では出さない」の 4 値も保持) |
+| `FeatureVisibilityTests.testOtherFeaturesAreAlwaysVisible` | `testAllFeaturesAreVisibleByDefault` に改名(検査は同じ) |
+| `FeatureCatalogTests`(重複 order の 2 件) | 例に使う ID を `judge` から `about` に変えただけ(検査は同じ) |
+| `JudgeScreenUITests`(17)・`JudgeSpeedNotesUITests`(8)・`JudgeHiddenUITests`(2) | 判定画面の削除 |
+| `LargeTextLayoutUITests`: `testJudgeScreenNoHorizontalOverflowAtAX5`・`testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5`・`testJudgeSpeedNotesAndStatusNoHorizontalOverflowAtAX5`・`testJudgeStatusOptionSheetNoHorizontalOverflowAtAX5`・`testJudgeOptionSheetNoHorizontalOverflowAtAX5` | 判定画面の AX5 検査。画面の削除 |
+| `AppNavigationUITests` の「`openJudgeScreen` が無い」の 1 行・`UITestNavigation` の `openJudgeScreen` | 入口が存在しなくなったため |

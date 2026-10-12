@@ -11,14 +11,13 @@ enum FeatureRegistry {
         TeamListFeature(),
         AdjustFeature(),
         SpeedFeature(),
-        JudgeFeature(),
         AboutFeature(),
         FavoritesFeature(),
     ]
 
     /// `order` 順の画面(入口の並び。`order` の重複は起動時の設定エラー)。
-    /// 既定で非表示の画面(判定。`FeatureVisibility`・F-07)は、環境変数 `POKECALC_SHOW_<ID>=1` のときだけ含める
-    /// (コード・サービス・テストは残す。再設計まで入口を出さない。出すときはダメージタブの区切りに並ぶ)。
+    /// 既定で非表示の画面(`FeatureVisibility`・F-07。今は無い)は、環境変数 `POKECALC_SHOW_<ID>=1` のときだけ含める
+    /// (コード・サービス・テストは残す)。
     static let features: [any AppFeature] = registered
         .filter {
             FeatureVisibility.isVisible(featureID: $0.id, environment: ProcessInfo.processInfo.environment)
