@@ -96,7 +96,7 @@ final class SpeciesImageUITests: XCTestCase {
         XCTAssertTrue(element(app, "attackerSpeciesPicker").isHittable)
     }
 
-    // MARK: - G-06: 素早さ表・お気に入り
+    // MARK: - G-06: 素早さ画面の選択済みポケモン(ADR-0610 §4。表は無い)
 
     private func openSpeedScreen(images: Bool) -> XCUIApplication {
         let app = XCUIApplication()
@@ -108,17 +108,35 @@ final class SpeciesImageUITests: XCTestCase {
         return app
     }
 
-    /// 画像あり: 素早さ表の行に、manifest にあるキー(9001-000)の画像の枠が出る。
-    func testSpeedTableRowsShowImageFrameWhenManifestHasKey() {
-        let app = openSpeedScreen(images: true)
-        XCTAssertTrue(element(app, "speciesImage-9001-000").waitForExistence(timeout: Self.existenceTimeout))
-        XCTAssertFalse(element(app, "speciesImage-9002-000").exists, "manifest に無いキーはエンブレムのまま")
+    /// ピッカーでポケモンを選ぶ(既定は未選択なので、枠が出る選択済み表示を作る)。
+    private func pickSpeedPokemon(_ app: XCUIApplication, button: String, pokemonID: String) {
+        let opener = element(app, button)
+        XCTAssertTrue(opener.waitForExistence(timeout: Self.existenceTimeout), button)
+        for _ in 0..<12 where !opener.isHittable { app.swipeUp() }
+        opener.tap()
+        XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout))
+        let row = element(app, "speedPokemonRow-\(pokemonID)")
+        XCTAssertTrue(row.waitForExistence(timeout: Self.existenceTimeout), pokemonID)
+        row.tap()
+        XCTAssertTrue(element(app, "speedPokemonSheet").waitForNonExistence(timeout: Self.existenceTimeout))
     }
 
-    /// 画像なし(既定): 素早さ表に画像の枠が出ず、表の段は従来どおり出る。
-    func testSpeedTableHasNoImageFramesByDefault() {
+    /// 画像あり: 選んだ自分のポケモン(manifest にある 9001-000)に画像の枠が出て、manifest に無い相手(9002-000)には出ない。
+    func testSpeedSelectedPokemonShowsImageFrameWhenManifestHasKey() {
+        let app = openSpeedScreen(images: true)
+        pickSpeedPokemon(app, button: "speedPokemonButton", pokemonID: "9001-000")
+        XCTAssertTrue(element(app, "speciesImage-9001-000").waitForExistence(timeout: Self.existenceTimeout))
+        pickSpeedPokemon(app, button: "speedOpponentPokemonButton", pokemonID: "9002-000")
+        XCTAssertTrue(element(app, "speedOpponentPokemonButton").waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertFalse(element(app, "speciesImage-9002-000").exists, "manifest に無いキーはエンブレムのまま")
+        XCTAssertTrue(element(app, "speciesImage-9001-000").exists, "自分の枠は残る")
+    }
+
+    /// 画像なし(既定): 素早さ画面で選んだポケモンに画像の枠が出ない(エンブレム+名前)。
+    func testSpeedSelectedPokemonHasNoImageFramesByDefault() {
         let app = openSpeedScreen(images: false)
-        XCTAssertTrue(element(app, "speedScreen").exists)
+        pickSpeedPokemon(app, button: "speedPokemonButton", pokemonID: "9001-000")
+        XCTAssertTrue(element(app, "speedPokemonButton").waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertFalse(imageFrames(app).firstMatch.waitForExistence(timeout: 1.5))
     }
 }
