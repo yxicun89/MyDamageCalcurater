@@ -240,3 +240,19 @@
   margin-top: var(--space-4);
   text-decoration: none;
 }
+
+/* ADR-0358: オフラインでは API 専用のタブ。控えめな見た目にして、理由を小さく添える(押せなくはしない。色はトークンのみ)。 */
+.app-tabs__tab--online-only {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-secondary);
+}
+
+.app-tabs__reason {
+  font-size: var(--font-size-caption);
+}
+
+/* ADR-0358: オフラインで使える範囲の 1 行。 */
+.app-offline-scope {
+  margin: 0 0 var(--space-3);
+}

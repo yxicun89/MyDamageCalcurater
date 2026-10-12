@@ -53,6 +53,11 @@ export interface ScreenEnvironment {
   readonly comboOpenRequest?: ComboOpenRequest;
   /** CB-6 段階 C2: 素早さ画面の「この相手で連続技を計算」。App が要求の token を進め、計算タブへ移す。 */
   readonly onOpenCombo?: (request: SpeedComboRequest) => void;
+  /**
+   * ADR-0358 段 2: 計算画面が mount 時に保存した直近の入力を戻すか。省略は戻す。計算する場所を切り替えたあと
+   * (マスタが入れ替わって画面が作り直されるとき)は false(ページを開き直したときだけ戻す)。
+   */
+  readonly restoreLastInput?: boolean;
   /** issue 276(ADR-0411): オンラインのマスタの取得口(API 専用の画面は計算モードに関係なくこれを使う)。 */
   readonly onlineMasterSource: MasterSource;
 }
@@ -81,6 +86,11 @@ interface ScreenDefinitionBase<C> {
   readonly hidden?: boolean;
   /** ナビの区分(ADR-0356。app/navGroups.ts の NAV_GROUPS)。省略は、この画面だけの区分。 */
   readonly group?: NavGroup;
+  /**
+   * 真なら API 専用の画面(オフラインでは動かない。ADR-0358)。オフラインのときタブを押せない表示 + 理由にする。
+   * 既定は false(オフラインでも動く)。
+   */
+  readonly onlineOnly?: boolean;
 }
 
 /** マスタを使う画面の定義。 */
@@ -120,6 +130,8 @@ export interface RegisteredScreen {
   readonly hidden: boolean;
   /** ナビの区分(省略は、この画面だけの区分)。 */
   readonly group?: NavGroup;
+  /** API 専用の画面か(オフラインでは動かない。ADR-0358)。 */
+  readonly onlineOnly: boolean;
   /** クライアントを作り、描画の口を返す。 */
   readonly instantiate: (deps: ScreenClientDeps) => ScreenInstance;
 }
@@ -128,7 +140,7 @@ export interface RegisteredScreen {
 export function defineScreen<C>(
   definition: MasterScreenDefinition<C> | MasterlessScreenDefinition<C>,
 ): RegisteredScreen {
-  const { id, segment, label, order, usesMaster, hidden = false, group } = definition;
+  const { id, segment, label, order, usesMaster, hidden = false, group, onlineOnly = false } = definition;
   return {
     id,
     segment,
@@ -137,6 +149,7 @@ export function defineScreen<C>(
     usesMaster,
     hidden,
     group,
+    onlineOnly,
     instantiate: (deps) => {
       const client = definition.createClient(deps);
       if (definition.usesMaster) {

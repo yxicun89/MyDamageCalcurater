@@ -14,6 +14,8 @@ export default defineScreen({
   order: 400,
   group: NAV_GROUPS.speed,
   usesMaster: false,
+  // API 専用(オフラインでは動かない。ADR-0358)。
+  onlineOnly: true,
   // createSpeedClient 自体は fetch しない(素早さのタブを開くまで呼ばれない。SpeedScreen.tsx)。
   createClient: createSpeedClient,
   render: (env, client) => <SpeedScreen speedClient={client} onOpenCombo={env.onOpenCombo} />,

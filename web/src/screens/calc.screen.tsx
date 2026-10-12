@@ -23,6 +23,7 @@ export default defineScreen({
       onFavoriteAdded={env.onFavoriteAdded}
       restoreRequest={env.favoriteRestore}
       comboRequest={env.comboOpenRequest}
+      restoreLastInput={env.restoreLastInput}
       // オフラインでは speed API を呼ばない(recordClient と同じく、オンラインのときだけ App が渡す)。
       speedClient={env.recordClient === undefined ? undefined : speedClient}
     />
