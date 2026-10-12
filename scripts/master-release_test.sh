@@ -33,8 +33,8 @@ case "$args" in
   *"rollout restart deployment/calc"*) cp "$STATE/db" "$STATE/calc" ;;
   *"rollout status deployment/calc"*) exit "${FAKE_ROLLOUT_RC:-0}" ;;
   *"services/speed:http/proxy/healthz"*) [ -s "$STATE/speed" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$(cat "$STATE/speed")" || exit 1 ;;
+  *"services/balance:http/proxy/healthz"*) [ -s "$STATE/balance" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$(cat "$STATE/balance")" || exit 1 ;;
   *"get --raw"*) [ -s "$STATE/calc" ] && printf '{"status":"ok","dataVersion":"%s"}\n' "$(cat "$STATE/calc")" || exit 1 ;;
-  *"deployment/balance"*) printf '{"metadata":{"annotations":{"pokecalc.example/data-version":"%s"}}}\n' "$(cat "$STATE/balance")" ;;
   *) echo "unexpected kubectl: $args" >&2; exit 99 ;;
 esac
 FAKE
