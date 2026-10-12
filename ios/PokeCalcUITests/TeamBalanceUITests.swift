@@ -65,18 +65,41 @@ final class TeamBalanceUITests: XCTestCase {
     }
 
     /// 構築編集のスクロールの中で `target` が押せる位置に来るまでスクロールする。要素は遅延なく作られるので、
-    /// 画面より上にあれば下へ(swipeDown)、下にあれば上へ(swipeUp)動かす(AX5 では節が長いので回数を多めに取る)。
+    /// 要素の位置から中央までの距離だけ引く(1 回は画面の 4 割まで。AX5 では節が長いので回数を多めに取る)。
     private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, maxSwipes: Int = 60) {
         let screen = element(app, "teamEditScreen")
-        for _ in 0..<maxSwipes where !(target.exists && target.isHittable) {
-            if target.exists, target.frame.maxY < screen.frame.minY {
-                screen.swipeDown()
-            } else {
-                screen.swipeUp()
+        for _ in 0..<maxSwipes {
+            if target.exists && target.isHittable {
+                // 慣性が止まってからもう一度確かめる(止まる間に画面の外へ流れることがある)。
+                waitUntilScrollSettles(target)
+                if target.isHittable { break }
             }
+            guard target.exists else {
+                screen.swipeUp()
+                continue
+            }
+            // 要素の中心を画面の中央へ寄せる分だけ、ゆっくり引く(swipe は AX5 で行き過ぎて、上端をまたいだまま行き来することがある)。
+            let screenFrame = screen.frame
+            let maxStep = screenFrame.height * 0.4
+            let delta = min(max(target.frame.midY - screenFrame.midY, -maxStep), maxStep)
+            let start = screen.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: -delta)))
         }
         XCTAssertTrue(
             target.isHittable, "\(target) に届かない(target=\(target.frame) screen=\(screen.frame) window=\(app.windows.firstMatch.frame))")
+    }
+
+    /// スワイプの慣性で動いている最中に押すと、ボタンではなくスクロールの停止として扱われる(並列のクローンで遅いと起きる)。
+    /// 位置が 2 回続けて同じになるまで待ってから押す。
+    private func waitUntilScrollSettles(_ target: XCUIElement, maxChecks: Int = 20) {
+        var previous = target.frame
+        for _ in 0..<maxChecks {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+            let current = target.frame
+            if current == previous { return }
+            previous = current
+        }
+        XCTFail("\(target) のスクロールが止まらない")
     }
 
     private func memberCardCount(_ app: XCUIApplication) -> Int {
