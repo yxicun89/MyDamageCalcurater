@@ -33,8 +33,10 @@ ADR-0421 で、タイプバランスは構築編集の中の節にし、別画�
 
 ### 3. おすすめ(ADR-0422 §1・§2)
 - 構築の節は `limit: 5`(`BalanceViewModel.teamRecommendationsLimit`。`init(recommendationsLimit:)`。既定 nil=送らないは従来のまま)。
-- 契約 0.10.0 の `skewedAttackTypes` を `BalanceRecommendations.skewedAttackTypes` に読む(無ければ空。知らないタイプは decode エラー)。
-  今は表示しない(Web も出していない。除外はサーバーが済ませる)。
+- 契約 0.10.0 の `skewedAttackTypes` を `BalanceRecommendations.skewedAttackTypes` に読む(無ければ空)。
+  今は表示しない(Web も出していない。除外はサーバーが済ませる)。表示に使わない項目で応答全体を失敗させないよう、ドメインへの写像では
+  写せないタイプを読み捨てる(`compactMap`。他の項目は従来どおり厳密)。ただし生成クライアントの `TypeId` は @frozen の enum なので、
+  契約に無い文字列は生成層で応答全体のデコード失敗になる(契約・生成の設定は変えない。将来タイプが増えるときは契約と生成物が先に更新される)。
 - 候補ごとに該当ポケモンのタイル(`SpeciesImageView` = 画像か、無ければタイプ色のエンブレム + 名前)。1 候補で 8 個まで(`BalancePickTiles`)、
   残りは「もっと見る」/「閉じる」。並びは応答のまま。タップで `TeamEditViewModel.addMember`(最初の空き枠)。空き枠が無ければ押せず、
   「空き枠がありません。枠を外すと入れられます」を出す(`hasEmptySlot`)。バランス側は枠の構造を知らない(`BalancePick` で構築側が渡す)。

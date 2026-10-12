@@ -4981,8 +4981,9 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 | `UITestNavigation` の `openBalanceScreen` の行き先 | 削除 | 入口が無くなったため |
 | `BalanceViewModelTests.testLoadTeamReplacesMembersWithTeamMembers` | `testSetPartyReplacesMembersWithTeamMembers`(`loadTeam` → `setParty`。期待値は同じ) | `loadTeam` を `setParty` に一本化して削除したため |
 | `TeamSparseSaveTests.testBalanceLoadsSparseTeamAndSendsEmptyMoveIds` | `loadTeam` → `setParty`(期待値は同じ) | 同上 |
+| `APIBalanceServiceStage3Tests.testRecommendationsWithUnknownSkewedTypeIsDecodeError` | 期待値は不変(decode エラー)。説明を追加 | `skewedAttackTypes` の写像は知らないタイプを読み捨てる方針に変えた(表示に使わない項目で応答全体を落とさない=契約の先行追加に強くする。検査を弱める変更ではない)。ただし生成型 `TypeId` が @frozen のため、契約に無い文字列は生成層で失敗する事実は残る(テストはそれを固定) |
 | `GlossaryTests` の `BalanceScreenText.emptyNotice` | 削除し、`teamEmptyNotice`・タイルの文言・接続できないときの文言を追加 | 旧画面の文言を削除したため。検査する文言は増えた |
 
 追加テスト: `TeamBalanceIntegrationTests`(10 件。下書き→setParty・空き枠無視・技 0 個・枠を外すと追随・失敗しても編集と保存が止まらない・再計算・limit 5・最初の空き枠・満杯)、
 `BalancePickTilesTests`(5 件。8 件+残り・相性の色の意味)、`MockBalanceServiceTests`(7 件)、`APIBalanceServiceStage3Tests` の `skewedAttackTypes` 3 件、
-`TeamBalanceUITests`(5 件。1 体で結果・タイルで空き枠へ・満杯で押せない・もっと見る・接続できなくても保存できる)。
+`TeamBalanceUITests`(6 件。1 体で結果・タイルで空き枠へ・満杯で押せない・もっと見る・接続できなくても保存できる・AX5 で節とタイルがはみ出さず押せる)。

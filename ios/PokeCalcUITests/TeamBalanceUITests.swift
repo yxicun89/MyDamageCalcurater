@@ -28,10 +28,20 @@ final class TeamBalanceUITests: XCTestCase {
         app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix))
     }
 
-    private func launchEditor(fixture: Bool) -> XCUIApplication {
+    /// AX5(アクセシビリティ域の最大。LargeTextLayoutUITests と同じ内部識別子)。
+    private static let ax5ContentSizeCategory = "UICTContentSizeCategoryAccessibilityXXXL"
+    /// フォントのサブピクセル丸めを許容する程度の余裕(pt。LargeTextLayoutUITests と同じ)。
+    private static let overflowTolerance: CGFloat = 1
+    /// タップ領域の最小(`CalcScreenMetrics.minimumTapSide`)。
+    private static let minimumTapSide: CGFloat = 36
+
+    private func launchEditor(fixture: Bool, contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["POKECALC_USE_MOCK"] = "1"
         if fixture { app.launchEnvironment["POKECALC_MOCK_BALANCE"] = "fixture" }
+        if let contentSizeCategory {
+            app.launchArguments += ["-UIPreferredContentSizeCategoryName", contentSizeCategory]
+        }
         app.launch()
         app.openScreen("openTeamListScreen")
         let createButton = element(app, "createTeamButton")
@@ -54,16 +64,19 @@ final class TeamBalanceUITests: XCTestCase {
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForNonExistence(timeout: Self.existenceTimeout), "選ぶとシートが閉じる")
     }
 
-    /// 構築編集のスクロールの中で `target` が押せる位置に来るまでスクロールする(下へ進んで届かなければ上へ戻る)。
-    private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, maxSwipes: Int = 25) {
+    /// 構築編集のスクロールの中で `target` が押せる位置に来るまでスクロールする。要素は遅延なく作られるので、
+    /// 画面より上にあれば下へ(swipeDown)、下にあれば上へ(swipeUp)動かす(AX5 では節が長いので回数を多めに取る)。
+    private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, maxSwipes: Int = 60) {
         let screen = element(app, "teamEditScreen")
         for _ in 0..<maxSwipes where !(target.exists && target.isHittable) {
-            screen.swipeUp()
+            if target.exists, target.frame.maxY < screen.frame.minY {
+                screen.swipeDown()
+            } else {
+                screen.swipeUp()
+            }
         }
-        for _ in 0..<maxSwipes where !(target.exists && target.isHittable) {
-            screen.swipeDown()
-        }
-        XCTAssertTrue(target.isHittable, "\(target) に届かない")
+        XCTAssertTrue(
+            target.isHittable, "\(target) に届かない(target=\(target.frame) screen=\(screen.frame) window=\(app.windows.firstMatch.frame))")
     }
 
     private func memberCardCount(_ app: XCUIApplication) -> Int {
@@ -153,6 +166,58 @@ final class TeamBalanceUITests: XCTestCase {
 
         XCTAssertTrue(element(app, Self.tenthTileID).waitForExistence(timeout: Self.existenceTimeout), "残りが出る")
         XCTAssertEqual(elements(app, beginningWith: "balancePickTile-1-").count, 10)
+    }
+
+    // MARK: - 最大の文字サイズ(AX5)
+
+    /// 横にはみ出している要素(identifier の前方一致)を集める。非表示(サイズ 0)は対象外。
+    private func horizontalOverflows(_ app: XCUIApplication, prefixes: [String]) -> [String] {
+        let window = app.windows.firstMatch.frame
+        var offenders: [String] = []
+        for prefix in prefixes {
+            let query = elements(app, beginningWith: prefix)
+            for index in 0..<query.count {
+                let item = query.element(boundBy: index)
+                guard item.exists else { continue }
+                let frame = item.frame
+                if frame.width == 0 && frame.height == 0 { continue }
+                if frame.minX < -Self.overflowTolerance || frame.maxX > window.maxX + Self.overflowTolerance {
+                    offenders.append("\(item.identifier): frame=\(frame) window=\(window)")
+                }
+            }
+        }
+        return offenders
+    }
+
+    /// AX5 でも節とおすすめのタイルが横にはみ出さず、タイル(36pt 以上)と「もっと見る」が押せる。
+    func testSectionAndTilesFitAndArePressableAtAX5() {
+        let app = launchEditor(fixture: true, contentSizeCategory: Self.ax5ContentSizeCategory)
+        XCTAssertGreaterThan(app.windows.firstMatch.frame.width, 0, "ウィンドウの frame が取得できない")
+        pickSpecies(app, slot: 1, name: Self.firstMockSpeciesName)
+        let tile = element(app, Self.firstTileID)
+        XCTAssertTrue(tile.waitForExistence(timeout: Self.existenceTimeout), "おすすめのタイル")
+        XCTAssertTrue(element(app, "balanceTeamSummary").exists)
+
+        let prefixes = [
+            "teamBalanceSection", "balanceTeamSummary", "balanceMemberDefense-", "balanceRecommendationsSection",
+            "balanceCandidate-", "balancePickTiles-", "balancePickTile-", "balancePickMore-",
+        ]
+        let offenders = horizontalOverflows(app, prefixes: prefixes)
+        XCTAssertTrue(offenders.isEmpty, "横にはみ出している要素があります:\n" + offenders.joined(separator: "\n"))
+
+        scrollUntilHittable(app, tile)
+        XCTAssertTrue(tile.isHittable, "AX5 でもタイルを押せる")
+        XCTAssertGreaterThanOrEqual(tile.frame.height, Self.minimumTapSide, "タップ領域の高さ")
+        XCTAssertGreaterThanOrEqual(tile.frame.width, Self.minimumTapSide, "タップ領域の幅")
+        let more = element(app, "balancePickMore-1")
+        scrollUntilHittable(app, more)
+        XCTAssertTrue(more.isHittable, "AX5 でも「もっと見る」を押せる")
+        more.tap()
+        XCTAssertTrue(element(app, Self.tenthTileID).waitForExistence(timeout: Self.existenceTimeout), "残りが出る")
+
+        scrollUntilHittable(app, tile)
+        tile.tap()
+        waitForMemberCards(app, 2)
     }
 
     // MARK: - balance が使えないとき

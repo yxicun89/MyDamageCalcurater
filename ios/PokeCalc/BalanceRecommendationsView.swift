@@ -130,9 +130,13 @@ struct BalancePickTilesView: View {
     /// 候補の 1 始まりの番号(識別子用。同じポケモンが複数の候補に出るため)。
     let number: Int
     let pick: BalancePick
+    /// タイルの最小幅の基準(既定の文字サイズで 2 列に並ぶ幅。文字の大きさに合わせて広げ、AX5 では 1 列になる)。
+    static let baseTileMinWidth: CGFloat = 132
+    /// 押せないタイルの不透明度(ピルのボタンの無効と同じ見え方)。
+    static let disabledTileOpacity = CalcScreenMetrics.disabledChipOpacity * 1.5
+
     @State private var expanded = false
-    /// タイルの最小幅(文字の大きさに合わせて広げる。AX5 では 1 列になる)。
-    @ScaledMetric(relativeTo: .body) private var tileMinWidth: CGFloat = 132
+    @ScaledMetric(relativeTo: .body) private var tileMinWidth: CGFloat = BalancePickTilesView.baseTileMinWidth
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
@@ -196,7 +200,7 @@ struct BalancePickTilesView: View {
         }
         .buttonStyle(.plain)
         .disabled(!pick.canPick)
-        .opacity(pick.canPick ? 1 : CalcScreenMetrics.disabledChipOpacity * 1.5)
+        .opacity(pick.canPick ? 1 : Self.disabledTileOpacity)
         .accessibilityLabel(name)
         .accessibilityIdentifier("balancePickTile-\(number)-\(pokemon.pokemonId)")
     }
