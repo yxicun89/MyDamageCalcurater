@@ -8,7 +8,7 @@ package main
 //	type cliEnv struct {
 //		Stdout, Stderr io.Writer
 //		Getenv         func(string) string
-//		Provision      func(rootDSN string, roles []db.RoleGrant) error
+//		Provision      func(rootDSN string, roles []dbmigrate.RoleGrant) error
 //		Up             func(dsn string) error
 //		Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 //		DownAll        func(dsn, confirmDatabase string) error
@@ -16,7 +16,7 @@ package main
 //	}
 //	func run(args []string, env cliEnv) int
 //
-// main は os.Getenv と db.Provision・db.Up・db.Version・db.DownAll・db.Force を渡す。
+// main は os.Getenv と dbmigrate.Provision・db.Up・db.Version・db.DownAll・db.Force を渡す。
 
 import (
 	"bytes"
@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"example.com/pokecalc/services/internal/dbmigrate"
 	"example.com/pokecalc/services/pokedex/db"
 )
 
@@ -45,9 +46,9 @@ type harness struct {
 
 	calls          []string // "provision" / "up" / "version" / "down" / "force" の呼ばれた順
 	provisionRoot  string
-	provisionRoles []db.RoleGrant
+	provisionRoles []dbmigrate.RoleGrant
 	// provisionRolesByCall は Provision の呼び出しごとのロール(Up の前後で2回呼ばれる)。
-	provisionRolesByCall [][]db.RoleGrant
+	provisionRolesByCall [][]dbmigrate.RoleGrant
 	upDSN                string
 	provisionErr         error
 	upErr                error
@@ -64,10 +65,10 @@ func (h *harness) cliEnv() cliEnv {
 		Stdout: &h.stdout,
 		Stderr: &h.stderr,
 		Getenv: func(k string) string { return h.env[k] },
-		Provision: func(rootDSN string, roles []db.RoleGrant) error {
+		Provision: func(rootDSN string, roles []dbmigrate.RoleGrant) error {
 			h.calls = append(h.calls, "provision")
 			h.provisionRoot = rootDSN
-			h.provisionRoles = append([]db.RoleGrant(nil), roles...)
+			h.provisionRoles = append([]dbmigrate.RoleGrant(nil), roles...)
 			h.provisionRolesByCall = append(h.provisionRolesByCall, h.provisionRoles)
 			return h.provisionErr
 		},
@@ -144,14 +145,14 @@ func TestUpWithProvisionDSNProvisionsThenMigrates(t *testing.T) {
 	if len(h.provisionRolesByCall) != 2 {
 		t.Fatalf("Provision の呼び出し回数 = %d, want 2", len(h.provisionRolesByCall))
 	}
-	importer := db.RoleGrant{DSN: fakeImporterDSN, Privileges: db.ImporterPrivileges, Scope: db.ScopeDataTables}
-	if !reflect.DeepEqual(h.provisionRolesByCall[1], []db.RoleGrant{importer}) {
+	importer := dbmigrate.RoleGrant{DSN: fakeImporterDSN, Privileges: dbmigrate.ImporterPrivileges, Scope: dbmigrate.ScopeDataTables}
+	if !reflect.DeepEqual(h.provisionRolesByCall[1], []dbmigrate.RoleGrant{importer}) {
 		t.Error("Up の後の Provision は importer(表単位)だけを渡すこと")
 	}
-	want := []db.RoleGrant{
-		{DSN: fakeReaderDSN, Privileges: db.ReaderPrivileges},
+	want := []dbmigrate.RoleGrant{
+		{DSN: fakeReaderDSN, Privileges: dbmigrate.ReaderPrivileges},
 		importer,
-		{DSN: fakeMigratorDSN, Privileges: db.MigratorPrivileges},
+		{DSN: fakeMigratorDSN, Privileges: dbmigrate.MigratorPrivileges},
 	}
 	h.provisionRoles = h.provisionRolesByCall[0]
 	if !reflect.DeepEqual(h.provisionRoles, want) {
@@ -321,7 +322,7 @@ func TestUpFailsWhenRegrantAfterUpFails(t *testing.T) {
 	h := newHarness(fullProvisionEnv())
 	env := h.cliEnv()
 	calls := 0
-	env.Provision = func(rootDSN string, roles []db.RoleGrant) error {
+	env.Provision = func(rootDSN string, roles []dbmigrate.RoleGrant) error {
 		h.calls = append(h.calls, "provision")
 		calls++
 		if calls == 2 {

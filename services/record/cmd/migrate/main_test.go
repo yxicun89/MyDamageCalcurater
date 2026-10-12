@@ -8,14 +8,14 @@ package main
 //	type cliEnv struct {
 //		Stdout, Stderr io.Writer
 //		Getenv         func(string) string
-//		Provision      func(rootDSN string, roles []pokedexdb.RoleGrant) error
+//		Provision      func(rootDSN string, roles []dbmigrate.RoleGrant) error
 //		Up             func(dsn string) error
 //		Version        func(dsn string) (version uint, dirty bool, ok bool, err error)
 //		DownAll        func(dsn, confirmDatabase string) error
 //	}
 //	func run(args []string, env cliEnv) int
 //
-// main は os.Getenv と pokedexdb.Provision・recorddb.Up・recorddb.Version・recorddb.DownAll を渡す。
+// main は os.Getenv と dbmigrate.Provision・recorddb.Up・recorddb.Version・recorddb.DownAll を渡す。
 
 import (
 	"bytes"
@@ -24,7 +24,7 @@ import (
 	"strings"
 	"testing"
 
-	pokedexdb "example.com/pokecalc/services/pokedex/db"
+	"example.com/pokecalc/services/internal/dbmigrate"
 	recorddb "example.com/pokecalc/services/record/db"
 )
 
@@ -44,7 +44,7 @@ type harness struct {
 
 	calls          []string // "provision" / "up" / "version" / "down" の呼ばれた順
 	provisionRoot  string
-	provisionRoles []pokedexdb.RoleGrant
+	provisionRoles []dbmigrate.RoleGrant
 	upDSN          string
 	provisionErr   error
 	upErr          error
@@ -57,10 +57,10 @@ func (h *harness) cliEnv() cliEnv {
 		Stdout: &h.stdout,
 		Stderr: &h.stderr,
 		Getenv: func(k string) string { return h.env[k] },
-		Provision: func(rootDSN string, roles []pokedexdb.RoleGrant) error {
+		Provision: func(rootDSN string, roles []dbmigrate.RoleGrant) error {
 			h.calls = append(h.calls, "provision")
 			h.provisionRoot = rootDSN
-			h.provisionRoles = append([]pokedexdb.RoleGrant(nil), roles...)
+			h.provisionRoles = append([]dbmigrate.RoleGrant(nil), roles...)
 			return h.provisionErr
 		},
 		Up: func(dsn string) error {
@@ -125,9 +125,9 @@ func TestUpWithProvisionDSNProvisionsThenMigrates(t *testing.T) {
 	if h.provisionRoot != fakeProvisionDSN {
 		t.Error("Provision の root DSN が RECORD_PROVISION_DSN でない")
 	}
-	want := []pokedexdb.RoleGrant{
-		{DSN: fakeAppDSN, Privileges: pokedexdb.AppPrivileges},
-		{DSN: fakeMigratorDSN, Privileges: pokedexdb.MigratorPrivileges},
+	want := []dbmigrate.RoleGrant{
+		{DSN: fakeAppDSN, Privileges: dbmigrate.AppPrivileges},
+		{DSN: fakeMigratorDSN, Privileges: dbmigrate.MigratorPrivileges},
 	}
 	if !reflect.DeepEqual(h.provisionRoles, want) {
 		// DSN を表示しない(パスワードを含むため)。権限だけを並べる。
@@ -223,7 +223,7 @@ func TestProductionEnvWiresRecordFunctions(t *testing.T) {
 		got  uintptr
 		want uintptr
 	}{
-		{"Provision", reflect.ValueOf(env.Provision).Pointer(), reflect.ValueOf(pokedexdb.Provision).Pointer()},
+		{"Provision", reflect.ValueOf(env.Provision).Pointer(), reflect.ValueOf(dbmigrate.Provision).Pointer()},
 		{"Up", reflect.ValueOf(env.Up).Pointer(), reflect.ValueOf(recorddb.Up).Pointer()},
 		{"Version", reflect.ValueOf(env.Version).Pointer(), reflect.ValueOf(recorddb.Version).Pointer()},
 		{"DownAll", reflect.ValueOf(env.DownAll).Pointer(), reflect.ValueOf(recorddb.DownAll).Pointer()},

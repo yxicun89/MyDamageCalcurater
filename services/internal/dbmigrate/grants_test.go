@@ -1,4 +1,4 @@
-package db
+package dbmigrate
 
 // db.Provision の入力検査と権限セットの定数(ADR-0110 §1・§4)。DB は使わない(make test で走る)。
 // 接続前に弾くべき入力は、閉じたポート(127.0.0.1:1)を指す DSN を渡して ErrInvalidRoleGrant で
@@ -21,7 +21,7 @@ const (
 )
 
 // unreachableDSN は閉じたポートを指す DSN を作る(検査を通れば接続で失敗する)。
-func unreachableDSN(user, pass, dbName string) string {
+func unreachableRoleDSN(user, pass, dbName string) string {
 	c := mysql.NewConfig()
 	c.User = user
 	c.Passwd = pass
@@ -69,9 +69,9 @@ func TestRolePrivilegeConstants(t *testing.T) {
 
 // AC-P6: 危険な入力は接続する前に ErrInvalidRoleGrant で拒否する。エラー文にパスワードを含めない。
 func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
-	root := unreachableDSN("root", fakeRootPass, "pokedex")
+	root := unreachableRoleDSN("root", fakeRootPass, "pokedex")
 	role := func(user, pass, dbName, privs string) RoleGrant {
-		return RoleGrant{DSN: unreachableDSN(user, pass, dbName), Privileges: privs}
+		return RoleGrant{DSN: unreachableRoleDSN(user, pass, dbName), Privileges: privs}
 	}
 	cases := []struct {
 		name  string
@@ -80,7 +80,7 @@ func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
 	}{
 		{"ロールが空", root, nil},
 		{"root DSN が解釈できない", "not a dsn", []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", ReaderPrivileges)}},
-		{"root DSN に DB 名が無い", unreachableDSN("root", fakeRootPass, ""), []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", ReaderPrivileges)}},
+		{"root DSN に DB 名が無い", unreachableRoleDSN("root", fakeRootPass, ""), []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", ReaderPrivileges)}},
 		{"ロールの DSN が解釈できない", root, []RoleGrant{{DSN: "not a dsn", Privileges: ReaderPrivileges}}},
 		{"パスワードに引用符", root, []RoleGrant{role("pokedex_reader", "abc'def0123456789", "pokedex", ReaderPrivileges)}},
 		{"パスワードにバックスラッシュ", root, []RoleGrant{role("pokedex_reader", `abc\def0123456789`, "pokedex", ReaderPrivileges)}},
@@ -94,8 +94,8 @@ func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
 		{"ロールのユーザーが root DSN のユーザーと同じ", root, []RoleGrant{role("root", fakeRolePass, "pokedex", ReaderPrivileges)}},
 		// root DSN のユーザーが "root" という名前とは限らない(admin 等の別名で運用されうる)。
 		// cfg.User == rootCfg.User の分岐(cfg.User == "root" の分岐とは別経路)を単独で検証する。
-		{"ロールのユーザーが root DSN のユーザーと同じ(root という名前でない場合)", unreachableDSN("admin", fakeRootPass, "pokedex"), []RoleGrant{role("admin", fakeRolePass, "pokedex", ReaderPrivileges)}},
-		{"ロールのユーザーが root", unreachableDSN("admin", fakeRootPass, "pokedex"), []RoleGrant{role("root", fakeRolePass, "pokedex", ReaderPrivileges)}},
+		{"ロールのユーザーが root DSN のユーザーと同じ(root という名前でない場合)", unreachableRoleDSN("admin", fakeRootPass, "pokedex"), []RoleGrant{role("admin", fakeRolePass, "pokedex", ReaderPrivileges)}},
+		{"ロールのユーザーが root", unreachableRoleDSN("admin", fakeRootPass, "pokedex"), []RoleGrant{role("root", fakeRolePass, "pokedex", ReaderPrivileges)}},
 		{"ロールのユーザーが mysql 予約名", root, []RoleGrant{role("mysql.sys", fakeRolePass, "pokedex", ReaderPrivileges)}},
 		{"ロールの DB 名が root DSN と違う", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "other", ReaderPrivileges)}},
 		{"同じユーザーが2回", root, []RoleGrant{
@@ -108,8 +108,8 @@ func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
 		{"権限に CREATE USER", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", "SELECT, CREATE USER")}},
 		{"権限に SQL を混ぜる", root, []RoleGrant{role("pokedex_reader", fakeRolePass, "pokedex", "SELECT ON *.* TO x; --")}},
 		// ADR-0125: 表単位の範囲は DML だけ(DDL を表ごとに配らない)。範囲の値も既知のものだけ。
-		{"表単位の範囲に DDL", root, []RoleGrant{{DSN: unreachableDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: MigratorPrivileges, Scope: ScopeDataTables}}},
-		{"範囲の値が不正", root, []RoleGrant{{DSN: unreachableDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: ImporterPrivileges, Scope: GrantScope(99)}}},
+		{"表単位の範囲に DDL", root, []RoleGrant{{DSN: unreachableRoleDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: MigratorPrivileges, Scope: ScopeDataTables}}},
+		{"範囲の値が不正", root, []RoleGrant{{DSN: unreachableRoleDSN("pokedex_importer", fakeRolePass, "pokedex"), Privileges: ImporterPrivileges, Scope: GrantScope(99)}}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -129,11 +129,11 @@ func TestProvisionRejectsUnsafeInputBeforeConnecting(t *testing.T) {
 
 // AC-P6: 正しい入力は検査を通り、接続の段階まで進む(閉じたポートなので接続エラーになる)。
 func TestProvisionAcceptsValidInputAndReachesConnect(t *testing.T) {
-	root := unreachableDSN("root", fakeRootPass, "pokedex")
+	root := unreachableRoleDSN("root", fakeRootPass, "pokedex")
 	roles := []RoleGrant{
-		{DSN: unreachableDSN("pokedex_reader", fakeRolePass, "pokedex"), Privileges: ReaderPrivileges},
-		{DSN: unreachableDSN("pokedex_importer", fakeRolePass2, "pokedex"), Privileges: ImporterPrivileges, Scope: ScopeDataTables},
-		{DSN: unreachableDSN("pokedex_migrator", strings.ToUpper(fakeRolePass), "pokedex"), Privileges: MigratorPrivileges},
+		{DSN: unreachableRoleDSN("pokedex_reader", fakeRolePass, "pokedex"), Privileges: ReaderPrivileges},
+		{DSN: unreachableRoleDSN("pokedex_importer", fakeRolePass2, "pokedex"), Privileges: ImporterPrivileges, Scope: ScopeDataTables},
+		{DSN: unreachableRoleDSN("pokedex_migrator", strings.ToUpper(fakeRolePass), "pokedex"), Privileges: MigratorPrivileges},
 	}
 	err := Provision(root, roles)
 	if err == nil {
