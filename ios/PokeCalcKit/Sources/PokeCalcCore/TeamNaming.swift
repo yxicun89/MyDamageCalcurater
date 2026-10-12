@@ -32,7 +32,7 @@ public enum TeamNaming {
 public enum TeamLabels {
     // 一覧
     public static let createButton = "新しい構築"
-    public static let emptyList = "まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます"
+    public static let emptyList = "まだ構築がありません"
     public static let openButton = "開く"
     public static let deleteButton = "削除"
     public static func openHint(name: String) -> String { "「\(name)」を開く" }
@@ -57,7 +57,6 @@ public enum TeamLabels {
     public static let leaveDiscard = "保存せずに戻る"
     public static let leaveCancel = "編集を続ける"
     public static let pokemonField = "ポケモン"
-    public static let emptySlotHint = "ポケモンを選ぶと、技・持ち物・特性などを決められます"
     public static func slotTitle(_ number: Int) -> String { "\(number)体目" }
     public static func moveUp(_ number: Int) -> String { "\(number)体目を上へ" }
     public static func moveDown(_ number: Int) -> String { "\(number)体目を下へ" }
