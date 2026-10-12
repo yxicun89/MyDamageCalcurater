@@ -10,6 +10,7 @@ import {
   applySelfSpeed,
   buildComboRequest,
   canBeOpponentMove,
+  clampSelfSpeedSp,
   maxSelfSpeedSp,
   type SelfSpeedInput,
   type SelfSpeedNature,
@@ -211,10 +212,13 @@ export function ComboSection({
   if (openToken !== null && openToken !== handledOpenToken) {
     setHandledOpenToken(openToken);
     setOpen(true);
-    if (openSpeed !== null) {
-      setSelfSpeed({ sp: openSpeed.sp, nature: openSpeed.nature, rank: openSpeed.rank });
-      setScarfIgnored(openSpeed.scarf);
-    }
+    // speed の無い要求は入力を既定(個体の値のまま)に戻す。前の要求の値を残さない。
+    setSelfSpeed(
+      openSpeed === null
+        ? DEFAULT_SELF_SPEED
+        : { sp: openSpeed.sp, nature: openSpeed.nature, rank: openSpeed.rank },
+    );
+    setScarfIgnored(openSpeed?.scarf === true);
   }
 
   const moveById = useMemo(() => new Map(extraCandidates.map((move) => [move.id, move])), [extraCandidates]);
@@ -553,10 +557,10 @@ export function ComboSection({
                   min={0}
                   max={maxSelfSpeedSp(attacker)}
                   step={1}
-                  value={selfSpeed.sp}
+                  value={selfSpeed.sp ?? attacker.sp.spe}
                   onChange={(event) => {
                     const parsed = Number.parseInt(event.target.value, 10);
-                    updateSelfSpeed({ sp: Number.isNaN(parsed) ? 0 : Math.max(0, parsed) });
+                    updateSelfSpeed({ sp: clampSelfSpeedSp(attacker, Number.isNaN(parsed) ? 0 : parsed) });
                   }}
                 />
               </label>
@@ -578,7 +582,7 @@ export function ComboSection({
               <RankMeter
                 label={comboScreenText.selfSpeed.rankLabel}
                 statName={comboScreenText.selfSpeed.rankStatName}
-                value={selfSpeed.rank}
+                value={selfSpeed.rank ?? attacker.ranks?.spe ?? 0}
                 onChange={(rank) => {
                   updateSelfSpeed({ rank });
                 }}

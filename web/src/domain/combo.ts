@@ -115,13 +115,15 @@ export type SelfSpeedNature = "keep" | "plus" | "neutral" | "minus";
  * こだわりスカーフは API の連続技に指定する項目が無い(持ち物は 1 つで、持ち物 ID で渡す)ので、ここには持たない。
  */
 export interface SelfSpeedInput {
-  readonly sp: number;
+  /** null = 攻撃側の個体の値のまま(計算画面が素早さの SP を持っていてもそれを上書きしない)。 */
+  readonly sp: number | null;
   readonly nature: SelfSpeedNature;
-  readonly rank: number;
+  /** null = 攻撃側の個体の値のまま。 */
+  readonly rank: number | null;
 }
 
 /** 既定。applySelfSpeed が個体をそのまま返す値(今の挙動と同一)。 */
-export const DEFAULT_SELF_SPEED: SelfSpeedInput = { sp: 0, nature: "keep", rank: 0 };
+export const DEFAULT_SELF_SPEED: SelfSpeedInput = { sp: null, nature: "keep", rank: null };
 
 /** 素早さに振れる SP の上限(1 能力 32・合計 66 から、素早さ以外の SP を引いた残り)。 */
 export function maxSelfSpeedSp(attacker: Individual): number {
@@ -155,17 +157,21 @@ function applySpeedNature(nature: Nature, choice: Exclude<SelfSpeedNature, "keep
  * 性格は素早さの補正だけを差し替え、攻撃・特攻の補正は(両立できる範囲で)残す。
  */
 export function applySelfSpeed(attacker: Individual, input: SelfSpeedInput): Individual {
-  const sp = Math.min(Math.max(0, Math.trunc(input.sp)), maxSelfSpeedSp(attacker));
-  const spChanged = sp !== attacker.sp.spe;
-  const rankChanged = input.rank !== (attacker.ranks?.spe ?? 0);
-  if (!spChanged && !rankChanged && input.nature === "keep") {
+  if (input.sp === null && input.rank === null && input.nature === "keep") {
     return attacker;
   }
-  const ranks: Ranks = { atk: 0, def: 0, spa: 0, spd: 0, ...attacker.ranks, spe: input.rank };
+  const sp = input.sp === null ? attacker.sp.spe : clampSelfSpeedSp(attacker, input.sp);
+  const rank = input.rank ?? attacker.ranks?.spe ?? 0;
+  const ranks: Ranks = { atk: 0, def: 0, spa: 0, spd: 0, ...attacker.ranks, spe: rank };
   return {
     ...attacker,
     sp: { ...attacker.sp, spe: sp },
-    ...(rankChanged || attacker.ranks !== undefined ? { ranks } : {}),
+    ...(input.rank !== null || attacker.ranks !== undefined ? { ranks } : {}),
     ...(input.nature === "keep" ? {} : { nature: applySpeedNature(attacker.nature, input.nature) }),
   };
+}
+
+/** 素早さの SP を 0〜上限に丸める(入力欄の表示と要求の値を揃える)。 */
+export function clampSelfSpeedSp(attacker: Individual, sp: number): number {
+  return Math.min(Math.max(0, Math.trunc(sp)), maxSelfSpeedSp(attacker));
 }

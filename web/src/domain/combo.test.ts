@@ -182,3 +182,27 @@ describe("applySelfSpeed(連続技の自分の素早さ。I-web-32)", () => {
     expect(result.nature).toEqual({ plus: expectPlus, minus: expectMinus });
   });
 });
+
+describe("applySelfSpeed の既定は個体の値のまま(素早さの SP・ランクが 0 以外でも)", () => {
+  const base: Individual = {
+    ...individual,
+    sp: { ...individual.sp, spe: 12 },
+    ranks: { atk: 0, def: 0, spa: 0, spd: 0, spe: 2 },
+  };
+
+  test("既定は同じ個体を返す", () => {
+    expect(applySelfSpeed(base, DEFAULT_SELF_SPEED)).toBe(base);
+  });
+
+  test("性格だけ変えても、SP とランクは個体の値のまま", () => {
+    const result = applySelfSpeed(base, { ...DEFAULT_SELF_SPEED, nature: "plus" });
+    expect(result.sp.spe).toBe(12);
+    expect(result.ranks?.spe).toBe(2);
+  });
+
+  test("0 を明示すれば個体の値を 0 で上書きする", () => {
+    const result = applySelfSpeed(base, { sp: 0, nature: "keep", rank: 0 });
+    expect(result.sp.spe).toBe(0);
+    expect(result.ranks?.spe).toBe(0);
+  });
+});
