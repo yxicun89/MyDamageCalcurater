@@ -378,7 +378,7 @@ private struct SPStatRow: View {
             text: Binding(
                 get: { text },
                 set: { newValue in
-                    let digits = newValue.filter(\.isNumber)
+                    let digits = newValue.filter { $0.isASCII && $0.isNumber }
                     text = digits
                     if let number = Int(digits) { _ = apply(number) }
                 }

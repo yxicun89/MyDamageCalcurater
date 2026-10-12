@@ -5214,6 +5214,8 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 | `LargeTextLayoutUITests` の構築編集の AX5 | はみ出し検査の対象 `slotEmptyHint-1` → `teamSlotGrid` | 案内の文を廃止し、格子に置き換えたため |
 | `TeamBalanceUITests.scrollUntilHittable`(AX5 のタイプバランス) | 既定の最大スワイプ数 60 → 100 | AX5 では 6 枠のタイルの格子(1 列)と SP の行が増えて画面が長くなり、節までの送りが 60 回では届かないことがあったため(検査は同じ) |
 
+タイプバランスの技ピッカー(`BalanceMemberCard`・`BalanceMoveRangeView`)は `MoveSearchSheet` の `noneLabel` 既定を使うため、先頭行の語が「外す」から「(なし)」に変わる(Web の語に揃う。識別子 `moveSearchRemoveButton` は不変で、UITest はこの語を参照していない)。SP の数値欄は ASCII の数字だけを通す(全角数字は受け付けない)。
+
 `TeamScreenUITests` の他(種族の選択・技シートの検索・入れ替え・外す・保存・戻る・カード・削除の 2 段階)、`TeamBalanceUITests`、`CalcScreenUITests`・`ReverseScreenUITests`(構築から選ぶ)は変えない
 (識別子・読み上げ名は不変)。`TeamLabels.emptyList` の値を変えるが、固定していた既存テストは無い。実装で上の他に文言・手順が変わるテストが出たら、同じ方針
 (期待の更新だけ・検査対象は減らさない)でこの表に足す。
