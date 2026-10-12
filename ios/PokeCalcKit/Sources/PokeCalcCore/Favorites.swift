@@ -191,9 +191,8 @@ public enum FavoritesLabels {
     public static let rootButtonTitle = "お気に入り・履歴"
     public static let favoritesSectionTitle = "お気に入り"
     public static let historySectionTitle = "よく計算する相手"
-    public static let emptyFavorites = "お気に入りはまだありません。計算画面の「お気に入りに追加」から追加できます。"
-    public static let emptyHistory = "計算した相手がまだありません。計算すると、よく計算する相手がここに並びます。"
-    public static let removeButton = "外す"
+    public static let emptyFavorites = "お気に入りはまだありません"
+    public static let emptyHistory = "計算した相手がまだありません"
     public static let retryButton = "再読み込み"
     public static let pinAttackerButton = "攻撃側をお気に入りに追加"
     public static let pinDefenderButton = "防御側をお気に入りに追加"
@@ -201,14 +200,10 @@ public enum FavoritesLabels {
     public static let pinned = "お気に入りに追加しました。"
     public static let alreadyPinned = "すでにお気に入りに追加済みです。"
     public static let unknownSpecies = "不明なポケモン"
-    public static let limitNote = "お気に入りは最大\(RequestLimits.maxFavorites)件までです。"
 
     // F-09: 計算つきのお気に入りを計算画面に復元する(Web の ADR-0333 と同じ語。ADR-0524)。
-    public static let useButton = "計算に使う"
     public static func useAccessibilityLabel(title: String) -> String { "「\(title)」を計算に使う" }
     public static func restoredNotice(title: String) -> String { "「\(title)」の計算を開きました" }
-    /// calc の無い旧お気に入りの行に添える案内。
-    public static let legacyFavoriteHint = "攻撃側・防御側の個体だけ(計算の条件は保存されていません)。計算画面の「お気に入りから読み込む」で使えます。"
     /// 復元しない範囲(履歴の復元と同じ限界。ADR-0519・ADR-0524)。計算を開いた画面に1回だけ添える。
     public static let restoreLimitNote =
         "防御側の性格・能力ポイント・持ち物は戻しません(防御側は代表的な調整の一覧で計算します)。ダブルで保存した計算もシングルで開きます。"

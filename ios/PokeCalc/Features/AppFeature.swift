@@ -80,6 +80,8 @@ struct FeatureContext {
     /// この画面が入っている `NavigationStack` の path(構築一覧のように、画面の中から先へ積む画面が使う)。
     /// 画面ごとに別のスタックを持つ(タブ・区切りを移っても積んだ状態が残る。ADR-0531)。
     let path: Binding<NavigationPath>
+    /// ダメージタブ(計算画面)へ移る。空の状態の「計算へ」が使う。
+    var openCalc: () -> Void = {}
 }
 
 /// `NavigationPath` に積む画面の行き先(値だけで、状態は持たない)。
