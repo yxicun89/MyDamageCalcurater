@@ -147,7 +147,15 @@ enum PopSymbol {
     static let warning = "exclamationmark.triangle"
     static let info = "info.circle"
     static let done = "checkmark.circle"
-    static let history = "clock.arrow.circlepath"
+    static let history = PopSymbolNames.history
+    static let close = PopSymbolNames.close
+    static let open = PopSymbolNames.open
+    static let help = PopSymbolNames.help
+    static let up = PopSymbolNames.up
+    static let down = PopSymbolNames.down
+    static let minus = PopSymbolNames.minus
+    /// 行の右端など「先へ進む」矢印。
+    static let forward = "chevron.right"
     static let reload = "arrow.clockwise"
     static let save = "square.and.arrow.down"
 
@@ -180,6 +188,8 @@ enum PopSymbol {
 struct PopHeading: View {
     let title: String
     let systemImage: String
+    /// 文字(見出し)に付ける識別子。
+    var identifier: String?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
@@ -190,8 +200,88 @@ struct PopHeading: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier(identifier ?? "")
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// 「説明」ボタンの見た目(アイコン + 名前。36pt 以上)。
+struct PopHelpLabel: View {
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        PopLabel(title: title, systemImage: systemImage)
+            .font(TextStyleToken.caption.font)
+            .foregroundStyle(ColorToken.brandPrimary.color)
+            .frame(minWidth: CalcScreenMetrics.minimumTapSide, minHeight: CalcScreenMetrics.minimumTapSide)
+            .contentShape(Rectangle())
+    }
+}
+
+/// 「説明」ボタン(補足の文を奥に置く。Web の `.ui-help`)。押すと `content` が吹き出し(popover)で出る。
+/// iPhone でもシートにせず吹き出しのまま出す。ボタンは 36pt 以上。名前とアイコンは呼び出し側が渡す(`CommonPartsText.help`・`PopSymbol.help`)。
+struct PopHelpButton<Content: View>: View {
+    let title: String
+    let systemImage: String
+    let identifier: String
+    @ViewBuilder let content: () -> Content
+    @State private var isPresented = false
+
+    var body: some View {
+        Button {
+            isPresented = true
+        } label: {
+            PopHelpLabel(title: title, systemImage: systemImage)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier(identifier)
+        .popover(isPresented: $isPresented) {
+            content()
+                .padding(SpacingToken.x4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .presentationCompactAdaptation(.popover)
+        }
+    }
+}
+
+/// 空の状態の中身(`ContentUnavailableView` の label。アイコン + 一言)。識別子は文字に付ける。
+struct PopEmptyLabel: View {
+    let message: String
+    let identifier: String
+
+    var body: some View {
+        VStack(spacing: SpacingToken.x2) {
+            PopIcon(PopSymbol.info)
+                .foregroundStyle(ColorToken.textSecondary.color)
+            Text(message)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier(identifier)
+        }
+    }
+}
+
+/// アイコンだけのボタン(読み上げ名は `label`)。36pt 以上。
+struct PopIconButton: View {
+    let systemImage: String
+    let label: String
+    let identifier: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            PopIcon(systemImage)
+                .foregroundStyle(ColorToken.brandPrimary.color)
+                .frame(minWidth: CalcScreenMetrics.minimumTapSide, minHeight: CalcScreenMetrics.minimumTapSide)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityIdentifier(identifier)
     }
 }
 

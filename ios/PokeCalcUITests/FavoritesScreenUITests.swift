@@ -97,6 +97,10 @@ final class FavoritesScreenUITests: XCTestCase {
         let remove = app.buttons["favoriteDeleteButton-102"]
         XCTAssertTrue(remove.exists)
         remove.tap()
+        // G-05(ADR-0536): 削除は 2 段階(確認 → 「削除する」)。
+        let confirm = app.buttons["favoriteDeleteConfirmButton-102"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: Self.existenceTimeout))
+        confirm.tap()
 
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: element(app, "favoriteRow-102"), handler: nil)
@@ -112,6 +116,9 @@ final class FavoritesScreenUITests: XCTestCase {
             let remove = app.buttons["favoriteDeleteButton-\(id)"]
             XCTAssertTrue(remove.waitForExistence(timeout: Self.existenceTimeout))
             remove.tap()
+            let confirm = app.buttons["favoriteDeleteConfirmButton-\(id)"]  // G-05(ADR-0536): 2 段階
+            XCTAssertTrue(confirm.waitForExistence(timeout: Self.existenceTimeout))
+            confirm.tap()
             let gone = NSPredicate(format: "exists == false")
             expectation(for: gone, evaluatedWith: element(app, "favoriteRow-\(id)"), handler: nil)
             waitForExpectations(timeout: Self.existenceTimeout)
@@ -256,6 +263,10 @@ final class FavoritesScreenUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(remove.frame.height, Self.minTapSize)
         if !remove.isHittable { app.swipeUp() }
         remove.tap()
+        let confirm = app.buttons["favoriteDeleteConfirmButton-102"]  // G-05(ADR-0536): 2 段階
+        XCTAssertTrue(confirm.waitForExistence(timeout: Self.existenceTimeout))
+        if !confirm.isHittable { app.swipeUp() }
+        confirm.tap()
         let gone = NSPredicate(format: "exists == false")
         expectation(for: gone, evaluatedWith: element(app, "favoriteRow-102"), handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)

@@ -42,19 +42,22 @@ struct AboutView: View {
     /// 非公式であることの注記(ADR-0501「P6-18」2章)。長文でも折り返す(`lineLimit` を付けない。
     /// P6-14/P6-17 と同じ方針で AX5 でも横にはみ出させない)。
     private var noticeCard: some View {
-        Text(AboutText.unofficialNotice)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(SpacingToken.x3)
-            .popCard()
-            .accessibilityIdentifier("aboutUnofficialNotice")
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopHeading(title: AboutText.unofficialHeading, systemImage: PopSymbol.warning)
+            Text(AboutText.unofficialNotice)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("aboutUnofficialNotice")
+        }
+        .padding(SpacingToken.x3)
+        .popCard()
     }
 
     private var dataSourcesSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            PopHeading(title: "データの出典", systemImage: PopSymbol.info)
+            PopHeading(title: AboutText.dataSourcesHeading, systemImage: PopSymbol.info)
 
             ForEach(Array(AboutText.dataSources.enumerated()), id: \.offset) { index, source in
                 AboutDataSourceRow(source: source)
@@ -69,6 +72,8 @@ struct AboutView: View {
 private struct DeviceDataSection: View {
     @State private var viewModel: DeviceDataDeletionViewModel
     @State private var task: Task<Void, Never>?
+    /// 確認が出たときの初期フォーカスは「キャンセル」(取り消せない操作なので、誤って確定しない側)。
+    @AccessibilityFocusState private var cancelFocused: Bool
 
     init(service: any DeviceDataService) {
         _viewModel = State(initialValue: DeviceDataDeletionViewModel(service: service))
@@ -76,15 +81,20 @@ private struct DeviceDataSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            PopHeading(title: DeviceDataText.sectionTitle, systemImage: PopSymbol.delete)
+            PopHeading(title: DeviceDataText.sectionTitle, systemImage: PopSymbol.about)
 
-            ForEach(Array(DeviceDataText.explanation.enumerated()), id: \.offset) { index, sentence in
-                Text(sentence)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("deviceDataExplanation-\(index)")
+            // 説明は 1 文ずつの箇条(文面・順序は変えない)。
+            ForEach(Array(DeviceDataText.explanationBullets.enumerated()), id: \.offset) { index, sentence in
+                HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+                    PopIcon(PopSymbol.minus)
+                        .foregroundStyle(ColorToken.textSecondary.color)
+                    Text(sentence)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("deviceDataExplanation-\(index)")
+                }
             }
 
             if viewModel.phase == .confirming {
@@ -115,6 +125,8 @@ private struct DeviceDataSection: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         // 子要素の identifier を上書きしないよう、コンテナとして識別する(`aboutDataSource-*` と同じ理由)。
+        .padding(SpacingToken.x3)
+        .popCard()
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("deviceDataSection")
         .onDisappear { task?.cancel() }
@@ -124,22 +136,24 @@ private struct DeviceDataSection: View {
     /// 2つ見えて操作できないため、セクション内の確認として描く(確認なしに削除しない点は同じ。ADR-0501「P6-7」実装結果)。
     private var confirmationCard: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(DeviceDataText.confirmMessage)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            Button(DeviceDataText.confirmAction) {
+            PopHeading(
+                title: DeviceDataText.confirmMessage, systemImage: PopSymbol.warning,
+                identifier: "deviceDataConfirmHeading")
+            Button {
                 task = Task { await viewModel.confirmDeletion() }
+            } label: {
+                PopLabel(title: DeviceDataText.confirmAction, systemImage: PopSymbol.delete)
             }
             .buttonStyle(PillButtonStyle(kind: .danger))
             .accessibilityIdentifier("confirmDeleteDeviceDataButton")
             Button(DeviceDataText.cancelAction) { viewModel.cancelConfirmation() }
                 .buttonStyle(PillButtonStyle())
+                .accessibilityFocused($cancelFocused)
                 .accessibilityIdentifier("cancelDeleteDeviceDataButton")
         }
         .padding(SpacingToken.x3)
-        .popCard()
+        .popInset()
+        .onAppear { cancelFocused = true }
     }
 }
 

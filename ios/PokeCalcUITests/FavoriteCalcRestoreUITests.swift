@@ -75,7 +75,14 @@ final class FavoriteCalcRestoreUITests: XCTestCase {
         let notice = element(app, "favoriteRestoreNotice")
         XCTAssertTrue(notice.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(notice.label.contains("「雨で攻撃」の計算を開きました"), "label: \(notice.label)")
-        XCTAssertTrue(notice.label.contains("防御側の性格・能力ポイント・持ち物は戻しません"), "復元しない範囲を明記: \(notice.label)")
+        // G-05(ADR-0536): 復元しない範囲の文は「説明」ボタンの奥(補足は 1 カード 1 行まで)。
+        XCTAssertFalse(notice.label.contains("防御側の性格・能力ポイント・持ち物は戻しません"), "文は出し続けない: \(notice.label)")
+        let help = app.buttons["favoriteRestoreHelpButton"]
+        XCTAssertTrue(help.waitForExistence(timeout: Self.existenceTimeout))
+        help.tap()
+        let limit = element(app, "favoriteRestoreLimitNote")
+        XCTAssertTrue(limit.waitForExistence(timeout: Self.existenceTimeout))
+        XCTAssertTrue(limit.label.contains("防御側の性格・能力ポイント・持ち物は戻しません"), "復元しない範囲を明記: \(limit.label)")
         waitForLabel(element(app, "attackerSpeciesPicker"), contains: "テストモンさん")
         waitForLabel(element(app, "defenderSpeciesPicker"), contains: "テストモンいち")
         waitForLabel(element(app, "movePicker"), contains: "テストわざとくしゅA")
