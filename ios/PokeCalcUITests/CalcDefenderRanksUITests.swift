@@ -179,15 +179,4 @@ final class CalcDefenderRanksUITests: XCTestCase {
         waitForValue(meter, "±0")
         assertRowsStillShown(app, "メーターのタップ")
     }
-
-    /// VoiceOver の上下スワイプ相当(adjustable の increment / decrement)で増減する。
-    func testDefenderRankMeterIsAdjustable() {
-        let app = launchCalcScreen()
-        openConditions(app)
-
-        let meter = element(app, "rankMeter-calcDefender")
-        scrollUntilHittable(app, meter)
-        meter.adjust(toNormalizedSliderPosition: 1.0)
-        waitForValue(meter, "+6")
-    }
 }

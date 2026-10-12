@@ -4971,14 +4971,14 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 受け入れ条件: (1) 13 段・+2/-3/±0 の併記・色の意味が Web(ADR-0357)と同じ。(2) − / + とトラックのタップで値が変わり、両端で止まる。(3) VoiceOver の adjustable で value が「+2」、label が欄のステータス名。
 (4) AX5 で横にはみ出さずタップできる。(5) 計算(攻撃側・防御側)・素早さ・判定の 5 ステータスに適用。ViewModel・契約は不変。
 
-追加テスト: `RankMeterLogicTests`(13 件)。UITest: `CalcDefenderRanksUITests` にメーターのタップ位置・adjustable、`SpeedScreenUITests.testRankMeterPlusChangesValueAndResult`。
+追加テスト: `RankMeterLogicTests`(13 件)。UITest: `CalcDefenderRanksUITests` にメーターのタップ位置(adjustable の増減は XCUITest の `adjust` が slider 型の要素専用で使えないため UITest では検査せず、増減は `RankMeterLogic` の XCTest とボタンで固定)、`SpeedScreenUITests.testRankMeterPlusChangesValueAndResult`。
 
 ### 既存テストの変更(操作の付け替え。検査は弱めていない)
 
 | テスト | 変更 | 理由 |
 |---|---|---|
 | `CalcConditionsUITests`(詳細の既定・条件変更後) | `calcAttackerRankValue`(label「A ±0」)→ `rankMeter-calcAttacker` の value「±0」・label「攻撃」。`calcAttackerRankIncrement` → `rankMeterPlus-calcAttacker` | ランク入力がメーターになり、値は読み上げ値(+N)で見る |
-| `CalcDefenderRanksUITests` 全件 | 識別子を `rankMeter*-calcDefender` に。値は label「B +1」→ value「+1」。ボタン名・上下限の無効化・36pt 以上・攻撃側と混ざらない検査は同じ | 同上。タップ位置(両端・中央)と adjustable の検査を追加 |
+| `CalcDefenderRanksUITests` 全件 | 識別子を `rankMeter*-calcDefender` に。値は label「B +1」→ value「+1」。ボタン名・上下限の無効化・36pt 以上・攻撃側と混ざらない検査は同じ | 同上。タップ位置(両端・中央)の検査を追加 |
 | `LargeTextLayoutUITests`(AX5 の詳細・防御側ランク) | 識別子の付け替えのみ(はみ出しなし・hittable の検査は同じ) | 同上 |
 | `SpeedScreenUITests.testCustomModeShowsItsControlsAndAResult` | `speedRank*` → `rankMeter*-speed` | 同上 |
 | `JudgeScreenUITests.testRankStepperIsLimitedToPlusMinusSix` | `judgeAttackerRank*-spe` → `rankMeter*-judgeAttacker-spe`。「+6 に届く・+ が無効」は同じ。label「素早さ」を追加 | 同上 |

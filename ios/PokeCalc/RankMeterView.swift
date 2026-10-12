@@ -28,8 +28,8 @@ struct RankMeterView: View {
     private static let segmentSpacing: CGFloat = 2
     private static let segmentHeight: CGFloat = 20
     private static let zeroMarkerWidth: CGFloat = 4
-    private static let trackMinWidth: CGFloat = 130
-    private static let valueMinWidth: CGFloat = 44
+    private static let trackMinWidth: CGFloat = 96
+    private static let valueMinWidth: CGFloat = 36
 
     var body: some View {
         if dynamicTypeSize.isAccessibilitySize {
@@ -58,6 +58,8 @@ struct RankMeterView: View {
         Text(valueLabel ?? RankMeterLogic.signedText(current))
             .font(TextStyleToken.body.font)
             .foregroundStyle(ColorToken.textPrimary.color)
+            .lineLimit(1)
+            .fixedSize()
             .frame(minWidth: Self.valueMinWidth)
             // 読み上げは track の value(「+2」)が受け持つ。二重に読まない。
             .accessibilityHidden(true)
@@ -138,6 +140,8 @@ struct RankMeterView: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
+        // 行が狭くても 36pt を割らない(縮むのはトラックだけ)。
+        .fixedSize()
         .disabled(!enabled)
         .opacity(enabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
         .accessibilityLabel(plus ? RankMeterLogic.increaseLabel(fieldName: fieldName) : RankMeterLogic.decreaseLabel(fieldName: fieldName))
