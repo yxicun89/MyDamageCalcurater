@@ -28,8 +28,6 @@ public enum JudgeLabels {
     public static let spTotalCaption = "能力ポイントの合計"
     public static func spIncrement(_ stat: StatKey) -> String { "\(StatKeyLabel.japaneseName(for: stat))の能力ポイントを増やす" }
     public static func spDecrement(_ stat: StatKey) -> String { "\(StatKeyLabel.japaneseName(for: stat))の能力ポイントを減らす" }
-    public static func rankIncrement(_ stat: StatKey) -> String { "\(StatKeyLabel.japaneseName(for: stat))のランクを上げる" }
-    public static func rankDecrement(_ stat: StatKey) -> String { "\(StatKeyLabel.japaneseName(for: stat))のランクを下げる" }
 
     // ---- 状態異常(ADR-0512。Web の `statusLabel`・`statusOptionLabel` と同じ語) ----
     /// 見出し・選択ボタンの名前・シートの題。

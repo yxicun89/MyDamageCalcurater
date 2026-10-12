@@ -90,9 +90,11 @@ final class CalcConditionsUITests: XCTestCase {
         for screen in ["reflect", "lightScreen", "auroraVeil"] {
             XCTAssertFalse(element(app, "calcDefenderScreen-\(screen)").isSelected, screen)
         }
-        XCTAssertEqual(element(app, "calcAttackerRankValue").label, "A ±0", "既定の技は物理なので A")
-        XCTAssertTrue(element(app, "calcAttackerRankIncrement").exists)
-        XCTAssertTrue(element(app, "calcAttackerRankDecrement").exists)
+        // ランクは 13 段のメーター(ADR-0533)。読み上げ値は「±0」、ラベルは既定の技(物理)なので「攻撃」。
+        XCTAssertEqual(element(app, "rankMeter-calcAttacker").value as? String, "±0")
+        XCTAssertEqual(element(app, "rankMeter-calcAttacker").label, "攻撃", "既定の技は物理なので攻撃")
+        XCTAssertTrue(element(app, "rankMeterPlus-calcAttacker").exists)
+        XCTAssertTrue(element(app, "rankMeterMinus-calcAttacker").exists)
         XCTAssertTrue(element(app, "calcAttackerAbilityPicker").exists)
 
         let toggle = element(app, "calcConditionsToggle")
@@ -128,11 +130,11 @@ final class CalcConditionsUITests: XCTestCase {
         expectation(for: NSPredicate(format: "isSelected == true"), evaluatedWith: reflect, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
 
-        let increment = element(app, "calcAttackerRankIncrement")
+        let increment = element(app, "rankMeterPlus-calcAttacker")
         scrollUntilHittable(app, increment)
         increment.tap()
-        let rankValue = element(app, "calcAttackerRankValue")
-        expectation(for: NSPredicate(format: "label == %@", "A +1"), evaluatedWith: rankValue, handler: nil)
+        let rankValue = element(app, "rankMeter-calcAttacker")
+        expectation(for: NSPredicate(format: "value == %@", "+1"), evaluatedWith: rankValue, handler: nil)
         waitForExpectations(timeout: Self.existenceTimeout)
 
         assertRowsStillShown(app, "天候・壁・ランク")

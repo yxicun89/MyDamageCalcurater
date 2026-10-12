@@ -126,58 +126,30 @@ struct CalcConditionsSection: View {
         }
     }
 
-    /// 攻撃側のランク: ステッパーの対象(A/C)は `attackerRankStat` が決める(4章)。
-    /// `Stepper` ではなく2つのボタン(XCUITest がロケールに依存しないため。6章)。
+    /// 攻撃側のランク: メーターの対象(A/C)は `attackerRankStat` が決める(4章)。13 段のメーター(ADR-0533)。
     private var rankSection: some View {
         sectionRow(CalcConditionLabels.rankTitle) {
-            rankStepperButton(systemName: "minus", label: CalcConditionLabels.rankDecrement, identifier: "calcAttackerRankDecrement", isEnabled: viewModel.attackerRank > RankLimits.min) {
-                viewModel.scheduleLatest { await $0.setAttackerRank($0.attackerRank - 1) }
-            }
-            Text(viewModel.attackerRankText)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .frame(minWidth: CalcScreenMetrics.rankValueMinWidth)
-                .accessibilityIdentifier("calcAttackerRankValue")
-            rankStepperButton(systemName: "plus", label: CalcConditionLabels.rankIncrement, identifier: "calcAttackerRankIncrement", isEnabled: viewModel.attackerRank < RankLimits.max) {
-                viewModel.scheduleLatest { await $0.setAttackerRank($0.attackerRank + 1) }
+            RankMeterView(
+                field: "calcAttacker", fieldName: CalcConditionLabels.rankTitle,
+                statName: RankMeterLogic.statName(for: viewModel.attackerRankStat),
+                valueLabel: viewModel.attackerRankText, value: viewModel.attackerRank
+            ) { next in
+                viewModel.scheduleLatest { await $0.setAttackerRank(next) }
             }
         }
     }
 
-    /// 防御側のランク: ステッパーの対象(B/D)は `defenderRankStat` が決める(issue #274・ADR-0501)。
+    /// 防御側のランク: メーターの対象(B/D)は `defenderRankStat` が決める(issue #274・ADR-0501・ADR-0533)。
     private var defenderRankSection: some View {
         sectionRow(CalcConditionLabels.defenderRankTitle) {
-            rankStepperButton(systemName: "minus", label: CalcConditionLabels.defenderRankDecrement, identifier: "calcDefenderRankDecrement", isEnabled: viewModel.defenderRank > RankLimits.min) {
-                viewModel.scheduleLatest { await $0.setDefenderRank($0.defenderRank - 1) }
-            }
-            Text(viewModel.defenderRankText)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .frame(minWidth: CalcScreenMetrics.rankValueMinWidth)
-                .accessibilityIdentifier("calcDefenderRankValue")
-            rankStepperButton(systemName: "plus", label: CalcConditionLabels.defenderRankIncrement, identifier: "calcDefenderRankIncrement", isEnabled: viewModel.defenderRank < RankLimits.max) {
-                viewModel.scheduleLatest { await $0.setDefenderRank($0.defenderRank + 1) }
+            RankMeterView(
+                field: "calcDefender", fieldName: CalcConditionLabels.defenderRankTitle,
+                statName: RankMeterLogic.statName(for: viewModel.defenderRankStat),
+                valueLabel: viewModel.defenderRankText, value: viewModel.defenderRank
+            ) { next in
+                viewModel.scheduleLatest { await $0.setDefenderRank(next) }
             }
         }
-    }
-
-    private static let rankStepButtonMinSide: CGFloat = 37
-
-    private func rankStepperButton(systemName: String, label: String, identifier: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .padding(SpacingToken.x2)
-                // 「−」「+」の記号は細いので、タップ範囲を 36pt 以上にそろえる(受け入れ条件 5)。
-                .frame(minWidth: Self.rankStepButtonMinSide, minHeight: Self.rankStepButtonMinSide)
-                .background(ColorToken.tableZebra.color, in: Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
     }
 
     /// 攻撃側の特性: 「指定なし」+ 種族の特性名(いまの攻撃側の `attackerAbilityOptions`。4章)。

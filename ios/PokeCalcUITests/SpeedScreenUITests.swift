@@ -114,6 +114,24 @@ final class SpeedScreenUITests: XCTestCase {
             "一致しない行は消える")
     }
 
+    // MARK: - 自分のランク(メーター。ADR-0533)
+
+    /// 13 段のメーター: 既定は「±0」・ラベル「素早さ」。+ で「+1」、両端で + が無効になる。
+    func testRankMeterPlusChangesValueAndStopsAtTheEnds() {
+        let app = launchSpeedScreen()
+        let meter = element(app, "rankMeter-speed")
+        scrollUntilHittable(app, meter)
+        XCTAssertEqual(meter.value as? String, "±0")
+        XCTAssertEqual(meter.label, "素早さ")
+        tap(app, "rankMeterPlus-speed")
+        expectation(for: NSPredicate(format: "value == %@", "+1"), evaluatedWith: meter, handler: nil)
+        waitForExpectations(timeout: Self.existenceTimeout)
+        for _ in 0..<5 { tap(app, "rankMeterPlus-speed") }
+        expectation(for: NSPredicate(format: "value == %@", "+6"), evaluatedWith: meter, handler: nil)
+        waitForExpectations(timeout: Self.existenceTimeout)
+        XCTAssertFalse(element(app, "rankMeterPlus-speed").isEnabled, "+6 より上には増やせない")
+    }
+
     // MARK: - 失敗の独立(絶対ルール5を含む)
 
     /// ポケモン一覧が失敗しても、画面は開いたままで失敗が表示され、他の入力は使える。

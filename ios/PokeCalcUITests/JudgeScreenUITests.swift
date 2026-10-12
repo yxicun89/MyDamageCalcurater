@@ -14,7 +14,7 @@ import XCTest
 ///   各体: <p>SpeciesButton(種族のシート `speciesSearchSheet`・`speciesSearchResult-<key>` を開く。既存の部品)/ <p>NatureButton・<p>AbilityButton・<p>ItemButton
 ///         (選択シート `judgeOptionSheet` を開く。行 `judgeOption-<id>`・未選択に戻す `judgeOptionNone`)/ <p>MoveButton(技のシート `moveSearchSheet`・`moveSearchResult-<id>`)/
 ///         <p>SPValue-<stat>・<p>SPIncrement-<stat>・<p>SPDecrement-<stat>(stat = hp|atk|def|spa|spd|spe)・<p>SPTotal /
-///         <p>RankValue-<stat>・<p>RankIncrement-<stat>・<p>RankDecrement-<stat>(stat = atk|def|spa|spd|spe)/
+///         rankMeter-<p>-<stat>・rankMeterPlus-<p>-<stat>・rankMeterMinus-<p>-<stat>(ランクはメーター。ADR-0533)(stat = atk|def|spa|spd|spe)/
 ///         <p>TeamSourceButton・<p>TeamEmptyMessage(既存の `TeamSourceMenuRow`。identifierPrefix = `<p>Team`)
 ///   候補: judgeAddCandidate / judgeRemoveCandidate-<n> / judgeCandidateLimitNotice
 ///   場の効果: judgeTrickRoom / judgeAttackerTailwind / judgeDefenderTailwind(isSelected で状態を出す)/ judgeDefenderTailwindNotice
@@ -204,9 +204,13 @@ final class JudgeScreenUITests: XCTestCase {
 
     func testRankStepperIsLimitedToPlusMinusSix() {
         let app = launchJudgeScreen()
-        for _ in 0..<6 { tap(app, "judgeAttackerRankIncrement-spe") }
-        XCTAssertTrue(label(app, "judgeAttackerRankValue-spe").contains("6"), "+6 に届く: \(label(app, "judgeAttackerRankValue-spe"))")
-        XCTAssertFalse(element(app, "judgeAttackerRankIncrement-spe").isEnabled, "+6 より上には増やせない")
+        // ランクは 13 段のメーター(ADR-0533)。読み上げ値「+6」、label は「素早さ」。
+        for _ in 0..<6 { tap(app, "rankMeterPlus-judgeAttacker-spe") }
+        let meter = element(app, "rankMeter-judgeAttacker-spe")
+        wait(meter, "メーターが無い")
+        XCTAssertEqual(meter.value as? String, "+6", "+6 に届く")
+        XCTAssertEqual(meter.label, "素早さ")
+        XCTAssertFalse(element(app, "rankMeterPlus-judgeAttacker-spe").isEnabled, "+6 より上には増やせない")
     }
 
     // MARK: - 場の効果・候補の増減

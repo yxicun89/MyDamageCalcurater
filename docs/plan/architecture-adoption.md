@@ -3,7 +3,9 @@
 - 状態: **方式はユーザーが決定(2026-10-11): ヘキサゴナル(ポートとアダプタ)を名前つきで正式採用する。A(このリポジトリを段階的に改造)も決定**。
   **S0 実装済み(2026-10-11。ADR-0811・coding-rules・`tools/archcheck`・`make lint`)**。§8 は全問決定済み。
   **S3(calc)完了(2026-10-12。S3a〈計算・一括・逆算〉と S3b〈調整。データレーンが代行〉。ADR-0252。calc は archcheck の未移行の一覧から外れた)**。S1(G1 の解消)も 2026-10-12 完了。
-  **S5(pokedex)実装済み(2026-10-12。ADR-0180。G7 解消。pokedex は未移行の一覧から外れた)**。残りは S2・S4・S6 以降。
+  **S5(pokedex)実装済み(2026-10-12。ADR-0180。G7 解消。pokedex は未移行の一覧から外れた)**。
+  **S4(record)実装済み(2026-10-12。ADR-0254。データレーンが代行。record は archcheck の未移行の一覧から外れた。G6 解消)**。
+  **S6(team)完了(2026-10-12。ADR-0255。データレーンが代行。team は archcheck の未移行の一覧から外れた)**。残りは S2・S8・S9。
 - 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
 - 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
@@ -65,7 +67,7 @@
 | G3 | 重要 | 同上。**他サービス 2 つを順に呼ぶ手順がハンドラの中**(約 200 行) | `services/judge/internal/httpapi/outspeed.go` `outspeedAndKo`(250 行〜。ファイル 944 行) |
 | G4 | 重要 | **ポートが無く、具体的な HTTP クライアントに直接依存** | `services/judge/internal/httpapi/server.go:27` `Dependencies{Pokedex *client.Pokedex; Calc *client.Calc}` |
 | G5 | 重要 | **内側がアダプタの型に依存**(向きが逆) | `services/judge/internal/speedeffects/decode.go:153` `BuildTable(master client.MasterEffects)`、`cache.go:14` |
-| G6 | 重要 | **HTTP 層がドメインの規則を持つ**(SP の上限・レベルの検証) | `services/record/internal/httpapi/favorites.go:239-244, 376-377`(`engine.DefaultLevel`・`engine.MaxSPPerStat` で検証) |
+| G6 | 重要 | **HTTP 層がドメインの規則を持つ**(SP の上限・レベルの検証)〔S4 で解消: `services/record/internal/domain/favorite.go`〕 | `services/record/internal/httpapi/favorites.go:239-244, 376-377`(`engine.DefaultLevel`・`engine.MaxSPPerStat` で検証) |
 | G7 | 重要 | **HTTP 層が DB(sqlc)を直接呼ぶ**。検索の組み立てもハンドラ側 | `services/pokedex/internal/httpapi` → `internal/store`・`internal/readtx`。`search.go`(595 行)・`master.go`(331 行) |
 | G8 | 軽微 | ハンドラから store を直接呼ぶ(ただし `store.Store` はインターフェース。処理が薄いので今は許容範囲) | `services/team/internal/httpapi/server.go`(543 行)・`services/record/internal/httpapi` |
 | G9 | 軽微 | **マスタ/イベントの型が HTTP の生成型(`services/internal/api`)に依存** | `services/calc/internal/master`(→ `services/internal/api`)、`services/internal/calcevents`(イベントの中身に `req.Attacker` など API の型をそのまま入れる。`server.go:280`) |
@@ -255,9 +257,9 @@ services/<svc>/
 | S1 越境の解消(G1)〔2026-10-12 完了。import の検査は足さない〕 | データ → API | `RoleGrant`・プロビジョニングを `services/pokedex/db` から `services/internal/dbmigrate` へ。record・team の migrate の import を差し替える | record・team の `cmd/migrate` が `services/pokedex/...` を import しない。`make test`(`-tags mysql`・`tidb` を含む)が通る |
 | S2 judge | 判定 | `internal/judge`・`speedeffects` の純粋な部分 → `domain`。`outspeedAndKo` の手順 → `app`(`Pokedex`・`Calc` のポートを app で宣言)。`httpapi`・`client`・`httpguard`・`httpmetrics` → `adapters`。G3〜G5 を解消 | judge が未移行の一覧から消え、archcheck が通る。app のテストが HTTP なしで fake のポートで走る。既存の judge のテストが全件通る |
 | S3 calc(**完了 2026-10-12。前半 S3a〈計算・一括・逆算〉・後半 S3b〈調整 `adjust.go` → app。データレーンが代行。I-api-2〉。ADR-0252**) | API | 入力の検証(`validateIndividual`・`checkMegaItem` など)→ `domain`。計算・一括・逆算・調整の手順 → `app`(イベント発行は app のポート)。`httpapi`・`events`・`master` → `adapters`。G2・G9・G10 を解消 | 契約テスト・`calctest`・`make test-golden`・k3d スモークが通る。調整(AJ)の PR が無い時に。大きければ「計算・一括・逆算」と「調整」の 2 PR に分けてよい |
-| S4 record | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
+| S4 record(**完了 2026-10-12・ADR-0254。データレーンが代行**) | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
 | S5 pokedex(**完了 2026-10-12・ADR-0180**) | データ | 検索の組み立て → `app`(正規化など純粋な部分は `domain`)。`httpapi`・`store`・`readtx`・`readmodel` の I/O → `adapters`。G7 を解消。importer は §8 Q6 | `-tags mysql` のテストが通る。storetest の import 検査(ADR-0105)を新しいパスに合わせる |
-| S6 team | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
+| S6 team(**完了 2026-10-12・ADR-0255。データレーンが代行。I-api-4**) | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
 | S7 gateway(**完了 2026-10-12・ADR-0811**) | API(データレーンが代行) | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
 | S8 balance | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
 | S9 speed | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |

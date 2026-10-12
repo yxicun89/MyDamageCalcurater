@@ -30,9 +30,7 @@ import (
 var unmigrated = []string{
 	"balance",
 	"judge",
-	"record",
 	"speed",
-	"team",
 }
 
 // layers は、形をそろえるときに必ず置く 3 つのフォルダ。

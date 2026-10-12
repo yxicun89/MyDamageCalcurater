@@ -165,16 +165,15 @@ struct JudgeIndividualCard: View {
     }
 
     private var rankSection: some View {
-        SpeedFlowLayout {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
             ForEach(StatKey.allCases.filter { $0 != .hp }, id: \.self) { stat in
-                let value = Self.rankValue(draft.ranks, stat)
-                JudgeStepper(
-                    title: JudgeLabels.rankLabel(stat), valueText: Self.rankText(value),
-                    decrementLabel: JudgeLabels.rankDecrement(stat), incrementLabel: JudgeLabels.rankIncrement(stat),
-                    canDecrement: value > RankLimits.min, canIncrement: value < RankLimits.max,
-                    identifiers: .init(prefix: identifierPrefix, kind: "Rank", stat: stat),
-                    onDecrement: { viewModel.setRank(stat, value - 1, for: target) },
-                    onIncrement: { viewModel.setRank(stat, value + 1, for: target) })
+                VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                    SpeedCaption(text: JudgeLabels.rankLabel(stat))
+                    RankMeterView(
+                        field: "\(identifierPrefix)-\(stat.rawValue)", fieldName: JudgeLabels.rankLabel(stat),
+                        statName: RankMeterLogic.statName(for: stat), value: Self.rankValue(draft.ranks, stat)
+                    ) { viewModel.setRank(stat, $0, for: target) }
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -205,9 +204,6 @@ struct JudgeIndividualCard: View {
         case .spe: return ranks.spe
         }
     }
-
-    /// 「+2」「0」「-3」。
-    private static func rankText(_ value: Int) -> String { value > 0 ? "+\(value)" : String(value) }
 }
 
 /// 選択の種類。`JudgePicker`(画面側)へ対象を足して渡すための、カード側の要求。

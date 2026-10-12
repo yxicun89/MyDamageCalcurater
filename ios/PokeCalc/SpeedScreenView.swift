@@ -130,13 +130,13 @@ private struct SpeedSelfSection: View {
             if case .failed(let failure) = viewModel.pokemonState {
                 ErrorBannerView(message: failure.message, identifier: "speedPokemonError")
             }
-            SpeedStepper(
-                title: SpeedLabels.rank, valueText: Self.rankText(viewModel.rank),
-                decrementLabel: CalcConditionLabels.rankDecrement, incrementLabel: CalcConditionLabels.rankIncrement,
-                canDecrement: viewModel.rank > RankLimits.min, canIncrement: viewModel.rank < RankLimits.max,
-                identifierPrefix: "speedRank",
-                onDecrement: { viewModel.setRank(viewModel.rank - 1) },
-                onIncrement: { viewModel.setRank(viewModel.rank + 1) })
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                SpeedCaption(text: SpeedLabels.rank)
+                RankMeterView(
+                    field: "speed", fieldName: SpeedLabels.rank,
+                    statName: RankMeterLogic.statName(for: .spe), value: viewModel.rank
+                ) { viewModel.setRank($0) }
+            }
             SpeedFlowLayout {
                 SpeedPill(title: SpeedLabels.scarf, isSelected: viewModel.scarf, identifier: "speedScarf") {
                     viewModel.setScarf(!viewModel.scarf)
@@ -156,8 +156,6 @@ private struct SpeedSelfSection: View {
         .popCard(cornerRadius: RadiusToken.card)
         .accessibilityElement(children: .contain)
     }
-
-    private static func rankText(_ rank: Int) -> String { rank > 0 ? "+\(rank)" : String(rank) }
 
     /// 今の振り(任意)。入れると行動順のバッジと「これ以上」が出る。
     private var currentGroup: some View {
