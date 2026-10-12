@@ -26,6 +26,7 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
     ]
     /// 出力側(トリックルーム + 今の振りで、文言が最も長くなる状態)。
     private static let outputIdentifiers = [
+        "speedConclusion", "speedCardHeading-uninvested", "speedCardNaturesToggle-uninvested", "speedReachConclusion", "speedReachListToggle",
         "speedCard-uninvested", "speedCardHeadline-uninvested", "speedCardOpponentSpeed-uninvested",
         "speedCardNature-uninvested-minus", "speedCardNature-uninvested-neutral", "speedCardOrder-uninvested",
         "speedReach", "speedReachRow-uninvested", "speedReachSlower-uninvested", "speedReachTie-uninvested", "speedReachFaster-uninvested",
@@ -33,6 +34,8 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // 出力側の検査は識別子が多く、AX5 のスクロールで 300 秒(run-xcode-tests.sh の既定)を超えうる(実測 約 316 秒)。上限の 600 秒まで許す(ADR-0520)。
+        executionTimeAllowance = 600
     }
 
     // MARK: - 補助
@@ -125,6 +128,9 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         tap(app, "speedCurrentToggle")
         tap(app, "speedCurrentPreset-max")
         tap(app, "speedTrickRoom")
+        // 折りたたみは初期は閉じる(I-ios-25)。行を検査するために開く。
+        tap(app, "speedCardNaturesToggle-uninvested")
+        tap(app, "speedReachListToggle")
         XCTAssertTrue(element(app, "speedCardNature-uninvested-minus").waitForExistence(timeout: Self.existenceTimeout), "トリックルーム中の下降の行が出ない")
         XCTAssertTrue(element(app, "speedReachRow-uninvested").waitForExistence(timeout: Self.existenceTimeout), "「これ以上」が出ない")
     }

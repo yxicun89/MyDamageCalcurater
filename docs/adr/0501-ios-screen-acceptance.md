@@ -5074,3 +5074,36 @@ UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、�
 | `JudgeScreenUITests`(17)・`JudgeSpeedNotesUITests`(8)・`JudgeHiddenUITests`(2) | 判定画面の削除 |
 | `LargeTextLayoutUITests`: `testJudgeScreenNoHorizontalOverflowAtAX5`・`testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5`・`testJudgeSpeedNotesAndStatusNoHorizontalOverflowAtAX5`・`testJudgeStatusOptionSheetNoHorizontalOverflowAtAX5`・`testJudgeOptionSheetNoHorizontalOverflowAtAX5` | 判定画面の AX5 検査。画面の削除 |
 | `AppNavigationUITests` の「`openJudgeScreen` が無い」の 1 行・`UITestNavigation` の `openJudgeScreen` | 入口が存在しなくなったため |
+
+## 素早さ画面の結論 1 行と折りたたみ(ADR-0538。2026-10-13。I-ios-25)
+
+Web の I-web-34(ADR-0610 §9)に揃える。値・既存の文言の語・識別子は変えず、出し方だけを変える。
+
+### 受け入れ条件
+
+1. 想定のカードが出ているとき、先頭に結論の 1 行(`speedConclusion`)が出る。上を取れる想定 = どれかの性格に最小 SP がある想定(同速だけは数えない)。
+   「N つの想定のうち M つで上を取れます」/ 全部「N つの想定すべてで上を取れます」/ 0「どの想定でも上を取れません」。
+   トリックルーム中は「先に動けます」「どの想定でも先に動けません」。
+2. カードに見出し「最速 ・ 素早さ 145」(`speedCardHeading-<id>`)がある。一言見出し・相手の素早さ・行動順のバッジは従来のまま残る。
+3. 性格の行(`speedCardNature-*`・`speedCardTie-*`)はカードごとの折りたたみ(`speedCardNaturesToggle-<id>`「性格補正ごとの最小 SP」。
+   トリックルーム中は「…上限 SP」)の中。初期は閉じていて画面に無く、開くと従来の行が出る。他のカードの開閉に影響されない。
+4. 「これ以上」に結論の 1 行(`speedReachConclusion`。最速の行の「最速 N 族まで抜ける」。トリックルーム中は「…までは後に動く」)があり、
+   6 行の一覧は折りたたみ(`speedReachListToggle`「6 つの振り方ごとの一覧を見る」)の中。初期は閉じ、開くと 6 行が出る。
+5. 折りたたみの題のタップ領域は 36pt 以上。AX5 で結論・見出し・題・開いた行が横にはみ出さず、固定高にしない。
+6. 帯の色は選んだ相手(カード)・自分・相手(入力カード)の先頭タイプ色。未選択は brandPrimary(文字で意味を伝える飾り)。
+7. ランクのメーター(ADR-0533)・API 不可時の表示(ADR-0534)・値・API は変えない。
+
+### 追加するテスト
+
+`SpeedMatchupConclusionTests`(新規。結論文言のテーブル駆動・トリックルーム・全部/0/一部・同速だけは数えない・見出し・最速の行の結論・帯のタイプ)、
+`SpeedMatchupUITests` の `testConclusionLineAndCardHeadingsAppearAndRowsAreCollapsedByDefault`・`testConclusionWordingForAllAndNoneReachable`・
+`testTrickRoomConclusionAndSummaryWording`・`testReachConclusionAndListAreCollapsedByDefault`・`testDisclosureTogglesAreAtLeast36ptTall`(新規)。
+
+### 変更する既存テスト(検査は弱めない。「開く操作」を足すだけ)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `SpeedMatchupUITests.testPickingBothPokemonShowsOneCardPerAssumptionAndNoTable` | 性格の行・同速の検査の前に `speedCardNaturesToggle-<id>` を開く操作を足し、閉じている間は行が無いことの検査を足した | 行が初期は閉じる(受け入れ条件 3)。検査する文言は同じ |
+| `SpeedMatchupUITests.testCurrentInvestmentAndTrickRoomShowOrderAndReach` | 「これ以上」の行の検査の前に `speedReachListToggle` を開き(閉じている検査を足す)、トリックルームの下降の行の前にカードの折りたたみを開く。トリックルーム後は一覧を開き直す | 同上(受け入れ条件 3・4)。検査する文言は同じ |
+| `SpeedMatchupLargeTextUITests`(出力側の識別子・`openFullState`) | 結論・見出し・題の識別子を検査対象に足し、行の検査の前に 2 つの折りたたみを開く | 同上。AX5 の検査対象は増える |
+| `SpeedMatchupDisplayTests`・`SpeedMatchupLabelsTests`・`SpeedMatchupViewModel*` | 変更なし(`rows`・`headline` などは模型のまま。`heading` は引数の既定値つきで足す) | 値と既存の語は不変 |
