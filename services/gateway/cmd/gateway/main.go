@@ -31,7 +31,7 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/pokecalc/services/gateway/internal/httpapi"
+	"example.com/pokecalc/services/gateway/internal/adapters/httpapi"
 	"example.com/pokecalc/services/internal/reqlog"
 	"example.com/pokecalc/services/internal/version"
 )
