@@ -494,7 +494,7 @@ export function ComboSection({
           </div>
 
           {request !== null && current === null && (
-            <p className="calc-screen__notice" aria-busy="true">
+            <p className="calc-screen__notice" role="status">
               {comboScreenText.loading}
             </p>
           )}
