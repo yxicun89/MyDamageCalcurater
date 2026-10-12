@@ -384,6 +384,37 @@ describe("W5 想定ごとのカード(上を取る最低ライン)", () => {
     expect(natureRow(max, "plus")).toHaveTextContent(speedScreenText.movesFirstMin(12));
   });
 
+  test("結論の 1 行を出し、性格ごとの最小 SP は折りたたみ(初期は閉じる。開けば同じ値が見える。I-web-34)", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, matchupResponse);
+
+    expect(within(matchupRegion()).getByTestId("speed-conclusion")).toHaveTextContent(
+      speedScreenText.matchupConclusion(
+        matchupResponse.lines.filter((line) => line.natures.some((n) => n.movesFirst !== undefined)).length,
+        matchupResponse.lines.length,
+        false,
+      ),
+    );
+    const card = cardFor("max");
+    const details = card.querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+    expect(within(card).getByText(speedScreenText.naturesSummary)).toBeInTheDocument();
+    await rendered.user.click(within(card).getByText(speedScreenText.naturesSummary));
+    expect(details).toHaveAttribute("open");
+    expect(natureRow(card, "plus")).toHaveTextContent(speedScreenText.movesFirstMin(12));
+  });
+
+  test("どの想定でも届かないときの結論は「どの想定でも上を取れません」", async () => {
+    const rendered = await renderLoaded();
+    await chooseBoth(rendered);
+    await resolveMatchup(rendered.client, unreachableMatchupResponse);
+    expect(within(matchupRegion()).getByTestId("speed-conclusion")).toHaveTextContent(
+      speedScreenText.matchupConclusion(0, unreachableMatchupResponse.lines.length, false),
+    );
+  });
+
   test("同速は上を取るに含めず、別に併記する(S11 で同速)。同速が無い行には出さない", async () => {
     const rendered = await renderLoaded();
     await chooseBoth(rendered);
@@ -607,6 +638,17 @@ describe("W9 これ以上(境界のリスト)", () => {
       within(reachRegion()).getByRole("heading", { level: 2, name: speedScreenText.reachHeading }),
     ).toBeInTheDocument();
     expect(within(reachRegion()).getByText(speedScreenText.reachIntro)).toBeInTheDocument();
+  });
+
+  test("「これ以上」は結論の 1 行(最速)を出し、6 行の一覧は折りたたみ(初期は閉じる。I-web-34)", async () => {
+    const user = (await withReach()).user;
+    const conclusion = within(reachRegion()).getByTestId("speed-reach-conclusion");
+    expect(conclusion).toHaveTextContent("最速");
+    const details = reachRegion().querySelector("details");
+    expect(details).not.toBeNull();
+    expect(details).not.toHaveAttribute("open");
+    await user.click(within(reachRegion()).getByText(speedScreenText.reachListSummary(6)));
+    expect(details).toHaveAttribute("open");
   });
 
   test("最速: 102 族まで抜ける・103 族と同速・104 族以上に抜かれる。数と境界の例を添える", async () => {

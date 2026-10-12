@@ -116,6 +116,9 @@ test("自分と相手を選ぶと、想定ごとのカードに先に動くた�
   await expect(cards.first()).toBeVisible();
   const max = page.locator('[data-testid="speed-matchup-card"][data-preset="max"]');
   await expect(max.getByRole("heading", { level: 3 })).toContainText("最速");
+  // 性格補正ごとの最小 SP は折りたたみ(初期は閉じる。I-web-34)。開くと同じ値が見える。
+  await expect(max.locator('[data-testid="speed-nature-line"][data-nature="plus"]')).toBeHidden();
+  await max.getByText("性格補正ごとの最小 SP").click();
   await expect(max.locator('[data-testid="speed-nature-line"][data-nature="plus"]')).toContainText("S12");
   const scarf = page.locator('[data-testid="speed-matchup-card"][data-preset="max-scarf"]');
   await expect(scarf).toContainText("どう振っても上を取れません");
@@ -134,6 +137,7 @@ test("トリックルームを入れると上限 SP の読み方に切り替わ�
   await page.getByRole("checkbox", { name: "トリックルーム" }).check();
 
   const max = page.locator('[data-testid="speed-matchup-card"][data-preset="max"]');
+  await max.getByText("性格補正ごとの上限 SP").click();
   await expect(max.locator('[data-testid="speed-nature-line"][data-nature="minus"]')).toBeVisible();
   await expect(max.locator('[data-testid="speed-nature-line"][data-nature="neutral"]')).toContainText("S28");
 });
