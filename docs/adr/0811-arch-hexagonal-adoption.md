@@ -40,5 +40,6 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S1 | G1 の解消(RoleGrant・プロビジョニングを internal/dbmigrate へ。record・team の migrate が pokedex を参照しない) | 2026-10-12 完了(検査は足さない。CLAUDE.md の規則とレビューで守る) |
 | S3a | calc の計算・一括・逆算を domain・app・adapters へ(判断は ADR-0252) | 2026-10-12 完了(calc を未移行の一覧から外した) |
 | S3b | calc の調整(`adjust.go`)の手順を app へ | 未着手 |
-| S2・S4〜S9 | judge・record・pokedex・team・gateway・balance・speed の移行 | 未着手 |
+| S5 | pokedex の検索・内部 API・readiness・read model を domain・app・adapters へ(判断は ADR-0180。importer は対象外) | 2026-10-12 完了(pokedex を未移行の一覧から外した) |
+| S2・S4・S6〜S9 | judge・record・team・gateway・balance・speed の移行 | 未着手 |
 | W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |

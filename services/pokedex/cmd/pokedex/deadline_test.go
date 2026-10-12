@@ -9,7 +9,7 @@ package main
 import (
 	"testing"
 
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
 )
 
 // AC-T1(#323・#299): 要求の締め切りは WriteTimeout より短い(WriteTimeout はハンドラを止めないので、

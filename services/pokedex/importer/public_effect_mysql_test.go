@@ -17,8 +17,8 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/pokedex/importer"
-	"example.com/pokecalc/services/pokedex/internal/httpapi"
-	"example.com/pokecalc/services/pokedex/internal/readtx"
+	"example.com/pokecalc/services/pokedex/internal/adapters/httpapi"
+	"example.com/pokecalc/services/pokedex/internal/adapters/readtx"
 )
 
 // getPublic は公開 API を端末ID・セッションID付きで呼び、200 の本文を json.Number で読む。

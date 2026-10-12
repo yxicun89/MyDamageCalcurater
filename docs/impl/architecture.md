@@ -120,8 +120,12 @@
 | `services/pokedex/importer/testdata/fictional/generated/showdown/abad1deaabad1deaabad1deaabad1deaabad1dea` | 1 | 同 架空 Showdown 取得物 |
 | `services/pokedex/importer/testdata/fictional/importer` | 3 | 同 架空の importer 設定 |
 | `services/pokedex/importer/testdata/fictional/local` | 1 | 同 架空の local override |
-| `services/pokedex/internal/httpapi` | 9 | HTTP 境界(検索6操作 + /internal/pokedex/master) |
-| `services/pokedex/internal/readmodel` | 5 | pokedex export(balance・speed 向け read model 出力) |
+| `services/pokedex/internal/domain` | 6 | 純粋な核(入力の検証・LIKE パターン・効果の字面・dataVersion・read model の正規化・失敗の語彙。ADR-0180) |
+| `services/pokedex/internal/app` | 6 | ユースケース(検索・内部 API・readiness・read model の手順と DB のポート) |
+| `services/pokedex/internal/adapters/httpapi` | 6 | HTTP 境界(検索8操作 + /internal/pokedex/master。生成型 ⇄ app の変換) |
+| `services/pokedex/internal/adapters/store` | 1 | app のポートの実装(sqlc を readtx 経由で呼ぶ) |
+| `services/pokedex/internal/adapters/readtx` | 2 | 読み取り専用トランザクションの口(ADR-0127) |
+| `services/pokedex/internal/adapters/readmodel` | 1 | pokedex export の入出力(書き出し)。組み立ては app |
 | `services/pokedex/internal/store` | 4 | sqlc 生成(Querier・モデル) |
 | `services/pokedex/internal/storetest` | 2 | store のテスト用 fake |
 | `services/record` | 1 | 未実装(.gitkeep のみ。計算イベント・お気に入り予定) |
@@ -256,8 +260,8 @@ flowchart LR
 | `master.Source`(`FileSource`・`HTTPSource`) | `services/calc/internal/adapters/master/export.go:378,384,401` | MasterExport の入手元 |
 | `calc httpapi.Server`(`api.ServerInterface` 実装)・`StoreFunc` | `services/calc/internal/adapters/httpapi/server.go:35`・`readiness.go:19` | 3 操作。マスタ未取得の間は 503 |
 | `store.Querier`(sqlc 生成) | `services/pokedex/internal/store/querier.go:11` | pokedex の DB アクセス唯一の口 |
-| `pokedex httpapi.Server` | `services/pokedex/internal/httpapi/server.go:16` | 検索 6 操作 + `/internal/pokedex/master` |
-| `readmodel.Export` | `services/pokedex/internal/readmodel/readmodel.go` | balance・speed 用 JSON 出力 |
+| `pokedex httpapi.Server` | `services/pokedex/internal/adapters/httpapi/server.go` | 検索 8 操作 + `/internal/pokedex/master`。手順は `app.Service`(`services/pokedex/internal/app`) |
+| `readmodel.Export` | `services/pokedex/internal/adapters/readmodel/readmodel.go` | balance・speed 用 JSON 出力(組み立ては `app.ExportReadModel`) |
 | `balance httpapi.Dependencies`(`TypeChart`・`PokemonTypes`・`Moves`・`Abilities`・`PokemonCatalog`) | `services/balance/internal/httpapi/server.go:50` | nil の依存は 503 `master_unavailable`。Provider IF は `services/balance/internal/balance/{defense,pokemon,move,ability,recommend}.go` |
 | `speed httpapi.Dependencies`・`speed.PokemonProvider` | `services/speed/internal/httpapi/server.go:33`・`services/speed/internal/speed/pokemon.go:22` | 同上 |
 | `judge httpapi.Dependencies`(`Pokedex`・`Calc`・`ChoiceScarfItemID`)・`client.Pokedex`/`client.Calc` | `services/judge/internal/httpapi/server.go:24`・`services/judge/internal/client/{pokedex,calc}.go` | 上流 HTTP クライアント。未設定なら 503 |
@@ -285,7 +289,7 @@ flowchart LR
 ## 7. `/internal` API
 
 - 契約: `api/openapi.yaml` の `GET /internal/pokedex/master`(operationId `getMasterExport`)。tag `internal`、ヘッダ不要。
-- 実装: pokedex-svc のみ(`services/pokedex/internal/httpapi/server.go:54` 登録、`master.go:19` `GetMasterExport`)。DB 全行を使用可能集合で絞らず返す。データ未投入・DB 不通は 503 `master_unavailable`。
+- 実装: pokedex-svc のみ(`services/pokedex/internal/adapters/httpapi/server.go` 登録、`master.go` `GetMasterExport`。組み立ては `app/master.go`)。DB 全行を使用可能集合で絞らず返す。データ未投入・DB 不通は 503 `master_unavailable`。
 - 公開しない: gateway は先頭セグメント `internal` を予約語にして 404 `not_found`(`routing.go:32,48`)。空セグメント `//internal/...` も先に 404(`routing.go:95`、ADR-0205)。calc は担当外で 404(`readiness.go` `GetMasterExport`)。
 - 利用者: calc-svc 起動時の `HTTPSource.Fetch`(`services/calc/internal/adapters/master/export.go:435`)。取得までは calc の 3 操作と `/readyz` が 503。取得後の再取得はしない(マスタ更新は calc の再起動で反映。ADR-0204 §3)。
 
@@ -296,7 +300,7 @@ flowchart LR
 | 取得 | 固定版のスナップショットを Node で取得 → `data/generated/`(Git 管理外) | `tools/importer/fetch*.mjs`、設定 `data/importer/config.json` |
 | 照合・変換・投入 | `Reconcile` → `RunStore`(MySQL) | `services/pokedex/importer/`、`services/pokedex/cmd/import/main.go`(`-dry-run`・`-force`・`-data`・`-upstream`) |
 | 保存 | MySQL DB `pokedex`(migration 000001〜000007) | `services/pokedex/db/migrations/` |
-| 公開 | 検索 6 操作(既定レギュレーションの使用可能集合)+ `/internal/pokedex/master`(全行) | `services/pokedex/internal/httpapi/` |
+| 公開 | 検索 6 操作(既定レギュレーションの使用可能集合)+ `/internal/pokedex/master`(全行) | `services/pokedex/internal/adapters/httpapi/`(手順は `internal/app`) |
 | 配布(別サービス向け) | `pokedex export -out <dir>` → read model JSON → ConfigMap → `BALANCE_*_PATH`・`SPEED_POKEMON_PATH` | `services/pokedex/cmd/pokedex/main.go`(`runExport`)、`services/pokedex/internal/readmodel/` |
 
 - 実マスタは Git に入れない(ADR-0002)。Git にあるのは架空データ(`services/calc/testdata/master.example.json`、`services/*/testdata/*.example.json`、`web/src/master/example/`)とコードのみ。
