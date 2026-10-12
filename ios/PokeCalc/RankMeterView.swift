@@ -5,7 +5,7 @@ import UIKit
 
 // 能力ランク(-6...+6)の入力メーター(ADR-0533。Web の ADR-0357 と段数・色の意味・読み上げをそろえる)。
 // 左 6 段 = 下降(warning)・中央 = 0(太い目印)・右 6 段 = 上昇(brandPrimary)。赤は弱点と紛れるので使わない。
-// 値は +2 / -3 / ±0 の文字でも出し、色だけに頼らない。タップ・ドラッグで最寄りの段、− / + ボタン、
+// 値の入っていない段は向きの色を薄く(塗り 16%・枠 70%。±0 でも枠だけにしない)。値は +2 / -3 / ±0 の文字でも出し、色だけに頼らない。タップ・ドラッグで最寄りの段、− / + ボタン、
 // VoiceOver では全体を 1 つの adjustable 要素にする(上下スワイプで増減)。常時アニメーションは無い。
 // 段の値↔添字・ドラッグ位置→段・文言は `RankMeterLogic`(PokeCalcCore。XCTest 済み)。
 
@@ -21,6 +21,7 @@ struct RankMeterView: View {
     let value: Int
     let onChange: (Int) -> Void
 
+    @Environment(\.isEnabled) private var isEnabled
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -30,6 +31,7 @@ struct RankMeterView: View {
     private static let segmentSpacing: CGFloat = 2
     private static let segmentHeight: CGFloat = 20
     private static let zeroMarkerWidth: CGFloat = 4
+    private static let zeroMarkerMargin: CGFloat = 2
     private static let trackMinWidth: CGFloat = 96
     private static let valueMinWidth: CGFloat = 36
 
@@ -89,6 +91,8 @@ struct RankMeterView: View {
         .accessibilityLabel(statName)
         .accessibilityValue(RankMeterLogic.signedText(current))
         .accessibilityIdentifier(RankMeterLogic.identifier(field: field))
+        // 無効時は控えめに(Web の aria-disabled と同じ)。
+        .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
         .accessibilityAdjustableAction { direction in
             switch direction {
             case .increment: move(by: 1)
@@ -100,29 +104,34 @@ struct RankMeterView: View {
 
     @ViewBuilder
     private func segment(_ step: Int) -> some View {
-        let state = RankMeterLogic.segmentState(step: step, value: current)
-        switch state {
-        case .zero:
-            // 中央の太い目印(常に見える)。
+        switch RankMeterLogic.segmentFill(step: step, value: current) {
+        case .zeroMarker:
+            // 中央の太い目印(常に見える)。左右に少し余白を足して強調する。
             Rectangle()
                 .fill(ColorToken.textPrimary.color)
                 .frame(width: Self.zeroMarkerWidth, height: Self.minTapSide - SpacingToken.x2)
+                .padding(.horizontal, Self.zeroMarkerMargin)
                 .frame(maxWidth: .infinity)
-        case .up:
-            filledSegment(ColorToken.brandPrimary.color)
-        case .down:
-            filledSegment(ColorToken.warning.color)
-        case .off:
-            Capsule()
-                .strokeBorder(ColorToken.textSecondary.color, lineWidth: 1)
-                .frame(height: Self.segmentHeight)
-                .frame(maxWidth: .infinity)
+        case .solidUp:
+            capsule(fill: ColorToken.brandPrimary.color, stroke: ColorToken.brandPrimary.color)
+        case .solidDown:
+            capsule(fill: ColorToken.warning.color, stroke: ColorToken.warning.color)
+        case .tintUp:
+            tintedCapsule(ColorToken.brandPrimary.color)
+        case .tintDown:
+            tintedCapsule(ColorToken.warning.color)
         }
     }
 
-    private func filledSegment(_ color: Color) -> some View {
+    /// 値の入っていない段: 向きの色を薄く塗り、枠は少し濃く。
+    private func tintedCapsule(_ color: Color) -> some View {
+        capsule(fill: color.opacity(RankMeterLogic.tintFillOpacity), stroke: color.opacity(RankMeterLogic.tintStrokeOpacity))
+    }
+
+    private func capsule(fill: Color, stroke: Color) -> some View {
         Capsule()
-            .fill(color)
+            .fill(fill)
+            .overlay(Capsule().strokeBorder(stroke, lineWidth: 1))
             .frame(height: Self.segmentHeight)
             .frame(maxWidth: .infinity)
     }

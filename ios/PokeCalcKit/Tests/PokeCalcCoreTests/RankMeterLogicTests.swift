@@ -111,4 +111,32 @@ final class RankMeterLogicTests: XCTestCase {
         XCTAssertFalse(RankMeterLogic.isHorizontalDrag(dx: 3, dy: 12))
         XCTAssertFalse(RankMeterLogic.isHorizontalDrag(dx: 10, dy: 10), "同じなら縦扱い")
     }
+
+    // MARK: 段の塗り(±0 でも枠だけにしない。Web の ADR-0357 追記と同じ。ADR-0533 追記)
+
+    func testFillOpacityConstants() {
+        XCTAssertEqual(RankMeterLogic.tintFillOpacity, 0.16)
+        XCTAssertEqual(RankMeterLogic.tintStrokeOpacity, 0.70)
+    }
+
+    func testSegmentFillTable() {
+        typealias Fill = RankMeterLogic.SegmentFill
+        // 値 → 左から右へ並べた 13 段(-6...+6)の塗り。
+        let cases: [(value: Int, expected: [Fill])] = [
+            (0, Array(repeating: .tintDown, count: 6) + [.zeroMarker] + Array(repeating: .tintUp, count: 6)),
+            (2, Array(repeating: .tintDown, count: 6) + [.zeroMarker, .solidUp, .solidUp] + Array(repeating: .tintUp, count: 4)),
+            (-3, [.tintDown, .tintDown, .tintDown, .solidDown, .solidDown, .solidDown, .zeroMarker] + Array(repeating: .tintUp, count: 6)),
+            (6, Array(repeating: .tintDown, count: 6) + [.zeroMarker] + Array(repeating: .solidUp, count: 6)),
+            (-6, Array(repeating: .solidDown, count: 6) + [.zeroMarker] + Array(repeating: .tintUp, count: 6)),
+        ]
+        for (value, expected) in cases {
+            let actual = RankMeterLogic.values.map { RankMeterLogic.segmentFill(step: $0, value: value) }
+            XCTAssertEqual(actual, expected, "value=\(value)")
+        }
+    }
+
+    func testSegmentFillClampsOutOfRangeValue() {
+        XCTAssertEqual(RankMeterLogic.segmentFill(step: 6, value: 99), .solidUp)
+        XCTAssertEqual(RankMeterLogic.segmentFill(step: -6, value: -99), .solidDown)
+    }
 }
