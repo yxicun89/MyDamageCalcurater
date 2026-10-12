@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { apiBaseUrl } from "./api/config";
 import { createBrowserMasterCacheStore } from "./master/cache/browserStore";
-import { createCachedMasterSources } from "./master/cache/cachedSources";
+import { countSavedSpecies, createCachedMasterSources } from "./master/cache/cachedSources";
 import { createOnlineMasterSource } from "./master/onlineSource";
 import type { MasterSources } from "./master/types";
 import "./styles/tokens.css";
@@ -13,6 +13,8 @@ const container = document.getElementById("root");
 if (container === null) {
   throw new Error("index.html に #root が無い");
 }
+// ADR-0313: 取得したマスタの保存先(IndexedDB)。オンラインの保存・オフラインの読み出し・保存済み件数の表示で共有する。
+const masterCacheStore = createBrowserMasterCacheStore();
 createRoot(container).render(
   <StrictMode>
     <App
@@ -26,9 +28,11 @@ createRoot(container).render(
             fetch: globalThis.fetch.bind(globalThis),
             ids,
           }),
-          store: createBrowserMasterCacheStore(),
+          store: masterCacheStore,
         })
       }
+      // ADR-0358: オフライン表示の「保存済み: ○匹」。
+      savedSpeciesCount={() => countSavedSpecies(masterCacheStore)}
     />
   </StrictMode>,
 );

@@ -12,6 +12,8 @@ export default defineScreen({
   order: 650,
   group: NAV_GROUPS.records,
   usesMaster: false,
+  // API 専用(オフラインでは動かない。ADR-0358)。
+  onlineOnly: true,
   // 記録 API のクライアントは App が持つ(オンライン限定で env.recordClient として渡す。ADR-0317)。
   createClient: () => undefined,
   render: (env) => (

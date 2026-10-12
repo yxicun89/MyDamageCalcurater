@@ -22,6 +22,8 @@ export interface ScreenRoute {
   readonly usesMaster: boolean;
   /** ナビの区分(登録の group。無ければこの画面だけの区分。ADR-0356)。 */
   readonly group: NavGroup;
+  /** API 専用の画面か(オフラインではタブを押せない表示にする。ADR-0358)。 */
+  readonly onlineOnly: boolean;
 }
 
 /**
@@ -32,11 +34,12 @@ export type ScreenId = string;
 
 /** 画面の定義順(hidden の画面を除く。ADR-0330。タブの並び順・ロービング tabIndex の移動順もこの順。登録ファイルの order の昇順)。 */
 export const SCREEN_ROUTES: readonly ScreenRoute[] = visibleScreens(SCREENS).map(
-  ({ id, segment, label, usesMaster, order, group }) => ({
+  ({ id, segment, label, usesMaster, order, group, onlineOnly }) => ({
     id,
     segment,
     label,
     usesMaster,
+    onlineOnly,
     // 区分の指定が無い画面は、その画面だけの区分(名前・アイコンは画面のもの。名前付きの区分より後ろに並べる)。
     group: group ?? { id, label, order: 1000 + order, icon: screenIconName(id) },
   }),
@@ -105,6 +108,11 @@ export function screenLabel(id: ScreenId): string {
 /** issue 308: この画面がマスタ(MasterData)を使うか。 */
 export function screenUsesMaster(id: ScreenId): boolean {
   return findRoute(id).usesMaster;
+}
+
+/** ADR-0358: この画面が API 専用(オフラインでは動かない)か。 */
+export function screenIsOnlineOnly(id: ScreenId): boolean {
+  return findRoute(id).onlineOnly;
 }
 
 /** issue 308: id がマスタを使わない画面か。 */

@@ -408,23 +408,31 @@ describe("issue #218 異常系: マスタが入れ替わったら作り直す(AD
   });
 });
 
-describe("issue #218 境界値: 保持はセッション内だけ(ADR-0308 決定4)", () => {
-  test("読み込み直す(unmount して描き直す)と入力は初期状態に戻り、ストレージにも残らない", async () => {
+// ADR-0358 段 2 による更新(ADR-0308 決定4 の一部変更): 以前は「リロードで初期状態に戻り、入力をストレージに書かない」だった。
+// 案 A(ユーザー承認 2026-10-12)で、計算画面の直近の入力 1 件だけを localStorage に覚えて再訪時に戻す。
+// 変わらないこと: sessionStorage には書かない / 書くのは直近の 1 件のキー(pokecalc.lastCalcInput)だけで、他の端末内のキーを増やさない。
+describe("issue #218 境界値: 保持の範囲(ADR-0308 決定4 を ADR-0358 で更新)", () => {
+  test("読み込み直す(unmount して描き直す)と、直近の 1 件だけ戻り、書き込み先は localStorage の決まったキーだけ", async () => {
     const { attackerKey } = await examplePicks();
     const user = userEvent.setup();
     const { unmount } = render(<App engine={createFakeEngine()} />);
 
     await user.selectOptions(await screen.findByRole("combobox", { name: "攻撃側のポケモン" }), attackerKey);
     expect(calcCombobox("攻撃側のポケモン")).toHaveValue(attackerKey);
+    await waitFor(() => {
+      expect(window.localStorage.getItem("pokecalc.lastCalcInput")).not.toBeNull();
+    });
     unmount();
 
     render(<App engine={createFakeEngine()} />);
-    expect(await screen.findByRole("combobox", { name: "攻撃側のポケモン" })).toHaveValue("");
+    await waitFor(() => {
+      expect(calcCombobox("攻撃側のポケモン")).toHaveValue(attackerKey);
+    });
 
-    // 入力はストレージに書かない(localStorage に入れるのは計算モードと端末 ID だけ。ADR-0308 決定4)。
+    // sessionStorage には入力を書かない。localStorage に増えるのは計算モード・端末 ID・直近の計算入力だけ。
     expect(window.sessionStorage.length).toBe(0);
     for (const key of Object.keys(window.localStorage)) {
-      expect(window.localStorage.getItem(key)).not.toContain(attackerKey);
+      expect(["pokecalc.calcMode", "pokecalc.deviceId", "pokecalc.lastCalcInput"]).toContain(key);
     }
   });
 });

@@ -14,6 +14,8 @@ export default defineScreen({
   order: 600,
   group: NAV_GROUPS.team,
   usesMaster: true,
+  // API 専用(オフラインでは動かない。ADR-0358)。
+  onlineOnly: true,
   // createTeamClient・createBalanceClient 自体は fetch しない(構築のタブを開くまで呼ばれない。TeamScreen.tsx)。
   createClient: (deps) => ({ team: createTeamClient(deps), balance: createBalanceClient(deps) }),
   render: (env, clients) => (

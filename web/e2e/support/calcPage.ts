@@ -189,6 +189,11 @@ export async function warmOfflineCache(page: Page): Promise<void> {
       }, MASTER_CACHE_DB_NAME),
     )
     .toBe(true);
+  // ADR-0358: 温めで選んだ攻守が直近の入力として復元されると、各テストの「候補から選ぶ」が成り立たない。
+  // 利用者の初回と同じ状態(直近の入力なし)から始めるため、保存された直近の入力だけ消す。
+  await page.evaluate(() => {
+    localStorage.removeItem("pokecalc.lastCalcInput");
+  });
 }
 
 /**
