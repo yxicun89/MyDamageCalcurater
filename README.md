@@ -9,7 +9,7 @@
 
 ## 何が動くか
 
-- ブラウザ(Web): ダメージ計算・逆算・タイプバランス・素早さ比較・判定・構築ビルダー。オフライン(WASM。架空の例データ)とオンライン(API。実データ)の両方
+- ブラウザ(Web): ダメージ計算・逆算・素早さ比較・構築ビルダー(構築編集の中でタイプバランスも見られる)。オフライン(WASM。架空の例データ)とオンライン(API。実データ)の両方
 - サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・judge・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
 - iOS アプリ(SwiftUI。`make ios-test`)
 - 別アプリ「欲しいものリスト」: 欲しいものを画像で並べ、各サイトの目安価格と検索リンクを出す(Web〈PWA〉・iOS・API・夜間の価格取得。[apps/wishlist/README.md](apps/wishlist/README.md))

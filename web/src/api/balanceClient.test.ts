@@ -467,7 +467,7 @@ describe("通信・応答の失敗は balance_unavailable(自動の切り替え�
 //
 // balance の応答はそのまま表示に使う(Web で倍率・集計を計算し直さない。ADR-0303 §1)ので、契約外の 200 を
 // ok:true で通すと、例外は画面の描画(`response.teamSummary.map(...)`・`threat.matchups.map(...)` など)で起きる。
-// 画面は「呼び出しは reject しない」前提で `.then` しか登録していない(BalanceScreen.tsx)。そこで応答を
+// 画面は「呼び出しは reject しない」前提で `.then` しか登録していない(旧 BalanceScreen。現在は useTeamBalance)。そこで応答を
 // クライアントで検証し、契約外なら balance_unavailable の not ok にする。
 //
 // 検証の範囲は「画面がたどる形」まで:

@@ -1,5 +1,5 @@
 // 素早さ画面のテスト用 fake の SpeedClient と架空データ(services/speed/testdata と同じ 9xxx-xxx の形。実マスタは使わない。ADR-0002)。
-// 呼び出しを記録し、テストが応答を返す(BalanceScreen.test.tsx と同じ形)。I-speed-4b。
+// 呼び出しを記録し、テストが応答を返す(BalancePanel.integration.test.tsx と同じ形)。I-speed-4b。
 
 import type { components } from "../speed/speed.gen";
 import type { SpeedClient, SpeedResult } from "../speed/speedClient";

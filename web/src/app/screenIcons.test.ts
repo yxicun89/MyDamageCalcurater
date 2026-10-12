@@ -11,7 +11,6 @@ describe("screenIconName", () => {
   test.each([
     ["calc", "calc"],
     ["reverse", "reverse"],
-    ["balance", "balance"],
     ["speed", "speed"],
     ["team", "team"],
     ["favorites", "favorites"],

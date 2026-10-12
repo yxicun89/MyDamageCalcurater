@@ -1,7 +1,7 @@
 // 構築ビルダーの画面(ADR-0309 §4・ADR-0332)。一覧と編集の2つの表示を切り替える(URL は /team のまま)。
 // 一覧: 構築のカード・[新しい構築]。編集: 6つの枠(TeamMemberEditor.tsx)。構築名は無い。
 //
-// 状態の作り(SpeedScreen.tsx・BalanceScreen.tsx と同じ考え方):
+// 状態の作り(SpeedScreen.tsx と同じ考え方):
 //   - list() はマウント時に1回だけ呼び、cancelled フラグで古い応答を捨てる
 //   - create()/update()/remove() が成功したら、応答の Team で手元の一覧を書き換える(list を呼び直さない)
 //   - 一覧の読み込みに失敗しても、[新しい構築]は先に使える(ADR-0309 §4)

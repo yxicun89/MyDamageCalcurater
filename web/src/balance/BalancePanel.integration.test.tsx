@@ -21,7 +21,7 @@ import type { Move } from "../engine/types";
 import { balanceErrorText, typeNameJa } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { BalanceScreen } from "./BalanceScreen";
+import { BalanceHarness } from "./balanceTestHarness";
 
 // P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations)(ADR-0303 §7・§9、ADR-0400、ADR-0401)。
 // 確かめること(この節は下の「仮想敵の枠」以降):
@@ -258,7 +258,7 @@ async function selectMove(user: UserEvent, index: number, slot: number, move: Mo
 
 function renderScreen(client: FakeBalanceClient = createFakeBalanceClient()) {
   const user = userEvent.setup();
-  render(<BalanceScreen master={master} client={client} />);
+  render(<BalanceHarness master={master} client={client} />);
   return { user, client };
 }
 
