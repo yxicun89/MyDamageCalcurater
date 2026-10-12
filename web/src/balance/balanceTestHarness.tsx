@@ -1,5 +1,5 @@
 // タイプバランスの結果(useTeamBalance + BalancePanel)をメンバー・仮想敵の入力欄つきで検証するための、テスト専用の足場。
-// 旧 BalanceHarness(別画面)は ADR-0421 段階 4 で撤去した。アプリ本体からは import しない(*.test.tsx からだけ使う)。
+// 旧 BalanceScreen(別画面)は ADR-0421 段階 4 で撤去した。アプリ本体からは import しない(*.test.tsx からだけ使う)。
 // 構築編集の本物の組み込みは team/TeamBalanceSection.tsx。ここは旧画面と同じ入力欄・同じ DOM を保ち、
 // 旧画面のテスト(期待値は変えない)を BalancePanel / useTeamBalance / MemberFields に対して走らせ続けるために残す。
 
