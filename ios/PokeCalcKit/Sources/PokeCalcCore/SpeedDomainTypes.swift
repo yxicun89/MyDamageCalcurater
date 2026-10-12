@@ -182,4 +182,8 @@ public protocol SpeedService: Sendable {
     func table(presets: [SpeedPresetID]?, field: SpeedTableField) async throws -> SpeedTable
     /// 自分のポケモンの実数値と、表の中の位置。
     func position(_ request: SpeedPositionRequest) async throws -> SpeedPosition
+    /// 相手を選んだときの「上を取る最低ライン」(想定ごと・性格ごとの SP の区間。ADR-0610 §2。契約 0.7.0)。
+    func matchup(_ request: SpeedMatchupRequest) async throws -> SpeedMatchup
+    /// 自分の素早さの「族」の区切り(表の 6 プリセットごと。ADR-0610 §2)。本文は `position` と同じ。
+    func reach(_ request: SpeedPositionRequest) async throws -> SpeedReach
 }

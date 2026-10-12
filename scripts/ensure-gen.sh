@@ -28,7 +28,6 @@ services/pokedex/internal/store/querier.go
 web/src/api/openapi.gen.ts
 web/src/api/balance.gen.ts
 web/src/speed/speed.gen.ts
-web/src/judge/judge.gen.ts
 EOF
 }
 

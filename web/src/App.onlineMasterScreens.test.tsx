@@ -167,8 +167,7 @@ test("取得の完了前にタブを離れても、後から解決して状態�
   expect(screen.queryByRole("combobox", { name: "自分のポケモン" })).not.toBeInTheDocument();
 });
 
-// ADR-0330: 判定は Web で非表示。judge.screen.tsx が OnlineMasterGate で包んでいる点の検証は、非表示の間は無い
-// (マウントされないため。再表示するときにこのテストを復活させる)。タイプバランスの包みは上のテストが担う。
+// CB-7: 判定は廃止(画面を削除)。タイプバランスの包みは上のテストが担う。
 // ここでは、判定のタブが無く、オンラインのマスタを判定のために使わないことだけを確かめる。
 test("判定のタブは出ない(ADR-0330)", async () => {
   const { offline, online } = await masters();

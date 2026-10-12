@@ -18,6 +18,8 @@ import (
 	"testing"
 
 	"github.com/go-sql-driver/mysql"
+
+	"example.com/pokecalc/services/internal/dbmigrate"
 )
 
 // MySQL のエラー番号(権限・認証)。
@@ -54,11 +56,13 @@ func roleDSN(rootCfg *mysql.Config, user, pass string) string {
 
 // testRoles は3ロールぶんの RoleGrant と、各ロールのパスワードを返す。
 type testRoleSet struct {
-	reader, importer, migrator RoleGrant
+	reader, importer, migrator dbmigrate.RoleGrant
 	pass                       map[string]string // user → password
 }
 
-func (s testRoleSet) all() []RoleGrant { return []RoleGrant{s.reader, s.importer, s.migrator} }
+func (s testRoleSet) all() []dbmigrate.RoleGrant {
+	return []dbmigrate.RoleGrant{s.reader, s.importer, s.migrator}
+}
 
 func newTestRoles(t *testing.T, rootCfg *mysql.Config) testRoleSet {
 	t.Helper()
@@ -66,9 +70,9 @@ func newTestRoles(t *testing.T, rootCfg *mysql.Config) testRoleSet {
 	for _, u := range []string{testReaderUser, testImporterUser, testMigratorUser} {
 		s.pass[u] = randomPassword(t)
 	}
-	s.reader = RoleGrant{DSN: roleDSN(rootCfg, testReaderUser, s.pass[testReaderUser]), Privileges: ReaderPrivileges}
-	s.importer = RoleGrant{DSN: roleDSN(rootCfg, testImporterUser, s.pass[testImporterUser]), Privileges: ImporterPrivileges, Scope: ScopeDataTables}
-	s.migrator = RoleGrant{DSN: roleDSN(rootCfg, testMigratorUser, s.pass[testMigratorUser]), Privileges: MigratorPrivileges}
+	s.reader = dbmigrate.RoleGrant{DSN: roleDSN(rootCfg, testReaderUser, s.pass[testReaderUser]), Privileges: dbmigrate.ReaderPrivileges}
+	s.importer = dbmigrate.RoleGrant{DSN: roleDSN(rootCfg, testImporterUser, s.pass[testImporterUser]), Privileges: dbmigrate.ImporterPrivileges, Scope: dbmigrate.ScopeDataTables}
+	s.migrator = dbmigrate.RoleGrant{DSN: roleDSN(rootCfg, testMigratorUser, s.pass[testMigratorUser]), Privileges: dbmigrate.MigratorPrivileges}
 	return s
 }
 
@@ -117,7 +121,7 @@ func openAs(t *testing.T, dsn string) (*sql.DB, error) {
 	return conn, conn.Ping()
 }
 
-func mustOpenAs(t *testing.T, g RoleGrant) *sql.DB {
+func mustOpenAs(t *testing.T, g dbmigrate.RoleGrant) *sql.DB {
 	t.Helper()
 	conn, err := openAs(t, g.DSN)
 	if err != nil {
@@ -233,13 +237,13 @@ func TestProvisionIsIdempotent(t *testing.T) {
 	roles := newTestRoles(t, cfg)
 
 	for i := 1; i <= 2; i++ {
-		if err := Provision(dsn, roles.all()); err != nil {
-			t.Fatalf("%d 回目の Provision: %v", i, err)
+		if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
+			t.Fatalf("%d 回目の dbmigrate.Provision: %v", i, err)
 		}
 	}
 	for _, c := range []struct {
 		user  string
-		grant RoleGrant
+		grant dbmigrate.RoleGrant
 	}{
 		{testReaderUser, roles.reader},
 		{testMigratorUser, roles.migrator},
@@ -285,11 +289,11 @@ func TestProvisionRevokesStalePrivileges(t *testing.T) {
 	roles := newTestRoles(t, cfg)
 
 	wide := roles.reader
-	wide.Privileges = MigratorPrivileges
-	if err := Provision(dsn, []RoleGrant{wide}); err != nil {
+	wide.Privileges = dbmigrate.MigratorPrivileges
+	if err := dbmigrate.Provision(dsn, []dbmigrate.RoleGrant{wide}); err != nil {
 		t.Fatalf("Provision(広い権限): %v", err)
 	}
-	if err := Provision(dsn, []RoleGrant{roles.reader}); err != nil {
+	if err := dbmigrate.Provision(dsn, []dbmigrate.RoleGrant{roles.reader}); err != nil {
 		t.Fatalf("Provision(reader): %v", err)
 	}
 	got := grantedPrivileges(t, root, testReaderUser, cfg.DBName)
@@ -304,14 +308,14 @@ func TestProvisionRotatesPassword(t *testing.T) {
 	dropTestUsers(t, root)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	oldReader := roles.reader
 
 	rotated := roles
-	rotated.reader = RoleGrant{DSN: roleDSN(cfg, testReaderUser, randomPassword(t)), Privileges: ReaderPrivileges}
-	if err := Provision(dsn, rotated.all()); err != nil {
+	rotated.reader = dbmigrate.RoleGrant{DSN: roleDSN(cfg, testReaderUser, randomPassword(t)), Privileges: dbmigrate.ReaderPrivileges}
+	if err := dbmigrate.Provision(dsn, rotated.all()); err != nil {
 		t.Fatalf("Provision(ローテーション後): %v", err)
 	}
 
@@ -333,7 +337,7 @@ func TestReaderPrivilegeBoundary(t *testing.T) {
 	dropTestUsers(t, admin)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	r := mustOpenAs(t, roles.reader)
@@ -363,7 +367,7 @@ func TestImporterPrivilegeBoundary(t *testing.T) {
 	dropTestUsers(t, admin)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	im := mustOpenAs(t, roles.importer)
@@ -404,7 +408,7 @@ func TestMigratorRunsFullMigration(t *testing.T) {
 		t.Fatalf("schema_migrations を消せない: %v", err)
 	}
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 
@@ -450,8 +454,8 @@ func TestProvisionFreshUsersFromScratch(t *testing.T) {
 	if exists != 0 {
 		t.Fatalf("前提: テスト用ユーザーが残っている(%d)", exists)
 	}
-	if err := Provision(dsn, roles.all()); err != nil {
-		t.Fatalf("新規ユーザーへの Provision: %v", err)
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
+		t.Fatalf("新規ユーザーへの dbmigrate.Provision: %v", err)
 	}
 }
 
@@ -462,7 +466,7 @@ func TestImporterCannotWriteMigrationsTable(t *testing.T) {
 	dropTestUsers(t, admin)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	assertImporterGrants(t, admin, cfg.DBName)
@@ -498,7 +502,7 @@ func TestImporterGrantsFollowNewTablesAfterReprovision(t *testing.T) {
 	dropTestUsers(t, admin)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	if _, err := admin.Exec(`CREATE TABLE t_new_after_provision (id INT PRIMARY KEY)`); err != nil {
@@ -509,7 +513,7 @@ func TestImporterGrantsFollowNewTablesAfterReprovision(t *testing.T) {
 	_, err := im.Exec(`INSERT INTO t_new_after_provision (id) VALUES (1)`)
 	expectDenied(t, "付け直す前の新しい表への INSERT", err)
 
-	if err := Provision(dsn, []RoleGrant{roles.importer}); err != nil {
+	if err := dbmigrate.Provision(dsn, []dbmigrate.RoleGrant{roles.importer}); err != nil {
 		t.Fatalf("Provision(importer の付け直し): %v", err)
 	}
 	_, err = im.Exec(`INSERT INTO t_new_after_provision (id) VALUES (1)`)

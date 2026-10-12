@@ -148,3 +148,40 @@ export function buildComboDefenders(input: BuildComboDefendersInput): ComboDefen
     };
   });
 }
+
+/** speed API の reach の 1 行のうち、例の文に使う部分(生成型の構造的な部分集合。domain は API の型を import しない)。 */
+export interface SpeedReachLineLike {
+  readonly preset: string;
+  readonly slower?: { readonly min: number; readonly max: number };
+  readonly tie?: { readonly min: number; readonly max: number };
+  readonly faster?: { readonly min: number; readonly max: number };
+  readonly fastestSlower?: { readonly nameJa: string };
+  readonly slowestFaster?: { readonly nameJa: string };
+}
+
+/** 例に使うプリセット(準速 = SP 32・補正なし)。 */
+const SPEED_EXAMPLE_PRESET = "neutral-max";
+
+/**
+ * 自分の素早さに対する「準速○族以上に抜かれる / ○族までは抜ける / ○族とは同速」を 1〜3 行にする(ADR-0610 の「族」)。
+ * 区間と名前は speed API の値のまま(Web で計算し直さない)。準速の行が無ければ空。
+ */
+export function speedExampleLines(lines: readonly SpeedReachLineLike[]): string[] {
+  const line = lines.find((candidate) => candidate.preset === SPEED_EXAMPLE_PRESET);
+  if (line === undefined) {
+    return [];
+  }
+  const text = comboScreenText.speedExample;
+  const result: string[] = [];
+  if (line.faster !== undefined) {
+    result.push(text.faster(line.faster.min, line.slowestFaster?.nameJa ?? null));
+  }
+  if (line.slower !== undefined) {
+    result.push(text.slower(line.slower.max, line.fastestSlower?.nameJa ?? null));
+  }
+  if (line.tie !== undefined) {
+    const { min, max } = line.tie;
+    result.push(text.tie(min === max ? String(min) : `${String(min)}〜${String(max)}`));
+  }
+  return result;
+}

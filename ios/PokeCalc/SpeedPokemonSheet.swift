@@ -2,12 +2,13 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// SpeedPokemonSheet: 自分のポケモンを選ぶシート(P6-24。ADR-0503 §5)。
+// SpeedPokemonSheet: 自分 / 相手のポケモンを選ぶシート(P6-24。ADR-0503 §5。I-speed-4c で両方に共用)。
 // speed の一覧を `load()` で 1 回取ったものを、名前の部分一致(ひらがな・カタカナ不問)で絞って出す。
 // 検索欄は `.searchable` ではなく通常の `TextField`(`.searchable` の識別子はタップ・入力できる欄に渡らないため)。
 
 struct SpeedPokemonSheet: View {
-    let viewModel: SpeedViewModel
+    let viewModel: SpeedMatchupViewModel
+    let target: SpeedPickerTarget
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -16,7 +17,7 @@ struct SpeedPokemonSheet: View {
                 searchField
                     .listRowSeparator(.hidden)
                 Button {
-                    viewModel.selectPokemon(id: nil)
+                    select(nil)
                     dismiss()
                 } label: {
                     Text(SpeedLabels.unselected)
@@ -34,7 +35,7 @@ struct SpeedPokemonSheet: View {
                 }
                 ForEach(viewModel.filteredPokemon) { pokemon in
                     Button {
-                        viewModel.selectPokemon(id: pokemon.pokemonId)
+                        select(pokemon.pokemonId)
                         dismiss()
                     } label: {
                         HStack(spacing: SpacingToken.x2) {
@@ -60,6 +61,13 @@ struct SpeedPokemonSheet: View {
             }
         }
         .accessibilityIdentifier("speedPokemonSheet")
+    }
+
+    private func select(_ id: String?) {
+        switch target {
+        case .own: viewModel.selectSelfPokemon(id: id)
+        case .opponent: viewModel.selectOpponentPokemon(id: id)
+        }
     }
 
     private var searchField: some View {

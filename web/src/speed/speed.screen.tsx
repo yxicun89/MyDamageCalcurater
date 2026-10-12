@@ -16,5 +16,5 @@ export default defineScreen({
   usesMaster: false,
   // createSpeedClient 自体は fetch しない(素早さのタブを開くまで呼ばれない。SpeedScreen.tsx)。
   createClient: createSpeedClient,
-  render: (_env, client) => <SpeedScreen speedClient={client} />,
+  render: (env, client) => <SpeedScreen speedClient={client} onOpenCombo={env.onOpenCombo} />,
 });
