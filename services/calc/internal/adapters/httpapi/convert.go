@@ -199,41 +199,6 @@ func battleStateToAPI(b *domain.BattleState) *api.CalcBattleState {
 	return &api.CalcBattleState{AttackerCurrentHp: b.AttackerCurrentHP, DefenderCurrentHp: b.DefenderCurrentHP, Hits: b.Hits}
 }
 
-// --- 調整(adjust.go)が使う解決・検証(app・domain に委ねて HTTP のエラーに写す) ---
-
-func derefInt(p *int) int {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
-
-// parseFormat は形式を検証する(必須。欠落は zero 値 "" が Valid() で弾かれる)。
-func parseFormat(f api.Format) (engine.Format, error) {
-	v, err := domain.ParseFormat(formatFrom(f))
-	return v, httpErrorFrom(err)
-}
-
-// parseField は場の状態を検証する(weather / terrain は列挙。省略は既定値)。
-func parseField(f *api.FieldState) (engine.Field, error) {
-	v, err := domain.ParseField(fieldFrom(f))
-	return v, httpErrorFrom(err)
-}
-
-func criticalFrom(o *api.CalcOptions) bool { return o != nil && o.Critical != nil && *o.Critical }
-
-// resolveIndividual は個体を解決する(app.Service.ResolveIndividual。列挙を先に、その後で ID)。
-func (s *Server) resolveIndividual(label string, in api.Individual) (engine.Individual, error) {
-	v, err := s.app.ResolveIndividual(label, individualFrom(in))
-	return v, httpErrorFrom(err)
-}
-
-// resolveMove は技 ID を解決する。
-func (s *Server) resolveMove(id string) (engine.Move, error) {
-	v, err := s.app.ResolveMove(id)
-	return v, httpErrorFrom(err)
-}
-
 // --- 結果の写し ---------------------------------------------------------------
 
 func statBlockFrom(s engine.Stats) api.StatBlock {
