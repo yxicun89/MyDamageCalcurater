@@ -23,6 +23,7 @@ struct HomeView: View {
     @Environment(AppModel.self) private var model
     @State private var sheet: HomeSheet?
     @State private var menuTile: HomeTile?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private let columns = Array(repeating: GridItem(.flexible(), spacing: Metrics.gridSpacing), count: HomeLayout.tileColumnCount)
 
@@ -137,19 +138,32 @@ struct HomeView: View {
     }
 
     private func genreButtons(_ home: HomeViewModel) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                genreButton(
-                    name: GenreLabel.allName, selected: home.selectedGenreID == nil, id: "genreChip-all", glyph: { GlyphIcon(all: $0, size: 24) }
-                ) { home.selectedGenreID = nil }
-                ForEach(home.chipGenres) { genre in
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
                     genreButton(
-                        name: genre.name, selected: home.selectedGenreID == genre.id, id: "genreChip-\(genre.id)",
-                        color: Color(hex: genre.color), glyph: { GlyphIcon(icon: genre.icon, color: $0, size: 24) }
-                    ) { home.selectedGenreID = genre.id }
+                        name: GenreLabel.allName, selected: home.selectedGenreID == nil, id: "genreChip-all", glyph: { GlyphIcon(all: $0, size: 24) }
+                    ) { home.selectedGenreID = nil }
+                    .id("genreChip-all")
+                    ForEach(home.chipGenres) { genre in
+                        genreButton(
+                            name: genre.name, selected: home.selectedGenreID == genre.id, id: "genreChip-\(genre.id)",
+                            color: Color(hex: genre.color), glyph: { GlyphIcon(icon: genre.icon, color: $0, size: 24) }
+                        ) { home.selectedGenreID = genre.id }
+                        .id("genreChip-\(genre.id)")
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            // 選んだ丸薬は名前で伸びるので、列の端で見切れないよう列の中に入れる(視差効果を減らすときは動かさず切り替える)
+            .onChange(of: home.selectedGenreID) { _, new in
+                let target = new.map { "genreChip-\($0)" } ?? "genreChip-all"
+                if reduceMotion {
+                    proxy.scrollTo(target, anchor: nil)
+                } else {
+                    withAnimation(.easeInOut(duration: 0.12)) { proxy.scrollTo(target, anchor: nil) }
                 }
             }
-            .padding(.horizontal, 16)
         }
     }
 

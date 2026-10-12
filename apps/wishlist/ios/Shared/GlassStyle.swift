@@ -271,18 +271,31 @@ struct GenreChooser: View {
     @Binding var selection: Int?
     var size: CGFloat = 60
     var radius: CGFloat = 18
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(genres) { genre in
-                    GenreIconButton(genre: genre, selected: selection == genre.id, size: size, radius: radius) {
-                        selection = genre.id
+        ScrollViewReader { proxy in
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(genres) { genre in
+                        GenreIconButton(genre: genre, selected: selection == genre.id, size: size, radius: radius) {
+                            selection = genre.id
+                        }
+                        .id(genre.id)
                     }
                 }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 10)
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 10)
+            // 選んだ丸薬が列の端で見切れないよう列の中に入れる(視差効果を減らすときは動かさず切り替える)
+            .onChange(of: selection) { _, new in
+                guard let new else { return }
+                if reduceMotion {
+                    proxy.scrollTo(new, anchor: nil)
+                } else {
+                    withAnimation(.easeInOut(duration: 0.12)) { proxy.scrollTo(new, anchor: nil) }
+                }
+            }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("ジャンル")
