@@ -17,7 +17,8 @@ import (
 	"github.com/labstack/echo/v5"
 
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/app"
+	"example.com/pokecalc/services/record/internal/domain"
 )
 
 // messageInternal は回復した panic・想定外の失敗に付ける固定文(Go の内部情報を出さない)。
@@ -54,18 +55,28 @@ func statusForCode(code api.ErrorCode) int {
 	}
 }
 
-// errFromStore は store のエラーを httpError に写す(store.ErrUnavailable は 503 store_unavailable、
+// errFromStore は store のエラーを httpError に写す(app.ErrUnavailable は 503 store_unavailable、
 // それ以外は 500 internal)。どちらも端末 ID・エラーコード・失敗の手がかりをログに残す(AC-L1:
 // 出してよい項目は端末 ID・操作名・件数・所要時間・エラーコード。DB のエラー文はログにだけ残し、
 // クライアントへの応答には出さない)。deviceID は分かる範囲でよい(readyz のように端末が無い
 // 呼び出しは空文字でよい)。
 func errFromStore(deviceID string, err error) error {
-	if errors.Is(err, store.ErrUnavailable) {
+	if errors.Is(err, app.ErrUnavailable) {
 		slog.Warn("record-svc: store に届かない", "deviceId", deviceID, "code", api.StoreUnavailable, "error", err)
 		return newError(api.StoreUnavailable, "保存データの DB を利用できない")
 	}
 	slog.Error("record-svc: store から想定外のエラー", "deviceId", deviceID, "error", err)
 	return newError(api.Internal, "%s", messageInternal)
+}
+
+// errFromDomain は domain の検証の失敗(domain.Error)を httpError に写す(code は契約の ErrorCode と同じ文字列、
+// 文言はそのまま)。domain.Error でなければ ok = false。
+func errFromDomain(err error) (error, bool) {
+	var de *domain.Error
+	if !errors.As(err, &de) {
+		return nil, false
+	}
+	return newError(api.ErrorCode(de.Code), "%s", de.Message), true
 }
 
 // notFoundForOtherServices は record-svc の担当外(calc・pokedex・internal)の操作に返す 404。

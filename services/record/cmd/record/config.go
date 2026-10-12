@@ -2,7 +2,7 @@
 package main
 
 import (
-	"example.com/pokecalc/services/record/internal/expire"
+	"example.com/pokecalc/services/record/internal/app/expire"
 	"fmt"
 	"strconv"
 	"time"

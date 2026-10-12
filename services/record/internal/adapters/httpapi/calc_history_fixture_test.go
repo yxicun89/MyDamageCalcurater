@@ -47,7 +47,7 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/adapters/store"
 )
 
 const pathCalcHistory = "/api/record/calc-history"

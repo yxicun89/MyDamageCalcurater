@@ -19,7 +19,8 @@ import (
 
 	"example.com/pokecalc/services/internal/api"
 	"example.com/pokecalc/services/internal/calcevents"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/app"
+	"example.com/pokecalc/services/record/internal/domain"
 )
 
 // 契約の limit(1〜50・既定 20)と cursor(1〜200文字・URL にそのまま入る文字だけ)。
@@ -33,12 +34,12 @@ const (
 var cursorPattern = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // encodeHistoryCursor は位置を不透明な文字列にする(occurred_at の UnixNano と event_id を ":" で区切り base64url)。
-func encodeHistoryCursor(c store.CalcHistoryCursor) string {
+func encodeHistoryCursor(c app.CalcHistoryCursor) string {
 	raw := strconv.FormatInt(c.OccurredAt.UnixNano(), 10) + ":" + c.EventID
 	return base64.RawURLEncoding.EncodeToString([]byte(raw))
 }
 
-func decodeHistoryCursor(s string) (*store.CalcHistoryCursor, bool) {
+func decodeHistoryCursor(s string) (*app.CalcHistoryCursor, bool) {
 	if len(s) == 0 || len(s) > maxCursorLength || !cursorPattern.MatchString(s) {
 		return nil, false
 	}
@@ -54,7 +55,7 @@ func decodeHistoryCursor(s string) (*store.CalcHistoryCursor, bool) {
 	if err != nil {
 		return nil, false
 	}
-	return &store.CalcHistoryCursor{OccurredAt: time.Unix(0, n).UTC(), EventID: id}, true
+	return &app.CalcHistoryCursor{OccurredAt: time.Unix(0, n).UTC(), EventID: id}, true
 }
 
 // ListCalcHistory は GET /api/record/calc-history。
@@ -75,7 +76,7 @@ func (s *Server) ListCalcHistory(ctx *echo.Context, params api.ListCalcHistoryPa
 	if limit < minHistoryLimit || limit > maxHistoryLimit {
 		return newError(api.InvalidInput, "limit は %d〜%d の範囲でなければならない(%d)", minHistoryLimit, maxHistoryLimit, limit)
 	}
-	var before *store.CalcHistoryCursor
+	var before *app.CalcHistoryCursor
 	if ctx.QueryParams().Has("cursor") {
 		c, ok := decodeHistoryCursor(ctx.QueryParam("cursor"))
 		if !ok {
@@ -84,42 +85,30 @@ func (s *Server) ListCalcHistory(ctx *echo.Context, params api.ListCalcHistoryPa
 		before = c
 	}
 
-	q := store.CalcHistoryQuery{Before: before, Limit: limit + 1}
-	if s.calcEventsRetention > 0 {
-		q.Since = time.Now().UTC().Add(-s.calcEventsRetention)
-	}
-
-	page := api.CalcHistoryPage{Items: make([]api.CalcHistoryEntry, 0, limit)}
-	err := touchAndRun(ctx.Request().Context(), s.store, params.XDeviceId, func() error {
-		rows, err := s.store.ListCalcHistory(ctx.Request().Context(), params.XDeviceId, q)
-		if err != nil {
-			return errFromStore(params.XDeviceId, err)
-		}
-		if len(rows) > limit {
-			rows = rows[:limit]
-			next := encodeHistoryCursor(store.CalcHistoryCursor{OccurredAt: rows[limit-1].OccurredAt, EventID: rows[limit-1].EventID})
-			page.NextCursor = &next
-		}
-		for _, r := range rows {
-			entry, err := calcHistoryEntryFrom(r)
-			if err != nil {
-				// payload の中身は出さない。event_id だけ。
-				slog.Warn("record-svc: 読めない計算履歴の行を飛ばす", "eventId", r.EventID)
-				continue
-			}
-			page.Items = append(page.Items, entry)
-		}
-		return nil
-	})
+	rows, next, err := s.svc.ListCalcHistory(ctx.Request().Context(), params.XDeviceId, before, limit)
 	if err != nil {
-		return err
+		return errFromStore(params.XDeviceId, err)
+	}
+	page := api.CalcHistoryPage{Items: make([]api.CalcHistoryEntry, 0, limit)}
+	if next != nil {
+		c := encodeHistoryCursor(*next)
+		page.NextCursor = &c
+	}
+	for _, r := range rows {
+		entry, err := calcHistoryEntryFrom(r)
+		if err != nil {
+			// payload の中身は出さない。event_id だけ。
+			slog.Warn("record-svc: 読めない計算履歴の行を飛ばす", "eventId", r.EventID)
+			continue
+		}
+		page.Items = append(page.Items, entry)
 	}
 	return ctx.JSON(http.StatusOK, page)
 }
 
 // calcHistoryEntryFrom は calc_events の payload から契約の1行を作る。必要な項目だけを詰め替える
 // (payload を丸ごと中継しない)。未知のキーは許し、読めなければエラー(呼び出し側が飛ばす)。
-func calcHistoryEntryFrom(r store.CalcHistoryRow) (api.CalcHistoryEntry, error) {
+func calcHistoryEntryFrom(r app.CalcHistoryRow) (api.CalcHistoryEntry, error) {
 	var ev calcevents.Event
 	if err := json.Unmarshal(r.Payload, &ev); err != nil {
 		return api.CalcHistoryEntry{}, err
@@ -128,9 +117,9 @@ func calcHistoryEntryFrom(r store.CalcHistoryRow) (api.CalcHistoryEntry, error) 
 		return api.CalcHistoryEntry{}, errors.New("計算イベントとして読めない")
 	}
 	d := ev.Detail
-	// calc-svc が保存した入力を、お気に入りと同じ関数で既定値を補った形にする。
+	// calc-svc が保存した入力を、お気に入りと同じ関数(domain)で既定値を補った形にする。
 	req := calcRequestFromDetail(d)
-	snap, err := normalizeCalc(&req)
+	snap, err := domain.NormalizeCalc(&req, contractEnums)
 	if err != nil {
 		return api.CalcHistoryEntry{}, err
 	}
@@ -145,17 +134,17 @@ func calcHistoryEntryFrom(r store.CalcHistoryRow) (api.CalcHistoryEntry, error) 
 	}, nil
 }
 
-// calcRequestFromDetail は detail を normalizeCalc の受け口(calcRequest)に写す。型の違い(ポインタ・
+// calcRequestFromDetail は detail を domain.NormalizeCalc の受け口(domain.CalcInput)に写す。型の違い(ポインタ・
 // 文字列)を JSON 経由で吸収するのではなく、必要な項目を明示的に詰める。
-func calcRequestFromDetail(d *calcevents.CalcDetail) calcRequest {
-	req := calcRequest{
+func calcRequestFromDetail(d *calcevents.CalcDetail) domain.CalcInput {
+	req := domain.CalcInput{
 		Format:   &d.Format,
 		Attacker: individualRequestFrom(d.Attacker),
 		Defender: individualRequestFrom(d.Defender),
 		MoveID:   &d.MoveID,
 	}
 	if f := d.Field; f != nil {
-		fr := &fieldRequest{
+		fr := &domain.FieldInput{
 			AttackerScreens: screensRequestFrom(f.AttackerScreens),
 			DefenderScreens: screensRequestFrom(f.DefenderScreens),
 		}
@@ -170,34 +159,34 @@ func calcRequestFromDetail(d *calcevents.CalcDetail) calcRequest {
 		req.Field = fr
 	}
 	if d.Options != nil {
-		req.Options = &optionsRequest{Critical: d.Options.Critical}
+		req.Options = &domain.OptionsInput{Critical: d.Options.Critical}
 	}
 	if b := d.BattleState; b != nil {
-		req.BattleState = &battleStateRequest{AttackerCurrentHP: b.AttackerCurrentHp, DefenderCurrentHP: b.DefenderCurrentHp, Hits: b.Hits}
+		req.BattleState = &domain.BattleStateInput{AttackerCurrentHP: b.AttackerCurrentHp, DefenderCurrentHP: b.DefenderCurrentHp, Hits: b.Hits}
 	}
 	return req
 }
 
-func screensRequestFrom(s *api.Screens) *screensRequest {
+func screensRequestFrom(s *api.Screens) *domain.ScreensInput {
 	if s == nil {
 		return nil
 	}
-	return &screensRequest{Reflect: s.Reflect, LightScreen: s.LightScreen, AuroraVeil: s.AuroraVeil}
+	return &domain.ScreensInput{Reflect: s.Reflect, LightScreen: s.LightScreen, AuroraVeil: s.AuroraVeil}
 }
 
-func individualRequestFrom(in api.Individual) *individualRequest {
+func individualRequestFrom(in api.Individual) *domain.IndividualInput {
 	key := string(in.SpeciesKey)
 	nature := in.NatureId
-	out := &individualRequest{
+	out := &domain.IndividualInput{
 		SpeciesKey: &key,
 		Level:      in.Level,
 		NatureID:   &nature,
 		AbilityID:  in.AbilityId,
 		ItemID:     in.ItemId,
-		Sp:         &spRequest{Hp: &in.Sp.Hp, Atk: &in.Sp.Atk, Def: &in.Sp.Def, Spa: &in.Sp.Spa, Spd: &in.Sp.Spd, Spe: &in.Sp.Spe},
+		Sp:         &domain.SPInput{Hp: &in.Sp.Hp, Atk: &in.Sp.Atk, Def: &in.Sp.Def, Spa: &in.Sp.Spa, Spd: &in.Sp.Spd, Spe: &in.Sp.Spe},
 	}
 	if r := in.Ranks; r != nil {
-		out.Ranks = &rankSnapshot{Atk: r.Atk, Def: r.Def, Spa: r.Spa, Spd: r.Spd, Spe: r.Spe}
+		out.Ranks = &domain.RankInput{Atk: r.Atk, Def: r.Def, Spa: r.Spa, Spd: r.Spd, Spe: r.Spe}
 	}
 	if in.TeraType != nil {
 		t := string(*in.TeraType)

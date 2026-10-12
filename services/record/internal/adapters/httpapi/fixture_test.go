@@ -29,7 +29,7 @@ import (
 	"time"
 
 	"example.com/pokecalc/services/internal/api"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/adapters/store"
 )
 
 // 架空の端末 ID / セッション ID(版4の形。gateway が検証済みの値が来る前提)。

@@ -1,19 +1,24 @@
-package expire
+// Package expirestore は record-svc の失効ジョブのポート(app/expire.Store)の TiDB 実装(ADR-0220 §4・ADR-0254)。
+// 全端末を横断する SQL を持つので、端末ごとの adapters/store とは分ける。HTTP・NATS・他サービスには依存しない
+// (app/expire の expire_test.go の import 検査がこのパッケージも見る)。
+package expirestore
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
 	"time"
+
+	"example.com/pokecalc/services/record/internal/app/expire"
 )
 
-// tidbStore は Store の TiDB(MySQL 互換)実装。時刻は UTC で渡す(internal/store と同じ)。
+// tidbStore は expire.Store の TiDB(MySQL 互換)実装。時刻は UTC で渡す(adapters/store と同じ)。
 type tidbStore struct {
 	db *sql.DB
 }
 
-// NewTiDB は Store の TiDB 実装を作る。
-func NewTiDB(db *sql.DB) Store { return &tidbStore{db: db} }
+// NewTiDB は expire.Store の TiDB 実装を作る。
+func NewTiDB(db *sql.DB) expire.Store { return &tidbStore{db: db} }
 
 // noBusinessRows は「その端末に業務テーブルの行が1つも無い」条件(devices を外側に持つ文の中で使う)。
 const noBusinessRows = `NOT EXISTS (SELECT 1 FROM calc_events WHERE calc_events.device_id = devices.device_id)

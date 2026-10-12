@@ -13,7 +13,7 @@ import (
 	"strconv"
 
 	"example.com/pokecalc/services/internal/calcevents"
-	"example.com/pokecalc/services/record/internal/store"
+	"example.com/pokecalc/services/record/internal/app"
 )
 
 // Action は1件のメッセージの処理後にすべきこと。
@@ -60,11 +60,11 @@ func EventID(streamSeq uint64) string {
 
 // Handler は record-svc の計算イベント消費本体。ゼロ値は使わない(NewHandler で作る)。
 type Handler struct {
-	store store.Store
+	store app.Store
 }
 
 // NewHandler は Store を使う Handler を作る。
-func NewHandler(st store.Store) *Handler {
+func NewHandler(st app.Store) *Handler {
 	return &Handler{store: st}
 }
 
@@ -95,7 +95,7 @@ func (h *Handler) Handle(ctx context.Context, eventID string, data []byte) Actio
 		return Term
 	}
 
-	ce := store.CalcEvent{
+	ce := app.CalcEvent{
 		EventID:            eventID,
 		DeviceID:           ev.DeviceID,
 		SessionID:          ev.SessionID,
@@ -107,7 +107,7 @@ func (h *Handler) Handle(ctx context.Context, eventID string, data []byte) Actio
 
 	outcome, err := h.store.SaveCalcEvent(ctx, ce)
 	if err != nil {
-		if errors.Is(err, store.ErrUnavailable) {
+		if errors.Is(err, app.ErrUnavailable) {
 			slog.Warn("record-svc: DB に届かない。再配送させる", "eventId", eventID, "error", err)
 			return Nak
 		}
@@ -116,16 +116,16 @@ func (h *Handler) Handle(ctx context.Context, eventID string, data []byte) Actio
 	}
 
 	switch outcome {
-	case store.Duplicate:
+	case app.Duplicate:
 		slog.Debug("record-svc: 重複イベントを ack する", "eventId", eventID, "deviceId", ev.DeviceID)
-	case store.Tombstoned:
+	case app.Tombstoned:
 		slog.Debug("record-svc: 墓石より前のイベントを破棄する", "eventId", eventID, "deviceId", ev.DeviceID)
 	}
 	return Ack
 }
 
 // defenderSpeciesKey は Operation が calc のときだけ防御側の種族を集計キーとして返す
-// (ADR-0209 §3 #2・store.CalcEvent の docstring)。
+// (ADR-0209 §3 #2・app.CalcEvent の docstring)。
 func defenderSpeciesKey(ev calcevents.Event) string {
 	if ev.Operation != calcevents.OperationCalc || ev.Detail == nil {
 		return ""

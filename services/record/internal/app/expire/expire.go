@@ -1,7 +1,8 @@
-// Package expire は record-svc の失効ジョブ(ADR-0209 §4・ADR-0220 §3・§4)。
+// Package expire は record-svc の失効ジョブの手順(ADR-0209 §4・ADR-0220 §3・§4。app 層。ADR-0811・ADR-0254)。
 //
-// 全端末を横断して期限切れの行を消すので、「全メソッドが deviceID を取る」internal/store の Store には
-// 足さず、失効専用の Store(このパッケージ)に置く。HTTP・NATS・他サービスには依存しない。
+// 全端末を横断して期限切れの行を消すので、「全メソッドが deviceID を取る」app.Store には
+// 足さず、失効専用のポート Store(このパッケージ)に置く。TiDB 実装は adapters/expirestore。
+// HTTP・NATS・DB ドライバ・他サービスには依存しない。
 package expire
 
 import (
