@@ -6,7 +6,6 @@ import type { IconName } from "../ui/Icon";
 const SCREEN_ICONS: Readonly<Record<string, IconName>> = {
   calc: "calc",
   reverse: "reverse",
-  balance: "balance",
   speed: "speed",
   team: "team",
   favorites: "favorites",

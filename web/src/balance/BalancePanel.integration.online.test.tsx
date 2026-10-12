@@ -29,7 +29,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import { ONLINE_MASTER_CAPABILITIES, SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
-import { BalanceScreen } from "./BalanceScreen";
+import { BalanceHarness } from "./balanceTestHarness";
 
 type Schemas = components["schemas"];
 type AnalyzeMembers = Schemas["AnalyzeRequest"]["members"];
@@ -175,12 +175,12 @@ function renderScreen(
     ? userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) })
     : userEvent.setup();
   const client = countingClient(options);
-  const rendered = render(<BalanceScreen master={master} client={client} masterSearch={search} />);
+  const rendered = render(<BalanceHarness master={master} client={client} masterSearch={search} />);
   return {
     user,
     client,
     rerenderMaster: (next) => {
-      rendered.rerender(<BalanceScreen master={next} client={client} masterSearch={search} />);
+      rendered.rerender(<BalanceHarness master={next} client={client} masterSearch={search} />);
     },
     advance: (ms) => {
       act(() => {
@@ -633,7 +633,7 @@ describe("A-9 の元の懸念が新しい条件でも再発しないこと(ADR-0
       expect(online.client.calls).toEqual(expect.arrayContaining(["analyze", "threats", "recommendations"]));
     });
     // 呼ばれた API の顔ぶれ(重複を除く)が、オフラインで種族だけ選んだときと同じであること。
-    // オフライン側の顔ぶれは BalanceScreen.test.tsx が固定しているので、ここでは値で突き合わせる。
+    // オフライン側の顔ぶれは BalancePanel.integration.test.tsx が固定しているので、ここでは値で突き合わせる。
     expect([...new Set(online.client.calls)].sort()).toEqual(["analyze", "recommendations", "threats"]);
   });
 });
