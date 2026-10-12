@@ -12,7 +12,7 @@ import (
 	"sort"
 	"testing"
 
-	pokedexdb "example.com/pokecalc/services/pokedex/db"
+	"example.com/pokecalc/services/internal/dbmigrate"
 )
 
 // userTables は dbName に実在するテーブル(schema_migrations を除く)を名前順で返す。
@@ -56,7 +56,7 @@ func TestMigratorRunsFullMigrationAndOnlyOwnTables(t *testing.T) {
 	}
 
 	roles := newTestRoles(t, cfg)
-	if err := pokedexdb.Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 

@@ -13,7 +13,6 @@ describe("screenIconName", () => {
     ["reverse", "reverse"],
     ["balance", "balance"],
     ["speed", "speed"],
-    ["judge", "judge"],
     ["team", "team"],
     ["favorites", "favorites"],
     ["adjust", "adjust"],

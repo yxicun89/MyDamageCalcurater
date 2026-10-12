@@ -6,6 +6,8 @@ package db
 
 import (
 	"testing"
+
+	"example.com/pokecalc/services/internal/dbmigrate"
 )
 
 const insertLedger = "INSERT INTO species_key_ledger (species_key, showdown_id, first_seen_at) VALUES "
@@ -60,7 +62,7 @@ func TestKeyLedgerGrants(t *testing.T) {
 	dropTestUsers(t, admin)
 	dsn, cfg := testDSN(t)
 	roles := newTestRoles(t, cfg)
-	if err := Provision(dsn, roles.all()); err != nil {
+	if err := dbmigrate.Provision(dsn, roles.all()); err != nil {
 		t.Fatalf("Provision: %v", err)
 	}
 	im := mustOpenAs(t, roles.importer)
