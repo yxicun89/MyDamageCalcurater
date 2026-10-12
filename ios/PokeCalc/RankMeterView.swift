@@ -23,8 +23,9 @@ struct RankMeterView: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    /// ボタンとトラックのタップ領域の最小の一辺(受け入れ条件: 36pt 以上)。
-    private static let minTapSide: CGFloat = 36
+    /// ボタンとトラックのタップ領域の一辺。受け入れ条件は 36pt 以上だが、描画の丸めで 35.99999… になると
+    /// XCUITest の `frame` 検査で落ちるため 1pt 余裕を持つ(旧ランクのボタンも 37。ADR-0501「issue #274」5)。
+    private static let minTapSide: CGFloat = 37
     private static let segmentSpacing: CGFloat = 2
     private static let segmentHeight: CGFloat = 20
     private static let zeroMarkerWidth: CGFloat = 4
