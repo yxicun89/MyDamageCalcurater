@@ -2,89 +2,94 @@ import PokeCalcCore
 import PokeCalcDesign
 import SwiftUI
 
-// SpeedScreenView: 素早さ比較画面(P6-24。ADR-0503 §7)。
+// SpeedScreenView: 素早さ画面(相手を選んで上を取る最低ライン。I-speed-4c。ADR-0610 追記)。
 //
-// ロジックは持たない。`SpeedViewModel`(PokeCalcCore)の状態を描き、操作をメソッドへつなぐだけ(ADR-0500 §1)。
-// 縦の 1 本のスクロール: 上から「自分のポケモン」(入力と結果)、「素早さの表」。
-// 色を持つのはタイプのエンブレムだけ(design.md)。常時動くアニメーションは入れない。
+// ロジックは持たない。`SpeedMatchupViewModel`(PokeCalcCore)の状態を描き、操作をメソッドへつなぐだけ(ADR-0500 §1)。
+// 縦の 1 本のスクロール: 入力(自分 / 相手 / 場)→ 出力 1(想定ごとのカード)→ 出力 2(「これ以上」)→ 連続技へのリンク。
+// 表と周辺パネルは出さない。固定高にしない(長い文言は折り返す。AX5 でも横にはみ出さない)。
+// 色だけに頼らない(バッジ・行は文字でも区別する)。常時動くアニメーションは入れない。
 
 struct SpeedScreenView: View {
-    @State private var viewModel: SpeedViewModel
-    @State private var isPokemonSheetPresented = false
+    @State private var viewModel: SpeedMatchupViewModel
+    @State private var pickerTarget: SpeedPickerTarget?
+    /// 連続技(計算画面)へ渡す先。nil の間は連続技へのリンクを出さない(連続技 CB-8 が入るまで)。
+    private let onOpenCombo: ((SpeedComboHandoff) -> Void)?
 
-    init(service: any SpeedService) {
-        _viewModel = State(initialValue: SpeedViewModel(service: service))
+    init(service: any SpeedService, onOpenCombo: ((SpeedComboHandoff) -> Void)? = nil) {
+        _viewModel = State(
+            initialValue: SpeedMatchupViewModel(service: service, comboAvailable: onOpenCombo != nil))
+        self.onOpenCombo = onOpenCombo
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: SpacingToken.x4) {
-                    Text(SpeedLabels.screenTitle)
-                        .font(TextStyleToken.heading.font)
-                        .foregroundStyle(ColorToken.textPrimary.color)
-                    SpeedSelfSection(viewModel: viewModel, isPokemonSheetPresented: $isPokemonSheetPresented)
-                    SpeedTableSection(viewModel: viewModel, scrollToRow: { proxy.scrollTo($0, anchor: .center) })
-                }
-                .padding(SpacingToken.x4)
+        ScrollView {
+            VStack(alignment: .leading, spacing: SpacingToken.x4) {
+                Text(SpeedLabels.screenTitle)
+                    .font(TextStyleToken.heading.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                SpeedSelfSection(viewModel: viewModel, pickerTarget: $pickerTarget)
+                SpeedOpponentSection(viewModel: viewModel, pickerTarget: $pickerTarget)
+                SpeedFieldSection(viewModel: viewModel)
+                SpeedMatchupSection(viewModel: viewModel)
+                SpeedReachSection(viewModel: viewModel)
+                comboLink
             }
+            .padding(SpacingToken.x4)
         }
         .popScreenBackground()
         .accessibilityIdentifier("speedScreen")
         .task { await viewModel.load() }
         .onDisappear { viewModel.cancelPendingWork() }
-        .sheet(isPresented: $isPokemonSheetPresented) {
-            SpeedPokemonSheet(viewModel: viewModel)
+        .sheet(item: $pickerTarget) { target in
+            SpeedPokemonSheet(viewModel: viewModel, target: target)
+        }
+    }
+
+    /// 「この相手で連続技を計算」。`comboHandoff` が nil の間(連続技が未実装・ポケモン未選択)は出さない。
+    @ViewBuilder
+    private var comboLink: some View {
+        if let handoff = viewModel.comboHandoff, let onOpenCombo {
+            Button {
+                onOpenCombo(handoff)
+            } label: {
+                Text(SpeedMatchupLabels.comboLink)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(SpacingToken.x3)
+                    .popCard(cornerRadius: RadiusToken.card)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("speedComboLink")
         }
     }
 }
 
-/// 「自分のポケモン」: 入力の方法・ポケモン・調整と、結果。
-private struct SpeedSelfSection: View {
-    let viewModel: SpeedViewModel
-    @Binding var isPokemonSheetPresented: Bool
+/// ポケモンのシートの対象(自分 / 相手)。
+enum SpeedPickerTarget: String, Identifiable {
+    case own
+    case opponent
+
+    var id: String { rawValue }
+}
+
+/// ポケモンを選ぶボタン(選んだ名前とエンブレム。タップでシートを開く)。
+private struct SpeedPokemonButton: View {
+    let title: String
+    let pokemon: SpeedPokemon?
+    let identifier: String
+    let action: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            PopHeading(title: SpeedLabels.selfRegion, systemImage: PopSymbol.speed)
-            modePills
-            pokemonRow
-            switch viewModel.mode {
-            case .preset: presetControls
-            case .custom: customControls
-            case .raw: rawControls
-            }
-            SpeedResultView(viewModel: viewModel)
-            SpeedNeighborhoodSection(viewModel: viewModel)
-        }
-        .padding(SpacingToken.x3)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .popCard(cornerRadius: RadiusToken.card)
-        .accessibilityElement(children: .contain)
-    }
-
-    private var modePills: some View {
-        SpeedPillGroup(title: SpeedLabels.modeGroup) {
-            ForEach(SpeedInputMode.allCases, id: \.self) { mode in
-                SpeedPill(
-                    title: SpeedLabels.mode(mode), isSelected: viewModel.mode == mode,
-                    identifier: "speedMode-\(mode.rawValue)"
-                ) { viewModel.setMode(mode) }
-            }
-        }
-    }
-
-    private var pokemonRow: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            SpeedCaption(text: SpeedLabels.pokemon)
-            Button {
-                isPokemonSheetPresented = true
-            } label: {
+            SpeedCaption(text: title)
+            Button(action: action) {
                 HStack(spacing: SpacingToken.x2) {
-                    if let selected = viewModel.selectedPokemon {
-                        SpeedEmblem(name: selected.nameJa, primaryType: selected.types.first ?? "", speciesKey: selected.pokemonId)
+                    if let pokemon {
+                        SpeedEmblem(name: pokemon.nameJa, primaryType: pokemon.types.first ?? "", speciesKey: pokemon.pokemonId)
                     }
-                    Text(viewModel.selectedPokemon?.nameJa ?? SpeedLabels.unselected)
+                    Text(pokemon?.nameJa ?? SpeedLabels.unselected)
                         .font(TextStyleToken.body.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
                         .multilineTextAlignment(.leading)
@@ -98,43 +103,24 @@ private struct SpeedSelfSection: View {
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
             }
             .buttonStyle(.plain)
-            .accessibilityIdentifier("speedPokemonButton")
+            .accessibilityIdentifier(identifier)
+        }
+    }
+}
+
+/// 「自分のポケモン」: ポケモン・ランク・スカーフ/追い風/まひ・今の振り(任意)。
+private struct SpeedSelfSection: View {
+    let viewModel: SpeedMatchupViewModel
+    @Binding var pickerTarget: SpeedPickerTarget?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            PopHeading(title: SpeedLabels.selfRegion, systemImage: PopSymbol.speed)
+            SpeedPokemonButton(
+                title: SpeedLabels.pokemon, pokemon: viewModel.selfPokemon, identifier: "speedPokemonButton"
+            ) { pickerTarget = .own }
             if case .failed(let failure) = viewModel.pokemonState {
                 ErrorBannerView(message: failure.message, identifier: "speedPokemonError")
-            }
-        }
-    }
-
-    private var presetControls: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            SpeedPillGroup(title: SpeedLabels.presetGroup) {
-                ForEach(SpeedMinimalPreset.allCases, id: \.self) { preset in
-                    SpeedPill(
-                        title: SpeedLabels.preset(preset), isSelected: viewModel.preset == preset,
-                        identifier: "speedPreset-\(preset.rawValue)"
-                    ) { viewModel.setPreset(preset) }
-                }
-            }
-            fieldFlags
-        }
-    }
-
-    private var customControls: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            SpeedStepper(
-                title: SpeedLabels.sp, valueText: String(viewModel.sp),
-                decrementLabel: SpeedLabels.spDecrement, incrementLabel: SpeedLabels.spIncrement,
-                canDecrement: viewModel.sp > 0, canIncrement: viewModel.sp < SPLimits.maxPerStat,
-                identifierPrefix: "speedSP",
-                onDecrement: { viewModel.setSP(viewModel.sp - 1) },
-                onIncrement: { viewModel.setSP(viewModel.sp + 1) })
-            SpeedPillGroup(title: SpeedLabels.natureGroup) {
-                ForEach(SpeedNature.allCases, id: \.self) { nature in
-                    SpeedPill(
-                        title: SpeedLabels.nature(nature), isSelected: viewModel.nature == nature,
-                        identifier: "speedNature-\(nature.rawValue)"
-                    ) { viewModel.setNature(nature) }
-                }
             }
             SpeedStepper(
                 title: SpeedLabels.rank, valueText: Self.rankText(viewModel.rank),
@@ -143,108 +129,134 @@ private struct SpeedSelfSection: View {
                 identifierPrefix: "speedRank",
                 onDecrement: { viewModel.setRank(viewModel.rank - 1) },
                 onIncrement: { viewModel.setRank(viewModel.rank + 1) })
-            fieldFlags
+            SpeedFlowLayout {
+                SpeedPill(title: SpeedLabels.scarf, isSelected: viewModel.scarf, identifier: "speedScarf") {
+                    viewModel.setScarf(!viewModel.scarf)
+                }
+                SpeedPill(title: SpeedLabels.selfTailwind, isSelected: viewModel.tailwind, identifier: "speedSelfTailwind") {
+                    viewModel.setTailwind(!viewModel.tailwind)
+                }
+                SpeedPill(title: SpeedMatchupLabels.selfParalysis, isSelected: viewModel.paralysis, identifier: "speedSelfParalysis") {
+                    viewModel.setParalysis(!viewModel.paralysis)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            currentGroup
         }
+        .padding(SpacingToken.x3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .popCard(cornerRadius: RadiusToken.card)
+        .accessibilityElement(children: .contain)
     }
 
     private static func rankText(_ rank: Int) -> String { rank > 0 ? "+\(rank)" : String(rank) }
 
-    /// スカーフ・追い風・まひ(preset と custom で共通。raw は補正済みの値を入れるので出さない)。
-    private var fieldFlags: some View {
-        SpeedFlowLayout {
-            SpeedPill(title: SpeedLabels.scarf, isSelected: viewModel.scarf, identifier: "speedScarf") {
-                viewModel.setScarf(!viewModel.scarf)
+    /// 今の振り(任意)。入れると行動順のバッジと「これ以上」が出る。
+    private var currentGroup: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            SpeedPillGroup(title: SpeedMatchupLabels.currentGroup) {
+                SpeedPill(
+                    title: SpeedMatchupLabels.currentToggle, isSelected: viewModel.current != nil,
+                    identifier: "speedCurrentToggle"
+                ) { viewModel.setCurrentEnabled(viewModel.current == nil) }
             }
-            SpeedPill(title: SpeedLabels.selfTailwind, isSelected: viewModel.tailwind, identifier: "speedSelfTailwind") {
-                viewModel.setTailwind(!viewModel.tailwind)
-            }
-            SpeedPill(title: SpeedLabels.paralysis, isSelected: viewModel.paralysis, identifier: "speedParalysis") {
-                viewModel.setParalysis(!viewModel.paralysis)
+            if let current = viewModel.current {
+                SpeedPillGroup(title: SpeedMatchupLabels.currentPresetGroup) {
+                    ForEach(SpeedMinimalPreset.allCases, id: \.self) { preset in
+                        SpeedPill(
+                            title: SpeedLabels.preset(preset), isSelected: current == Self.investment(preset),
+                            identifier: "speedCurrentPreset-\(preset.rawValue)"
+                        ) { viewModel.applyCurrentPreset(preset) }
+                    }
+                }
+                SpeedStepper(
+                    title: SpeedLabels.sp, valueText: String(current.sp),
+                    decrementLabel: SpeedLabels.spDecrement, incrementLabel: SpeedLabels.spIncrement,
+                    canDecrement: current.sp > 0, canIncrement: current.sp < SPLimits.maxPerStat,
+                    identifierPrefix: "speedSP",
+                    onDecrement: { viewModel.setCurrentSP(current.sp - 1) },
+                    onIncrement: { viewModel.setCurrentSP(current.sp + 1) })
+                SpeedPillGroup(title: SpeedLabels.natureGroup) {
+                    ForEach(SpeedNature.allCases, id: \.self) { nature in
+                        SpeedPill(
+                            title: SpeedLabels.nature(nature), isSelected: current.nature == nature,
+                            identifier: "speedNature-\(nature.rawValue)"
+                        ) { viewModel.setCurrentNature(nature) }
+                    }
+                }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var rawControls: some View {
+    /// かんたん設定が指す SP・性格(`SpeedMatchupViewModel.applyCurrentPreset` と同じ対応)。
+    private static func investment(_ preset: SpeedMinimalPreset) -> SpeedInvestment {
+        switch preset {
+        case .uninvested: return SpeedInvestment(sp: 0, nature: .neutral)
+        case .neutralMax: return SpeedInvestment(sp: SPLimits.maxPerStat, nature: .neutral)
+        case .max: return SpeedInvestment(sp: SPLimits.maxPerStat, nature: .plus)
+        }
+    }
+}
+
+/// 「相手のポケモン」: ポケモン・想定のチップ・追い風/まひ。
+private struct SpeedOpponentSection: View {
+    let viewModel: SpeedMatchupViewModel
+    @Binding var pickerTarget: SpeedPickerTarget?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x3) {
+            PopHeading(title: SpeedMatchupLabels.opponentRegion, systemImage: PopSymbol.speed)
+            SpeedPokemonButton(
+                title: SpeedLabels.pokemon, pokemon: viewModel.opponentPokemon, identifier: "speedOpponentPokemonButton"
+            ) { pickerTarget = .opponent }
+            assumptionGroup
+            SpeedFlowLayout {
+                SpeedPill(title: SpeedMatchupLabels.opponentTailwind, isSelected: viewModel.opponentTailwind, identifier: "speedOpponentTailwind") {
+                    viewModel.setOpponentTailwind(!viewModel.opponentTailwind)
+                }
+                SpeedPill(
+                    title: SpeedMatchupLabels.opponentParalysis, isSelected: viewModel.opponentParalysis,
+                    identifier: "speedOpponentParalysis"
+                ) { viewModel.setOpponentParalysis(!viewModel.opponentParalysis) }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(SpacingToken.x3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .popCard(cornerRadius: RadiusToken.card)
+        .accessibilityElement(children: .contain)
+    }
+
+    private var assumptionGroup: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            SpeedCaption(text: SpeedLabels.rawValue)
-            TextField(
-                SpeedLabels.rawValue,
-                text: Binding(get: { viewModel.rawValueText }, set: { viewModel.setRawValueText($0) })
-            )
-            .keyboardType(.numberPad)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .padding(SpacingToken.x3)
-            .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
-            .accessibilityIdentifier("speedRawValueField")
-            if let message = viewModel.rawValueError {
-                Text(message)
+            SpeedPillGroup(title: SpeedMatchupLabels.assumptionGroup) {
+                ForEach(SpeedPresetID.allCases, id: \.self) { id in
+                    SpeedPill(
+                        title: SpeedLabels.preset(id), isSelected: viewModel.selectedPresets.contains(id),
+                        identifier: "speedAssumption-\(id.rawValue)"
+                    ) { viewModel.togglePreset(id) }
+                }
+            }
+            if viewModel.assumptionMinimumNoticeVisible {
+                Text(SpeedMatchupLabels.assumptionMinimumNotice)
                     .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
+                    .foregroundStyle(ColorToken.textSecondary.color)
                     .multilineTextAlignment(.leading)
-                    .accessibilityIdentifier("speedRawValueError")
+                    .accessibilityIdentifier("speedAssumptionMinimumNotice")
             }
         }
     }
 }
 
-/// 自分の結果(実数値・速い/遅い行数・同速)。トリックルーム中は行動順の読み替えを足す。
-private struct SpeedResultView: View {
-    let viewModel: SpeedViewModel
+/// 「場の状態」: トリックルーム。
+private struct SpeedFieldSection: View {
+    let viewModel: SpeedMatchupViewModel
 
     var body: some View {
-        switch viewModel.positionState {
-        case .idle:
-            EmptyView()
-        case .loading:
-            Text(SpeedLabels.positionLoading)
-                .font(TextStyleToken.caption.font)
-                .foregroundStyle(ColorToken.textSecondary.color)
-                .accessibilityIdentifier("speedPositionLoading")
-        case .failed(let failure):
-            ErrorBannerView(message: failure.message, identifier: "speedPositionError")
-        case .loaded:
-            if let display = viewModel.positionDisplay {
-                resultBody(display)
+        SpeedPillGroup(title: SpeedLabels.fieldGroup) {
+            SpeedPill(title: SpeedLabels.trickRoom, isSelected: viewModel.trickRoom, identifier: "speedTrickRoom") {
+                viewModel.setTrickRoom(!viewModel.trickRoom)
             }
         }
-    }
-
-    private func resultBody(_ display: SpeedPositionDisplay) -> some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            if let name = display.pokemonName {
-                line(name, style: .body, id: "speedResultPokemon")
-            }
-            line(display.speedLabel, style: .heading, id: "speedResultSpeed")
-            line(display.fasterLabel, style: .body, id: "speedResultFaster")
-            line(display.slowerLabel, style: .body, id: "speedResultSlower")
-            if let before = display.movesBeforeLabel {
-                line(before, style: .body, id: "speedResultMovesBefore")
-            }
-            if let after = display.movesAfterLabel {
-                line(after, style: .body, id: "speedResultMovesAfter")
-            }
-            if display.hasTie {
-                line(SpeedLabels.tie, style: .caption, id: "speedResultTie", secondary: true)
-                ForEach(Array(display.tieEntries.enumerated()), id: \.offset) { index, entry in
-                    line(entry.label, style: .body, id: "speedResultTieEntry-\(index)")
-                }
-            } else {
-                line(SpeedLabels.noTie, style: .body, id: "speedResultNoTie")
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("speedResult")
-    }
-
-    private func line(_ text: String, style: TextStyleToken, id: String, secondary: Bool = false) -> some View {
-        Text(text)
-            .font(style.font)
-            .foregroundStyle(secondary ? ColorToken.textSecondary.color : ColorToken.textPrimary.color)
-            .multilineTextAlignment(.leading)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier(id)
     }
 }

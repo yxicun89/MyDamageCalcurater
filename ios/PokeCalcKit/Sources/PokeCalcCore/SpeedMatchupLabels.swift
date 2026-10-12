@@ -41,48 +41,87 @@ public enum SpeedMatchupLabels {
         }
     }
 
-    // ---- 値を埋め込む文言(未実装。例は SpeedMatchupLabelsTests) ----
+    // ---- 値を埋め込む文言 ----
 
     /// 「相手の素早さ 200」
-    public static func opponentSpeed(_ speed: Int) -> String { "" }
+    public static func opponentSpeed(_ speed: Int) -> String { "相手の素早さ \(speed)" }
 
     /// カスタム想定の名前。「カスタム(S20・上昇)」「カスタム(S32・補正なし・+1・スカーフ)」(ランク 0 とスカーフなしは省く)。
-    public static func customAssumption(_ custom: SpeedCustomAssumption) -> String { "" }
+    public static func customAssumption(_ custom: SpeedCustomAssumption) -> String {
+        var parts = ["S\(custom.sp)", SpeedLabels.nature(custom.nature)]
+        if custom.rank != 0 { parts.append(custom.rank > 0 ? "+\(custom.rank)" : "\(custom.rank)") }
+        if custom.scarf { parts.append("スカーフ") }
+        return "カスタム(" + parts.joined(separator: "・") + ")"
+    }
 
     /// 性格ごとの行の本文(トリックルームなし)。最小 SP が 0 なら「無振りでも抜ける」、それ以外は「S31以上で抜ける」、
     /// 区間なしは「届かない」。
-    public static func firstLine(_ range: SpeedSPRange?) -> String { "" }
+    public static func firstLine(_ range: SpeedSPRange?) -> String {
+        guard let range else { return "届かない" }
+        return range.min == 0 ? "無振りでも抜ける" : "S\(range.min)以上で抜ける"
+    }
 
     /// 性格ごとの行の本文(トリックルーム中)。「S12まで下を取れる」、区間なしは「下を取れない」。
-    public static func trickRoomLine(_ range: SpeedSPRange?) -> String { "" }
+    public static func trickRoomLine(_ range: SpeedSPRange?) -> String {
+        guard let range else { return "下を取れない" }
+        return "S\(range.max)まで下を取れる"
+    }
 
     /// 同速の SP。1 点なら「S17で同速」、区間なら「S10〜S12で同速」。
-    public static func tieLine(_ range: SpeedSPRange) -> String { "" }
+    public static func tieLine(_ range: SpeedSPRange) -> String {
+        range.min == range.max ? "S\(range.min)で同速" : "S\(range.min)〜S\(range.max)で同速"
+    }
+
+    private static func movesFirst(_ natures: [SpeedNatureLine], _ nature: SpeedNature) -> SpeedSPRange? {
+        natures.first { $0.nature == nature }?.movesFirst
+    }
 
     /// 見出し(トリックルームなし)。補正なしの最小 SP が 0 →「無振りで抜ける」/ 補正なしで足りる →「準速で抜ける」/
     /// 補正なしは届かず上昇で足りる →「最速なら S18で抜ける」/ どれも届かない →「最速でも届かない」。
-    public static func headline(natures: [SpeedNatureLine]) -> String { "" }
+    public static func headline(natures: [SpeedNatureLine]) -> String {
+        if let neutral = movesFirst(natures, .neutral) {
+            return neutral.min == 0 ? "無振りで抜ける" : "準速で抜ける"
+        }
+        if let plus = movesFirst(natures, .plus) { return "最速なら S\(plus.min)で抜ける" }
+        return "最速でも届かない"
+    }
 
     /// 見出し(トリックルーム中)。上昇でも 32 まで →「最速でも下を取れる」/ 補正なしで 32 まで →「準速でも下を取れる」/
     /// 補正なしの上限 k →「補正なしなら S12まで下を取れる」/ 下降だけ →「下降なら S5まで下を取れる」/ どれも無い →「どう振っても下を取れない」。
-    public static func trickRoomHeadline(natures: [SpeedNatureLine]) -> String { "" }
+    public static func trickRoomHeadline(natures: [SpeedNatureLine]) -> String {
+        let top = SPLimits.maxPerStat
+        if movesFirst(natures, .plus)?.max == top { return "最速でも下を取れる" }
+        if let neutral = movesFirst(natures, .neutral) {
+            return neutral.max == top ? "準速でも下を取れる" : "補正なしなら S\(neutral.max)まで下を取れる"
+        }
+        if let minus = movesFirst(natures, .minus) { return "下降なら S\(minus.max)まで下を取れる" }
+        return "どう振っても下を取れない"
+    }
 
     // ---- 「これ以上」(族の区切り。P は調整名〈`SpeedLabels.preset`〉) ----
 
     /// 「最速 102族まで抜ける」。トリックルーム中は「最速 102族までは後に動く」。区間なしは「最速 はどの族も抜けない」
     /// (トリックルーム中は「最速 より後に動く族なし」)。
-    public static func reachSlower(preset: String, range: SpeedBaseSpeedRange?, trickRoom: Bool) -> String { "" }
+    public static func reachSlower(preset: String, range: SpeedBaseSpeedRange?, trickRoom: Bool) -> String {
+        guard let range else { return trickRoom ? "\(preset) より後に動く族なし" : "\(preset) はどの族も抜けない" }
+        return trickRoom ? "\(preset) \(range.max)族までは後に動く" : "\(preset) \(range.max)族まで抜ける"
+    }
 
     /// 「最速 103族と同速」「最速 10〜12族と同速」。
-    public static func reachTie(preset: String, range: SpeedBaseSpeedRange) -> String { "" }
+    public static func reachTie(preset: String, range: SpeedBaseSpeedRange) -> String {
+        range.min == range.max ? "\(preset) \(range.min)族と同速" : "\(preset) \(range.min)〜\(range.max)族と同速"
+    }
 
     /// 「最速 104族以上に抜かれる」。トリックルーム中は「最速 104族以上には先に動ける」。区間なしは「最速 に抜かれる族なし」
     /// (トリックルーム中は「最速 には先に動けない」)。
-    public static func reachFaster(preset: String, range: SpeedBaseSpeedRange?, trickRoom: Bool) -> String { "" }
+    public static func reachFaster(preset: String, range: SpeedBaseSpeedRange?, trickRoom: Bool) -> String {
+        guard let range else { return trickRoom ? "\(preset) には先に動けない" : "\(preset) に抜かれる族なし" }
+        return trickRoom ? "\(preset) \(range.min)族以上には先に動ける" : "\(preset) \(range.min)族以上に抜かれる"
+    }
 
     /// 「4体」
-    public static func count(_ count: Int) -> String { "" }
+    public static func count(_ count: Int) -> String { "\(count)体" }
 
     /// 「例: テストデンキネズミ」
-    public static func example(_ name: String) -> String { "" }
+    public static func example(_ name: String) -> String { "例: \(name)" }
 }

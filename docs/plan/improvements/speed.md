@@ -23,11 +23,11 @@
   - [x] 仕様と失敗するテスト(spec-writer): `services/speed/internal/speed/matchup_test.go`・`engine_parity_test.go`、`services/speed/internal/httpapi/matchup_test.go`、契約 0.7.0(`POST /api/speed/v1/matchup`・`/reach`)、スタブ(`matchup.go` 2 つ)
   - [x] I-speed-4a: speed のコア(MovesFirstLines・Matchup・Reach)と HTTP(matchup・reach。ミドルウェア登録)。上のテストを通す(2026-10-12。`Speed` は元から engine.EffectiveStat 経由で、engine_parity_test が engine.FinalSpeed との一致を守る)
   - [ ] I-speed-4b: Web の画面(入力 = 自分・相手・場、出力 1・2、連続技へのリンク。表・周辺パネルを外す)
-  - [ ] I-speed-4c: iOS の画面(Web と同じ体験)。ブランチ `feat/speed-ios-matchup`。設計は ADR-0610 追記「iOS の画面」
+  - [x] I-speed-4c: iOS の画面(Web と同じ体験)。ブランチ `feat/speed-ios-matchup`。設計は ADR-0610 追記「iOS の画面」
     - [x] 仕様と失敗するテスト(spec-writer): PokeCalcKit の `APISpeedMatchupTests`・`MockSpeedMatchupTests`・`SpeedMatchupLabelsTests`・`SpeedMatchupDisplayTests`・`SpeedMatchupViewModelInputTests`・`SpeedMatchupViewModelStateTests`、UI テスト `SpeedMatchupUITests`(3 本)・`SpeedMatchupLargeTextUITests`(AX5 1 本)、スタブ(`SpeedMatchupTypes`・`SpeedMatchupLabels`・`SpeedMatchupDisplay`・`SpeedMatchupViewModel`・`APISpeedService` / `MockSpeedService` の matchup・reach)
-    - [ ] API クライアント: `APISpeedService.matchup` / `reach`(生成クライアント)
-    - [ ] ラベル・表示の整形: `SpeedMatchupLabels`(関数)・`SpeedMatchupDisplayBuilder`
-    - [ ] `SpeedMatchupViewModel`(入力 → 要求 → 状態・トリックルーム・失敗・キャンセル)
-    - [ ] モック: `MockSpeedService.matchup` / `reach`(`MockSpeedMatchupTests` の手計算に合わせる)
-    - [ ] View: 新しい `SpeedScreenView`(自分・相手・場の入力、カード、「これ以上」)。表・周辺パネル・旧入力を外し、旧型・旧テストを整理(ADR-0610 追記 §5・§6)
-    - [ ] 旧 UI テストの書き換え(ADR-0610 追記 §6)・`make ios-test` 成功
+    - [x] API クライアント: `APISpeedService.matchup` / `reach`(生成クライアント)
+    - [x] ラベル・表示の整形: `SpeedMatchupLabels`(関数)・`SpeedMatchupDisplayBuilder`
+    - [x] `SpeedMatchupViewModel`(入力 → 要求 → 状態・トリックルーム・失敗・キャンセル)
+    - [x] モック: `MockSpeedService.matchup` / `reach`(`MockSpeedMatchupTests` の手計算に合わせる)
+    - [x] View: 新しい `SpeedScreenView`(自分・相手・場の入力、カード、「これ以上」)。表・周辺パネル・旧入力を外し、旧型・旧テストを整理(ADR-0610 追記 §5・§6)
+    - [x] 旧 UI テストの書き換え(ADR-0610 追記 §6)・`make ios-test` 成功

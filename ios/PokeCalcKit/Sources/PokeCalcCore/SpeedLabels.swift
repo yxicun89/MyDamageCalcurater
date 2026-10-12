@@ -1,54 +1,28 @@
-// SpeedLabels: 素早さ比較の画面の固定文言(P6-24。ADR-0503)。
-// Web の `speedScreenText`・`speedPresetText`(web/src/i18n/ja.ts)と同じ文言にそろえる(違いは ADR に書く)。
-// 範囲の数値(SP の最大・ランクの範囲)は `SPLimits` / `RankLimits` から埋め込む(直書きしない。coding-rules §2)。
+// SpeedLabels: 素早さ画面の共通の文言(P6-24。ADR-0503)。調整名・性格名・エラー文言・入口。
+// 画面の見出し・カード・「これ以上」の文言は `SpeedMatchupLabels`(I-speed-4c。ADR-0610)。
+// Web の `speedScreenText`・`speedPresetText`(web/src/i18n/speed.ts)と同じ語にそろえる(違いは ADR-0610 追記に書く)。
 
 public enum SpeedLabels {
     // ---- 入口・見出し ----
     /// ルート画面の入口ボタン。
     public static let openButton = "素早さを比べる"
     public static let screenTitle = "素早さ比較"
-    public static let tableRegion = "素早さの表"
     public static let selfRegion = "自分のポケモン"
     public static let loading = "読み込み中"
-    public static let positionLoading = "位置を計算中"
 
-    // ---- 表 ----
-    public static let filterGroup = "表の絞り込み"
-    public static let filterMinimumNotice = "少なくとも1つは選ぶ必要があります"
+    // ---- 場 ----
     public static let fieldGroup = "場の状態"
-    public static let tableTailwind = "追い風(相手側)"
     public static let trickRoom = "トリックルーム"
-    public static let tie = "同速"
-    public static let noTie = "同速なし"
-    public static let selfTier = "自分と同速"
-    public static let selfBoundary = "ここに自分が入る"
-    public static let entrySeparator = "・"
-
-    public static func tierSpeed(_ speed: Int) -> String { "素早さ \(speed)" }
-
-    // ---- 表の中の自分の位置(遅延描画で自分の行が画面外のとき。ADR-0517) ----
-    public static let jumpToSelf = "自分の位置へ"
-    public static let jumpToSelfAbove = "自分の位置へ(上)"
-    public static let jumpToSelfBelow = "自分の位置へ(下)"
     public static let summarySeparator = "・"
-    public static func tableTotal(_ count: Int) -> String { "全\(count)段" }
-    public static func selfAtTier(_ n: Int) -> String { "自分は\(n)段目" }
-    public static func selfBeforeTier(_ n: Int) -> String { "自分は\(n)段目の前" }
-    public static func selfAfterTier(_ n: Int) -> String { "自分は\(n)段目の後" }
-    public static func selfBetweenTiers(_ a: Int, _ b: Int) -> String { "自分は\(a)段目と\(b)段目の間" }
 
     // ---- 自分のポケモン ----
-    public static let modeGroup = "入力の方法"
     public static let pokemon = "ポケモン"
     public static let unselected = "未選択"
-    public static let presetGroup = "調整"
     public static let scarf = "こだわりスカーフ"
     public static let selfTailwind = "追い風(自分側)"
-    public static let paralysis = "まひ"
     public static let sp = "素早さ SP"
     public static let natureGroup = "性格補正"
     public static let rank = "ランク"
-    public static let rawValue = "実数値"
     /// ピッカー(シート)の検索欄の案内と、0件のとき。
     public static let pokemonSearchPrompt = "ポケモンの名前で絞り込み"
     public static let pokemonNoMatch = "一致するポケモンがいません"
@@ -57,6 +31,7 @@ public enum SpeedLabels {
     public static let spIncrement = "素早さ SP を増やす"
     public static let spDecrement = "素早さ SP を減らす"
 
+    /// 位置の入力方法の名前(用語集テスト〈GlossaryTests〉が語を見る。画面では使わない)。
     public static func mode(_ mode: SpeedInputMode) -> String {
         switch mode {
         case .preset: return "定番の振り方"
@@ -94,19 +69,9 @@ public enum SpeedLabels {
         }
     }
 
-    // ---- 入力の範囲外(画面で送信前に止める) ----
-    public static func spRange(max: Int) -> String { "能力ポイントは0〜\(max)の整数で入力してください" }
-    public static func rankRange(min: Int, max: Int) -> String { "ランクは\(min)〜+\(max)の整数で入力してください" }
-    /// 実数値の下限(契約の minimum: 1)。上限は speed サービスだけが式から導くので画面では判定しない。
-    public static let rawValueRange = "実数値は1以上の整数で入力してください"
-
     // ---- 結果 ----
+    /// 今の振りを入れたときの自分の素早さ(実数値)。
     public static func selfSpeed(_ speed: Int) -> String { "実数値 \(speed)" }
-    public static func faster(_ rows: Int) -> String { "自分より速い \(rows)行" }
-    public static func slower(_ rows: Int) -> String { "自分より遅い \(rows)行" }
-    /// トリックルーム中の行動順の読み替え(速い = 後に動く、遅い = 先に動く。ADR-0607 §4)。
-    public static func movesBefore(_ rows: Int) -> String { "自分より先に動く \(rows)行" }
-    public static func movesAfter(_ rows: Int) -> String { "自分より後に動く \(rows)行" }
 
     // ---- エラー(サーバーの英語 message は出さず、code から日本語にする) ----
     public static let unavailable = "素早さのサーバーに接続できません"

@@ -102,14 +102,55 @@ public struct SpeedReachRowDisplay: Equatable, Identifiable, Sendable {
 public enum SpeedMatchupDisplayBuilder {
     /// 応答の `lines`(要求の想定の順)をカードにする。`trickRoom` は応答の `trickRoom` を使う。
     public static func cards(_ matchup: SpeedMatchup) -> [SpeedMatchupCardDisplay] {
-        // TODO(implementer): SpeedMatchupDisplayTests の規則で実装する。
-        []
+        var customIndex = 0
+        return matchup.lines.map { line in
+            let id: String
+            let label: String
+            switch line.assumption {
+            case .preset(let preset):
+                id = preset.rawValue
+                label = SpeedLabels.preset(preset)
+            case .custom(let custom):
+                id = "custom-\(customIndex)"
+                customIndex += 1
+                label = SpeedMatchupLabels.customAssumption(custom)
+            }
+            let trickRoom = matchup.trickRoom
+            // 下降の行はトリックルーム中だけ(ADR-0610 §6 Q5)。順は 下降・補正なし・上昇。
+            let rows = line.natures
+                .filter { trickRoom || $0.nature != .minus }
+                .map { natureRow($0, trickRoom: trickRoom) }
+            return SpeedMatchupCardDisplay(
+                id: id, assumptionLabel: label, opponentSpeedLabel: SpeedMatchupLabels.opponentSpeed(line.opponentSpeed),
+                headline: trickRoom
+                    ? SpeedMatchupLabels.trickRoomHeadline(natures: line.natures)
+                    : SpeedMatchupLabels.headline(natures: line.natures),
+                rows: rows, orderBadge: line.current.map(SpeedMatchupLabels.orderBadge), order: line.current)
+        }
+    }
+
+    private static func natureRow(_ line: SpeedNatureLine, trickRoom: Bool) -> SpeedNatureRowDisplay {
+        SpeedNatureRowDisplay(
+            nature: line.nature, natureLabel: SpeedLabels.nature(line.nature),
+            text: trickRoom ? SpeedMatchupLabels.trickRoomLine(line.movesFirst) : SpeedMatchupLabels.firstLine(line.movesFirst),
+            isReachable: line.movesFirst != nil, tieText: line.tie.map(SpeedMatchupLabels.tieLine))
     }
 
     /// 応答の `lines`(6 件)を行にする。`trickRoom`(今の場の状態)で「抜ける」の言い換えが変わる
     /// (reach の応答はトリックルームに依存しないので、言い換えだけ画面側で切り替える。ADR-0610 §1)。
     public static func reachRows(_ reach: SpeedReach, trickRoom: Bool) -> [SpeedReachRowDisplay] {
-        // TODO(implementer): SpeedMatchupDisplayTests の規則で実装する。
-        []
+        reach.lines.map { line in
+            let preset = SpeedLabels.preset(line.preset)
+            return SpeedReachRowDisplay(
+                id: line.preset.rawValue, presetLabel: preset,
+                slowerText: SpeedMatchupLabels.reachSlower(preset: preset, range: line.slower, trickRoom: trickRoom),
+                tieText: line.tie.map { SpeedMatchupLabels.reachTie(preset: preset, range: $0) },
+                fasterText: SpeedMatchupLabels.reachFaster(preset: preset, range: line.faster, trickRoom: trickRoom),
+                slowerCountLabel: SpeedMatchupLabels.count(line.slowerCount),
+                tieCountLabel: SpeedMatchupLabels.count(line.tieCount),
+                fasterCountLabel: SpeedMatchupLabels.count(line.fasterCount),
+                slowerExample: line.fastestSlower.map { SpeedMatchupLabels.example($0.nameJa) },
+                fasterExample: line.slowestFaster.map { SpeedMatchupLabels.example($0.nameJa) })
+        }
     }
 }

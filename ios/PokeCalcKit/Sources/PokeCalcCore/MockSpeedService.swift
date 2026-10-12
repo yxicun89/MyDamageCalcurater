@@ -73,28 +73,7 @@ public struct MockSpeedService: SpeedService {
 
     public func position(_ request: SpeedPositionRequest) async throws -> SpeedPosition {
         if scenario == .positionError || scenario == .allError { throw Self.unavailable }
-        let speed: Int
-        let pokemon: SpeedPokemon?
-        switch request.input {
-        case .preset(let pokemonId, let preset, let scarf, let tailwind, let paralysis):
-            let found = try Self.find(pokemonId)
-            pokemon = found
-            let (sp, nature) = Self.invest(preset)
-            speed = Self.applyField(
-                Self.stat(base: found.baseSpeed, sp: sp, nature: nature), scarf: scarf, tailwind: tailwind, paralysis: paralysis)
-        case .custom(let pokemonId, let sp, let nature, let rank, let scarf, let tailwind, let paralysis):
-            let found = try Self.find(pokemonId)
-            pokemon = found
-            speed = Self.applyField(
-                Self.applyRank(Self.stat(base: found.baseSpeed, sp: sp, nature: nature), rank: rank),
-                scarf: scarf, tailwind: tailwind, paralysis: paralysis)
-        case .raw(let value, let pokemonId):
-            guard value >= 1 else {
-                throw PokeCalcError(code: "invalid_request", message: "モック: 実数値は1以上")
-            }
-            pokemon = try pokemonId.map(Self.find)
-            speed = value
-        }
+        let (speed, pokemon) = try Self.resolveSpeed(request.input)
         // 位置は常に全6行の表が基準(契約)。
         let entries = Self.tiers(presets: SpeedPresetID.allCases, tailwind: request.tableTailwind)
         return SpeedPosition(
@@ -104,13 +83,130 @@ public struct MockSpeedService: SpeedService {
             tie: entries.first { $0.speed == speed }?.entries ?? [])
     }
 
-    // TODO(implementer): 簡易な式で実装する。固定する事実は MockSpeedMatchupTests(ADR-0610 追記「モック」)。
+    /// 要求の入力から自分の実数値(と、あればポケモン)を決める(position・reach で共用)。
+    private static func resolveSpeed(_ input: SpeedPositionRequest.Input) throws -> (Int, SpeedPokemon?) {
+        switch input {
+        case .preset(let pokemonId, let preset, let scarf, let tailwind, let paralysis):
+            let found = try find(pokemonId)
+            let (sp, nature) = invest(preset)
+            return (
+                applyField(stat(base: found.baseSpeed, sp: sp, nature: nature), scarf: scarf, tailwind: tailwind, paralysis: paralysis),
+                found
+            )
+        case .custom(let pokemonId, let sp, let nature, let rank, let scarf, let tailwind, let paralysis):
+            let found = try find(pokemonId)
+            return (
+                applyField(
+                    applyRank(stat(base: found.baseSpeed, sp: sp, nature: nature), rank: rank),
+                    scarf: scarf, tailwind: tailwind, paralysis: paralysis),
+                found
+            )
+        case .raw(let value, let pokemonId):
+            guard value >= 1 else {
+                throw PokeCalcError(code: "invalid_request", message: "モック: 実数値は1以上")
+            }
+            return (value, try pokemonId.map(find))
+        }
+    }
+
+    // MARK: - matchup・reach(I-speed-4c。ADR-0610。簡易な式。固定する事実は MockSpeedMatchupTests)
+
+    private static let defaultAssumptions: [SpeedAssumption] = [
+        .preset(.uninvested), .preset(.neutralMax), .preset(.max), .preset(.maxScarf),
+    ]
+
     public func matchup(_ request: SpeedMatchupRequest) async throws -> SpeedMatchup {
-        throw PokeCalcError(code: "not_implemented", message: "MockSpeedService.matchup は未実装(I-speed-4c)")
+        if let failure = matchupFailure { throw failure }
+        let own = try Self.find(request.own.pokemonId)
+        let opponent = try Self.find(request.opponent.pokemonId)
+        let ownSpeed = { (sp: Int, nature: SpeedNature) -> Int in
+            Self.applyField(
+                Self.applyRank(Self.stat(base: own.baseSpeed, sp: sp, nature: nature), rank: request.own.rank),
+                scarf: request.own.scarf, tailwind: request.own.tailwind, paralysis: request.own.paralysis)
+        }
+        let selfSpeed = request.own.current.map { ownSpeed($0.sp, $0.nature) }
+        let lines = (request.opponent.assumptions ?? Self.defaultAssumptions).map { assumption -> SpeedMatchupLine in
+            let opponentSpeed = Self.assumedSpeed(assumption, of: opponent, request.opponent)
+            let natures = SpeedNature.allCases.map { nature -> SpeedNatureLine in
+                let sps = Array(0...SPLimits.maxPerStat)
+                let first = sps.filter {
+                    let own = ownSpeed($0, nature)
+                    return request.trickRoom ? own < opponentSpeed : own > opponentSpeed
+                }
+                let tie = sps.filter { ownSpeed($0, nature) == opponentSpeed }
+                return SpeedNatureLine(nature: nature, movesFirst: Self.spRange(first), tie: Self.spRange(tie))
+            }
+            return SpeedMatchupLine(
+                assumption: assumption, opponentSpeed: opponentSpeed,
+                current: selfSpeed.map { Self.turnOrder(own: $0, opponent: opponentSpeed, trickRoom: request.trickRoom) },
+                natures: natures)
+        }
+        return SpeedMatchup(
+            selfPokemon: own, opponent: opponent, trickRoom: request.trickRoom, selfSpeed: selfSpeed, lines: lines)
     }
 
     public func reach(_ request: SpeedPositionRequest) async throws -> SpeedReach {
-        throw PokeCalcError(code: "not_implemented", message: "MockSpeedService.reach は未実装(I-speed-4c)")
+        if let failure = matchupFailure { throw failure }
+        let (speed, pokemon) = try Self.resolveSpeed(request.input)
+        let lines = SpeedPresetID.allCases.map { preset -> SpeedReachLine in
+            func presetSpeed(_ base: Int) -> Int { Self.rowSpeed(base: base, preset, tailwind: request.tableTailwind) }
+            let bases = Array(1...Self.maxBaseSpeed)
+            let slower = bases.filter { presetSpeed($0) < speed }
+            let tie = bases.filter { presetSpeed($0) == speed }
+            let faster = bases.filter { presetSpeed($0) > speed }
+            let slowerPokemon = Self.pokemonList.filter { presetSpeed($0.baseSpeed) < speed }
+            let tiePokemon = Self.pokemonList.filter { presetSpeed($0.baseSpeed) == speed }
+            let fasterPokemon = Self.pokemonList.filter { presetSpeed($0.baseSpeed) > speed }
+            return SpeedReachLine(
+                preset: preset, slower: Self.baseRange(slower), tie: Self.baseRange(tie), faster: Self.baseRange(faster),
+                slowerCount: slowerPokemon.count, tieCount: tiePokemon.count, fasterCount: fasterPokemon.count,
+                fastestSlower: slowerPokemon.max { presetSpeed($0.baseSpeed) < presetSpeed($1.baseSpeed) },
+                slowestFaster: fasterPokemon.min { presetSpeed($0.baseSpeed) < presetSpeed($1.baseSpeed) })
+        }
+        return SpeedReach(speed: speed, pokemon: pokemon, lines: lines)
+    }
+
+    /// matchup・reach だけの失敗(シナリオ)。
+    private var matchupFailure: PokeCalcError? {
+        switch scenario {
+        case .allError: return Self.unavailable
+        case .matchupError: return PokeCalcError(code: "upstream_unavailable", message: "モック: gateway が上流に届かない")
+        default: return nil
+        }
+    }
+
+    /// 契約の族(種族値)の上限。
+    private static let maxBaseSpeed = 255
+
+    private static func assumedSpeed(
+        _ assumption: SpeedAssumption, of pokemon: SpeedPokemon, _ opponent: SpeedMatchupRequest.Opponent
+    ) -> Int {
+        switch assumption {
+        case .preset(let preset):
+            return applyField(
+                rowSpeed(base: pokemon.baseSpeed, preset, tailwind: false),
+                scarf: false, tailwind: opponent.tailwind, paralysis: opponent.paralysis)
+        case .custom(let custom):
+            return applyField(
+                applyRank(stat(base: pokemon.baseSpeed, sp: custom.sp, nature: custom.nature), rank: custom.rank),
+                scarf: custom.scarf, tailwind: opponent.tailwind, paralysis: opponent.paralysis)
+        }
+    }
+
+    private static func turnOrder(own: Int, opponent: Int, trickRoom: Bool) -> SpeedTurnOrder {
+        if own == opponent { return .speedTie }
+        return (own > opponent) != trickRoom ? .selfFirst : .opponentFirst
+    }
+
+    /// 昇順の SP の列 → 閉区間(空なら nil)。
+    private static func spRange(_ values: [Int]) -> SpeedSPRange? {
+        guard let first = values.first, let last = values.last else { return nil }
+        return SpeedSPRange(min: first, max: last)
+    }
+
+    private static func baseRange(_ values: [Int]) -> SpeedBaseSpeedRange? {
+        guard let first = values.first, let last = values.last else { return nil }
+        return SpeedBaseSpeedRange(min: first, max: last)
     }
 
     // MARK: - 簡易な式
@@ -150,12 +246,12 @@ public struct MockSpeedService: SpeedService {
     }
 
     /// 表の1行の実数値(スカーフ・+1 は同じ 1.5 倍、+2 は 2 倍)。
-    private static func rowSpeed(_ pokemon: SpeedPokemon, _ preset: SpeedPresetID, tailwind: Bool) -> Int {
-        let maxStat = stat(base: pokemon.baseSpeed, sp: SPLimits.maxPerStat, nature: .plus)
+    private static func rowSpeed(base: Int, _ preset: SpeedPresetID, tailwind: Bool) -> Int {
+        let maxStat = stat(base: base, sp: SPLimits.maxPerStat, nature: .plus)
         let value: Int
         switch preset {
-        case .uninvested: value = stat(base: pokemon.baseSpeed, sp: 0, nature: .neutral)
-        case .neutralMax: value = stat(base: pokemon.baseSpeed, sp: SPLimits.maxPerStat, nature: .neutral)
+        case .uninvested: value = stat(base: base, sp: 0, nature: .neutral)
+        case .neutralMax: value = stat(base: base, sp: SPLimits.maxPerStat, nature: .neutral)
         case .max: value = maxStat
         case .maxScarf, .maxPlus1: value = maxStat * 3 / 2
         case .maxPlus2: value = maxStat * 2
@@ -171,7 +267,7 @@ public struct MockSpeedService: SpeedService {
                 let entry = SpeedTableEntry(
                     pokemonId: pokemon.pokemonId, nameJa: pokemon.nameJa, types: pokemon.types,
                     baseSpeed: pokemon.baseSpeed, preset: preset)
-                bySpeed[rowSpeed(pokemon, preset, tailwind: tailwind), default: []].append(entry)
+                bySpeed[rowSpeed(base: pokemon.baseSpeed, preset, tailwind: tailwind), default: []].append(entry)
             }
         }
         return bySpeed.keys.sorted(by: >).map { SpeedTier(speed: $0, entries: bySpeed[$0] ?? []) }

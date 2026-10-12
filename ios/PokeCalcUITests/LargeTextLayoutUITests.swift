@@ -744,104 +744,11 @@ final class LargeTextLayoutUITests: XCTestCase {
         assertNoHorizontalOverflow(
             app, identifiers: ["frequentOpponentsSection", "frequentOpponentRow-9003-000", "frequentOpponentRow-9001-000"])
     }
-    // MARK: - 素早さ比較画面(P6-24。ADR-0501「P6-24 の受け入れ条件」の AX5)
+    // MARK: - 素早さ画面
 
-    /// 素早さ画面の識別子(ADR-0503 §9)。入力・絞り込み・表・結果のうち、長い文言(「トリックルーム」
-    /// 「追い風(相手側)」「こだわりスカーフ」「自分より先に動く N行」など)を持つものを AX5 で見る。
-    private static let speedScreenIdentifiers = [
-        "speedScreen", "speedTable", "speedFilter-max-scarf", "speedFilter-max-plus1",
-        "speedTableTailwind", "speedTrickRoom", "speedMode-preset", "speedMode-custom", "speedMode-raw",
-        "speedPokemonButton",
-    ]
-    private static let speedResultIdentifiers = [
-        "speedResult", "speedResultSpeed", "speedResultFaster", "speedResultSlower", "speedResultMovesBefore",
-        "speedResultMovesAfter",
-    ]
+    // 素早さ画面(相手を選んで上を取る最低ライン)の AX5 は `SpeedMatchupLargeTextUITests` に移した
+    // (表・境界線・遅延描画の識別子が画面から無くなったため。ADR-0610 追記「既存 UI テストの書き換え案」)。
 
-    private static let speedBoundaryMaxScrolls = 60
-
-    /// 遅い速度で 1 回送る。既定の `swipeUp` は勢いで 1 画面以上動き、途中の段(同速の段など)を描かずに飛ばすことがある。
-    private func scrollDownSlowly(_ app: XCUIApplication) {
-        app.swipeUp(velocity: .slow)
-    }
-
-    private func openSpeedScreen(_ app: XCUIApplication) {
-        let openButton = app.buttons["openSpeedScreen"]
-        XCTAssertTrue(openButton.waitForExistence(timeout: Self.existenceTimeout), "ルート画面に openSpeedScreen が無い")
-        openButton.tap()
-        XCTAssertTrue(element(app, "speedScreen").waitForExistence(timeout: Self.existenceTimeout), "speedScreen が開かない")
-    }
-
-    /// P6-24: AX5 でも素早さ画面の入力・絞り込み・場の状態が横にはみ出さない(長い日本語のピル・トグルが折り返す)。
-    func testSpeedScreenNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openSpeedScreen(app)
-        assertNoHorizontalOverflow(app, identifiers: Self.speedScreenIdentifiers)
-    }
-
-    /// P6-24: AX5 で、実数値の結果(トリックルーム中の「先に動く/後に動く」の行を含む)・表の段・境界線が横にはみ出さない。
-    func testSpeedScreenResultAndTableNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openSpeedScreen(app)
-
-        let trickRoom = element(app, "speedTrickRoom")
-        XCTAssertTrue(trickRoom.waitForExistence(timeout: Self.existenceTimeout))
-        trickRoom.tap()
-        let rawMode = element(app, "speedMode-raw")
-        XCTAssertTrue(rawMode.waitForExistence(timeout: Self.existenceTimeout))
-        rawMode.tap()
-        let field = element(app, "speedRawValueField")
-        XCTAssertTrue(field.waitForExistence(timeout: Self.existenceTimeout))
-        field.tap()
-        field.typeText("1")
-        XCTAssertTrue(element(app, "speedResultSpeed").waitForExistence(timeout: Self.existenceTimeout), "結果が出ない")
-
-        assertNoHorizontalOverflow(app, identifiers: Self.speedResultIdentifiers + ["speedRawValueField"])
-
-        // 表は遅延描画(ADR-0517)なので、段・境界線は表までスクロールしてから現れる。
-        // 境界線が出るまでスクロールし(上限あり。出なければ失敗)、その途中で描かれた段を毎回検査する。
-        // 段(speedTier-)・同速の段(speedTierTie-)がそれぞれ一度も描かれなければ失敗にする(検証は弱めない)。
-        let tierPrefixes = ["speedTier-", "speedTierTie-"]
-        var seenPrefixes: Set<String> = []
-        let boundary = element(app, "speedBoundary")
-        func checkRenderedTiers() {
-            for prefix in tierPrefixes {
-                let first = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
-                if first.exists {
-                    seenPrefixes.insert(prefix)
-                    assertNoHorizontalOverflowForPrefixes(app, prefixes: [prefix])
-                }
-            }
-        }
-        var boundaryChecked = false
-        func checkBoundary() {
-            guard !boundaryChecked, boundary.exists else { return }
-            boundaryChecked = true
-            assertNoHorizontalOverflow(app, identifiers: ["speedBoundary"])
-        }
-        checkRenderedTiers()
-        checkBoundary()
-        // 境界線・段・同速の段のすべてが一度は描かれるまで送る(トリックルーム中は境界線が表の上側に出る)。
-        for _ in 0..<Self.speedBoundaryMaxScrolls where !(boundaryChecked && seenPrefixes.count == tierPrefixes.count) {
-            scrollDownSlowly(app)
-            checkRenderedTiers()
-            checkBoundary()
-        }
-        XCTAssertTrue(boundaryChecked, "境界線(speedBoundary)が表のどこにも描かれない")
-        XCTAssertEqual(seenPrefixes, Set(tierPrefixes), "スクロール中に描かれなかった段の種類がある: \(Set(tierPrefixes).subtracting(seenPrefixes))")
-    }
-
-    /// P6-24: AX5 でポケモンのシート(名前の一覧・検索欄)が横にはみ出さない。
-    func testSpeedPokemonSheetNoHorizontalOverflowAtAX5() {
-        let app = launchWithMock(contentSizeCategory: Self.ax5ContentSizeCategory)
-        openSpeedScreen(app)
-        let button = element(app, "speedPokemonButton")
-        XCTAssertTrue(button.waitForExistence(timeout: Self.existenceTimeout))
-        button.tap()
-        XCTAssertTrue(element(app, "speedPokemonSheet").waitForExistence(timeout: Self.existenceTimeout), "シートが開かない")
-        assertNoHorizontalOverflow(app, identifiers: ["speedPokemonSheet", "speedPokemonSearchField"])
-        assertNoHorizontalOverflowForPrefixes(app, prefixes: ["speedPokemonRow-"])
-    }
     // MARK: - 判定画面(P6-25。ADR-0501「P6-25 の受け入れ条件」の AX5)
 
     /// 判定画面の識別子(ADR-0504 §10)。長い日本語の文言(「自分の側の追い風」「相手の側の追い風は、すべての相手候補に…」「相手候補を追加」など)を持つものを AX5 で見る。

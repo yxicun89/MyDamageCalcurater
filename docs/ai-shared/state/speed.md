@@ -61,3 +61,5 @@ Status(追記): 2026-10-12 I-speed-4c(iOS の画面)の仕様とテストを先�
 設計は ADR-0610 追記「iOS の画面」。PokeCalcKit に matchup・reach のドメイン型・`SpeedService` の 2 操作・`SpeedMatchupViewModel`・`SpeedMatchupLabels`・`SpeedMatchupDisplayBuilder` のスタブ、UI テスト 4 本(`SpeedMatchupUITests` 3 本・`SpeedMatchupLargeTextUITests` 1 本)。
 旧 `SpeedViewModel` と表・周辺パネルの部品・テストは、画面の置き換えと一緒に implementer が整理する(ADR-0610 追記 §5・§6)。ランクのメーターは iOS に部品が無く、今回は `SpeedStepper` を使う。
 Next: implementer が docs/plan/improvements/speed.md の I-speed-4c の順(API クライアント → ラベル・整形 → ViewModel → モック → View → 旧 UI テストの整理)で実装する。Web(I-speed-4b)の語と食い違ったら ADR-0610 追記に差を書く。
+Status(追記): 2026-10-12 I-speed-4c(iOS の画面)を実装(ブランチ feat/speed-ios-matchup。コミットのみ・push 前)。`APISpeedService` / `MockSpeedService` の matchup・reach、`SpeedMatchupLabels`・`SpeedMatchupDisplayBuilder`・`SpeedMatchupViewModel` を実装し、素早さ画面を新構成(入力 = 自分・相手・想定のチップ・今の振り・場、出力 = 想定ごとのカード + 「これ以上」、連続技へのリンクは `comboAvailable` が true の間だけ)に作り直した。表・周辺パネル・旧 `SpeedViewModel` と専用のコード・テストは削除(ADR-0610 追記 §5)。Web との文言の差は ADR-0610 追記 §8。
+Next: I-speed-4b(Web)とあわせて PR を出す。連続技(CB-8)が計算画面に入ったら `SpeedScreenView` の `onOpenCombo` を計算画面へつなぐ。ランクのメーター化は iOS 全体のランク入力をそろえるときの別タスク。

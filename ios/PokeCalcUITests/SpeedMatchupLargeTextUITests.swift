@@ -31,8 +31,13 @@ final class SpeedMatchupLargeTextUITests: XCTestCase {
         "speedReach", "speedReachRow-uninvested", "speedReachSlower-uninvested", "speedReachTie-uninvested", "speedReachFaster-uninvested",
     ]
 
+    /// AX5 では識別子ごとにゆっくりスクロールして探すため、1 本で約 520 秒かかる(既定の 300 秒では足りない)。
+    /// run-xcode-tests.sh の上限(600 秒)いっぱいに伸ばす(ADR-0520)。
+    private static let slowTestAllowance: TimeInterval = 600
+
     override func setUpWithError() throws {
         continueAfterFailure = false
+        executionTimeAllowance = Self.slowTestAllowance
     }
 
     // MARK: - 補助

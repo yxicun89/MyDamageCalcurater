@@ -6,14 +6,34 @@
 //  - ポケモン一覧・matchup・reach は互いに独立(片方の失敗がもう片方の表示を消さない)。
 //  - `CancellationError` は画面のエラーにしない。
 //
-// このクラスは `SpeedViewModel`(表の画面)を置き換える。表の部品が画面から消えたら `SpeedViewModel` と表専用の
-// 型・テストは削除する(ADR-0610 追記「iOS の画面」)。`SpeedFailure`・`SpeedLoadState`・`SpeedInput` は引き続き使う。
-//
-// spec-writer の足場: 公開 API の形(名前・型・引数)は SpeedMatchupViewModel*Tests が固定する。
-// 本体は未実装(入力の操作は何もせず、状態は変わらない)。implementer が埋める。
+// このクラスは `SpeedViewModel`(表の画面)を置き換えた(ADR-0610 追記「iOS の画面」)。
+// 公開 API の形(名前・型・引数)は SpeedMatchupViewModel*Tests が固定する。
 
 import Foundation
 import Observation
+
+/// 表示する失敗。`message` は `SpeedLabels.errorMessage(forCode:)`(サーバーの英語 message は出さない)。
+public struct SpeedFailure: Equatable, Sendable {
+    public let code: String
+    public var message: String { SpeedLabels.errorMessage(forCode: code) }
+
+    public init(code: String) {
+        self.code = code
+    }
+}
+
+/// ポケモン一覧の読み込み状態。
+public enum SpeedLoadState<Value: Equatable & Sendable>: Equatable, Sendable {
+    case loading
+    case loaded(Value)
+    case failed(SpeedFailure)
+}
+
+/// 入力の待ち時間などの定数(直書きしない。coding-rules §2)。
+public enum SpeedInput {
+    /// 再計算の待ち時間(連続入力をまとめる。`CalcInput.debounceInterval` と同じ値)。
+    public static let debounceInterval: Duration = CalcInput.debounceInterval
+}
 
 /// matchup / reach の取得状態。`idle` は送れる入力が無い(ポケモン未選択など)。
 public enum SpeedRequestState<Value: Equatable & Sendable>: Equatable, Sendable {
@@ -96,6 +116,15 @@ public final class SpeedMatchupViewModel {
     private let service: any SpeedService
     private let debounce: Duration
 
+    /// matchup・reach の要求を 1 つずつだけ保持する(先行の要求は新しい入力で cancel する)。
+    private let matchupRunner = LatestTaskRunner()
+    private let reachRunner = LatestTaskRunner()
+    private var matchupTask: Task<Void, Never>?
+    private var reachTask: Task<Void, Never>?
+    /// 最新の要求かを確かめる世代(サービスが cancel を無視して古い応答を返しても反映しない)。
+    private var matchupGeneration = 0
+    private var reachGeneration = 0
+
     public init(
         service: any SpeedService, debounce: Duration = SpeedInput.debounceInterval, comboAvailable: Bool = false
     ) {
@@ -108,83 +137,270 @@ public final class SpeedMatchupViewModel {
 
     /// ポケモン一覧を 1 回取る(matchup・reach は入力が揃ったときに取る)。
     public func load() async {
-        // TODO(implementer)
+        pokemonState = .loading
+        do {
+            pokemonState = .loaded(try await service.pokemon().pokemon)
+        } catch is CancellationError {
+            return
+        } catch {
+            pokemonState = .failed(Self.failure(error))
+        }
+    }
+
+    private static func failure(_ error: any Error) -> SpeedFailure {
+        SpeedFailure(code: (error as? PokeCalcError)?.code ?? PokeCalcError.Code.transport)
     }
 
     // MARK: - 入力の操作(要求が要るものは、先行の要求を cancel して予約する。`settle()` で待てる)
 
     /// nil は未選択。
-    public func selectSelfPokemon(id: String?) {}
+    public func selectSelfPokemon(id: String?) {
+        changeInput { selfPokemonID = id }
+    }
 
-    public func selectOpponentPokemon(id: String?) {}
+    public func selectOpponentPokemon(id: String?) {
+        changeInput { opponentPokemonID = id }
+    }
 
     /// `RankLimits.min...RankLimits.max` に収める。
-    public func setRank(_ value: Int) {}
+    public func setRank(_ value: Int) {
+        changeInput { rank = min(max(value, RankLimits.min), RankLimits.max) }
+    }
 
-    public func setScarf(_ value: Bool) {}
+    public func setScarf(_ value: Bool) {
+        changeInput { scarf = value }
+    }
 
-    public func setTailwind(_ value: Bool) {}
+    public func setTailwind(_ value: Bool) {
+        changeInput { tailwind = value }
+    }
 
-    public func setParalysis(_ value: Bool) {}
+    public func setParalysis(_ value: Bool) {
+        changeInput { paralysis = value }
+    }
 
     /// 「今の振りを入れる」。on にすると (SP 0・補正なし) から始め、off にすると nil に戻す。
-    public func setCurrentEnabled(_ enabled: Bool) {}
+    public func setCurrentEnabled(_ enabled: Bool) {
+        changeInput {
+            if !enabled {
+                current = nil
+            } else if current == nil {
+                current = SpeedInvestment(sp: 0, nature: .neutral)
+            }
+        }
+    }
 
     /// `0...SPLimits.maxPerStat` に収める。今の振りが無いときは何もしない。
-    public func setCurrentSP(_ value: Int) {}
+    public func setCurrentSP(_ value: Int) {
+        changeInput { current?.sp = min(max(value, 0), SPLimits.maxPerStat) }
+    }
 
     /// 今の振りが無いときは何もしない。
-    public func setCurrentNature(_ nature: SpeedNature) {}
+    public func setCurrentNature(_ nature: SpeedNature) {
+        changeInput { current?.nature = nature }
+    }
 
     /// かんたん設定(無振り = SP 0・補正なし / 準速 = SP 32・補正なし / 最速 = SP 32・上昇)。今の振りが無ければ入れる。
-    public func applyCurrentPreset(_ preset: SpeedMinimalPreset) {}
+    public func applyCurrentPreset(_ preset: SpeedMinimalPreset) {
+        changeInput {
+            switch preset {
+            case .uninvested: current = SpeedInvestment(sp: 0, nature: .neutral)
+            case .neutralMax: current = SpeedInvestment(sp: SPLimits.maxPerStat, nature: .neutral)
+            case .max: current = SpeedInvestment(sp: SPLimits.maxPerStat, nature: .plus)
+            }
+        }
+    }
 
     /// 想定のチップの切り替え。最後の 1 つ(カスタムを含めて)は外せない。
-    public func togglePreset(_ id: SpeedPresetID) {}
+    public func togglePreset(_ id: SpeedPresetID) {
+        if selectedPresets.contains(id) {
+            guard assumptionCount > 1 else { return }
+            changeInput { selectedPresets.remove(id) }
+        } else {
+            changeInput { selectedPresets.insert(id) }
+        }
+    }
 
     /// カスタムの想定を入れる / 外す(nil)。SP は 0...32、ランクは -6...+6 に収める。外すとき、チップが 0 個になるなら何もしない。
-    public func setCustomAssumption(_ custom: SpeedCustomAssumption?) {}
+    public func setCustomAssumption(_ custom: SpeedCustomAssumption?) {
+        if let custom {
+            changeInput {
+                customAssumption = SpeedCustomAssumption(
+                    sp: min(max(custom.sp, 0), SPLimits.maxPerStat), nature: custom.nature,
+                    rank: min(max(custom.rank, RankLimits.min), RankLimits.max), scarf: custom.scarf)
+            }
+        } else {
+            guard !selectedPresets.isEmpty else { return }
+            changeInput { customAssumption = nil }
+        }
+    }
 
-    public func setOpponentTailwind(_ value: Bool) {}
+    public func setOpponentTailwind(_ value: Bool) {
+        changeInput { opponentTailwind = value }
+    }
 
-    public func setOpponentParalysis(_ value: Bool) {}
+    public func setOpponentParalysis(_ value: Bool) {
+        changeInput { opponentParalysis = value }
+    }
 
-    public func setTrickRoom(_ value: Bool) {}
+    public func setTrickRoom(_ value: Bool) {
+        changeInput { trickRoom = value }
+    }
 
-    public func setPokemonQuery(_ text: String) {}
+    public func setPokemonQuery(_ text: String) {
+        pokemonQuery = text
+    }
 
     /// 予約済みの要求がすべて終わる(または cancel される)まで待つ。テストと View の `.task` 用。
-    public func settle() async {}
+    public func settle() async {
+        await matchupTask?.value
+        await reachTask?.value
+    }
 
     /// 画面破棄(`.onDisappear`)。待機中・送信済みの要求を cancel する。
-    public func cancelPendingWork() {}
+    public func cancelPendingWork() {
+        matchupRunner.cancel()
+        reachRunner.cancel()
+    }
+
+    // MARK: - 要求の予約
+
+    /// 入力を変え、matchup / reach の要求が変わったほうだけ取り直す(要求が変わらない入力では送らない)。
+    private func changeInput(_ change: () -> Void) {
+        let matchupBefore = matchupRequest
+        let reachBefore = reachRequest
+        change()
+        let matchupAfter = matchupRequest
+        let reachAfter = reachRequest
+        if matchupAfter != matchupBefore { rescheduleMatchup(matchupAfter) }
+        if reachAfter != reachBefore { rescheduleReach(reachAfter) }
+    }
+
+    private func rescheduleMatchup(_ request: SpeedMatchupRequest?) {
+        matchupGeneration += 1
+        let token = matchupGeneration
+        guard let request else {
+            matchupRunner.cancel()
+            matchupTask = nil
+            matchupState = .idle
+            return
+        }
+        matchupState = .loading
+        let service = self.service
+        matchupTask = matchupRunner.schedule(debounce: debounce) { [weak self] in
+            let result: Result<SpeedMatchup, any Error>
+            do { result = .success(try await service.matchup(request)) } catch { result = .failure(error) }
+            self?.applyMatchup(result, token: token)
+        }
+    }
+
+    private func rescheduleReach(_ request: SpeedPositionRequest?) {
+        reachGeneration += 1
+        let token = reachGeneration
+        guard let request else {
+            reachRunner.cancel()
+            reachTask = nil
+            reachState = .idle
+            return
+        }
+        reachState = .loading
+        let service = self.service
+        reachTask = reachRunner.schedule(debounce: debounce) { [weak self] in
+            let result: Result<SpeedReach, any Error>
+            do { result = .success(try await service.reach(request)) } catch { result = .failure(error) }
+            self?.applyReach(result, token: token)
+        }
+    }
+
+    private func applyMatchup(_ result: Result<SpeedMatchup, any Error>, token: Int) {
+        guard token == matchupGeneration else { return }
+        switch result {
+        case .success(let matchup): matchupState = .loaded(matchup)
+        case .failure(let error):
+            if !(error is CancellationError) { matchupState = .failed(Self.failure(error)) }
+        }
+    }
+
+    private func applyReach(_ result: Result<SpeedReach, any Error>, token: Int) {
+        guard token == reachGeneration else { return }
+        switch result {
+        case .success(let reach): reachState = .loaded(reach)
+        case .failure(let error):
+            if !(error is CancellationError) { reachState = .failed(Self.failure(error)) }
+        }
+    }
 
     // MARK: - 派生
 
+    /// 想定の数(チップ + カスタム)。
+    private var assumptionCount: Int { selectedPresets.count + (customAssumption == nil ? 0 : 1) }
+
     /// 今の入力から作る matchup の要求。自分と相手が決まっていなければ nil。
     /// 想定は常に明示する(選んだプリセットを契約の順に並べ、カスタムを最後に置く)。
-    public var matchupRequest: SpeedMatchupRequest? { nil }
+    public var matchupRequest: SpeedMatchupRequest? {
+        guard let selfID = selfPokemonID, let opponentID = opponentPokemonID else { return nil }
+        var assumptions = SpeedPresetID.allCases.filter { selectedPresets.contains($0) }.map { SpeedAssumption.preset($0) }
+        if let customAssumption { assumptions.append(.custom(customAssumption)) }
+        return SpeedMatchupRequest(
+            own: .init(
+                pokemonId: selfID, rank: rank, scarf: scarf, tailwind: tailwind, paralysis: paralysis, current: current),
+            opponent: .init(
+                pokemonId: opponentID, assumptions: assumptions, tailwind: opponentTailwind, paralysis: opponentParalysis),
+            trickRoom: trickRoom)
+    }
 
     /// 今の入力から作る reach の要求。自分が決まっていて、今の振りがあるときだけ(それ以外は nil)。
     /// 本文は custom(今の振り + ランク・スカーフ・自分の追い風・まひ)、`tableTailwind` は相手の追い風。
-    public var reachRequest: SpeedPositionRequest? { nil }
+    public var reachRequest: SpeedPositionRequest? {
+        guard let selfID = selfPokemonID, let current else { return nil }
+        return SpeedPositionRequest(
+            input: .custom(
+                pokemonId: selfID, sp: current.sp, nature: current.nature, rank: rank, scarf: scarf, tailwind: tailwind,
+                paralysis: paralysis),
+            tableTailwind: opponentTailwind)
+    }
 
     /// 連続技へ渡す値。`comboAvailable` が true で、自分と相手が決まっているときだけ。
-    public var comboHandoff: SpeedComboHandoff? { nil }
+    public var comboHandoff: SpeedComboHandoff? {
+        guard comboAvailable, let selfID = selfPokemonID, let opponentID = opponentPokemonID else { return nil }
+        return SpeedComboHandoff(
+            attackerPokemonID: selfID, defenderPokemonID: opponentID, attackerSpeed: current, attackerRank: rank,
+            attackerScarf: scarf)
+    }
 
-    public var selfPokemon: SpeedPokemon? { nil }
+    public var selfPokemon: SpeedPokemon? { pokemon(id: selfPokemonID) }
 
-    public var opponentPokemon: SpeedPokemon? { nil }
+    public var opponentPokemon: SpeedPokemon? { pokemon(id: opponentPokemonID) }
+
+    private func pokemon(id: String?) -> SpeedPokemon? {
+        guard let id, case .loaded(let all) = pokemonState else { return nil }
+        return all.first { $0.pokemonId == id }
+    }
 
     /// ピッカーに出す一覧(`pokemonQuery` で名前を絞る。前後空白を落とし、ひらがなはカタカナとして照合)。
-    public var filteredPokemon: [SpeedPokemon] { [] }
+    public var filteredPokemon: [SpeedPokemon] {
+        guard case .loaded(let all) = pokemonState else { return [] }
+        let query = Self.katakana(pokemonQuery.trimmingCharacters(in: .whitespacesAndNewlines))
+        guard !query.isEmpty else { return all }
+        return all.filter { Self.katakana($0.nameJa).contains(query) }
+    }
 
-    /// 想定のチップを 1 つだけ残しているとき true(「想定は少なくとも1つ必要です」を出す)。
-    public var assumptionMinimumNoticeVisible: Bool { false }
+    private static func katakana(_ text: String) -> String {
+        text.applyingTransform(.hiraganaToKatakana, reverse: false) ?? text
+    }
+
+    /// 想定のチップを 1 つだけ残していて(カスタムなし)、それ以上外せないとき true(「想定は少なくとも1つ必要です」を出す)。
+    public var assumptionMinimumNoticeVisible: Bool { customAssumption == nil && selectedPresets.count == 1 }
 
     /// 出力 1 のカード(matchup が読み込めているとき。そうでなければ空)。
-    public var matchupCards: [SpeedMatchupCardDisplay] { [] }
+    public var matchupCards: [SpeedMatchupCardDisplay] {
+        guard case .loaded(let matchup) = matchupState else { return [] }
+        return SpeedMatchupDisplayBuilder.cards(matchup)
+    }
 
     /// 出力 2 の行(reach が読み込めているとき。そうでなければ空)。言い換えは今の `trickRoom` に従う。
-    public var reachRows: [SpeedReachRowDisplay] { [] }
+    public var reachRows: [SpeedReachRowDisplay] {
+        guard case .loaded(let reach) = reachState else { return [] }
+        return SpeedMatchupDisplayBuilder.reachRows(reach, trickRoom: trickRoom)
+    }
 }
