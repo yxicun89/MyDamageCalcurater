@@ -20,7 +20,7 @@ import (
 
 	"example.com/pokecalc/services/calc/calctest"
 	"example.com/pokecalc/services/gateway/deploytest"
-	"example.com/pokecalc/services/gateway/internal/httpapi"
+	"example.com/pokecalc/services/gateway/internal/adapters/httpapi"
 )
 
 const smokeScript = "services/gateway/scripts/smoke.sh"

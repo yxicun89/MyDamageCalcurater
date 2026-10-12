@@ -98,3 +98,4 @@ Status(追記 2026-10-12): ARCH S3a(docs/plan/architecture-adoption.md §6・ADR
 `internal/app`(計算・一括・逆算の手順。ポート `Master`・`EventPublisher`・`Expired`)/`internal/adapters/{httpapi,master,events}` にそろえた。
 振る舞い不変(openapi 不変・code/ステータス・失敗の順番・イベントの中身)。calc を tools/archcheck の未移行の一覧から外した。
 Next(S3b): 調整(`adapters/httpapi/adjust.go` の 5 操作)の手順を app へ移す。今は `resolveIndividual`・`parseFormat` 等の薄い関数が app・domain に委ねている。
+Status(追記 2026-10-12): ARCH S7(I-api-5。データレーンが代行)。gateway の `internal/httpapi` を `internal/adapters/httpapi` へ移し、`domain`・`app` は doc.go だけ。振る舞い不変。gateway を archcheck の未移行の一覧から外した。

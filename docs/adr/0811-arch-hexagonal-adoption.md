@@ -41,5 +41,6 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S3a | calc の計算・一括・逆算を domain・app・adapters へ(判断は ADR-0252) | 2026-10-12 完了(calc を未移行の一覧から外した) |
 | S3b | calc の調整(`adjust.go`)の手順を app へ(ADR-0252 追記 S3b) | 2026-10-12 完了(データレーンが代行) |
 | S5 | pokedex の検索・内部 API・readiness・read model を domain・app・adapters へ(判断は ADR-0180。importer は対象外) | 2026-10-12 完了(pokedex を未移行の一覧から外した) |
-| S2・S4・S6〜S9 | judge・record・team・gateway・balance・speed の移行 | 未着手 |
+| S7 | gateway の httpapi を adapters へ。domain・app は doc.go だけ(転送だけ) | 2026-10-12 完了(データレーンが代行。gateway を未移行の一覧から外した) |
+| S2・S4・S6・S8・S9 | judge・record・team・balance・speed の移行 | 未着手 |
 | W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |

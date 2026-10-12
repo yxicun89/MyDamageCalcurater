@@ -258,7 +258,7 @@ services/<svc>/
 | S4 record | API | SP 上限などの検証 → `domain`。お気に入り・履歴の手順と失効ジョブ → `app`。`httpapi`・`store`・`events` → `adapters`。G6 を解消 | `-tags tidb` を含むテストが通る。失効ジョブの import 検査(`expire_test.go`)を新しいパスに合わせ、検査の意味は弱めない。M2 の PR が record に無い時に(§8 Q5) |
 | S5 pokedex(**完了 2026-10-12・ADR-0180**) | データ | 検索の組み立て → `app`(正規化など純粋な部分は `domain`)。`httpapi`・`store`・`readtx`・`readmodel` の I/O → `adapters`。G7 を解消。importer は §8 Q6 | `-tags mysql` のテストが通る。storetest の import 検査(ADR-0105)を新しいパスに合わせる |
 | S6 team | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
-| S7 gateway | API | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
+| S7 gateway(**完了 2026-10-12・ADR-0811**) | API(データレーンが代行) | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
 | S8 balance | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
 | S9 speed | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
 | W0〜W2 Web | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js` に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
