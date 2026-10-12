@@ -1,14 +1,11 @@
-// P4-12a/b: タイプバランスの画面(docs/adr/0303-web-balance-screen.md、docs/type-balance-design.md §6 TB1〜TB5、
-// ADR-0400、ADR-0401)。balance API のクライアント(props の client、ADR-0303 §1)へ、メンバー(最大6体。
-// ポケモン・特性・技4つまで)を送り、防御相性(analyze)・攻撃範囲(coverage)を出す(P4-12a)。加えて、
-// 仮想敵(threats。最大6体、メンバーと同じ入力)・おすすめタイプ(recommendations)を出す(P4-12b)。
-// 倍率・集計・穴の判定は応答をそのまま出し、Web で計算し直さない(ADR-0303 §1・§7)。
-// ADR-0421: 呼び出しの状態管理は balance/useTeamBalance、結果の表示は balance/BalancePanel に取り出した。
-// この画面に残るのは入力欄(メンバー・仮想敵の選択)とその組み合わせだけ。
+// タイプバランスの結果(useTeamBalance + BalancePanel)をメンバー・仮想敵の入力欄つきで検証するための、テスト専用の足場。
+// 旧 BalanceHarness(別画面)は ADR-0421 段階 4 で撤去した。アプリ本体からは import しない(*.test.tsx からだけ使う)。
+// 構築編集の本物の組み込みは team/TeamBalanceSection.tsx。ここは旧画面と同じ入力欄・同じ DOM を保ち、
+// 旧画面のテスト(期待値は変えない)を BalancePanel / useTeamBalance / MemberFields に対して走らせ続けるために残す。
 
 import { useState } from "react";
 import type { BalanceClient } from "../api/balanceClient";
-import { BalancePanel } from "../balance/BalancePanel";
+import { BalancePanel } from "./BalancePanel";
 import {
   emptyMember,
   MAX_MEMBERS,
@@ -16,17 +13,17 @@ import {
   toBalanceInput,
   useMemberListActions,
   type MemberState,
-} from "../balance/memberInputs";
-import { isBalanceAvailable, useTeamBalance } from "../balance/useTeamBalance";
+} from "./memberInputs";
+import { isBalanceAvailable, useTeamBalance } from "./useTeamBalance";
 import { balanceScreenText, masterOnlineText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
 import { Tile } from "../ui/Tile";
-import { useSpeciesResolutions } from "./speciesResolution";
-import "../balance/BalancePanel.css";
+import { useSpeciesResolutions } from "../screens/speciesResolution";
+import "./BalancePanel.css";
 
 /** 画面の props(App.tsx が注入する。マスタは既存の画面と同じ MasterData。ADR-0303 §2・§3)。 */
-export interface BalanceScreenProps {
+export interface BalanceHarnessProps {
   readonly master: MasterData;
   readonly client: BalanceClient;
   /**
@@ -39,7 +36,7 @@ export interface BalanceScreenProps {
 }
 
 /** タイプバランスの画面(ADR-0303 §2・§7)。 */
-export function BalanceScreen({ master, client, masterSearch }: BalanceScreenProps) {
+export function BalanceHarness({ master, client, masterSearch }: BalanceHarnessProps) {
   // P4-17b(ADR-0304 A-14.1): 画面の可否は「入力の口があるか」で決める(判定は useTeamBalance と共有)。
   const capabilities = masterCapabilities(master);
   const balanceAvailable = isBalanceAvailable(master, masterSearch);

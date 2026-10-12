@@ -14,7 +14,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterData } from "../master/types";
 import type { RecordClient } from "../record/recordClient";
-import { BalanceScreen } from "../screens/BalanceScreen";
+import { BalanceHarness } from "../balance/balanceTestHarness";
 import { ReverseScreen } from "../screens/ReverseScreen";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import { createFakeEngine } from "../test/fakeEngine";
@@ -205,10 +205,10 @@ describe("逆算・構築の編集枠・タイプバランスの枠", () => {
       coverage: pending,
       threats: pending,
       recommendations: pending,
-    } as unknown as ComponentProps<typeof BalanceScreen>["client"];
+    } as unknown as ComponentProps<typeof BalanceHarness>["client"];
     render(
       <PokemonImagesProvider manifest={manifestOf([first.key])}>
-        <BalanceScreen master={master} client={client} />
+        <BalanceHarness master={master} client={client} />
       </PokemonImagesProvider>,
     );
     const group = screen.getByRole("group", { name: "メンバー1" });

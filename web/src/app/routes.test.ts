@@ -25,7 +25,6 @@ describe("ルート表", () => {
       ["favorites", "favorites", favoritesScreenText.tabLabel],
       ["adjust", "adjust", appText.adjustTabLabel],
     ]);
-    expect(appText.balanceTabLabel).toBe("タイプバランス");
     expect(appText.speedTabLabel).toBe("素早さ");
     expect(appText.teamTabLabel).toBe("構築");
     expect(appText.adjustTabLabel).toBe("調整");

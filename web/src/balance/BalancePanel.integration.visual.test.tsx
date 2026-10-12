@@ -11,7 +11,7 @@ import type { BalanceClient } from "../api/balanceClient";
 import { balanceScreenText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { BalanceScreen } from "./BalanceScreen";
+import { BalanceHarness } from "./balanceTestHarness";
 
 type Schemas = components["schemas"];
 
@@ -29,7 +29,7 @@ function createClient(overrides: Partial<BalanceClient> = {}): BalanceClient {
 
 function renderScreen(client: BalanceClient = createClient()): UserEvent {
   const user = userEvent.setup();
-  render(<BalanceScreen master={master} client={client} />);
+  render(<BalanceHarness master={master} client={client} />);
   return user;
 }
 

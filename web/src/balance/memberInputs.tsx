@@ -1,5 +1,5 @@
 // 仮想敵・メンバーの入力欄(ポケモン・特性・技1〜4)と、その枠の一覧を操作するハンドラ。
-// タイプバランス画面(screens/BalanceScreen.tsx)から取り出し、構築編集の「仮想敵」の節でも使う(ADR-0421 §3)。
+// タイプバランス画面(balance/balanceTestHarness.tsx(旧画面。段階4で撤去しテスト用の足場に))から取り出し、構築編集の「仮想敵」の節でも使う(ADR-0421 §3)。
 
 import { useId, useRef } from "react";
 import type { Dispatch, SetStateAction } from "react";
