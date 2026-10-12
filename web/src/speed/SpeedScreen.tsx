@@ -12,6 +12,7 @@ import { PokemonCard } from "../ui/PokemonCard";
 import { RankMeter } from "../ui/RankMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { Stepper } from "../ui/Stepper";
+import { typeAccentStyle } from "../ui/typeAccent";
 import "./SpeedScreen.css";
 import type { components } from "./speed.gen";
 import type { SpeedClient, SpeedResult } from "./speedClient";
@@ -236,7 +237,11 @@ export function SpeedScreen({ speedClient, onOpenCombo }: SpeedScreenProps): Rea
       {list === null && <p className="speed-screen__notice">{speedScreenText.pokemonListLoadingNotice}</p>}
 
       <div className="speed-screen__inputs">
-        <section aria-labelledby={selfHeadingId} className="speed-card">
+        <section
+          aria-labelledby={selfHeadingId}
+          className="speed-card speed-card--typed"
+          style={typeAccentStyle(selfPokemon?.types[0])}
+        >
           <h2 id={selfHeadingId} className="speed-card__region">
             {speedScreenText.selfRegionLabel}
           </h2>
@@ -305,7 +310,11 @@ export function SpeedScreen({ speedClient, onOpenCombo }: SpeedScreenProps): Rea
           )}
         </section>
 
-        <section aria-labelledby={opponentHeadingId} className="speed-card">
+        <section
+          aria-labelledby={opponentHeadingId}
+          className="speed-card speed-card--typed"
+          style={typeAccentStyle(opponentPokemon?.types[0])}
+        >
           <h2 id={opponentHeadingId} className="speed-card__region">
             {speedScreenText.opponentRegionLabel}
           </h2>
@@ -379,7 +388,11 @@ export function SpeedScreen({ speedClient, onOpenCombo }: SpeedScreenProps): Rea
           </p>
         )}
         {matchup.result?.ok === true && (
-          <MatchupCards response={matchup.result.value} trickRoom={trickRoom} />
+          <MatchupCards
+            response={matchup.result.value}
+            trickRoom={trickRoom}
+            accentType={opponentPokemon?.types[0]}
+          />
         )}
         {onOpenCombo !== undefined && selfId !== "" && opponentId !== "" && (
           <button
@@ -462,19 +475,30 @@ function SpeedPokemonCard({ pokemon }: { readonly pokemon: SpeedPokemon }): Reac
 
 // ---- 出力 1: 想定ごとのカード ----
 
+/** 上を取れる(先に動ける)性格が 1 つでもある想定か。 */
+function canMoveFirst(line: Schemas["MatchupLine"]): boolean {
+  return line.natures.some((entry) => entry.movesFirst !== undefined);
+}
+
 function MatchupCards({
   response,
   trickRoom,
+  accentType,
 }: {
   readonly response: Schemas["MatchupResponse"];
   readonly trickRoom: boolean;
+  readonly accentType: string | undefined;
 }): ReactElement {
+  const reachable = response.lines.filter(canMoveFirst).length;
   return (
     <>
+      <p className="speed-conclusion" data-testid="speed-conclusion">
+        {speedScreenText.matchupConclusion(reachable, response.lines.length, trickRoom)}
+      </p>
       {response.selfSpeed !== undefined && (
         <p className="speed-self-speed">{speedScreenText.selfSpeedLabel(response.selfSpeed)}</p>
       )}
-      <div className="speed-matchup-list">
+      <div className="speed-matchup-list" style={typeAccentStyle(accentType)}>
         {response.lines.map((line, index) => (
           <MatchupCard
             key={line.assumption.preset ?? `custom-${String(index)}`}
@@ -527,11 +551,16 @@ function MatchupCard({
           {speedScreenText.currentOrderLabel[line.current]}
         </p>
       )}
-      <ul className="speed-natures">
-        {shown.map((entry) => (
-          <NatureRow key={entry.nature} line={entry} trickRoom={trickRoom} />
-        ))}
-      </ul>
+      <details className="speed-details">
+        <summary className="speed-details__summary">
+          {trickRoom ? speedScreenText.naturesSummaryTrickRoom : speedScreenText.naturesSummary}
+        </summary>
+        <ul className="speed-natures">
+          {shown.map((entry) => (
+            <NatureRow key={entry.nature} line={entry} trickRoom={trickRoom} />
+          ))}
+        </ul>
+      </details>
     </article>
   );
 }
@@ -576,13 +605,36 @@ function ReachList({
   readonly response: Schemas["ReachResponse"];
   readonly trickRoom: boolean;
 }): ReactElement {
+  const highlight = response.lines.find((line) => line.preset === "max");
   return (
-    <ul className="speed-reach">
-      {response.lines.map((line) => (
-        <ReachRow key={line.preset} line={line} trickRoom={trickRoom} />
-      ))}
-    </ul>
+    <>
+      {highlight !== undefined && (
+        <p className="speed-conclusion" data-testid="speed-reach-conclusion">
+          {reachSlowerText(highlight, trickRoom)}
+        </p>
+      )}
+      <details className="speed-details">
+        <summary className="speed-details__summary">
+          {speedScreenText.reachListSummary(response.lines.length)}
+        </summary>
+        <ul className="speed-reach">
+          {response.lines.map((line) => (
+            <ReachRow key={line.preset} line={line} trickRoom={trickRoom} />
+          ))}
+        </ul>
+      </details>
+    </>
   );
+}
+
+/** 「抜ける側」の文(行の slower セルと結論の 1 行で同じ文を使う)。 */
+function reachSlowerText(line: Schemas["ReachLine"], trickRoom: boolean): string {
+  const t = speedScreenText;
+  const { preset, slower } = line;
+  if (slower === undefined) {
+    return trickRoom ? t.reachNoneSlowerTrickRoom : t.reachNoneSlower;
+  }
+  return trickRoom ? t.reachSlowerTrickRoom(preset, slower.max) : t.reachSlower(preset, slower.max);
 }
 
 function ReachRow({
@@ -599,15 +651,7 @@ function ReachRow({
       <h3 className="speed-reach__title">{speedPresetText[preset]}</h3>
       <ReachCell
         testId="speed-reach-slower"
-        text={
-          slower === undefined
-            ? trickRoom
-              ? t.reachNoneSlowerTrickRoom
-              : t.reachNoneSlower
-            : trickRoom
-              ? t.reachSlowerTrickRoom(preset, slower.max)
-              : t.reachSlower(preset, slower.max)
-        }
+        text={reachSlowerText(line, trickRoom)}
         count={slower === undefined ? undefined : line.slowerCount}
         example={line.fastestSlower}
       />

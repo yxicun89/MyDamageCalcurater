@@ -121,11 +121,26 @@ export const speedScreenText = {
   } as const satisfies Record<TurnOrderKey, string>,
   /** 自分の今の素早さ(実数値)。 */
   selfSpeedLabel: (speed: number): string => `自分の素早さ ${String(speed)}`,
+  /** 全体の結論の 1 行(想定のうち、上を取れる / 先に動ける想定の数)。 */
+  matchupConclusion: (reachable: number, total: number, trickRoom: boolean): string => {
+    const verb = trickRoom ? "先に動けます" : "上を取れます";
+    if (reachable === 0) {
+      return trickRoom ? "どの想定でも先に動けません" : "どの想定でも上を取れません";
+    }
+    return reachable === total
+      ? `${String(total)} つの想定すべてで${verb}`
+      : `${String(total)} つの想定のうち ${String(reachable)} つで${verb}`;
+  },
+  /** カード内の折りたたみ(性格補正ごとの最小 SP。初期は閉じる)。 */
+  naturesSummary: "性格補正ごとの最小 SP",
+  naturesSummaryTrickRoom: "性格補正ごとの上限 SP",
   matchupLoadingNotice: "最低ラインを計算中",
   // ---- 出力 2: これ以上 ----
   reachHeading: "これ以上",
   reachIntro:
     "今の素早さで、素早さの基本値がどこまでのポケモンを抜けるかの一覧です(「100 族」は、素早さの基本値が 100 のポケモンのことです)",
+  /** 「これ以上」の全行を開く折りたたみ(初期は閉じる)。 */
+  reachListSummary: (count: number): string => `${String(count)} つの振り方ごとの一覧を見る`,
   reachNeedsCurrent: "「今の振りも入れる」をオンにすると、ここに「これ以上」の一覧が出ます",
   reachLoadingNotice: "「これ以上」を計算中",
   /** 通常の場。「準速 117 族まで抜ける」「準速 118 族と同速」「準速 119 族以上に抜かれる」。 */

@@ -39,6 +39,16 @@ describe("RankMeter", () => {
     expect(slider()).toHaveAttribute("aria-valuetext", "攻撃 ±0");
   });
 
+  test("±0 でも左(下降)・右(上昇)・中央の側が data-side で分かる(薄い色の目盛。ADR-0357 追記)", () => {
+    const { container } = render(
+      <RankMeter label="攻撃側のランク" statName="攻撃" value={0} onChange={vi.fn()} />,
+    );
+    const sides = [...container.querySelectorAll(".ui-rank__segment")].map((node) =>
+      node.getAttribute("data-side"),
+    );
+    expect(sides).toEqual([...Array<string>(6).fill("down"), "zero", ...Array<string>(6).fill("up")]);
+  });
+
   test("段の色: 右の上昇は up、左の下降は down、中央は zero(目印)", () => {
     const states = (value: number) => {
       const { container, unmount } = render(
