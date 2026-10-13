@@ -7,11 +7,16 @@ import SwiftUI
 // 見た目だけを残す。
 
 enum TeamTextControls {
-    static func buttonLabel(_ title: String) -> some View {
-        Text(title)
-            .font(TextStyleToken.body.font)
-            .multilineTextAlignment(.center)
-            .fixedSize(horizontal: false, vertical: true)
-            .frame(maxWidth: .infinity)
+    /// `systemImage` を渡すと文字の前に装飾アイコンを付ける(既定はなし)。
+    @ViewBuilder
+    static func buttonLabel(_ title: String, systemImage: String? = nil) -> some View {
+        HStack(spacing: SpacingToken.x2) {
+            if let systemImage { PopIcon(systemImage) }
+            Text(title)
+                .font(TextStyleToken.body.font)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity)
     }
 }

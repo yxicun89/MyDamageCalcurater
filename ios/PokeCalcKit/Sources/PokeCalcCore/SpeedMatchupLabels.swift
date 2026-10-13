@@ -47,7 +47,27 @@ public enum SpeedMatchupLabels {
         }
     }
 
+    // ---- 結論の 1 行・折りたたみ(I-ios-25。ADR-0538。Web の speedScreenText と同じ語) ----
+    /// カード内の折りたたみの題(初期は閉じる)。
+    public static let naturesSummary = "性格補正ごとの最小 SP"
+    public static let naturesSummaryTrickRoom = "性格補正ごとの上限 SP"
+
     // ---- 値を埋め込む文言 ----
+
+    /// 出力 1 の結論。`reachable` = 上を取れる(同速だけは含めない)想定の数、`total` = 想定の数。
+    /// 例「4 つの想定のうち 3 つで上を取れます」「4 つの想定すべてで上を取れます」「どの想定でも上を取れません」
+    /// (トリックルーム中は「先に動けます」「どの想定でも先に動けません」)。
+    public static func matchupConclusion(reachable: Int, total: Int, trickRoom: Bool) -> String {
+        let verb = trickRoom ? "先に動けます" : "上を取れます"
+        if reachable == 0 { return trickRoom ? "どの想定でも先に動けません" : "どの想定でも上を取れません" }
+        return reachable == total ? "\(total) つの想定すべてで\(verb)" : "\(total) つの想定のうち \(reachable) つで\(verb)"
+    }
+
+    /// カードの見出し。「最速 ・ 素早さ 145」(`assumption` は想定の名前、`speed` は相手の素早さ)。
+    public static func cardHeading(assumption: String, speed: Int) -> String { "\(assumption) ・ 素早さ \(speed)" }
+
+    /// 出力 2 の折りたたみの題。「6 つの振り方ごとの一覧を見る」。
+    public static func reachListSummary(count: Int) -> String { "\(count) つの振り方ごとの一覧を見る" }
 
     /// 「相手の素早さ 200」
     public static func opponentSpeed(_ speed: Int) -> String { "相手の素早さ \(speed)" }

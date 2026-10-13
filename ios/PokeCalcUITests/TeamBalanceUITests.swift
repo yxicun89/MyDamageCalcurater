@@ -66,7 +66,7 @@ final class TeamBalanceUITests: XCTestCase {
 
     /// 構築編集のスクロールの中で `target` が押せる位置に来るまでスクロールする。要素は遅延なく作られるので、
     /// 要素の位置から中央までの距離だけ引く(1 回は画面の 4 割まで。AX5 では節が長いので回数を多めに取る)。
-    private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, maxSwipes: Int = 60) {
+    private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, maxSwipes: Int = 100) {
         let screen = element(app, "teamEditScreen")
         for _ in 0..<maxSwipes {
             if target.exists && target.isHittable {

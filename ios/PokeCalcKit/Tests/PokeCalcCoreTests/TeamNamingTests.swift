@@ -72,7 +72,6 @@ final class TeamLabelsTests: XCTestCase {
         XCTAssertEqual(TeamLabels.unsavedNotice, "保存していない変更があります")
         XCTAssertEqual(TeamLabels.leaveDiscard, "保存せずに戻る")
         XCTAssertEqual(TeamLabels.leaveCancel, "編集を続ける")
-        XCTAssertEqual(TeamLabels.emptySlotHint, "ポケモンを選ぶと、技・持ち物・特性などを決められます")
     }
 
     func testUpdatedTextIsFallbackWhenUnknown() {

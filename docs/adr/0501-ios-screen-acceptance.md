@@ -5152,6 +5152,39 @@ iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早
 
 既存のテストは削除・緩和していない。モックの `test-move-status-a` に効果を足すため、モックの技一覧の件数・名前は変わらない(項目が 1 つ増えるだけ)。
 
+## 素早さ画面の結論 1 行と折りたたみ(ADR-0538。2026-10-13。I-ios-25)
+
+Web の I-web-34(ADR-0610 §9)に揃える。値・既存の文言の語・識別子は変えず、出し方だけを変える。
+
+### 受け入れ条件
+
+1. 想定のカードが出ているとき、先頭に結論の 1 行(`speedConclusion`)が出る。上を取れる想定 = どれかの性格に最小 SP がある想定(同速だけは数えない)。
+   「N つの想定のうち M つで上を取れます」/ 全部「N つの想定すべてで上を取れます」/ 0「どの想定でも上を取れません」。
+   トリックルーム中は「先に動けます」「どの想定でも先に動けません」。
+2. カードに見出し「最速 ・ 素早さ 145」(`speedCardHeading-<id>`)がある。一言見出し・相手の素早さ・行動順のバッジは従来のまま残る。
+3. 性格の行(`speedCardNature-*`・`speedCardTie-*`)はカードごとの折りたたみ(`speedCardNaturesToggle-<id>`「性格補正ごとの最小 SP」。
+   トリックルーム中は「…上限 SP」)の中。初期は閉じていて画面に無く、開くと従来の行が出る。他のカードの開閉に影響されない。
+4. 「これ以上」に結論の 1 行(`speedReachConclusion`。最速の行の「最速 N 族まで抜ける」。トリックルーム中は「…までは後に動く」)があり、
+   6 行の一覧は折りたたみ(`speedReachListToggle`「6 つの振り方ごとの一覧を見る」)の中。初期は閉じ、開くと 6 行が出る。
+5. 折りたたみの題のタップ領域は 36pt 以上。AX5 で結論・見出し・題・開いた行が横にはみ出さず、固定高にしない。
+6. 帯の色は選んだ相手(カード)・自分・相手(入力カード)の先頭タイプ色。未選択は brandPrimary(文字で意味を伝える飾り)。
+7. ランクのメーター(ADR-0533)・API 不可時の表示(ADR-0534)・値・API は変えない。
+
+### 追加するテスト
+
+`SpeedMatchupConclusionTests`(新規。結論文言のテーブル駆動・トリックルーム・全部/0/一部・同速だけは数えない・見出し・最速の行の結論・帯のタイプ)、
+`SpeedMatchupUITests` の `testConclusionLineAndCardHeadingsAppearAndRowsAreCollapsedByDefault`・`testConclusionWordingForAllAndNoneReachable`・
+`testTrickRoomConclusionAndSummaryWording`・`testReachConclusionAndListAreCollapsedByDefault`・`testDisclosureTogglesAreAtLeast36ptTall`(新規)。
+
+### 変更する既存テスト(検査は弱めない。「開く操作」を足すだけ)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `SpeedMatchupUITests.testPickingBothPokemonShowsOneCardPerAssumptionAndNoTable` | 性格の行・同速の検査の前に `speedCardNaturesToggle-<id>` を開く操作を足し、閉じている間は行が無いことの検査を足した | 行が初期は閉じる(受け入れ条件 3)。検査する文言は同じ |
+| `SpeedMatchupUITests.testCurrentInvestmentAndTrickRoomShowOrderAndReach` | 「これ以上」の行の検査の前に `speedReachListToggle` を開き(閉じている検査を足す)、トリックルームの下降の行の前にカードの折りたたみを開く。トリックルーム後は一覧を開き直す | 同上(受け入れ条件 3・4)。検査する文言は同じ |
+| `SpeedMatchupLargeTextUITests`(出力側の識別子・`openFullState`) | 結論・見出し・題の識別子を検査対象に足し、行の検査の前に 2 つの折りたたみを開く | 同上。AX5 の検査対象は増える |
+| `SpeedMatchupDisplayTests`・`SpeedMatchupLabelsTests`・`SpeedMatchupViewModel*` | 変更なし(`rows`・`headline` などは模型のまま。`heading` は引数の既定値つきで足す) | 値と既存の語は不変 |
+
 ## G-05 このアプリについて・お気に入り・履歴の作り直し(ADR-0536。2026-10-12)
 
 方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0348/0349)に追う。対象は
@@ -5224,3 +5257,76 @@ iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早
 
 `FavoritesScreenUITests.testDefaultShowsEmptyFavoritesAndOpponentHistory` ほか、行・識別子・label を見る既存の UITest は変えない(識別子・label は不変)。
 実装で上の他に文言・手順が変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。
+
+## G-05 構築の一覧・編集の作り直し(ADR-0537。2026-10-12)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0347/0350)に追う。対象は
+`TeamListView`・`TeamEditView`・`TeamEditMemberCard`・`TeamSlotViews`・`TeamSourceMenuRow`・`TeamTextControls`、新規の `TeamSlotGridView`、
+技のシート(`MasterSearchSheet.swift` の `MoveSearchSheet`)。識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ)。
+API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ランクのメーターは触らない。
+
+### 現状の洗い出し(文で説明している箇所・Web と構造や語が違う箇所)
+
+| 画面・部品 | 今 | 直す |
+|---|---|---|
+| 一覧の空 | 「まだ構築がありません。「新しい構築」を押すと、ポケモンを6体まで選んで構築を作れます」(2 文) | `ContentUnavailableView`(構築のアイコン)+「まだ構築がありません」 |
+| 一覧・編集の読み込み中 | `ProgressView`(回り続ける) | `PopNoticeView(.loading)`(静止したアイコン + 「読み込み中」) |
+| 一覧のカードの枠 | 埋まった枠のアイコンだけ並ぶ | 6 つの枠(空きは破線の枠。読み上げない) |
+| 一覧の[削除] | 文字「削除」 + ごみ箱 | ごみ箱のアイコンだけ(読み上げ名は従来の「「名前」を削除」)。確認の「削除する」にごみ箱、確定に警告の触覚 |
+| 編集の先頭 | 6 枠が縦に並ぶだけ | 6 枠のタイルの格子(埋まった枠=ポケモンカード、空き=「+ N体目を追加」)。押すとその枠へスクロール |
+| 枠の上へ・下へ・外す | 文字 + アイコン | アイコンだけ(読み上げ名・識別子は従来のまま) |
+| 空の枠の案内 | 「ポケモンを選ぶと、技・持ち物・特性などを決められます」(`slotEmptyHint-N`) | 廃止(「ポケモン」の欄だけ。タイルの「+」が示す) |
+| 未保存・保存済み | caption の文字だけ | アイコン + 一言(注意 / 完了) |
+| メンバーの見出し・欄の語 | 「わざ」「ニックネーム(任意)」「技を選択」 | 「技」「ニックネーム」「(なし)」(Web と同じ) |
+| SP の見出し | 「能力ポイント(合計 x/66)」(文)+ 6 つの `Stepper` | 「合計 66/66(残り 0)」(数値)+ 装飾のバー。6 欄とも − / + のアイコンボタン + 数値欄 |
+| 技ピッカー | 並びはタイプ順でなく、他の枠の技は一覧から消える。先頭は「外す」 | タイプ順の群。他の枠の技は薄く押せない行で残す。先頭は「(なし)」 |
+| 「構築から選ぶ」 | 1 行に縮めて収める(`lineLimit(1)`・`minimumScaleFactor`)。空は caption の文。矢印は直書き | 折り返して全文。空はアイコン + 一言。矢印は `PopSymbol` 経由 |
+| 戻る・選択の矢印 | SF Symbols の名前を View に直書き | `PopSymbol.back`・`PopSymbol.picker` |
+
+既に方針どおりで変えないもの: 見出しのアイコン + 名前、[新しい構築]・[開く]・[保存]・[一覧に戻る]のアイコン付きピル、削除と未保存で戻るときの 2 段階(文は確認なので残す)、
+エラー・読み込み失敗の文、画像かエンブレム(`SpeciesImageView`)、持ち物・特性・性格・テラスタイプの選択(5 択以上・文字だけの短い選択肢)、
+メガの持ち物の固定の理由・保存データを直した通知(状態の通知)、タイプバランスの節、ランクのメーター、`PillButtonStyle` の押下の縮み(視差効果を減らすで 0 秒)。
+
+### 受け入れ条件
+
+1. 一覧の空は一言「まだ構築がありません」(`teamListEmpty`)。一覧・編集の読み込み中に `ProgressView`(`activityIndicators`)が無い。
+2. カード: [開く]は アイコン + 名前(読み上げ名は従来の「「名前」を開く」)、[削除]はアイコンだけ(`staticTexts` が 0・読み上げ名は従来)で、どちらも 36pt 以上。
+   アイコン列の読み上げは埋まった枠の名前だけ(空きは読み上げない)。削除は 2 段階のまま、確認のボタンも 36pt 以上。
+3. 編集に 6 枠のタイルの格子(`teamSlotGrid`。読み上げ「メンバー」)。空きは「N体目を追加」(`teamTile-N`・36pt 以上)、埋まった枠は種族名(同じ `teamTile-N`)。
+   タイルを押すと対応する枠までスクロールして「ポケモン」欄が押せる。空の枠に案内の文(`slotEmptyHint-N`)が無い。
+4. 上へ・下へ・外すはアイコンだけ(`staticTexts` が 0)で、36pt 以上。読み上げ名(「N体目を上へ/下へ/外す」)と識別子は不変。
+5. メンバーカード: 技の見出し(`memberMovesHeading-<id>`)は「技」、ニックネーム欄の placeholder は「ニックネーム」、空の技の枠は「(なし)」。
+   SP は 6 欄とも − / + のボタン(`memberSPDown/Up-<id>-<stat>`。読み上げ「<欄>の能力ポイントを減らす/増やす」)と数値欄(`memberSPField-<id>-<stat>`)があり、すべて 36pt 以上。
+   0 で − が、32 または合計 66 で + が押せなくなる。数値欄に打つと反映され、数字キーボードに「完了」。合計は「合計 n/66(残り m)」(`memberSPSummary-<id>`)+ 装飾のバー(`memberSPBar-<id>`)。
+6. 技ピッカー: 先頭に「(なし)」(`moveSearchRemoveButton`。選ぶと枠が空く)、技はタイプ順の群(見出し = タイプ名)、他の枠で選んだ技は残して押せない、自分の枠の技は選べる。
+   読み上げ(技名 + 値にタイプ・分類・威力)・識別子は不変。
+7. 未保存・保存済みの語は不変(`teamUnsavedNotice`・`teamSavedNotice`。アイコン + 一言)。「構築から選ぶ」の入口が全文を折り返す。
+8. 常に画面に出る文字(空・読み込み中・ボタン・件数・見出し・SP の合計)は「。」を含まない(`G05TeamTextTests.testAlwaysVisibleStringsAreNotSentences`)。文を置くのは確認(削除・未保存で戻る)とエラーだけ。
+9. 7 ファイルに `ProgressView(`・`repeatForever`・`lineLimit`・`minimumScaleFactor`・色のリテラル・SF Symbols 名の直書きが無く、縮み・動きは視差効果を減らすで 0 秒(`G05TeamSourceRulesTests`)。
+10. 新しい部品(タイルの格子・アイコンだけの操作・SP のボタン・合計)を含め、AX5 で横にはみ出さず、タップが 36pt 以上。
+
+### 新しい識別子
+
+`teamSlotGrid`・`teamTile-<n>`・`memberMovesHeading-<id>`・`memberSPSummary-<id>`・`memberSPBar-<id>`・`memberSPUp-<id>-<stat>`・`memberSPDown-<id>-<stat>`・`memberSPField-<id>-<stat>`。
+既存の識別子(`slotMoveUp-N`・`teamDelete-<id>`・`memberSP-<id>-<stat>`〔行〕・`teamListEmpty`・`teamEditLoadingIndicator` ほか)は付け替えない。廃止: `slotEmptyHint-<n>`(案内の文ごと)。
+
+### 追加したテスト
+
+`G05TeamTextTests`・`G05TeamSourceRulesTests`(以上 PokeCalcCoreTests)、`TeamG05UITests`。`GlossaryTests` の対象文言に新しい語を足した(追加のみ)。
+骨組みとして `PokeCalcCore/G05TeamText.swift`(値は空・`TeamSPControl` は常に false。実装者が入れる)を置いた。
+
+### 既存テストの変更(新しい語・構造への更新。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `TeamLabelsTests.testSlotLabelsUseSameWordsAsWeb`(`TeamNamingTests.swift`) | `emptySlotHint` の固定の 1 行を削除(定数ごと廃止) | 空の枠の案内の文を廃止(決定 3) |
+| `TeamScreenUITests.testNewTeamOpensEditorWithSixEmptySlots` | 空の一覧の案内が「新しい構築」を含む → 一言「まだ構築がありません」。`slotEmptyHint-N` の文 → 存在しない | 決定 1・3。他の検査(6 枠・欄・未保存の印なし)は同じ |
+| `LargeTextLayoutUITests` の構築編集の AX5 | はみ出し検査の対象 `slotEmptyHint-1` → `teamSlotGrid` | 案内の文を廃止し、格子に置き換えたため |
+| `TeamBalanceUITests.scrollUntilHittable`(AX5 のタイプバランス) | 既定の最大スワイプ数 60 → 100 | AX5 では 6 枠のタイルの格子(1 列)と SP の行が増えて画面が長くなり、節までの送りが 60 回では届かないことがあったため(検査は同じ) |
+| `CalcAttackerStatsUITests.tapUntilSelected` | 押し直し 1 回 → 「ゆっくりスクロール(velocity .slow)→ 止まるのを待つ → 押す」を選択されるまで最大 3 回。要素がバーの下に潜っていたら引き下げる | 性格ボタンが上のナビゲーションバーの下(上端 y=86)に止まり、上寄りのタップがバーに当たって不安定だったため(team 変更と無関係。期待値は同じ) |
+
+タイプバランスの技ピッカー(`BalanceMemberCard`・`BalanceMoveRangeView`)は `MoveSearchSheet` の `noneLabel` 既定を使うため、先頭行の語が「外す」から「(なし)」に変わる(Web の語に揃う。識別子 `moveSearchRemoveButton` は不変で、UITest はこの語を参照していない)。SP の数値欄は ASCII の数字だけを通す(全角数字は受け付けない)。
+
+`TeamScreenUITests` の他(種族の選択・技シートの検索・入れ替え・外す・保存・戻る・カード・削除の 2 段階)、`TeamBalanceUITests`、`CalcScreenUITests`・`ReverseScreenUITests`(構築から選ぶ)は変えない
+(識別子・読み上げ名は不変)。`TeamLabels.emptyList` の値を変えるが、固定していた既存テストは無い。実装で上の他に文言・手順が変わるテストが出たら、同じ方針
+(期待の更新だけ・検査対象は減らさない)でこの表に足す。
