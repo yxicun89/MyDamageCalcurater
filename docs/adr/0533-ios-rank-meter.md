@@ -31,3 +31,12 @@ iOS の計算・素早さ・判定の画面とそのテスト。API・engine・W
 素早さ画面は speed レーンが「相手を選んで先に動く最低ライン」の構成に作り直した(#757)。自分の側のランク行は、新しい `SpeedSelfSection` の中で同じ `RankMeterView`(field `speed`)に置き換えた。識別子・読み上げは本文のとおり。
 
 追記(ゲートの失敗と対処。2026-10-12): `SpeedMatchupLargeTextUITests.testSpeedMatchupInputNoHorizontalOverflowAtAX5` が「画面に出なかった要素」で落ちた。原因は本物で、ランクのメーターの `DragGesture` が ScrollView の縦スクロールを奪い、画面中央(slow swipe の開始点)がメーターに当たると 30 回スワイプしても進まなかった。対処はアプリ側: ドラッグを `RankHorizontalPan`(`UIGestureRecognizerRepresentable` の UIPanGestureRecognizer。最初の速度が水平優勢のときだけ begin。判定は `RankMeterLogic.isHorizontalDrag`)に替え、縦は始まらせない。期待は変えていない。`CalcDefenderRanksUITests` の縦スワイプ試験に「メーターの上から始めても画面がスクロールする」検査を追加。他の3件(`AdjustGoalsUITests.testUnavailableGoals…`・`AdjustScreenUITests.testUnsupportedMarkNoticeIsShown`・`CalcAttackerStatsUITests.testSelectingSpecialMove…`)は単独では再現せず、修正後の上記クラス一式(48 件)と合わせて成功した(同じ原因の可能性が高い:スクロールが進まない)。
+
+## 追記: ±0(未入力)の見た目(2026-10-13。Web の ADR-0357 追記 / `docs/ai-shared/decisions/2026-10-13-web-rank-meter-zero.md` に揃える)
+
+ユーザーの画面確認で「±0 のとき枠だけで寂しい」。決定 2 の「未到達の段の枠 = `textSecondary`」を改める。
+- 値の入っていない段のうち、左 6(下降側)は `warning`、右 6(上昇側)は `brandPrimary` を薄く塗る(塗り 16%・枠 70%。トークンの `opacity` で表す。色リテラルは使わない)。値が入った段は従来どおり濃い塗り。
+- 中央の 0 は太い縦棒(`textPrimary`)に、左右 2pt の余白を足して強調。
+- 見た目の決定は純粋ロジック `RankMeterLogic.segmentFill`(`SegmentFill`: solidUp/solidDown/tintUp/tintDown/zeroMarker)と定数 `tintFillOpacity`/`tintStrokeOpacity` に切り出し、XCTest で固定。
+- 無効時はメーター全体の不透明度を下げる(`disabledChipOpacity`)。常時アニメーションなし。
+- 右の見える値ラベルは符号付き(計算は「A ±0」、素早さは「±0」。従来どおり)。読み上げ(label「攻撃」・value「±0」)・adjustable・識別子・タップ 37pt は不変。
