@@ -72,7 +72,13 @@ public enum UnsupportedNoticeText {
     /// 結果の上に1回だけ出す注記。`この結果は正確でない可能性があります(未対応: <印>、<印>)`。
     public static func summary(_ marks: [UnsupportedMark], names: UnsupportedMarkNames) -> String? {
         guard !marks.isEmpty else { return nil }
-        return "この結果は正確でない可能性があります(未対応: \(joinedText(marks, names: names)))"
+        return summary(texts: marks.map { UnsupportedMarkLabel.text(for: $0, name: names.name(for: $0)) })
+    }
+
+    /// 印ごとの文言(`UnsupportedMarkLabel.text`)を並べた注記。連続技の印(`ComboMark`)も同じ書式で出す。
+    static func summary(texts: [String]) -> String? {
+        guard !texts.isEmpty else { return nil }
+        return "この結果は正確でない可能性があります(未対応: \(texts.joined(separator: "、")))"
     }
 
     /// 行(候補カード)に出す短い注記。`未対応: <印>、<印>`。
