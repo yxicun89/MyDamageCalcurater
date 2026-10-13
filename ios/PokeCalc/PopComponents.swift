@@ -154,6 +154,7 @@ enum PopSymbol {
     static let up = PopSymbolNames.up
     static let down = PopSymbolNames.down
     static let minus = PopSymbolNames.minus
+    static let judge = PopSymbolNames.judge
     /// 行の右端など「先へ進む」矢印。
     static let forward = "chevron.right"
     static let reload = "arrow.clockwise"
@@ -283,13 +284,15 @@ struct PopIconButton: View {
     var isEnabled = true
     /// true なら取り消し系の色(danger)で描く。
     var isDanger = false
+    /// タップ領域の最小の一辺(既定は 36pt)。画面の座標が小数のとき、ちょうど 36 だと測定の誤差で 36 未満に見えるため、必要な画面は少し大きく渡せる。
+    var minSide: CGFloat = CalcScreenMetrics.minimumTapSide
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             PopIcon(systemImage)
                 .foregroundStyle(isDanger ? ColorToken.danger.color : ColorToken.brandPrimary.color)
-                .frame(minWidth: CalcScreenMetrics.minimumTapSide, minHeight: CalcScreenMetrics.minimumTapSide)
+                .frame(minWidth: minSide, minHeight: minSide)
                 .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
                 .contentShape(Rectangle())
         }

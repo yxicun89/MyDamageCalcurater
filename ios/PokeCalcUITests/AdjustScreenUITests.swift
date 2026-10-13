@@ -116,7 +116,7 @@ final class AdjustScreenUITests: XCTestCase {
         tap(app, "adjustSubmitButton")
         XCTAssertTrue(element(app, "adjustStatsLine").waitForExistence(timeout: Self.resultTimeout))
         waitForLabel(element(app, "adjustFirepowerIndex"), "技を選ぶと出します")
-        for identifier in ["adjustPhysicalBulk", "adjustSpecialBulk", "adjustIndexNote", "adjustHPCurrent"] {
+        for identifier in ["adjustPhysicalBulk", "adjustSpecialBulk", "adjustIndexNoteHelpButton", "adjustHPCurrent"] {
             XCTAssertTrue(element(app, identifier).exists, "\(identifier) が無い")
         }
         for index in 0..<4 {
@@ -150,6 +150,9 @@ final class AdjustScreenUITests: XCTestCase {
         XCTAssertFalse(element(app, "adjustCeiling-spe").exists, "耐久側は素早さを見ない")
         tap(app, "adjustSubmitButton")
         XCTAssertTrue(element(app, "adjustMaxIndexPlan").waitForExistence(timeout: Self.resultTimeout))
+        // 補足の文は「説明」ボタンの奥(G-05 第 4 弾。ADR-0540)。文面は変えない。
+        XCTAssertFalse(element(app, "adjustMinSpNotRequested").exists, "最初は出ない")
+        tap(app, "adjustMinSpNotRequestedHelpButton")
         waitForLabel(element(app, "adjustMinSpNotRequested"), "目標を指定すると、目標に届くいちばん少ない振り方も出します")
     }
 

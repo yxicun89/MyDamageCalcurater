@@ -10,4 +10,7 @@ public enum PopSymbolNames {
     public static let up = "arrow.up"
     public static let down = "arrow.down"
     public static let minus = "minus"
+    /// 調整の「耐える」目標と「目標」の見出し(Web のアイコン名 `judge`。盾の形)。G-05 第 4 弾(ADR-0540)。
+    /// spec-writer の骨組み: 値は実装者が入れる(今は空。`PopSymbolNamesTests` が失敗する)。
+    public static let judge = "shield"
 }

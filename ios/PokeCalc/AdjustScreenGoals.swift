@@ -31,14 +31,9 @@ struct AdjustGoalsCardView: View {
     @State private var movePick: GoalMovePick?
 
     var body: some View {
-        AdjustCard(title: AdjustText.goalRegion, identifier: "adjustGoalsCard") {
+        AdjustCard(title: AdjustText.goalRegion, systemImage: PopSymbol.judge, identifier: "adjustGoalsCard") {
             if viewModel.goalDrafts.isEmpty {
-                Text(AdjustText.noGoalsNotice)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("adjustNoGoals")
+                PopNoticeView(kind: .empty, message: AdjustText.noGoalsNotice, identifier: "adjustNoGoals")
             }
             ForEach(Array(viewModel.goalDrafts.enumerated()), id: \.element.id) { offset, draft in
                 AdjustGoalItemView(viewModel: viewModel, draft: draft, number: offset + 1) { role in
@@ -57,10 +52,11 @@ struct AdjustGoalsCardView: View {
             Button {
                 viewModel.addGoal()
             } label: {
-                PopLabel(title: AdjustText.addGoalButton, systemImage: PopSymbol.add)
+                AdjustAddTile(title: AdjustText.addGoalButton)
             }
-            .buttonStyle(PillButtonStyle(kind: .secondary))
+            .buttonStyle(.plain)
             .disabled(!viewModel.canAddGoal)
+            .opacity(viewModel.canAddGoal ? 1 : CalcScreenMetrics.disabledChipOpacity)
             .accessibilityIdentifier("adjustAddGoalButton")
             if !viewModel.canAddGoal {
                 Text(AdjustText.goalLimitHint(RequestLimits.maxAdjustGoals))
@@ -74,6 +70,29 @@ struct AdjustGoalsCardView: View {
     }
 }
 
+/// 「+」のタイル(目標の追加。破線の枠。構築の空き枠と同じ作り)。
+private struct AdjustAddTile: View {
+    let title: String
+
+    var body: some View {
+        VStack(spacing: SpacingToken.x1) {
+            PopIcon(PopSymbol.add)
+            Text(title)
+                .font(TextStyleToken.body.font)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(ColorToken.textSecondary.color)
+        .padding(SpacingToken.x2)
+        .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide * 2)
+        .overlay(
+            RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                .stroke(ColorToken.borderHairline.color, style: StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+        )
+        .contentShape(Rectangle())
+    }
+}
+
 /// 目標1件のカード(種類・相手・振り方・技・発数/確率・外す)。
 private struct AdjustGoalItemView: View {
     let viewModel: AdjustViewModel
@@ -84,23 +103,23 @@ private struct AdjustGoalItemView: View {
 
     private var prefix: String { "adjustGoal-\(number)" }
 
+    /// 発数の行(− 値 +)の最大幅。
+    private static let hitsRowMaxWidth: CGFloat = 240
+
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            Text(AdjustText.goalCardLegend(number))
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityAddTraits(.isHeader)
-                .accessibilityIdentifier("\(prefix)-legend")
+            PopHeading(
+                title: AdjustText.goalCardLegend(number), systemImage: kindSymbol(draft.kind), identifier: "\(prefix)-legend")
             kindChoices
             AdjustSpeciesRow(
                 viewModel: viewModel, species: viewModel.goalOpponentSpecies(draft),
                 title: AdjustText.goalOpponentSpeciesField,
                 accessibilityLabel: AdjustText.goalFieldName(number, AdjustText.goalOpponentSpeciesField),
-                identifier: "\(prefix)-opponentButton"
+                identifier: "\(prefix)-opponentButton", itemMark: viewModel.goalOpponentItemMark(draft)
             ) { option in
                 Task { await viewModel.selectGoalOpponent(id: draft.id, key: option.key) }
             }
+            recentOpponents
             switch draft.kind {
             case .outspeed:
                 speedPresets
@@ -133,21 +152,93 @@ private struct AdjustGoalItemView: View {
 
     // MARK: - 種類
 
+    /// 種類のアイコン(素早さ = 速度、耐える = 判定〈盾〉、倒す = 計算。Web と同じ)。
+    private func kindSymbol(_ kind: AdjustGoalKind) -> String {
+        switch kind {
+        case .outspeed: return PopSymbol.speed
+        case .survive: return PopSymbol.judge
+        case .ko: return PopSymbol.calc
+        }
+    }
+
+    /// 3 択の区切りボタン(アイコン + 短い名前。選択中は塗り + チェック。AX5 は縦に積む)。
     private var kindChoices: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
             AdjustFieldCaption(text: AdjustText.goalKindField)
-            ForEach(AdjustGoalKind.allCases, id: \.self) { kind in
-                AdjustChoiceButton(
-                    title: AdjustText.goalKindOption(kind), isSelected: draft.kind == kind,
-                    identifier: "\(prefix)-kind-\(kind.rawValue)"
-                ) {
-                    viewModel.setGoalKind(id: draft.id, kind)
-                }
+            if dynamicTypeSize >= .accessibility1 {
+                VStack(spacing: SpacingToken.x2) { kindButtons }
+            } else {
+                HStack(alignment: .top, spacing: SpacingToken.x2) { kindButtons }
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(AdjustText.goalFieldName(number, AdjustText.goalKindField))
         .accessibilityIdentifier("\(prefix)-kind")
+    }
+
+    @ViewBuilder
+    private var kindButtons: some View {
+        ForEach(AdjustGoalKind.allCases, id: \.self) { kind in
+            let isSelected = draft.kind == kind
+            Button {
+                viewModel.setGoalKind(id: draft.id, kind)
+            } label: {
+                VStack(spacing: SpacingToken.x1) {
+                    PopIcon(isSelected ? PopSymbol.done : kindSymbol(kind))
+                    Text(AdjustText.goalKindOption(kind))
+                        .font(TextStyleToken.body.font)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
+                .padding(.horizontal, SpacingToken.x2)
+                .padding(.vertical, SpacingToken.x2)
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                .background(
+                    PopChipStyle.fill(isSelected: isSelected),
+                    in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                        .stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth)
+                )
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("\(prefix)-kind-\(kind.rawValue)")
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
+        }
+    }
+
+    // MARK: - 選んだ相手から
+
+    /// これまでに選んだ相手を絵つきのタイルで並べる(押すとその目標の相手になる。従来の選択・検索も残す)。
+    @ViewBuilder
+    private var recentOpponents: some View {
+        let recent = viewModel.recentOpponents
+        if !recent.isEmpty {
+            VStack(alignment: .leading, spacing: SpacingToken.x1) {
+                AdjustFieldCaption(text: AdjustText.goalRecentOpponents)
+                AdjustWrapLayout(spacing: SpacingToken.x2) {
+                    ForEach(recent, id: \.key) { species in
+                        Button {
+                            Task { await viewModel.selectGoalOpponent(id: draft.id, key: species.key) }
+                        } label: {
+                            PopPokemonCard(
+                                speciesKey: species.key, name: species.nameJa, types: species.types, itemName: nil,
+                                size: .compact)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(species.nameJa)
+                        .accessibilityAddTraits(draft.opponentSpeciesKey == species.key ? .isSelected : [])
+                        .accessibilityIdentifier("\(prefix)-recent-\(species.key)")
+                    }
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(AdjustText.goalRecentOpponents)
+            .accessibilityIdentifier("\(prefix)-recent")
+        }
     }
 
     // MARK: - 振り方
@@ -219,12 +310,9 @@ private struct AdjustGoalItemView: View {
                 role: .boost, field: AdjustText.goalBoostMoveField,
                 value: viewModel.goalBoostMove(draft)?.nameJa ?? AdjustText.goalBoostMoveNone,
                 identifier: "\(prefix)-boostMoveButton", hint: AdjustText.goalBoostMoveHint)
-            Text(AdjustText.goalBoostMoveHint)
-                .font(TextStyleToken.caption.font)
-                .foregroundStyle(ColorToken.textSecondary.color)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .accessibilityHidden(true)
+            PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "\(prefix)-boostMoveHelpButton") {
+                AdjustHelpText(text: AdjustText.goalBoostMoveHint, identifier: "\(prefix)-boostMoveHint")
+            }
         }
     }
 
@@ -254,24 +342,30 @@ private struct AdjustGoalItemView: View {
     private var hitsAndChance: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             AdjustFieldCaption(text: AdjustText.goalHitsAndChanceField)
+            // − と + は行の両端に置く(端は整数の位置になり、タップの大きさが 36pt ちょうどで測れる)。
             HStack(spacing: SpacingToken.x3) {
-                stepButton(
-                    systemImage: "minus", label: AdjustText.hitsDecrease, identifier: "\(prefix)-hitsMinus",
-                    isEnabled: draft.hits > 1
+                PopIconButton(
+                    systemImage: PopSymbol.minus, label: AdjustText.goalFieldName(number, AdjustText.hitsDecrease),
+                    identifier: "\(prefix)-hitsMinus", isEnabled: draft.hits > 1,
+                    minSide: AdjustMetrics.iconButtonSide
                 ) {
                     viewModel.selectGoalHits(id: draft.id, draft.hits - 1)
                 }
                 Text(AdjustText.hitsOption(draft.hits))
                     .font(TextStyleToken.body.font.monospacedDigit())
                     .foregroundStyle(ColorToken.textPrimary.color)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
                     .accessibilityIdentifier("\(prefix)-hits")
-                stepButton(
-                    systemImage: "plus", label: AdjustText.hitsIncrease, identifier: "\(prefix)-hitsPlus",
-                    isEnabled: draft.hits < RequestLimits.maxAdjustHits
+                PopIconButton(
+                    systemImage: PopSymbol.add, label: AdjustText.goalFieldName(number, AdjustText.hitsIncrease),
+                    identifier: "\(prefix)-hitsPlus", isEnabled: draft.hits < RequestLimits.maxAdjustHits,
+                    minSide: AdjustMetrics.iconButtonSide
                 ) {
                     viewModel.selectGoalHits(id: draft.id, draft.hits + 1)
                 }
             }
+            .frame(maxWidth: Self.hitsRowMaxWidth, alignment: .leading)
             AdjustWrapLayout(spacing: SpacingToken.x2) {
                 ForEach(AdjustViewModel.thresholdOptions, id: \.self) { percent in
                     AdjustPillButton(
@@ -286,24 +380,6 @@ private struct AdjustGoalItemView: View {
         .accessibilityElement(children: .contain)
         .accessibilityLabel(AdjustText.goalFieldName(number, AdjustText.goalHitsAndChanceField))
         .accessibilityIdentifier("\(prefix)-hitsAndChance")
-    }
-
-    private func stepButton(
-        systemImage: String, label: String, identifier: String, isEnabled: Bool, action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .frame(minWidth: CalcScreenMetrics.minimumTapSide, minHeight: CalcScreenMetrics.minimumTapSide)
-                .background(ColorToken.tableZebra.color, in: Circle())
-                .overlay(Circle().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
-        .accessibilityLabel(AdjustText.goalFieldName(number, label))
-        .accessibilityIdentifier(identifier)
     }
 
     // MARK: - 外す
@@ -366,9 +442,9 @@ private struct AdjustGoalMoveSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                row(title: noneLabel, isSelected: selectedID == nil, identifier: "adjustGoalMoveOption-none") { choose(nil) }
+                row(title: noneLabel, move: nil, isSelected: selectedID == nil, identifier: "adjustGoalMoveOption-none") { choose(nil) }
                 ForEach(moves, id: \.id) { move in
-                    row(title: move.nameJa, isSelected: selectedID == move.id, identifier: "adjustGoalMoveOption-\(move.id)") {
+                    row(title: move.nameJa, move: move, isSelected: selectedID == move.id, identifier: "adjustGoalMoveOption-\(move.id)") {
                         choose(move.id)
                     }
                 }
@@ -379,26 +455,32 @@ private struct AdjustGoalMoveSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button(AdjustText.goalMoveSheetClose) { dismiss() }
-                        .accessibilityIdentifier("adjustGoalMoveSheetClose")
+                    PopIconButton(
+                        systemImage: PopSymbol.close, label: AdjustText.goalMoveSheetClose,
+                        identifier: "adjustGoalMoveSheetClose", minSide: AdjustMetrics.iconButtonSide
+                    ) { dismiss() }
                 }
             }
         }
     }
 
-    private func row(title: String, isSelected: Bool, identifier: String, action: @escaping () -> Void) -> some View {
+    /// 行: タイプバッジ + 技名 + 威力(「未選択」の行はバッジ・威力なし)。選択中はチェック。
+    private func row(title: String, move: Move?, isSelected: Bool, identifier: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+            HStack(alignment: .center, spacing: SpacingToken.x2) {
+                if let move { TypeBadgeView(type: move.type) }
                 Text(title)
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.textPrimary.color)
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .foregroundStyle(ColorToken.brandPrimary.color)
+                if let move, move.power > 0 {
+                    Text("\(move.power)")
+                        .font(TextStyleToken.caption.font.monospacedDigit())
+                        .foregroundStyle(ColorToken.textSecondary.color)
                         .accessibilityHidden(true)
                 }
+                if isSelected { PopIcon(PopSymbol.done).foregroundStyle(ColorToken.brandPrimary.color) }
             }
             .frame(minHeight: CalcScreenMetrics.minimumTapSide)
         }

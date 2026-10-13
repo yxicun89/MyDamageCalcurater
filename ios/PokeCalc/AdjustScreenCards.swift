@@ -26,10 +26,11 @@ struct AdjustOwnCardView: View {
     }
 
     var body: some View {
-        AdjustCard(title: AdjustText.ownRegion, identifier: "adjustOwnCard") {
+        AdjustCard(title: AdjustText.ownRegion, systemImage: PopSymbol.team, identifier: "adjustOwnCard") {
             AdjustSpeciesRow(
                 viewModel: viewModel, species: viewModel.ownSpecies, title: AdjustText.speciesField,
-                accessibilityLabel: AdjustText.ownSpeciesLabel, identifier: "adjustOwnSpeciesButton"
+                accessibilityLabel: AdjustText.ownSpeciesLabel, identifier: "adjustOwnSpeciesButton",
+                itemMark: viewModel.ownItemMark
             ) { option in
                 Task { await viewModel.selectOwnSpecies(key: option.key) }
             }
@@ -81,13 +82,19 @@ struct AdjustOwnCardView: View {
 
     private var fixedSPFields: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            AdjustFieldCaption(text: AdjustText.fixedSPGroup)
+            HStack(spacing: SpacingToken.x2) {
+                AdjustFieldCaption(text: AdjustText.fixedSPGroup)
+                AdjustFixedSPHelpButton()
+            }
             ForEach(StatKey.allCases, id: \.self) { stat in
                 AdjustNumberFieldRow(
                     title: AdjustText.fixedSPLabel(stat), hint: AdjustText.fixedSPHint,
                     identifier: "adjustFixedSP-\(stat.rawValue)",
                     text: Binding(get: { viewModel.fixedSPText(for: stat) }, set: { viewModel.setFixedSPText($0, for: stat) }),
-                    focus: focus, focusValue: .fixedSP(stat)
+                    focus: focus, focusValue: .fixedSP(stat),
+                    step: AdjustStepConfig(
+                        range: AdjustNumberStep.spRange, downIdentifier: "adjustFixedSPDown-\(stat.rawValue)",
+                        upIdentifier: "adjustFixedSPUp-\(stat.rawValue)")
                 )
             }
             Text(AdjustText.fixedSPTotal(viewModel.fixedSPTotal))
@@ -115,7 +122,7 @@ struct AdjustModeCardView: View {
     }
 
     var body: some View {
-        AdjustCard(title: AdjustText.modeRegion, identifier: "adjustModeCard") {
+        AdjustCard(title: AdjustText.modeRegion, systemImage: PopSymbol.adjust, identifier: "adjustModeCard") {
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 // 目標方式(F-11)は先頭。サーバーが提供していないと分かったら出さない(従来の5つだけに戻る)。
                 if viewModel.goalsAvailable {
@@ -137,7 +144,7 @@ struct AdjustModeCardView: View {
             if !viewModel.isGoalsMode {
                 if viewModel.mode == .bulk { focusChoices }
                 if viewModel.mode == .offense { categoryChoices }
-                if !rotatedStats.isEmpty { ceilingPickers }
+                if !rotatedStats.isEmpty { ceilingFields }
                 if viewModel.mode == .offense { minSpeedField }
                 if viewModel.mode == .bulk || viewModel.mode == .offense { goalToggle }
             }
@@ -172,28 +179,33 @@ struct AdjustModeCardView: View {
         }
     }
 
-    private var ceilingPickers: some View {
+    private var ceilingFields: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             AdjustFieldCaption(text: AdjustText.ceilingGroup)
             ForEach(rotatedStats, id: \.self) { stat in
-                AdjustPickerRow(
-                    title: AdjustText.ceilingLabel(stat), identifier: "adjustCeiling-\(stat.rawValue)",
-                    selection: Binding(get: { viewModel.ceiling(for: stat) }, set: { viewModel.setCeiling($0, for: stat) })
-                ) {
-                    ForEach(0...SPLimits.maxPerStat, id: \.self) { value in
-                        Text("\(value)").tag(value)
-                    }
-                }
+                AdjustNumberFieldRow(
+                    title: AdjustText.ceilingLabel(stat), hint: nil, identifier: "adjustCeiling-\(stat.rawValue)",
+                    text: Binding(
+                        get: { String(viewModel.ceiling(for: stat)) },
+                        set: { viewModel.setCeiling(AdjustNumberStep.clamped(text: $0, range: AdjustNumberStep.spRange), for: stat) }),
+                    focus: focus, focusValue: .ceiling(stat),
+                    step: AdjustStepConfig(
+                        range: AdjustNumberStep.spRange, downIdentifier: "adjustCeilingDown-\(stat.rawValue)",
+                        upIdentifier: "adjustCeilingUp-\(stat.rawValue)")
+                )
             }
         }
     }
 
     private var minSpeedField: some View {
-        AdjustNumberFieldRow(
-            title: AdjustText.minSpeedField, hint: AdjustText.minSpeedHint, identifier: "adjustMinSpeed",
-            text: Binding(get: { viewModel.minSpeedText }, set: { viewModel.setMinSpeedText($0) }),
-            focus: focus, focusValue: .minSpeed
-        )
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            AdjustNumberFieldRow(
+                title: AdjustText.minSpeedField, hint: AdjustText.minSpeedHint, identifier: "adjustMinSpeed",
+                text: Binding(get: { viewModel.minSpeedText }, set: { viewModel.setMinSpeedText($0) }),
+                focus: focus, focusValue: .minSpeed
+            )
+            AdjustMinSpeedHelpButton()
+        }
     }
 
     private var goalToggle: some View {
@@ -214,10 +226,11 @@ struct AdjustOpponentCardView: View {
     private var ownMove: Move? { viewModel.ownMoveOptions.first { $0.id == viewModel.ownMoveId } }
 
     var body: some View {
-        AdjustCard(title: AdjustText.opponentRegion, identifier: "adjustOpponentCard") {
+        AdjustCard(title: AdjustText.opponentRegion, systemImage: PopSymbol.swap, identifier: "adjustOpponentCard") {
             AdjustSpeciesRow(
                 viewModel: viewModel, species: viewModel.opponentSpecies, title: AdjustText.speciesField,
-                accessibilityLabel: AdjustText.opponentSpeciesLabel, identifier: "adjustOpponentSpeciesButton"
+                accessibilityLabel: AdjustText.opponentSpeciesLabel, identifier: "adjustOpponentSpeciesButton",
+                itemMark: viewModel.opponentItemMark
             ) { option in
                 Task { await viewModel.selectOpponentSpecies(key: option.key) }
             }
@@ -299,7 +312,7 @@ struct AdjustGoalCardView: View {
     let viewModel: AdjustViewModel
 
     var body: some View {
-        AdjustCard(title: AdjustText.goalRegion, identifier: "adjustGoalCard") {
+        AdjustCard(title: AdjustText.goalRegion, systemImage: PopSymbol.judge, identifier: "adjustGoalCard") {
             AdjustPickerRow(
                 title: AdjustText.hitsField, identifier: "adjustHitsPicker",
                 selection: Binding(get: { viewModel.hits }, set: { viewModel.selectHits($0) })
