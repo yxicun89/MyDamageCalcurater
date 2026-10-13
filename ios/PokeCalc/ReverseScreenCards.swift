@@ -14,6 +14,15 @@ struct ReverseMyCardView: View {
     private var species: SpeciesSummary? { viewModel.mySpecies }
 
     var body: some View {
+        // 見出し(「自分」)はカードの外・上。カード(`reverseMyCard`)の識別子と縦積みの判定は変えない。
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopHeading(
+                title: ReverseLabels.myRegion, systemImage: PopSymbol.myRegion, identifier: "reverseMyHeading")
+            card
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             // issue #68: `Menu` ではなく検索シートで選ぶ(`CalcScreenCards` と同じ理由)。
             Button {
@@ -40,10 +49,7 @@ struct ReverseMyCardView: View {
             }
             // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
             if viewModel.itemOptionsReachedLimit {
-                Text(MasterSearchLabels.itemsTruncated)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("reverseMyItemLimitHint")
+                PopNoticeView(kind: .info, message: MasterSearchLabels.itemsTruncated, identifier: "reverseMyItemLimitHint")
             }
         }
         .padding(SpacingToken.x3)
@@ -69,6 +75,7 @@ struct ReverseMyCardView: View {
             }
         } label: {
             MenuLabelChip(text: viewModel.itemLabel(for: viewModel.myItemId))
+                .frame(minHeight: CalcScreenMetrics.minimumTapSide)
         }
         .disabled(lock.disablesItemField)
         .accessibilityHint(lockReason(for: lock) ?? "")
@@ -86,6 +93,15 @@ struct ReverseOpponentCardView: View {
     private var species: SpeciesSummary? { viewModel.opponentSpecies }
 
     var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopHeading(
+                title: ReverseLabels.opponentRegion, systemImage: PopSymbol.opponentRegion,
+                identifier: "reverseOpponentHeading")
+            card
+        }
+    }
+
+    private var card: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             Button {
                 isSpeciesSearchPresented = true

@@ -435,4 +435,19 @@ public final class SpeedMatchupViewModel {
         guard case .loaded(let reach) = reachState else { return [] }
         return SpeedMatchupDisplayBuilder.reachRows(reach, trickRoom: trickRoom)
     }
+
+    /// 出力 1 の結論の 1 行(読み込めているときだけ)。
+    public var matchupConclusion: String? {
+        guard case .loaded(let matchup) = matchupState else { return nil }
+        return SpeedMatchupDisplayBuilder.matchupConclusion(matchup)
+    }
+
+    /// 出力 2 の結論の 1 行(読み込めているときだけ)。
+    public var reachConclusion: String? {
+        SpeedMatchupDisplayBuilder.reachConclusion(reachRows)
+    }
+
+    /// 入力カード・出力の端の帯に使うタイプ ID(未選択は nil)。
+    public var selfAccentTypeID: String? { SpeedMatchupDisplayBuilder.accentTypeID(selfPokemon) }
+    public var opponentAccentTypeID: String? { SpeedMatchupDisplayBuilder.accentTypeID(opponentPokemon) }
 }

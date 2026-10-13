@@ -163,6 +163,9 @@ enum PopSymbol {
     static let back = "chevron.left"
     /// 選択欄(ピッカー)の右端の上下の矢印。
     static let picker = "chevron.up.chevron.down"
+    /// 逆算の「自分」「相手」の見出し。
+    static let myRegion = "person"
+    static let opponentRegion = "person.2"
 
     /// 画面の入口(`AppFeature.id`。区切り・画面の中の行)に付ける装飾アイコン。未知の ID は汎用の「情報」。
     static func forFeature(id: String) -> String {

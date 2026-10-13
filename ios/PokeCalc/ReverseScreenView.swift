@@ -19,8 +19,8 @@ struct ReverseScreenView: View {
     @State private var frequentOpponents: FrequentOpponentsViewModel
     private let backendDescription: String
 
-    /// 読み込み中インジケータの高さ(`CalcScreenView` と同じ理由で固定する)。
-    private static let loadingIndicatorHeight: CGFloat = 24
+    /// 読み込み中の案内(アイコン + 一言)の枠の高さ(出入りでレイアウトが跳ねないよう、空のときも同じ高さを取る。文字が大きいときは枠が伸びる)。
+    @ScaledMetric(relativeTo: .body) private var loadingSlotHeight: CGFloat = 48
 
     /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
     private let lifetime: ScreenLifetime
@@ -124,10 +124,12 @@ struct ReverseScreenView: View {
             Text(side == .defender ? "与えたダメージ" : "受けたダメージ")
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
-                .lineLimit(1)
-                .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingToken.x2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                .padding(.vertical, SpacingToken.x1)
+                // 選ばれていない側は何も描かないので、押せる範囲(36pt 以上)を形で示す。
+                .contentShape(Capsule())
                 .background(Capsule().fill(isSelected ? ColorToken.textPrimary.color : Color.clear))
         }
         .buttonStyle(.plain)
@@ -233,18 +235,18 @@ struct ReverseScreenView: View {
                     Text(viewModel.selectedMove?.nameJa ?? "-")
                         .font(TextStyleToken.heading.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
-                        .lineLimit(1)
-                        .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
                     if let move = viewModel.selectedMove {
                         Text("威力\(move.power) / \(MoveCategoryLabel.japaneseName(for: move.category))")
                             .font(TextStyleToken.caption.font)
                             .foregroundStyle(ColorToken.textSecondary.color)
-                            .lineLimit(1)
-                            .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
                 Spacer()
-                Image(systemName: "chevron.up.chevron.down")
+                PopIcon(PopSymbol.picker)
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
@@ -324,10 +326,7 @@ struct ReverseScreenView: View {
                 }
             }
             if viewModel.opponentItemCandidatesReachedLimit {
-                Text(RequestLimitLabels.itemCandidatesReachedLimit)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("reverseItemCandidateLimitHint")
+                PopNoticeView(kind: .info, message: RequestLimitLabels.itemCandidatesReachedLimit, identifier: "reverseItemCandidateLimitHint")
             }
         }
     }
@@ -335,12 +334,11 @@ struct ReverseScreenView: View {
     private var loadingSlot: some View {
         Group {
             if viewModel.isLoading {
-                ProgressView()
-                    .accessibilityIdentifier("reverseLoadingIndicator")
+                PopNoticeView(kind: .loading, message: ReverseLabels.loading, identifier: "reverseLoadingIndicator")
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Self.loadingIndicatorHeight)
+        .frame(minHeight: loadingSlotHeight, alignment: .top)
     }
 }
 
@@ -356,10 +354,10 @@ private struct PresetPillButton: View {
             Text(title)
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
-                .lineLimit(1)
-                .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, SpacingToken.x2)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                .padding(.vertical, SpacingToken.x1)
                 .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }

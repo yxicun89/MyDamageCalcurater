@@ -19,10 +19,19 @@ public struct MockPokeCalcService: PokeCalcService {
     /// `calc-results.json` の1対1計算用エントリのキー(プリセットに属さない)。
     private static let singleResultKey = "single"
 
-    private let fixtures: MockFixtures
+    let fixtures: MockFixtures
+    /// 連続技の失敗シナリオ(`POKECALC_MOCK_COMBO`。`MockPokeCalcService+Combo.swift`)。
+    let comboScenario: MockComboScenario
+    /// `.failOnce` の「もう 1 回失敗したか」。サービスのコピー間で共有する参照型。
+    let comboFailureLatch = MockComboFailureLatch()
 
     public init() throws {
+        try self.init(comboScenario: .normal)
+    }
+
+    public init(comboScenario: MockComboScenario) throws {
         fixtures = try MockFixtures.load()
+        self.comboScenario = comboScenario
     }
 
     /// フィクスチャ JSON の URL(架空データ検査用。`MockPokeCalcServiceTests` が生の JSON を
@@ -390,7 +399,7 @@ public struct MockPokeCalcService: PokeCalcService {
         return StatBlock(hp: stats.hp, atk: stats.atk, def: stats.def, spa: stats.spa, spd: stats.spd, spe: stats.spe)
     }
 
-    private func cannedResult(forKey key: String, category: MoveCategory) throws -> CalcResult {
+    func cannedResult(forKey key: String, category: MoveCategory) throws -> CalcResult {
         let entry = try cannedResultEntry(forKey: key)
         return CalcResult(
             rolls: entry.rolls, minDamage: entry.minDamage, maxDamage: entry.maxDamage,
@@ -452,11 +461,22 @@ public struct MockPokeCalcService: PokeCalcService {
         )
     }
 
-    private static func domainMove(_ entry: MockFixtures.MoveEntry) throws -> Move {
+    static func domainMove(_ entry: MockFixtures.MoveEntry) throws -> Move {
         Move(
             id: entry.id, nameJa: entry.nameJa, type: try domainPokeType(entry.type),
-            category: try domainMoveCategory(entry.category), power: entry.power, priority: entry.priority
+            category: try domainMoveCategory(entry.category), power: entry.power, priority: entry.priority,
+            effect: entry.effect.flatMap(domainRankEffect)
         )
+    }
+
+    /// フィクスチャの `effect`(契約の `Move.effect` と同じ形)。確率 100% で語彙内のものだけ(API の写像と同じ規則)。
+    private static func domainRankEffect(_ entry: MockFixtures.MoveEntry.EffectEntry) -> MoveRankEffect? {
+        guard entry.chance == 100, let target = MoveEffectTarget(rawValue: entry.target) else { return nil }
+        return MoveRankEffect(
+            target: target,
+            stages: RankBlock(
+                atk: entry.stages["atk"] ?? 0, def: entry.stages["def"] ?? 0, spa: entry.stages["spa"] ?? 0,
+                spd: entry.stages["spd"] ?? 0, spe: entry.stages["spe"] ?? 0))
     }
 
     private static func domainNature(_ entry: MockFixtures.NatureEntry) throws -> Nature {

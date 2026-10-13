@@ -114,6 +114,8 @@ check_value "/api/pokedex/moves/{key}/learners クエリ limit.default" \
   "$(contract_query_inline_schema_value '/api/pokedex/moves/{key}/learners' limit default)" moveLearnersPageSize
 check_value "AdjustHits.maximum" "$(contract_schema_value AdjustHits maximum)" maxAdjustHits
 check AdjustGoalsRequest goals maxAdjustGoals
+# 連続技の手の数(CB-8。ADR-0535・ADR-0501「連続技」AC-i2)
+check ComboRequest steps maxComboSteps
 
 # --- 素早さ(P6-24。ADR-0503): services/speed/api/openapi.yaml の範囲と、既存の定数(SPLimits・RankLimits)が一致するか ---
 # 素早さの画面は SP の最大・ランクの範囲を専用の定数に複製せず SPLimits / RankLimits を使う。

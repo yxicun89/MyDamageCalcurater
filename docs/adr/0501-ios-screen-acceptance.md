@@ -5084,6 +5084,107 @@ UITest はすべて既に `POKECALC_USE_MOCK=1` で起動しているため、�
 | `LargeTextLayoutUITests`: `testJudgeScreenNoHorizontalOverflowAtAX5`・`testJudgeResultAndUnsupportedNoticesNoHorizontalOverflowAtAX5`・`testJudgeSpeedNotesAndStatusNoHorizontalOverflowAtAX5`・`testJudgeStatusOptionSheetNoHorizontalOverflowAtAX5`・`testJudgeOptionSheetNoHorizontalOverflowAtAX5` | 判定画面の AX5 検査。画面の削除 |
 | `AppNavigationUITests` の「`openJudgeScreen` が無い」の 1 行・`UITestNavigation` の `openJudgeScreen` | 入口が存在しなくなったため |
 
+## 連続技(CB-8 / I-ios-20。ADR-0535。2026-10-12。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+計算画面の結果の下に「連続技」の節を足す(docs/plan/combo-calc.md §4-3 案 A。Web の ADR-0359・CB-6 と同じ構成・語)。
+iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早さ画面 → 計算タブの導線は今回の対象外(ADR-0535「今回は対象外」。I-ios-21)。
+
+### 受け入れ条件
+
+| ID | 条件(検証するテスト) |
+|---|---|
+| AC-i1 | 起動直後(手がメインだけ)の計算画面に「連続技」の見出しと「次の技」ボタンだけが出て、要求を送らない。「次の技」で広がり、手のリスト(1手目 = 上の技欄の技・「上の技欄の技」の印)・「追加の技」・相手の振り・相手の技・相手の素早さ・自分の素早さ・素早さの場(折りたたみ)・注記が出る。手がメインだけで相手の技も無いときだけ「閉じる」で戻せる(`ComboViewModelTests`・`CalcComboUITests`) |
+| AC-i2 | 「追加の技」の候補は攻撃側の覚える技を `moves(ids:)` で引いた攻撃技とランクを変える変化技(`Move.effect`)だけで、タイプ順。手は最大 3 つ(`RequestLimits.maxComboSteps`。契約の `ComboRequest.steps.maxItems` と `check-request-limits.sh` で照合)。上限では「追加の技」の代わりに「手は最大3つまでです」(`ComboViewModelTests`・`ComboDomainTests`・`check-request-limits.sh`) |
+| AC-i3 | 追加の手は外せる・上へ/下へで並べ替えられる(メインより前にも置ける)。メインは外せない。端の手の上へ/下へは押せない。攻撃側を変えて覚えなくなった追加の手は表示と要求から外れる(`ComboViewModelTests`) |
+| AC-i4 | 計算するのは手が 2 件以上、または相手の技を選んだときだけ。要求は計算画面の攻撃側(ランク・やけど・特性・持ち物込み)・場・選んだ防御側の振り・手(急所は true のときだけ・メインの急所は計算画面の「急所」)・相手の技(選んだときだけ)・相手の素早さ(切り替えたときだけ `from_defender`)・素早さの場(1 つでも true のときだけ)で、別の入力欄を持たない(UC-5)。計算画面の入力(振りの行・攻撃側・場)が変わると引き直す(`ComboViewModelTests`・`CalcViewModelComboContextTests`・`APIPokeCalcServiceComboTests`) |
+| AC-i5 | 防御側の振りは計算画面の結果の行(振り × 持ち物 × 特性)から選ぶ。キーは結果の行の ID と同じ。選んでいた振りが無くなったら先頭に戻し「選んでいた相手の振りがなくなったので、先頭の振りに戻しました」を出す(`ComboDefenderOptionsTests`・`ComboViewModelTests`) |
+| AC-i6 | 自分の素早さ(I-web-32 相当): SP は未入力なら個体の値・0〜min(32, 66 − 素早さ以外の SP) に丸める。性格補正は「計算画面の性格のまま / 素早さ上がる(×1.1)/ 素早さ補正なし / 素早さ下がる(×0.9)」で、Web と同じ置き換え規則で性格 ID を引き直す(引けなければ計算せず案内)。ランクは `RankMeterView`(field `comboSelfSpeed`)。既定のままなら攻撃側の個体をそのまま送る(`ComboDomainTests`・`ComboViewModelTests`) |
+| AC-i7 | 結果: 各手(「N手目」・技名・ランクのチップ「攻撃 +1」「相手の素早さ -1」・ダメージ % 幅 / 変化技は「ダメージなし」・行動順「先に動く / 相手が先 / 同速」。決まらないときは出さない)、「合計 a〜b%」とバー、「N 手で倒す 51.6%」/「N 手で倒す(確定)」/「倒せない」、「素早さ 120 → 180」、相手の素早さが分からないときは最後の手の線「179 以下を抜く / 180 は同速 / 181 以上は相手が先」、分かるときは「相手の素早さ 150」、相手の技を選んだときは「耐える 87.5%」(fast を主。0/100 を予約)・「相手の行動 1〜2回」・「1回ぶん 25.0〜31.7%」、注記「場は全手で同じ状態が続きます。命中は考えません。」(`ComboResultDisplayTests`・`CalcComboUITests`) |
+| AC-i8 | 素早さの基本値の例: 相手の素早さが分からず、トリックルームでないときだけ、最後の手の自分の素早さで `SpeedService.reach`(raw)を引き、準速の行だけを「準速 c 族以上には抜かれる(例: ○○)」「準速 a 族までは抜ける(例: ○○)」「準速 b 族とは同速」で 1〜3 行出す。失敗・サービス無しは何も出さない(`ComboDomainTests`・`ComboViewModelTests`) |
+| AC-i9 | 印: 単発と同じ「この結果は正確でない可能性があります(未対応: …)」。連続技だけの理由は「技を変えられない持ち物」「2手目以降も相手が満タンとして計算」「素早さへの影響を判定できない」(`ComboResultDisplayTests`・`APIPokeCalcServiceComboTests`) |
+| AC-i10 | 失敗: 節の中だけに「連続技を計算できませんでした(<計算画面の失敗の文言>)」(`comboError`)と「もう一度」(`comboRetry`)。もう一度で同じ要求を送り直す。単発の結果の行・計算画面のエラー表示は変わらない。キャンセルは表示しない。古い要求の応答は捨てる(`ComboViewModelTests`・`CalcComboUITests`) |
+| AC-i11 | API: 要求本文は契約どおり(省略できる項目はキーを作らない)。応答の全項目をドメインに写す(`damage` の null・`opponentAttack` の null・未知でない連続技の印)。400/503 の JSON はその `code`、接続できないは `client_transport_error`、形の違いは `client_decode_error`、キャンセルは `CancellationError`。公開 `Move.effect`(PascalCase)を `Move.effect` に写し、確率 100 以外・語彙外は nil(`APIPokeCalcServiceComboTests`) |
+| AC-i12 | モック: 架空データで決め打ちの結果を要求の形(手の数・変化技・相手の技・相手の素早さ)に合わせて返す。手 0 件・4 件以上・ランクの変わらない変化技の手・変化技の相手の技は `invalid_input`、知らない技・種族は `not_found`。`POKECALC_MOCK_COMBO=fail` で常に失敗、`fail-once` で 1 回だけ失敗(`MockPokeCalcServiceComboTests`) |
+| AC-i13 | 見た目: タップ領域 36pt 以上、AX5 で節の中身が横にはみ出さずタップできる、`lineLimit` 無し、常時アニメーション無し、パレット K のトークンだけ、画像を使わない、用語集の禁止語を使わない(`CalcComboUITests`・`GlossaryTests` に連続技の文言を追加) |
+
+### 識別子(UI テスト)
+
+節 `comboSection`・開く `comboOpenButton`・閉じる `comboCloseButton`・手の行 `comboStep-<0始まりの位置>`・急所 `comboStepCritical-<位置>`・
+上へ `comboStepUp-<位置>`・下へ `comboStepDown-<位置>`・外す `comboStepRemove-<位置>`・追加の技 `comboAddPicker`(シートの行 `comboAddMove-<技ID>`)・
+上限の案内 `comboMaxStepsNotice`・相手の振り `comboDefenderPicker`・振りが戻った案内 `comboDefenderReset`・相手の技 `comboOpponentMovePicker`(シートの行 `comboOpponentMove-<技ID>`・選ばない `comboOpponentMoveNone`)・
+相手の素早さ `comboOpponentSpeedToggle`・自分の素早さ `comboSelfSpeedSP`・`comboSelfSpeedNature`・`rankMeter-comboSelfSpeed`・素早さの場 `comboSpeedFieldToggle`・`comboTrickRoom`・`comboSelfTailwind`・`comboOpponentTailwind`・
+計算中 `comboLoading`・失敗 `comboError`・もう一度 `comboRetry`・結果 `comboResult`・各手の結果 `comboResultStep-<位置>`・合計 `comboTotal`・バー `comboTotalBar`・倒す確率 `comboKO`・
+素早さ `comboSpeedSummary`・線 `comboSpeedLine`・相手の素早さ `comboOpponentSpeed`・例 `comboSpeedExample`・耐える `comboSurvive`・行動回数 `comboActions`・1回ぶん `comboPerHit`・印 `comboUnsupportedNotice`・注記 `comboNote`。
+
+### PokeCalcCore の型の形(テストが固定する。実装者はこの名前・ラベルで作る)
+
+- `Move.effect: MoveRankEffect?`(init の末尾に `effect: MoveRankEffect? = nil`)。`MoveRankEffect(target: MoveEffectTarget, stages: RankBlock)`、`MoveEffectTarget.user`(契約 `self`)/ `.opponent`(契約 `target`)。
+- `ComboMoveRules.changesRanks(_:)`・`canBeStep(_:)`・`canBeOpponentMove(_:)`。`RequestLimits.maxComboSteps = 3`。
+- 要求: `ComboStepInput(moveId:critical:hits:)`・`ComboOpponentSpeed { unknown, fromDefender }`・`ComboSpeedField(trickRoom:selfTailwind:opponentTailwind:)`(既定 false)・
+  `ComboRequest(format:attacker:defender:field:steps:opponentMoveId:opponentSpeed:speedField:)`(`opponentMoveId` 既定 nil・`opponentSpeed` 既定 `.unknown`・`speedField` 既定 `ComboSpeedField()`)。
+- 応答: `ComboResult(steps:total:speed:opponentAttack:unsupported:)`・`ComboStepResult(moveId:selfStartRanks:selfEndRanks:opponentStartRanks:opponentEndRanks:damage:selfSpeed:opponentSpeed:selfPriority:opponentPriority:order:line:)`・
+  `ComboTurnOrder { selfFirst, opponentFirst, speedTie, dependsOnOpponentSpeed }`・`ComboSpeedLine(selfSpeed:selfFirst:opponentFirst:)`・`ComboSpeedRange(min:max:)`(`isEmpty`)・
+  `ComboKOChance(chancePercent:guaranteed:displayChancePercent:)`・`ComboTotal(minDamage:maxDamage:minPercent:maxPercent:defenderHP:ko:koByStep:)`・
+  `ComboSpeedSummary(firstSelfSpeed:lastSelfSpeed:opponentSpeed:opponentSpeedKnown:)`・`ComboOpponentAttack(selfHp:minActions:maxActions:fast:slow:)`・
+  `ComboOpponentScenario(actions:surviveChancePercent:)`・`ComboOpponentAction(step:timing:damage:surviveChancePercent:)`・`ComboOpponentTiming { beforeSelf, afterSelf }`・
+  `ComboMark { case calc(UnsupportedMark); case combo(target: UnsupportedTarget, reason: ComboMarkReason, id: String) }`・`ComboMarkReason { choiceLocked, defenderFullHPAssumed, speedUndetermined }`。
+- サービス: `protocol ComboCalcService: Sendable { func calcCombo(_ request: ComboRequest) async throws -> ComboResult }`。`APIPokeCalcService`・`MockPokeCalcService` が準拠。
+  `MockPokeCalcService.init(comboScenario: MockComboScenario)`(既存の `init()` は `.normal`)。`MockComboScenario(environmentValue:)`・`MockComboScenario.environmentKey = "POKECALC_MOCK_COMBO"`。
+- 画面の材料: `ComboDefenderOption(key:label:individual:)`・`ComboDefenderOptions.make(rows:rowIDs:defenderSpeciesKey:defenderRanks:items:abilityNames:natures:)`・
+  `ComboContext(attacker:mainMove:mainCritical:field:defenders:attackerLearnset:defenderSpeciesKey:natures:)`・`CalcViewModel.comboContext: ComboContext?`。
+- 自分の素早さ: `ComboSelfSpeedNature { keep, plus, neutral, minus }`・`ComboSelfSpeedInput(sp:nature:rank:)`(`.default`)・`ComboSelfSpeed.maxSP(for:)`・`clampSP(_:for:)`・`apply(_:to:natures:) throws`。
+- 表示: `ComboText`(文言)・`ComboRankChip(text:direction:)`(`ComboRankChip.Direction { up, down }`)・`ComboRankChips.chips(for:)`・`ComboResultDisplay(result:stepMoves:names:trickRoom:)`。
+- 画面の状態: `ComboViewModel(comboService:master:speedService:)`。状態・操作の名前は `ComboViewModelTests` の冒頭の一覧。
+
+### 既存テストの変更
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `GlossaryTests.screenStrings` | 連続技の文言(`ComboText`)を検査対象に追加 | 新しい画面の文言も禁止語を使わないことを確かめる(検査を強める変更) |
+| `ios/scripts/check-request-limits.sh` | `check ComboRequest steps maxComboSteps` を追加 | 手の上限の写しを契約と照合する(検査を強める変更) |
+| `CalcComboUITests.setUpWithError`(新規テストの修正) | `executionTimeAllowance = 600` を足した | AX5 の検査は遅いスワイプで約 260 秒かかり、既定の 300 秒に近い。ADR-0520 の上限まで許す。検査は同じ |
+| `APIPokeCalcServiceComboTests.testErrorResponsesCarryTheServerCode`(新規テストの修正) | 500 の本文の code を `internal_error` から `internal` にした | 計算・マスタの契約の `ErrorCode` に `internal_error` は無い(テストデータの誤り)。検査(サーバーの code を運ぶ)は同じ |
+
+| `ComboViewModelTests.extraKey` | 追加の手でないときは `XCTFail` してから skip | 黙って飛ばさない(検査を強める変更) |
+| `CalcViewModelComboContextTests` | 「応答が来るまで `comboContext` は変わらない」を追加 | critic 指摘: 技・覚える技を要求時点の値で保存(検査の追加) |
+| `ComboViewModelTests` | 取り消された候補の読み込みを次の文脈で読み直すテストを追加 | critic 指摘(検査の追加) |
+| `CalcComboUITests.scrollUntilHittable`(補助) | `swipeUp()`/`swipeDown()` を `velocity: .slow` + 0.2 秒の待ちにし、上限を 12 → 40 回に | AX5 の長い画面で既定のスワイプが慣性で 44pt の欄(`comboSelfSpeedSP`)を飛び越え、ゲートで落ちた。検査(タップできること・36pt・はみ出し)は変えていない |
+
+既存のテストは削除・緩和していない。モックの `test-move-status-a` に効果を足すため、モックの技一覧の件数・名前は変わらない(項目が 1 つ増えるだけ)。
+
+## 素早さ画面の結論 1 行と折りたたみ(ADR-0538。2026-10-13。I-ios-25)
+
+Web の I-web-34(ADR-0610 §9)に揃える。値・既存の文言の語・識別子は変えず、出し方だけを変える。
+
+### 受け入れ条件
+
+1. 想定のカードが出ているとき、先頭に結論の 1 行(`speedConclusion`)が出る。上を取れる想定 = どれかの性格に最小 SP がある想定(同速だけは数えない)。
+   「N つの想定のうち M つで上を取れます」/ 全部「N つの想定すべてで上を取れます」/ 0「どの想定でも上を取れません」。
+   トリックルーム中は「先に動けます」「どの想定でも先に動けません」。
+2. カードに見出し「最速 ・ 素早さ 145」(`speedCardHeading-<id>`)がある。一言見出し・相手の素早さ・行動順のバッジは従来のまま残る。
+3. 性格の行(`speedCardNature-*`・`speedCardTie-*`)はカードごとの折りたたみ(`speedCardNaturesToggle-<id>`「性格補正ごとの最小 SP」。
+   トリックルーム中は「…上限 SP」)の中。初期は閉じていて画面に無く、開くと従来の行が出る。他のカードの開閉に影響されない。
+4. 「これ以上」に結論の 1 行(`speedReachConclusion`。最速の行の「最速 N 族まで抜ける」。トリックルーム中は「…までは後に動く」)があり、
+   6 行の一覧は折りたたみ(`speedReachListToggle`「6 つの振り方ごとの一覧を見る」)の中。初期は閉じ、開くと 6 行が出る。
+5. 折りたたみの題のタップ領域は 36pt 以上。AX5 で結論・見出し・題・開いた行が横にはみ出さず、固定高にしない。
+6. 帯の色は選んだ相手(カード)・自分・相手(入力カード)の先頭タイプ色。未選択は brandPrimary(文字で意味を伝える飾り)。
+7. ランクのメーター(ADR-0533)・API 不可時の表示(ADR-0534)・値・API は変えない。
+
+### 追加するテスト
+
+`SpeedMatchupConclusionTests`(新規。結論文言のテーブル駆動・トリックルーム・全部/0/一部・同速だけは数えない・見出し・最速の行の結論・帯のタイプ)、
+`SpeedMatchupUITests` の `testConclusionLineAndCardHeadingsAppearAndRowsAreCollapsedByDefault`・`testConclusionWordingForAllAndNoneReachable`・
+`testTrickRoomConclusionAndSummaryWording`・`testReachConclusionAndListAreCollapsedByDefault`・`testDisclosureTogglesAreAtLeast36ptTall`(新規)。
+
+### 変更する既存テスト(検査は弱めない。「開く操作」を足すだけ)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `SpeedMatchupUITests.testPickingBothPokemonShowsOneCardPerAssumptionAndNoTable` | 性格の行・同速の検査の前に `speedCardNaturesToggle-<id>` を開く操作を足し、閉じている間は行が無いことの検査を足した | 行が初期は閉じる(受け入れ条件 3)。検査する文言は同じ |
+| `SpeedMatchupUITests.testCurrentInvestmentAndTrickRoomShowOrderAndReach` | 「これ以上」の行の検査の前に `speedReachListToggle` を開き(閉じている検査を足す)、トリックルームの下降の行の前にカードの折りたたみを開く。トリックルーム後は一覧を開き直す | 同上(受け入れ条件 3・4)。検査する文言は同じ |
+| `SpeedMatchupLargeTextUITests`(出力側の識別子・`openFullState`) | 結論・見出し・題の識別子を検査対象に足し、行の検査の前に 2 つの折りたたみを開く | 同上。AX5 の検査対象は増える |
+| `SpeedMatchupDisplayTests`・`SpeedMatchupLabelsTests`・`SpeedMatchupViewModel*` | 変更なし(`rows`・`headline` などは模型のまま。`heading` は引数の既定値つきで足す) | 値と既存の語は不変 |
+
 ## G-05 このアプリについて・お気に入り・履歴の作り直し(ADR-0536。2026-10-12)
 
 方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0348/0349)に追う。対象は
@@ -5237,6 +5338,13 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 `PokeCalcCore` の調整の文言・判定(`G05AdjustText.swift`)、`PokeCalcDesign` の `PopSymbolNames`。識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ)。
 API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)は触らない。種族の検索シートと技のシートの共用部は第 3 弾(ADR-0539=逆算)の変更に従い、ここでは変えない。
 
+## G-05 逆算の作り直し(ADR-0539。2026-10-13)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0346)に追う。対象は
+`ReverseScreenView`・`ReverseScreenCards`・`ReverseScreenObservations`・`ReverseScreenResults`、検索シート(`MasterSearchSheet.swift` の `SpeciesSearchSheet`・`MoveSearchSheet`。計算・構築・調整と共用)、
+`PokeCalcCore` の逆算の文言(`G05ReverseText.swift` の `ReverseLabels`・`ReverseCandidateDisplay`)。識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ。下の表の語の変更を除く)。
+API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)・ダメージの側の切り替えは触らない。
+
 ### 現状の洗い出し(文で説明している箇所・Web と構造や語が違う箇所)
 
 | 画面・部品 | 今 | 直す |
@@ -5301,6 +5409,59 @@ API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)
 `PopSymbolNamesTests` に `judge` = `shield` を追加。`GlossaryTests` に目標の文言と新しい語を追加(追加のみ)。骨組みとして `PokeCalcCore/G05AdjustText.swift`
 (値は空・判定は常に false。実装者が入れる)と `PopSymbolNames.judge`(空)を置いた。
 
+| 自分・相手のカード | 見出しが無い(カードだけ) | 見出し「自分」「相手」(`PopHeading`)をカードの上に。カードの中身(画像かエンブレム・名前・タイプバッジ・持ち物)は既に Web と同じなので変えない |
+| 持ち物の上限の注記(`reverseMyItemLimitHint`) | caption の文字 | アイコン + 一言(`PopNoticeView(.info)`)。メガ固定の理由(`reverse*ItemLockReason`)は状態の文のまま |
+| ダメージの側 | 自前の区切り(識別子・選択中の特性・AX で縦積み) | 変えない(既に方針どおり)。`lineLimit(1)`・`minimumScaleFactor` だけ外す |
+| 自分の調整(定番の振り方)のピル | `lineLimit(1)`・`minimumScaleFactor` | 外して折り返す。見た目・識別子・AX5 での縦積みは変えない |
+| 技の欄 | `lineLimit(1)`・`minimumScaleFactor`、矢印 `chevron.up.chevron.down` を直書き | 折り返して全文。矢印は `PopSymbol.picker` |
+| 観測欄の名前 | 見える名前が無い(読み上げ名だけ) | 行の頭に「ダメージ1」(`reverseObservationLabel-N`。読み上げは隠さない。UITest が識別子で引くため、二重読み上げは許容) |
+| 単位 | 「%」/ HP 側は「ダメージ」(欄の名前と同じ語) | 「%」/「HP」(Web の語。`reverseObservationUnit-N`)。単位の切り替えは無い(側で決まる。ADR-0539 §2) |
+| 単位の説明 | 無い | 一覧の下に 1 行「相手の HP が減った割合(%)」/「自分の HP が減った実数値(HP)」(`reverseObservationHint`。単位が分からない欄の例外) |
+| 観測欄の削除・追加 | 削除 = `minus.circle` 直書き、追加 = `plus.circle` 直書き + 名前 | 削除 = アイコンだけ(`PopIconButton` + `PopSymbol.minus`・読み上げ名不変)、追加 = `PopSymbol.add` + 「ダメージを追加」。36pt 以上 |
+| 入力エラー・上限の注記 | caption の文字 | アイコン + 文(`PopNoticeView(.error)` / `.info`)。識別子・文面は不変 |
+| 候補のカード 1 行目 | 「補正なし / 持ち物なし」(型と持ち物を 1 つの見出しに) + 右に範囲の%(ラベル無し) | 型の名前(`reverseCandidateNature-<id>`)+ 目安の名前のバッジ + 「ほぼ合う候補」のバッジ(一致しない候補だけ)、右に予測%の大きい数字(`reverseCandidatePercent-<id>`)と「予測」 |
+| 候補の一致の文 | 全候補に caption の文(「入力したダメージと一致」/「一致なし(最も近い SP)」) | 一致しない候補だけ「ほぼ合う候補」のバッジ(`reverseCandidateMatch-<id>` を付け替え)。一致した候補には出さない。文は読み上げの値として残す |
+| 候補の下の行 | SP の範囲・目安(caption)・特性(caption) | バー(装飾・読み上げない)→ SP の範囲(+ 全候補が不一致のとき「参考」バッジ)・持ち物(`reverseCandidateItem-<id>`)・特性を小さく |
+| 一致が 1 件も無いとき | 案内なし | 先頭に案内(`reverseNoExactNotice`。`PopNoticeView(.info)`) |
+| 前提 | 「相手の HP の SP を 32(H32)と仮定した結果です」 | 「H32 を仮定した結果です」(Web の語) |
+| 一致件数 | 「入力したダメージと一致: 2 件 / 候補 3 件」(body の文) | 「一致 2 件 / 候補 3 件」(数値の行) |
+| 読み込み中(`reverseLoadingIndicator`) | `ProgressView`(回り続ける) | `PopNoticeView(.loading)`(静止したアイコン + 「計算中」) |
+| 検索シートの補足 | 空クエリで「名前の先頭で検索」を行として常時表示(種族・技とも) | 「説明」ボタンの奥(`speciesSearchHelp`・`moveSearchHelp`)。「一致する候補がありません」などの状態は従来どおり |
+| 検索シートの閉じる・検索中 | 文字「閉じる」・`ProgressView` | 閉じるはアイコンだけ(読み上げ名「閉じる」・識別子不変)、検索中は静止したアイコン |
+
+既に方針どおりで変えないもの: ダメージの側の区切り・定番の振り方のピル(`PresetPillButton`)の見た目と識別子、自分・相手のカードの中身(画像かエンブレム・名前・タイプバッジ・持ち物の欄。`SpeciesHeaderMenuLabel` は計算・調整と共用)、
+構築から選ぶ入口(`TeamSourceMenuRow`。ADR-0537 で済)、相手の特性・持ち物候補のチップ、入力エラーの文面、未対応の印、候補が絞られる切り替え(操作時だけ・視差効果を減らすでなし)、
+バックエンドの状態バッジ、テンキーの「完了」、エラー表示(`ErrorBannerView`)と「もう一度」(ADR-0534)。
+
+### 受け入れ条件
+
+1. 自分・相手のカードの上に見出し「自分」「相手」(`reverseMyHeading`・`reverseOpponentHeading`。見出しの特性)。見出しはカードの外・上で、AX5 でカードどうしは縦積みのまま(`reverseMyCard`・`reverseOpponentCard` の識別子は不変)。
+2. 観測欄: 行の頭に「ダメージ1」(`reverseObservationLabel-0`)、単位は与えたダメージ = 「%」・受けたダメージ = 「HP」(`reverseObservationUnit-0`)。欄の読み上げ名は「ダメージ1(%)」「ダメージ1(HP)」。
+   単位の 1 行(`reverseObservationHint`)は与えた = 「相手の HP が減った割合(%)」、受けた = 「自分の HP が減った実数値(HP)」。1 カードに補足は 1 行だけ。
+3. 観測の削除(`reverseObservationRemove-N`)は読み上げ名「このダメージを削除」のアイコンだけ(`staticTexts` が 0)、追加(`reverseAddObservationButton`)はアイコン + 「ダメージを追加」で、どちらも 36pt 以上。
+   入力エラー(`reverseObservationError-N`)・上限の注記(`reverseObservationLimitHint`)は識別子・文面そのままでアイコン + 文。不正な行があるうちは候補を出さない(不変)。
+4. 候補のカード: 型の名前(`reverseCandidateNature-<id>` = 「補正なし」「B上昇」。持ち物を含まない)、予測%(`reverseCandidatePercent-<id>`、「%」を含む)と短いラベル「予測」、SP の範囲(`reverseCandidateRange-<id>`)、
+   持ち物(`reverseCandidateItem-<id>`)。一致した候補に「ほぼ合う候補」「参考」は出ない。一致しない候補だけ「ほぼ合う候補」のバッジ(`reverseCandidateMatch-<id>`)。
+5. 厳密に合う候補が 1 件も無く候補が 1 件以上あるとき(`ReverseLabels.hasNoExactCandidate`。engine の `exactCount` のまま)、先頭に案内(`reverseNoExactNotice`)と各候補の SP の範囲に「参考」。一致があるときは出ない。
+6. 前提(`reversePremise`)は「H32 を仮定した結果です」(受けたダメージ = 攻撃側の逆算では出ない。不変)。一致件数(`reverseExactCount`)は「一致 2 件 / 候補 3 件」で「入力したダメージと一致」を含まない。
+7. 読み込み中・検索中に `ProgressView`(`activityIndicators`)が無い。4 ファイルに `ProgressView(`・`repeatForever`・`lineLimit`・`minimumScaleFactor`・色のリテラル・SF Symbols 名の直書きが無く、動きは視差効果を減らすで 0(`G05ReverseSourceRulesTests`)。
+8. 検索シート(種族・技): 空クエリの補足の文を常時出さず(`speciesSearchHint`・`moveSearchHint` は無い)、「説明」ボタン(`speciesSearchHelp`・`moveSearchHelp`。36pt 以上)を押すと文(`speciesSearchNote`・`moveSearchNote`)が出る。
+   「一致する候補がありません」は従来どおり `speciesSearchHint` に出る。閉じる(`speciesSearchCancelButton`・`moveSearchCancelButton`)は読み上げ名「閉じる」のアイコンだけ・36pt 以上で、押すと閉じる。
+9. 常に画面に出る文字(見出し・単位・ラベル・バッジ・件数・前提・計算中)は「。」を含まない(`G05ReverseTextTests.testAlwaysVisibleStringsAreNotSentences`)。文を置くのはエラー・状態の案内・単位の 1 行だけ。
+10. AX5: 新しい部品(見出し・ラベル・単位・単位の 1 行・削除/追加・候補のカード)が横にはみ出さず、タップが 36pt 以上。ダメージの側のボタンは縦積みのまま全文を見せる。禁止語なし(`GlossaryTests` に新しい語を追加)。
+
+### 新しい識別子
+
+`reverseMyHeading`・`reverseOpponentHeading`・`reverseObservationLabel-<n>`・`reverseObservationUnit-<n>`・`reverseObservationHint`・`reverseNoExactNotice`・
+`reverseCandidateNature-<id>`・`reverseCandidatePercent-<id>`・`reverseCandidateItem-<id>`・`speciesSearchHelp`・`speciesSearchNote`・`moveSearchHelp`・`moveSearchNote`。
+既存の識別子(`reverseSide-*`・`reverseObservationField-N`・`reverseObservationRemove-N`・`reverseObservationError-N`・`reverseAddObservationButton`・`reverseCandidateRow-<id>`・`reverseCandidateRange-<id>`・
+`reverseCandidateMatch-<id>`〔付け先は「ほぼ合う候補」のバッジ〕・`reversePremise`・`reverseExactCount`・`reverseLoadingIndicator`・`speciesSearch*`・`moveSearch*` ほか)は付け替えない。
+
+### 追加したテスト
+
+`G05ReverseTextTests`・`G05ReverseSourceRulesTests`(以上 PokeCalcCoreTests)、`ReverseG05UITests`。`GlossaryTests` の対象文言に新しい語を足した(追加のみ)。
+骨組みとして `PokeCalcCore/G05ReverseText.swift`(`ReverseLabels`。値は空・判定は常に false。実装者が入れる)を置いた。
+
 ### 既存テストの変更(新しい語・構造への更新。検査は弱めていない)
 
 | テスト | 変更 | 理由 |
@@ -5312,4 +5473,15 @@ API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)
 | `AdjustLargeTextLayoutUITests` の結果の AX5 | はみ出し検査の対象 `adjustIndexNote` → `adjustIndexNoteHelpButton` | 注は説明の奥に移ったため |
 
 `AdjustScreenUITests` の他、`AdjustGoalsUITests`、`AdjustGoalsLargeTextUITests`、`AdjustLargeTextLayoutUITests` の他は変えない(識別子・読み上げ名・選択の特性は不変)。
+
+| `ReverseCandidateDisplayTests.testResultDisplay…`(`exactCountText`・`premiseText`) | 「入力したダメージと一致: 2 件 / 候補 3 件」→「一致 2 件 / 候補 3 件」、「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4(Web の語・数値の行) |
+| 同 `testPremiseUsesServerValueAndIsAbsentForAttackerSide` | 「…20(H20)と仮定…」→「H20 を仮定した結果です」、`exactCountText` の 0 件版も同じ語に | 決定 4。「32 を直書きしない」「攻撃側は出さない」の検査は同じ |
+| `AbilitySplitDisplayTests`(`exactCountText`) | 「入力したダメージと一致: 2 件 / 候補 4 件」→「一致 2 件 / 候補 4 件」 | 決定 4。「分かれた候補をそのまま数える」の検査は同じ |
+| `ReverseViewModelTests`(`premiseText`) | 「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4 |
+| `ReverseG05UITests.testSpeciesSheetNoMatchStaysAndCloseWorks` | 検索語を入れた後、検索欄の取り消し(識別子の無いシステムの「閉じる」)で検索を終えてから、シートの閉じる(`speciesSearchCancelButton`)を押す | 検索中は iOS 26 がツールバーの項目を隠す(実装前の `Button` でも同じ)。検査の内容(一致なしの案内が残る・閉じるで閉じる)は同じ |
+| `ReverseScreenUITests.testAddObservationButtonIsDisabledWithReasonAtTheLimit` | 追加ボタンが画面の下端(タブバーの裏)に寄ったときは、先にゆっくりスクロールしてから押す。最後の行を探す前も見えるまでスクロールする(補助だけ) | 追加ボタンが下端に寄るとタップがタブバーに当たって空振りし、通しで失敗した(単独では通る)。行の追加・上限の注記・無効化の検査は同じ |
+
+`ReverseCandidateDisplayTests.testMatchLabel…`(`matchLabel` の 2 つの文)は変えない(読み上げの値として残す)。
+`ReverseScreenUITests`(識別子と挙動)・`LargeTextLayoutUITests` の逆算・`UnsupportedMarksUITests`・`AbilityPickerUITests`・`FrequentOpponentsUITests`・`TeamG05UITests`(`moveSearchCancelButton`)は変えない
+(識別子・読み上げ名は不変。「閉じる」はアイコンになっても読み上げ名が同じなので `app.buttons["閉じる"]` で引ける)。
 実装で上の他に文言・手順が変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。

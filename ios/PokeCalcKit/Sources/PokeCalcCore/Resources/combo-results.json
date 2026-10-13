@@ -1,0 +1,25 @@
+{
+  "steps": [
+    {
+      "selfSpeed": 120,
+      "line": { "selfSpeed": 120, "selfFirst": { "min": 0, "max": 119 }, "opponentFirst": { "min": 121, "max": 999 } },
+      "knownOrder": "opponent_first"
+    },
+    {
+      "selfSpeed": 180,
+      "line": { "selfSpeed": 180, "selfFirst": { "min": 0, "max": 179 }, "opponentFirst": { "min": 181, "max": 999 } },
+      "knownOrder": "self_first"
+    },
+    {
+      "selfSpeed": 180,
+      "line": { "selfSpeed": 180, "selfFirst": { "min": 0, "max": 179 }, "opponentFirst": { "min": 181, "max": 999 } },
+      "knownOrder": "self_first"
+    }
+  ],
+  "knownOpponentSpeed": 150,
+  "total": {
+    "minDamage": 64, "maxDamage": 76, "minPercent": 91.4, "maxPercent": 108.6, "defenderHP": 70,
+    "ko": { "chancePercent": 51.5625, "guaranteed": false, "displayChancePercent": 51.6 }
+  },
+  "opponentAttack": { "selfHp": 132, "minActions": 1, "maxActions": 2, "fastSurviveChancePercent": 87.5, "slowSurviveChancePercent": 100 }
+}

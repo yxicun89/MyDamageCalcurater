@@ -99,6 +99,15 @@ final class GlossaryTests: XCTestCase {
             AdjustText.goalOutcomesLabel, AdjustText.goalRecentOpponents, AdjustText.fixedSPHint, AdjustText.minSpeedHint,
             AdjustText.stepperIncrease("B の上限"), AdjustText.stepperDecrease("B の上限"),
         ] + AdjustGoalKind.allCases.map(AdjustText.goalKindOption))
+
+        // G-05 第 3 弾(ADR-0539): 逆算の作り直しで足した文言(追加のみ)。
+        add("G05Reverse", [
+            ReverseLabels.myRegion, ReverseLabels.opponentRegion, ReverseLabels.unitLabel(.percent), ReverseLabels.unitLabel(.damage),
+            ReverseLabels.observationLabel(1), ReverseLabels.observationHint(side: .defender),
+            ReverseLabels.observationHint(side: .attacker), ReverseLabels.predictedPercent, ReverseLabels.closeCandidate,
+            ReverseLabels.referenceRange, ReverseLabels.noExactNotice, ReverseLabels.loading, ReverseLabels.assumedHP(32),
+            ReverseLabels.exactCount(exact: 2, total: 3),
+        ])
         add("ReverseCandidateDisplay", [
             ReverseCandidateDisplay.matchLabel(exact: true), ReverseCandidateDisplay.matchLabel(exact: false),
         ])
@@ -110,6 +119,22 @@ final class GlossaryTests: XCTestCase {
             BalanceScreenText.pickNoEmptySlot, BalanceScreenText.pickGroupLabel("みず"),
             BalanceErrorText.message(forCode: BalanceErrorText.unavailableCode),
         ])
+        // 計算画面の「連続技」(CB-8。ADR-0535)
+        add("ComboText", [
+            ComboText.sectionLabel, ComboText.addStepButton, ComboText.addPickerLabel, ComboText.closeButton,
+            ComboText.maxStepsNotice, ComboText.mainStepBadge, ComboText.noDamage, ComboText.defenderLabel,
+            ComboText.opponentMoveLabel, ComboText.opponentMoveNone, ComboText.opponentSpeedFromDefender,
+            ComboText.speedFieldToggle, ComboText.trickRoom, ComboText.selfTailwind, ComboText.opponentTailwind,
+            ComboText.loading, ComboText.retryButton, ComboText.defenderReset, ComboText.note,
+            ComboText.selfSpeedLegend, ComboText.selfSpeedSPLabel, ComboText.selfSpeedNatureLabel, ComboText.selfSpeedRankLabel,
+            ComboText.selfSpeedNatureNote, ComboText.selfSpeedNatureUnavailable, ComboText.speedExampleListLabel,
+            ComboText.failureMessage(for: PokeCalcError(code: PokeCalcError.Code.transport, message: "x")),
+            ComboText.stepOrdinal(0), ComboText.critical(0), ComboText.moveUp("テストわざ"), ComboText.moveDown("テストわざ"),
+            ComboText.removeStep("テストわざ"), ComboText.koText(steps: 2, ko: ComboKOChance(chancePercent: 1, guaranteed: false, displayChancePercent: 1)),
+            ComboText.koText(steps: 2, ko: ComboKOChance(chancePercent: 100, guaranteed: true, displayChancePercent: 100)),
+        ] + ComboSelfSpeedNature.allCases.map(ComboText.selfSpeedNatureOption)
+            + ComboMarkReason.allCases.map(ComboText.markReason)
+            + [ComboTurnOrder.selfFirst, .opponentFirst, .speedTie].compactMap(ComboText.orderLabel))
         return out
     }
 

@@ -41,6 +41,8 @@ public struct SpeedMatchupCardDisplay: Equatable, Identifiable, Sendable {
     public let opponentSpeedLabel: String
     /// 見出し(B の要約語。`SpeedMatchupLabels.headline` / `trickRoomHeadline`)。
     public let headline: String
+    /// カードの見出し「最速 ・ 素早さ 145」(`SpeedMatchupLabels.cardHeading`。既存の assumptionLabel・opponentSpeedLabel は残す)。
+    public let heading: String
     /// 性格ごとの行。下降は**トリックルーム中だけ**含める(ADR-0610 §6 Q5)。順は 下降・補正なし・上昇。
     public let rows: [SpeedNatureRowDisplay]
     /// 今の振りがあるときの行動順(「先に動く」など)。無ければ nil。
@@ -49,8 +51,9 @@ public struct SpeedMatchupCardDisplay: Equatable, Identifiable, Sendable {
 
     public init(
         id: String, assumptionLabel: String, opponentSpeedLabel: String, headline: String,
-        rows: [SpeedNatureRowDisplay], orderBadge: String?, order: SpeedTurnOrder?
+        rows: [SpeedNatureRowDisplay], orderBadge: String?, order: SpeedTurnOrder?, heading: String = ""
     ) {
+        self.heading = heading
         self.id = id
         self.assumptionLabel = assumptionLabel
         self.opponentSpeedLabel = opponentSpeedLabel
@@ -100,6 +103,24 @@ public struct SpeedReachRowDisplay: Equatable, Identifiable, Sendable {
 }
 
 public enum SpeedMatchupDisplayBuilder {
+    /// 出力 1 の結論の 1 行(Web `matchupConclusion`)。上を取れる想定 = どれかの性格の `movesFirst` がある行
+    /// (同速だけの行は含めない)。想定が 0 件なら nil。
+    public static func matchupConclusion(_ matchup: SpeedMatchup) -> String? {
+        guard !matchup.lines.isEmpty else { return nil }
+        let reachable = matchup.lines.filter { line in line.natures.contains { $0.movesFirst != nil } }.count
+        return SpeedMatchupLabels.matchupConclusion(
+            reachable: reachable, total: matchup.lines.count, trickRoom: matchup.trickRoom)
+    }
+
+    /// 出力 2 の結論の 1 行。プリセット `max` の行の `slowerText`(「最速 60 族まで抜ける」。トリックルーム中は言い換え後)。
+    /// `max` の行が無ければ nil。
+    public static func reachConclusion(_ rows: [SpeedReachRowDisplay]) -> String? {
+        rows.first { $0.id == "max" }?.slowerText
+    }
+
+    /// 帯の色に使うタイプ ID(Web `opponentPokemon?.types[0]`)。ポケモン未選択・タイプ無しは nil(画面は brandPrimary)。
+    public static func accentTypeID(_ pokemon: SpeedPokemon?) -> String? { pokemon?.types.first }
+
     /// 応答の `lines`(要求の想定の順)をカードにする。`trickRoom` は応答の `trickRoom` を使う。
     public static func cards(_ matchup: SpeedMatchup) -> [SpeedMatchupCardDisplay] {
         var customIndex = 0
@@ -125,7 +146,8 @@ public enum SpeedMatchupDisplayBuilder {
                 headline: trickRoom
                     ? SpeedMatchupLabels.trickRoomHeadline(natures: line.natures)
                     : SpeedMatchupLabels.headline(natures: line.natures),
-                rows: rows, orderBadge: line.current.map(SpeedMatchupLabels.orderBadge), order: line.current)
+                rows: rows, orderBadge: line.current.map(SpeedMatchupLabels.orderBadge), order: line.current,
+                heading: SpeedMatchupLabels.cardHeading(assumption: label, speed: line.opponentSpeed))
         }
     }
 

@@ -24,6 +24,8 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
     public let matchLabel: String
     /// 「12.3〜15.6%」のような想定ダメージ幅。
     public let percentRangeText: String
+    /// 予測%の上限(予測%の大きい数字と、上限のバーの幅に使う)。
+    public let maxPercent: Double
     /// この候補だけに付いた未対応の印の注記(無ければ nil。全候補に共通する印は
     /// `ReverseResultDisplay.unsupportedNotice`。ADR-0501「P6-17」3章)。
     public let unsupportedNote: String?
@@ -49,6 +51,7 @@ public struct ReverseCandidateDisplay: Identifiable, Equatable, Sendable {
         exact = candidate.exact
         matchLabel = Self.matchLabel(exact: candidate.exact)
         percentRangeText = BulkRowDisplay.percentRangeText(minPercent: candidate.minPercent, maxPercent: candidate.maxPercent)
+        maxPercent = candidate.maxPercent
         self.id = id ?? Self.baseID(for: candidate)
     }
 
@@ -181,9 +184,7 @@ public struct ReverseResultDisplay: Sendable {
             )
         }
         exactCount = result.exactCount
-        exactCountText = "入力したダメージと一致: \(result.exactCount) 件 / 候補 \(result.candidates.count) 件"
-        premiseText = result.side == .defender
-            ? "相手の HP の SP を \(result.assumedHPSP)(H\(result.assumedHPSP))と仮定した結果です"
-            : nil
+        exactCountText = ReverseLabels.exactCount(exact: result.exactCount, total: result.candidates.count)
+        premiseText = result.side == .defender ? ReverseLabels.assumedHP(result.assumedHPSP) : nil
     }
 }
