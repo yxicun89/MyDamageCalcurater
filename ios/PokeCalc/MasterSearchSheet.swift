@@ -109,8 +109,12 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
     let viewModel: ViewModel
     let options: [Move]
     let onSelect: (Move) -> Void
-    /// 非 nil なら「外す」行を先頭に出す(構築編集の技スロット専用。すでに選ばれている技を外す)。
+    /// 非 nil なら「外す」行(名前は `noneLabel`)を先頭に出す(構築編集の技スロット専用。すでに選ばれている技を外す。空の枠でも出す)。
     var removeAction: (() -> Void)? = nil
+    /// 「外す」行の名前(構築編集は「(なし)」)。
+    var noneLabel = TeamLabels.moveNone
+    /// 押せない行にする技 ID(構築編集で他の枠が選んでいる技。一覧には残して薄く出す)。既定は空(計算・逆算は変わらない)。
+    var disabledIDs: Set<String> = []
     /// true なら技をタイプ別の群(見出し = タイプ名)で出す(G-01。並びはタイプ順だけ)。`options` は呼び出し元がタイプ順に並べて渡す。
     var groupsByType = false
     @Environment(\.dismiss) private var dismiss
@@ -119,11 +123,14 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
         NavigationStack {
             List {
                 if let removeAction {
-                    Button(role: .destructive) {
+                    Button {
                         removeAction()
                         dismiss()
                     } label: {
-                        Text("外す")
+                        Text(noneLabel)
+                            .font(TextStyleToken.body.font)
+                            .foregroundStyle(ColorToken.textPrimary.color)
+                            .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide, alignment: .leading)
                     }
                     .accessibilityIdentifier("moveSearchRemoveButton")
                 }
@@ -175,6 +182,9 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
         .accessibilityLabel(move.nameJa)
         // 読み上げは従来どおり全情報(タイプ・分類・威力)を含める。見た目は名前+アイコンの1行(G-01)。
         .accessibilityValue(MoveRowLabels.detail(move))
+        // 他の枠で選んだ技は押せない(薄く出す)。
+        .disabled(disabledIDs.contains(move.id))
+        .opacity(disabledIDs.contains(move.id) ? CalcScreenMetrics.disabledChipOpacity : 1)
     }
 
     @ViewBuilder

@@ -77,11 +77,11 @@ final class TeamScreenUITests: XCTestCase {
     // MARK: 6 つの枠
 
     /// [新しい構築]で名前の入力なしに構築ができ、すぐ編集画面が開く。6 つの枠が最初から並び、空の枠は
-    /// 「ポケモン」の欄と案内だけ(技・持ち物などは出ない)。
+    /// 「ポケモン」の欄だけ(案内の文・技・持ち物などは出ない)。
     func testNewTeamOpensEditorWithSixEmptySlots() {
         let app = launchTeamList()
         XCTAssertTrue(element(app, "teamListEmpty").waitForExistence(timeout: Self.existenceTimeout), "開いた直後は0件")
-        XCTAssertTrue(element(app, "teamListEmpty").label.contains("新しい構築"), "次にすることを書いた案内")
+        XCTAssertEqual(element(app, "teamListEmpty").label, "まだ構築がありません", "空の状態は一言(次にすることは[新しい構築]が示す。G-05)")
         XCTAssertFalse(element(app, "teamNameField").exists, "構築名の入力欄は無い")
         createTeam(app)
 
@@ -89,8 +89,7 @@ final class TeamScreenUITests: XCTestCase {
         for number in 1...6 {
             XCTAssertTrue(element(app, "teamSlot-\(number)").exists, "\(number)体目の枠")
             XCTAssertTrue(element(app, "slotSpeciesPicker-\(number)").exists, "\(number)体目の「ポケモン」欄")
-            XCTAssertEqual(
-                element(app, "slotEmptyHint-\(number)").label, "ポケモンを選ぶと、技・持ち物・特性などを決められます")
+            XCTAssertFalse(element(app, "slotEmptyHint-\(number)").exists, "空の枠の案内の文は置かない(タイルの「+」が示す。G-05)")
         }
         XCTAssertFalse(elementBeginningWith(app, "memberCard-").exists, "空の枠に技・持ち物などは出ない")
         XCTAssertFalse(elementBeginningWith(app, "memberMoveSlot-").exists)

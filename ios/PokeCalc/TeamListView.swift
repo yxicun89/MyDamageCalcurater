@@ -27,9 +27,6 @@ struct TeamListView: View {
 
     @State private var isCreating = false
 
-    /// 読み込み中インジケータの高さ(Calc/Reverse 画面と同じ理由で固定する)。
-    private static let loadingIndicatorHeight: CGFloat = 24
-
     init(
         store: any TeamStore, service: any PokeCalcService, balance: (any BalanceService)? = nil, path: Binding<NavigationPath>
     ) {
@@ -50,7 +47,9 @@ struct TeamListView: View {
                 loadingSlot
                 if viewModel.teams.isEmpty {
                     if !viewModel.isLoading {
-                        PopNoticeView(kind: .empty, message: TeamLabels.emptyList, identifier: "teamListEmpty")
+                        ContentUnavailableView {
+                            PopEmptyLabel(message: TeamLabels.emptyList, identifier: "teamListEmpty", systemImage: PopSymbol.team)
+                        }
                     }
                 } else {
                     ForEach(viewModel.teams, id: \.id) { team in
@@ -104,12 +103,10 @@ struct TeamListView: View {
     private var loadingSlot: some View {
         Group {
             if viewModel.isLoading {
-                ProgressView()
-                    .accessibilityIdentifier("teamListLoadingIndicator")
+                PopNoticeView(kind: .loading, message: TeamLabels.loading, identifier: "teamListLoadingIndicator")
             }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: Self.loadingIndicatorHeight)
     }
 }
 
@@ -120,6 +117,8 @@ private struct TeamCardView: View {
     let onOpen: () -> Void
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 削除を確定するたびに増やし、警告の触覚を 1 回だけ鳴らす(取り消せない操作。design.md「動きの決まり」)。
+    @State private var deleteHapticTick = 0
 
     private var name: String { viewModel.displayName(for: team.id) }
     private var isConfirmingDelete: Bool { viewModel.pendingDeleteID == team.id }
@@ -156,15 +155,20 @@ private struct TeamCardView: View {
         .accessibilityIdentifier("teamCard-\(team.id)")
     }
 
-    /// 6 体のアイコン。画像が無ければタイプ色のエンブレム(種族が引けなければ無彩色のエンブレム)。
+    /// 6 つの枠。埋まった枠は画像かタイプ色のエンブレム(種族が引けなければ無彩色のエンブレム)、空きは破線の枠(読み上げない)。
     private var icons: some View {
         let names = team.members.enumerated().map { offset, member in
             viewModel.speciesSummary(forKey: member.speciesKey)?.nameJa ?? TeamLabels.slotTitle(offset + 1)
         }
         return HStack(spacing: SpacingToken.x1) {
-            ForEach(Array(team.members.enumerated()), id: \.element.id) { _, member in
-                let species = viewModel.speciesSummary(forKey: member.speciesKey)
-                SpeciesImageView(speciesKey: member.speciesKey, name: species?.nameJa ?? "-", types: species?.types ?? [])
+            ForEach(0..<TeamLimits.maxMembers, id: \.self) { index in
+                if team.members.indices.contains(index) {
+                    let member = team.members[index]
+                    let species = viewModel.speciesSummary(forKey: member.speciesKey)
+                    SpeciesImageView(speciesKey: member.speciesKey, name: species?.nameJa ?? "-", types: species?.types ?? [])
+                } else {
+                    EmptySlotOutline()
+                }
             }
         }
         .accessibilityElement(children: .ignore)
@@ -185,15 +189,11 @@ private struct TeamCardView: View {
             .accessibilityLabel(TeamLabels.openHint(name: name))
             .accessibilityIdentifier("teamOpen-\(team.id)")
 
-            Button {
+            PopIconButton(
+                systemImage: PopSymbol.delete, label: TeamLabels.deleteHint(name: name), identifier: "teamDelete-\(team.id)"
+            ) {
                 viewModel.requestDelete(id: team.id)
-            } label: {
-                PopLabel(title: TeamLabels.deleteButton, systemImage: PopSymbol.delete)
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(PillButtonStyle(kind: .secondary))
-            .accessibilityLabel(TeamLabels.deleteHint(name: name))
-            .accessibilityIdentifier("teamDelete-\(team.id)")
         }
     }
 
@@ -203,10 +203,12 @@ private struct TeamCardView: View {
                 kind: .error, message: TeamLabels.deleteConfirmNotice(name: name),
                 identifier: "teamDeleteConfirmNotice-\(team.id)")
             Button {
+                deleteHapticTick += 1
                 Task { await viewModel.confirmDelete() }
             } label: {
-                TeamTextControls.buttonLabel(TeamLabels.deleteConfirmButton)
+                TeamTextControls.buttonLabel(TeamLabels.deleteConfirmButton, systemImage: PopSymbol.delete)
             }
+            .sensoryFeedback(.warning, trigger: deleteHapticTick)
             .buttonStyle(PillButtonStyle(kind: .danger))
             .accessibilityIdentifier("teamDeleteConfirm-\(team.id)")
             Button {
@@ -217,6 +219,16 @@ private struct TeamCardView: View {
             .buttonStyle(PillButtonStyle(kind: .secondary))
             .accessibilityIdentifier("teamDeleteCancel-\(team.id)")
         }
+    }
+}
+
+/// 一覧のカードの空きの枠(破線の枠。装飾なので読み上げない。`SpeciesImageView` と同じ大きさ)。
+struct EmptySlotOutline: View {
+    var body: some View {
+        Circle()
+            .stroke(ColorToken.borderHairline.color, style: StrokeStyle(lineWidth: 1.5, dash: [3, 3]))
+            .frame(width: SpeciesEmblemView.diameter, height: SpeciesEmblemView.diameter)
+            .accessibilityHidden(true)
     }
 }
 

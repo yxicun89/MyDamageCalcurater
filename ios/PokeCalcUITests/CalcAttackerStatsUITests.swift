@@ -100,18 +100,30 @@ final class CalcAttackerStatsUITests: XCTestCase {
         waitForExpectations(timeout: Self.existenceTimeout)
     }
 
-    /// スクロール直後はタップが慣性で外れることがあるため、選択されなければ一度だけ押し直す(期待値は弱めない)。
+    /// スクロール直後はタップが慣性で外れる・要素が上のナビゲーションバーの下に潜って押せないことがあるため、
+    /// 選択されるまで「ゆっくりスクロール → 止まるのを待つ → 押す」を最大 3 回くり返す(期待値は弱めない)。
     private func tapUntilSelected(_ app: XCUIApplication, _ target: XCUIElement) {
-        scrollUntilHittable(app, target)
-        tapUpperPart(target)
-        if !target.waitForExistence(timeout: 1) || !NSPredicate(format: "isSelected == true").evaluate(with: target) {
+        for _ in 0..<3 {
+            scrollUntilHittable(app, target)
+            settleBelowNavigationBar(app, target)
+            tapUpperPart(target)
+            if NSPredicate(format: "isSelected == true").evaluate(with: target) { return }
             Thread.sleep(forTimeInterval: 1)
-            if !target.isSelected {
-                scrollUntilHittable(app, target)
-                tapUpperPart(target)
-            }
+            if target.isSelected { return }
         }
         waitForPredicate("isSelected == true", target)
+    }
+
+    /// 慣性が止まるまで待ち、要素の上端がバーの下に潜っていたら、ゆっくり(velocity .slow)引き下げて見える位置に置く。
+    private func settleBelowNavigationBar(_ app: XCUIApplication, _ target: XCUIElement) {
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
+        let window = app.windows.firstMatch.frame
+        let minTop = window.height * 0.2
+        guard target.exists, target.frame.minY < minTop else { return }
+        let delta = min(window.midY - target.frame.midY, window.height * 0.4)
+        let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+        start.press(forDuration: 0.05, thenDragTo: start.withOffset(CGVector(dx: 0, dy: delta)), withVelocity: .slow, thenHoldForDuration: 0.3)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.8))
     }
 
     private func waitUntilGone(_ target: XCUIElement) {

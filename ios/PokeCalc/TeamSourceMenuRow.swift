@@ -57,10 +57,9 @@ struct TeamSourceMenuRow: View {
                     Text(labelText)
                         .font(TextStyleToken.body.font)
                         .foregroundStyle(ColorToken.textPrimary.color)
-                        .lineLimit(1)
-                        .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                        .fixedSize(horizontal: false, vertical: true)
                     Spacer()
-                    Image(systemName: "chevron.up.chevron.down")
+                    PopIcon(PopSymbol.picker)
                         .foregroundStyle(ColorToken.textSecondary.color)
                 }
                 .padding(SpacingToken.x3)
@@ -71,11 +70,7 @@ struct TeamSourceMenuRow: View {
             .accessibilityIdentifier("\(identifierPrefix)SourceButton")
 
             if isEmpty {
-                Text(TeamLoadLabels.empty)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .padding(.horizontal, SpacingToken.x1)
-                    .accessibilityIdentifier("\(identifierPrefix)EmptyMessage")
+                PopNoticeView(kind: .empty, message: TeamLoadLabels.empty, identifier: "\(identifierPrefix)EmptyMessage")
             }
         }
     }

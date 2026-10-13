@@ -158,6 +158,10 @@ enum PopSymbol {
     static let forward = "chevron.right"
     static let reload = "arrow.clockwise"
     static let save = "square.and.arrow.down"
+    /// 「戻る」の矢印。
+    static let back = "chevron.left"
+    /// 選択欄(ピッカー)の右端の上下の矢印。
+    static let picker = "chevron.up.chevron.down"
 
     /// 画面の入口(`AppFeature.id`。区切り・画面の中の行)に付ける装飾アイコン。未知の ID は汎用の「情報」。
     static func forFeature(id: String) -> String {
@@ -250,10 +254,12 @@ struct PopHelpButton<Content: View>: View {
 struct PopEmptyLabel: View {
     let message: String
     let identifier: String
+    /// 空の状態のアイコン(既定は情報。構築は構築のアイコン)。
+    var systemImage: String = PopSymbol.info
 
     var body: some View {
         VStack(spacing: SpacingToken.x2) {
-            PopIcon(PopSymbol.info)
+            PopIcon(systemImage)
                 .foregroundStyle(ColorToken.textSecondary.color)
             Text(message)
                 .font(TextStyleToken.body.font)
@@ -270,16 +276,22 @@ struct PopIconButton: View {
     let systemImage: String
     let label: String
     let identifier: String
+    /// false なら押せない(減光する)。
+    var isEnabled = true
+    /// true なら取り消し系の色(danger)で描く。
+    var isDanger = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             PopIcon(systemImage)
-                .foregroundStyle(ColorToken.brandPrimary.color)
+                .foregroundStyle(isDanger ? ColorToken.danger.color : ColorToken.brandPrimary.color)
                 .frame(minWidth: CalcScreenMetrics.minimumTapSide, minHeight: CalcScreenMetrics.minimumTapSide)
+                .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .disabled(!isEnabled)
         .accessibilityLabel(label)
         .accessibilityIdentifier(identifier)
     }

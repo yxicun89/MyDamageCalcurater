@@ -579,7 +579,7 @@ final class LargeTextLayoutUITests: XCTestCase {
         "saveTeamButton",
         "teamSlot-1",
         "slotSpeciesPicker-1",
-        "slotEmptyHint-1",
+        "teamSlotGrid",
         "teamSlot-6",
     ]
 

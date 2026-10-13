@@ -40,10 +40,7 @@ struct MemberCardView: View {
             movesSection
             spSection
             if let memberError = viewModel.memberErrors[member.id] {
-                Text(memberError.uiMessage)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
-                    .accessibilityIdentifier("memberError-\(member.id)")
+                PopNoticeView(kind: .error, message: memberError.uiMessage, identifier: "memberError-\(member.id)")
             }
         }
         .padding(SpacingToken.x3)
@@ -78,7 +75,7 @@ struct MemberCardView: View {
     /// 触れるため配線した(critic 指摘)。
     private var nicknameField: some View {
         TextField(
-            "ニックネーム(任意)",
+            TeamLabels.nicknameField,
             text: Binding(
                 get: { nicknameText },
                 set: { newValue in
@@ -215,9 +212,11 @@ struct MemberCardView: View {
 
     private var movesSection: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Text("わざ")
+            Text(TeamLabels.movesHeading)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
+                .accessibilityAddTraits(.isHeader)
+                .accessibilityIdentifier("memberMovesHeading-\(member.id)")
             ForEach(0..<TeamLimits.maxMovesPerMember, id: \.self) { index in
                 moveSlot(index: index)
             }
@@ -227,11 +226,19 @@ struct MemberCardView: View {
         // 同じ状態を4つのシートが同時に監視してしまうため、ここにまとめる)。
         .sheet(item: $moveSearchSlot) { target in
             let selectedID = member.moveIds.indices.contains(target.index) ? member.moveIds[target.index] : nil
-            let remainingOptions = moveOptions.filter { !member.moveIds.contains($0.id) }
+            // 他の枠で選んだ技は一覧に残して押せなくする(自分の枠の技は選べる。Web の技ピッカーと同じ)。
+            let takenElsewhere = Set(member.moveIds).subtracting(selectedID.map { [$0] } ?? [])
             MoveSearchSheet(
-                viewModel: viewModel, options: remainingOptions,
-                onSelect: { move in viewModel.addMove(id: member.id, moveId: move.id) },
-                removeAction: selectedID != nil ? { viewModel.removeMove(id: member.id, at: target.index) } : nil
+                viewModel: viewModel, options: moveOptions,
+                onSelect: { move in
+                    // 自分の枠の技を選び直したときは何も変えない(重複の警告を出さない)。
+                    if move.id != selectedID { viewModel.addMove(id: member.id, moveId: move.id) }
+                },
+                // 「(なし)」は空の枠でも出す(選ぶと枠が空く。空の枠では何も変わらない)。
+                removeAction: {
+                    if selectedID != nil { viewModel.removeMove(id: member.id, at: target.index) }
+                },
+                noneLabel: TeamLabels.moveNone, disabledIDs: takenElsewhere, groupsByType: true
             )
         }
     }
@@ -243,7 +250,7 @@ struct MemberCardView: View {
     /// そろえて ID を出す(「技を選択」に見えてしまうと選択済みであることが伝わらないため)。
     private func moveSlot(index: Int) -> some View {
         let selectedID = member.moveIds.indices.contains(index) ? member.moveIds[index] : nil
-        let label = selectedID.map { id in viewModel.move(forID: id)?.nameJa ?? id } ?? "技を選択"
+        let label = selectedID.map { id in viewModel.move(forID: id)?.nameJa ?? id } ?? TeamLabels.moveNone
         return Button {
             moveSearchSlot = MoveSlotTarget(index: index)
         } label: {
@@ -255,42 +262,142 @@ struct MemberCardView: View {
     // MARK: - SP(能力ポイント。1ステータス最大32・合計66)
 
     private var spSection: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            Text("能力ポイント(合計 \(member.sp.teamEditValues.reduce(0, +))/\(SPLimits.maxTotal))")
+        let total = member.sp.teamEditValues.reduce(0, +)
+        return VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            Text(TeamLabels.spSummary(total: total))
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("memberSPSummary-\(member.id)")
+            SPTotalBar(fraction: TeamSPControl.fillFraction(total: total))
+                .accessibilityIdentifier("memberSPBar-\(member.id)")
             ForEach(StatKey.allCases, id: \.self) { stat in
-                spStepper(for: stat)
+                SPStatRow(
+                    statName: StatKeyLabel.japaneseName(for: stat), value: member.sp.teamEditValue(for: stat), total: total,
+                    memberID: member.id, statID: stat.rawValue
+                ) { newValue in viewModel.setMemberSP(id: member.id, stat: stat, value: newValue) }
+            }
+        }
+    }
+}
+
+/// SP の合計のバー(装飾。数値は上の合計が持つ)。満ち具合は `TeamSPControl.fillFraction`。
+private struct SPTotalBar: View {
+    let fraction: Double
+    private static let height: CGFloat = 8
+
+    var body: some View {
+        Capsule()
+            .fill(ColorToken.tableZebra.color)
+            .frame(height: Self.height)
+            .overlay(alignment: .leading) {
+                GeometryReader { proxy in
+                    Capsule()
+                        .fill(ColorToken.brandPrimary.color)
+                        .frame(width: proxy.size.width * fraction)
+                }
+            }
+            .accessibilityElement(children: .ignore)
+    }
+}
+
+/// SP の 1 行: 能力名・− ボタン・数値欄・+ ボタン。数値欄は打った値をそのまま ViewModel へ渡し(範囲外・合計超えは拒否されて
+/// 欄が元の値へ戻る)、ボタンは上限・下限で押せなくなる。
+private struct SPStatRow: View {
+    let statName: String
+    let value: Int
+    let total: Int
+    let memberID: String
+    let statID: String
+    /// ViewModel へ値を渡す(受け付けたかを返す)。
+    let apply: (Int) -> Bool
+
+    @State private var text: String
+    @FocusState private var isFocused: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric private var fieldWidth: CGFloat = 64
+
+    init(statName: String, value: Int, total: Int, memberID: String, statID: String, apply: @escaping (Int) -> Bool) {
+        self.statName = statName
+        self.value = value
+        self.total = total
+        self.memberID = memberID
+        self.statID = statID
+        self.apply = apply
+        _text = State(initialValue: String(value))
+    }
+
+    var body: some View {
+        let layout = dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x1))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: SpacingToken.x2))
+        layout {
+            Text(statName)
+                .font(TextStyleToken.body.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+            if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 0) }
+            HStack(spacing: SpacingToken.x1) {
+                PopIconButton(
+                    systemImage: PopSymbol.minus, label: TeamLabels.spDecrease(statName: statName),
+                    identifier: "memberSPDown-\(memberID)-\(statID)", isEnabled: TeamSPControl.canDecrease(value: value)
+                ) { if apply(value - 1) { text = String(value - 1) } }
+                field
+                PopIconButton(
+                    systemImage: PopSymbol.add, label: TeamLabels.spIncrease(statName: statName),
+                    identifier: "memberSPUp-\(memberID)-\(statID)",
+                    isEnabled: TeamSPControl.canIncrease(value: value, total: total)
+                ) { if apply(value + 1) { text = String(value + 1) } }
+            }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("memberSP-\(memberID)-\(statID)")
+        // ボタンや外部の変更で値が変わったら欄に映す(打っている最中は欄を書き換えない。打った文字が失われるため)。
+        .onChange(of: value) { _, newValue in
+            if !isFocused { text = String(newValue) }
+        }
+        // 打ち終わったら、受け付けられなかった入力を元の値へ戻す。
+        .onChange(of: isFocused) { _, focused in
+            if !focused { text = String(value) }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                if isFocused {
+                    Spacer()
+                    Button(TeamLabels.keyboardDone) { isFocused = false }
+                }
             }
         }
     }
 
-    private func spStepper(for stat: StatKey) -> some View {
-        let value = member.sp.teamEditValue(for: stat)
-        return HStack(spacing: SpacingToken.x2) {
-            // 「とくこう」「ぼうぎょ」など4文字のラベルがあるので、固定幅で切ると折り返る
-            // (実機スクリーンショットで確認した不具合)。`.fixedSize()` で1行の自然な幅を確保し、
-            // `frame(minWidth:)` は短いラベル(HP)の見た目をそろえる下限としてだけ使う。
-            Text(StatKeyLabel.japaneseName(for: stat))
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .lineLimit(1)
-                .fixedSize()
-                .frame(minWidth: 64, alignment: .leading)
-            Stepper(
-                value: Binding(
-                    get: { value },
-                    set: { newValue in viewModel.setMemberSP(id: member.id, stat: stat, value: newValue) }
-                ),
-                in: 0...SPLimits.maxPerStat
-            ) {
-                Text("\(value)")
-                    .font(TextStyleToken.body.font.monospacedDigit())
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .frame(minWidth: 28, alignment: .trailing)
-            }
+    private var fieldIdentifier: String { "memberSPField-\(memberID)-\(statID)" }
+
+    private var field: some View {
+        TextField(
+            TeamLabels.spField(statName: statName),
+            text: Binding(
+                get: { text },
+                set: { newValue in
+                    let digits = newValue.filter { $0.isASCII && $0.isNumber }
+                    text = digits
+                    if let number = Int(digits) { _ = apply(number) }
+                }
+            )
+        )
+        .keyboardType(.numberPad)
+        .focused($isFocused)
+        .multilineTextAlignment(.center)
+        .font(TextStyleToken.body.font.monospacedDigit())
+        .foregroundStyle(ColorToken.textPrimary.color)
+        .frame(width: fieldWidth, height: CalcScreenMetrics.minimumTapSide)
+        .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
+        .accessibilityLabel(TeamLabels.spField(statName: statName))
+        .accessibilityIdentifier(fieldIdentifier)
+        // 数値欄は触れたら全体を選択する(打った数字が今の値に置き換わる。カーソルが数字の手前に入って「320」にならない)。
+        .onReceive(NotificationCenter.default.publisher(for: UITextField.textDidBeginEditingNotification)) { note in
+            guard let field = note.object as? UITextField, field.accessibilityIdentifier == fieldIdentifier else { return }
+            DispatchQueue.main.async { field.selectAll(nil) }
         }
-        .accessibilityIdentifier("memberSP-\(member.id)-\(stat.rawValue)")
     }
 }
 

@@ -82,6 +82,13 @@ final class GlossaryTests: XCTestCase {
         add("FavoriteLoad", [
             FavoritesLabels.loadSpeciesMissingNotice, FavoritesLabels.loadUnavailableNotice,
         ])
+        // G-05 第 2 弾(ADR-0537): 構築の一覧・編集の作り直しで足した文言(追加のみ)。
+        add("G05Team", [
+            TeamLabels.emptyList, TeamLabels.loading, TeamLabels.slotsGroup, TeamLabels.slotAdd(2), TeamLabels.movesHeading,
+            TeamLabels.moveNone, TeamLabels.nicknameField, TeamLabels.spSummary(total: 40),
+            TeamLabels.spIncrease(statName: "こうげき"), TeamLabels.spDecrease(statName: "こうげき"),
+            TeamLabels.spField(statName: "こうげき"),
+        ])
         add("ReverseCandidateDisplay", [
             ReverseCandidateDisplay.matchLabel(exact: true), ReverseCandidateDisplay.matchLabel(exact: false),
         ])
