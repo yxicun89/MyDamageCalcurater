@@ -151,20 +151,20 @@ final class ReverseCandidateDisplayTests: XCTestCase {
         XCTAssertEqual(display.stat, .def)
         XCTAssertEqual(display.assumedHPSP, 32)
         XCTAssertEqual(display.exactCount, 2)
-        XCTAssertEqual(display.exactCountText, "入力したダメージと一致: 2 件 / 候補 3 件")
+        XCTAssertEqual(display.exactCountText, "一致 2 件 / 候補 3 件")
         // ADR-0010 §R1・§R7: 「H32 を仮定した結果」であることを画面に出す(値はサーバーの assumedHpSp から作る)
-        XCTAssertEqual(display.premiseText, "相手の HP の SP を 32(H32)と仮定した結果です")
+        XCTAssertEqual(display.premiseText, "H32 を仮定した結果です")
     }
 
     func testPremiseUsesServerValueAndIsAbsentForAttackerSide() {
         let defender = ReverseResult(side: .defender, stat: .spd, assumedHPSP: 20, candidates: [], exactCount: 0)
         XCTAssertEqual(ReverseResultDisplay(result: defender, items: items).premiseText,
-                       "相手の HP の SP を 20(H20)と仮定した結果です", "32 を直書きしない")
+                       "H20 を仮定した結果です", "32 を直書きしない")
 
         // 攻撃側の逆算は相手の H を計算に使わない(ADR-0010 §R1。assumedHpSp = 0)ので前提の文言を出さない。
         let attacker = ReverseResult(side: .attacker, stat: .atk, assumedHPSP: 0, candidates: [], exactCount: 0)
         let display = ReverseResultDisplay(result: attacker, items: items)
         XCTAssertNil(display.premiseText)
-        XCTAssertEqual(display.exactCountText, "入力したダメージと一致: 0 件 / 候補 0 件")
+        XCTAssertEqual(display.exactCountText, "一致 0 件 / 候補 0 件")
     }
 }

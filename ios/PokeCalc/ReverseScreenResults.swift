@@ -15,8 +15,20 @@ struct ReverseResultsSectionView: View {
 
     private static let narrowingAnimation = Animation.spring(response: 0.4, dampingFraction: 0.8)
 
+    /// 一致する候補が 1 件も無い(各候補の SP の範囲に「参考」を添える)。
+    private var isReference: Bool {
+        guard let result else { return false }
+        return ReverseLabels.hasNoExactCandidate(exactCount: result.exactCount, candidateCount: result.candidates.count)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            // 厳密に合う候補が 1 件も無いときは先頭に案内(判定は engine の `exactCount` のまま)。
+            if let result,
+                ReverseLabels.hasNoExactCandidate(exactCount: result.exactCount, candidateCount: result.candidates.count)
+            {
+                PopNoticeView(kind: .info, message: ReverseLabels.noExactNotice, identifier: "reverseNoExactNotice")
+            }
             if let premiseText = result?.premiseText {
                 Text(premiseText)
                     .font(TextStyleToken.caption.font)
@@ -37,7 +49,7 @@ struct ReverseResultsSectionView: View {
             }
             VStack(alignment: .leading, spacing: SpacingToken.x2) {
                 ForEach(result?.candidates ?? []) { candidate in
-                    ReverseCandidateCardView(candidate: candidate)
+                    ReverseCandidateCardView(candidate: candidate, isReference: isReference)
                 }
             }
             // 値(候補の id 列)そのものが変わったときにアニメーションする(批評対応: 以前は別の
@@ -49,50 +61,46 @@ struct ReverseResultsSectionView: View {
     }
 }
 
-/// 候補1件のカード: 性格クラス・持ち物、SP の範囲、目安の名前、一致の文言、想定ダメージ幅。
+/// 候補1件のカード(Web の ADR-0346 と同じ順): 型の名前 + 目安の名前・「ほぼ合う候補」のバッジ、予測%の大きい数字、
+/// 予測%の上限のバー(装飾)、SP の範囲(+「参考」)、持ち物、特性。
 private struct ReverseCandidateCardView: View {
     let candidate: ReverseCandidateDisplay
+    /// 一致する候補が 1 件も無いとき true(SP の範囲に「参考」を添える)。
+    let isReference: Bool
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("\(candidate.natureClassLabel) / \(candidate.itemLabel)")
-                    .font(TextStyleToken.heading.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .lineLimit(2)
-                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                Spacer(minLength: SpacingToken.x2)
-                Text(candidate.percentRangeText)
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            header
+            ReverseCandidateBar(fraction: BulkRowDisplay.barFraction(percent: candidate.maxPercent))
+                .accessibilityHidden(true)
+            HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
+                Text(candidate.spRangeText)
                     .font(TextStyleToken.body.font.monospacedDigit())
                     .foregroundStyle(ColorToken.textPrimary.color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("reverseCandidateRange-\(candidate.id)")
+                if isReference {
+                    ReverseBadge(text: ReverseLabels.referenceRange, isWarning: false)
+                }
             }
-            Text(candidate.spRangeText)
-                .font(TextStyleToken.body.font.monospacedDigit())
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .accessibilityIdentifier("reverseCandidateRange-\(candidate.id)")
-            if !candidate.guideNames.isEmpty {
-                Text(candidate.guideNames.joined(separator: " / "))
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-            }
-            // danger はエラー表示用の色(design.md)。「一致なし」は入力エラーではないので、
-            // exact の有無にかかわらず textSecondary のまま出す。
-            Text(candidate.matchLabel)
+            Text(candidate.itemLabel)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
-                .accessibilityIdentifier("reverseCandidateMatch-\(candidate.id)")
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reverseCandidateItem-\(candidate.id)")
             if let abilityText = candidate.abilityText {
                 Text(abilityText)
                     .font(TextStyleToken.caption.font)
                     .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("reverseCandidateAbility-\(candidate.id)")
             }
             if let unsupportedNote = candidate.unsupportedNote {
                 Text(unsupportedNote)
                     .font(TextStyleToken.caption.font)
                     .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("reverseCandidateUnsupported-\(candidate.id)")
             }
         }
@@ -105,5 +113,95 @@ private struct ReverseCandidateCardView: View {
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("reverseCandidateRow-\(candidate.id)")
         .transition(.opacity.combined(with: .scale(scale: 0.96)))
+    }
+
+    /// 1 行目: 左に型の名前とバッジ、右に予測%(大きい数字)と「予測」。大きい文字では縦に積む。
+    @ViewBuilder
+    private var header: some View {
+        if dynamicTypeSize >= .accessibility1 {
+            VStack(alignment: .leading, spacing: SpacingToken.x2) {
+                nameAndBadges
+                percentBlock(alignment: .leading)
+            }
+        } else {
+            HStack(alignment: .top, spacing: SpacingToken.x2) {
+                nameAndBadges
+                Spacer(minLength: SpacingToken.x2)
+                percentBlock(alignment: .trailing)
+            }
+        }
+    }
+
+    private var nameAndBadges: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Text(candidate.natureClassLabel)
+                .font(TextStyleToken.heading.font)
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reverseCandidateNature-\(candidate.id)")
+            if !candidate.guideNames.isEmpty || !candidate.exact {
+                SpeedFlowLayout(spacing: SpacingToken.x1) {
+                    ForEach(candidate.guideNames, id: \.self) { ReverseBadge(text: $0, isWarning: false) }
+                    // 一致しない候補だけ「ほぼ合う候補」(一致した候補には出さない)。文は読み上げの値として残す。
+                    if !candidate.exact {
+                        ReverseBadge(text: ReverseLabels.closeCandidate, isWarning: true)
+                            .accessibilityValue(candidate.matchLabel)
+                            .accessibilityIdentifier("reverseCandidateMatch-\(candidate.id)")
+                    }
+                }
+            }
+        }
+    }
+
+    private func percentBlock(alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 0) {
+            Text(candidate.percentRangeText)
+                .font(TextStyleToken.heading.font.monospacedDigit())
+                .foregroundStyle(ColorToken.textPrimary.color)
+                .multilineTextAlignment(alignment == .leading ? .leading : .trailing)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reverseCandidatePercent-\(candidate.id)")
+            Text(ReverseLabels.predictedPercent)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+        }
+    }
+}
+
+/// 小さい角丸のバッジ(目安の名前・「ほぼ合う候補」・「参考」)。警告色は枠だけ(色だけで意味を伝えず、文字を併記する)。
+private struct ReverseBadge: View {
+    let text: String
+    let isWarning: Bool
+
+    var body: some View {
+        Text(text)
+            .font(TextStyleToken.caption.font)
+            .foregroundStyle(isWarning ? ColorToken.warning.color : ColorToken.textSecondary.color)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SpacingToken.x2)
+            .padding(.vertical, SpacingToken.x1)
+            .background(ColorToken.tableZebra.color, in: Capsule())
+            .overlay(
+                Capsule().stroke(
+                    isWarning ? ColorToken.warning.color : ColorToken.borderHairline.color,
+                    lineWidth: CalcScreenMetrics.hairlineBorderWidth))
+    }
+}
+
+/// 予測%の上限のバー(装飾。幅 = 上限 / 100 を 0...1 に収めた値。動かさない)。
+private struct ReverseCandidateBar: View {
+    let fraction: Double
+    private static let height: CGFloat = 8
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(ColorToken.tableZebra.color)
+                    .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
+                Capsule().fill(ColorToken.brandPrimary.color)
+                    .frame(width: max(Self.height, CGFloat(fraction) * proxy.size.width))
+            }
+        }
+        .frame(height: Self.height)
     }
 }

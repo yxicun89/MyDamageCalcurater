@@ -5330,3 +5330,83 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 `TeamScreenUITests` の他(種族の選択・技シートの検索・入れ替え・外す・保存・戻る・カード・削除の 2 段階)、`TeamBalanceUITests`、`CalcScreenUITests`・`ReverseScreenUITests`(構築から選ぶ)は変えない
 (識別子・読み上げ名は不変)。`TeamLabels.emptyList` の値を変えるが、固定していた既存テストは無い。実装で上の他に文言・手順が変わるテストが出たら、同じ方針
 (期待の更新だけ・検査対象は減らさない)でこの表に足す。
+
+## G-05 逆算の作り直し(ADR-0539。2026-10-13)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0346)に追う。対象は
+`ReverseScreenView`・`ReverseScreenCards`・`ReverseScreenObservations`・`ReverseScreenResults`、検索シート(`MasterSearchSheet.swift` の `SpeciesSearchSheet`・`MoveSearchSheet`。計算・構築・調整と共用)、
+`PokeCalcCore` の逆算の文言(`G05ReverseText.swift` の `ReverseLabels`・`ReverseCandidateDisplay`)。識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ。下の表の語の変更を除く)。
+API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)・ダメージの側の切り替えは触らない。
+
+### 現状の洗い出し(文で説明している箇所・Web と構造や語が違う箇所)
+
+| 画面・部品 | 今 | 直す |
+|---|---|---|
+| 自分・相手のカード | 見出しが無い(カードだけ) | 見出し「自分」「相手」(`PopHeading`)をカードの上に。カードの中身(画像かエンブレム・名前・タイプバッジ・持ち物)は既に Web と同じなので変えない |
+| 持ち物の上限の注記(`reverseMyItemLimitHint`) | caption の文字 | アイコン + 一言(`PopNoticeView(.info)`)。メガ固定の理由(`reverse*ItemLockReason`)は状態の文のまま |
+| ダメージの側 | 自前の区切り(識別子・選択中の特性・AX で縦積み) | 変えない(既に方針どおり)。`lineLimit(1)`・`minimumScaleFactor` だけ外す |
+| 自分の調整(定番の振り方)のピル | `lineLimit(1)`・`minimumScaleFactor` | 外して折り返す。見た目・識別子・AX5 での縦積みは変えない |
+| 技の欄 | `lineLimit(1)`・`minimumScaleFactor`、矢印 `chevron.up.chevron.down` を直書き | 折り返して全文。矢印は `PopSymbol.picker` |
+| 観測欄の名前 | 見える名前が無い(読み上げ名だけ) | 行の頭に「ダメージ1」(`reverseObservationLabel-N`。読み上げは隠さない。UITest が識別子で引くため、二重読み上げは許容) |
+| 単位 | 「%」/ HP 側は「ダメージ」(欄の名前と同じ語) | 「%」/「HP」(Web の語。`reverseObservationUnit-N`)。単位の切り替えは無い(側で決まる。ADR-0539 §2) |
+| 単位の説明 | 無い | 一覧の下に 1 行「相手の HP が減った割合(%)」/「自分の HP が減った実数値(HP)」(`reverseObservationHint`。単位が分からない欄の例外) |
+| 観測欄の削除・追加 | 削除 = `minus.circle` 直書き、追加 = `plus.circle` 直書き + 名前 | 削除 = アイコンだけ(`PopIconButton` + `PopSymbol.minus`・読み上げ名不変)、追加 = `PopSymbol.add` + 「ダメージを追加」。36pt 以上 |
+| 入力エラー・上限の注記 | caption の文字 | アイコン + 文(`PopNoticeView(.error)` / `.info`)。識別子・文面は不変 |
+| 候補のカード 1 行目 | 「補正なし / 持ち物なし」(型と持ち物を 1 つの見出しに) + 右に範囲の%(ラベル無し) | 型の名前(`reverseCandidateNature-<id>`)+ 目安の名前のバッジ + 「ほぼ合う候補」のバッジ(一致しない候補だけ)、右に予測%の大きい数字(`reverseCandidatePercent-<id>`)と「予測」 |
+| 候補の一致の文 | 全候補に caption の文(「入力したダメージと一致」/「一致なし(最も近い SP)」) | 一致しない候補だけ「ほぼ合う候補」のバッジ(`reverseCandidateMatch-<id>` を付け替え)。一致した候補には出さない。文は読み上げの値として残す |
+| 候補の下の行 | SP の範囲・目安(caption)・特性(caption) | バー(装飾・読み上げない)→ SP の範囲(+ 全候補が不一致のとき「参考」バッジ)・持ち物(`reverseCandidateItem-<id>`)・特性を小さく |
+| 一致が 1 件も無いとき | 案内なし | 先頭に案内(`reverseNoExactNotice`。`PopNoticeView(.info)`) |
+| 前提 | 「相手の HP の SP を 32(H32)と仮定した結果です」 | 「H32 を仮定した結果です」(Web の語) |
+| 一致件数 | 「入力したダメージと一致: 2 件 / 候補 3 件」(body の文) | 「一致 2 件 / 候補 3 件」(数値の行) |
+| 読み込み中(`reverseLoadingIndicator`) | `ProgressView`(回り続ける) | `PopNoticeView(.loading)`(静止したアイコン + 「計算中」) |
+| 検索シートの補足 | 空クエリで「名前の先頭で検索」を行として常時表示(種族・技とも) | 「説明」ボタンの奥(`speciesSearchHelp`・`moveSearchHelp`)。「一致する候補がありません」などの状態は従来どおり |
+| 検索シートの閉じる・検索中 | 文字「閉じる」・`ProgressView` | 閉じるはアイコンだけ(読み上げ名「閉じる」・識別子不変)、検索中は静止したアイコン |
+
+既に方針どおりで変えないもの: ダメージの側の区切り・定番の振り方のピル(`PresetPillButton`)の見た目と識別子、自分・相手のカードの中身(画像かエンブレム・名前・タイプバッジ・持ち物の欄。`SpeciesHeaderMenuLabel` は計算・調整と共用)、
+構築から選ぶ入口(`TeamSourceMenuRow`。ADR-0537 で済)、相手の特性・持ち物候補のチップ、入力エラーの文面、未対応の印、候補が絞られる切り替え(操作時だけ・視差効果を減らすでなし)、
+バックエンドの状態バッジ、テンキーの「完了」、エラー表示(`ErrorBannerView`)と「もう一度」(ADR-0534)。
+
+### 受け入れ条件
+
+1. 自分・相手のカードの上に見出し「自分」「相手」(`reverseMyHeading`・`reverseOpponentHeading`。見出しの特性)。見出しはカードの外・上で、AX5 でカードどうしは縦積みのまま(`reverseMyCard`・`reverseOpponentCard` の識別子は不変)。
+2. 観測欄: 行の頭に「ダメージ1」(`reverseObservationLabel-0`)、単位は与えたダメージ = 「%」・受けたダメージ = 「HP」(`reverseObservationUnit-0`)。欄の読み上げ名は「ダメージ1(%)」「ダメージ1(HP)」。
+   単位の 1 行(`reverseObservationHint`)は与えた = 「相手の HP が減った割合(%)」、受けた = 「自分の HP が減った実数値(HP)」。1 カードに補足は 1 行だけ。
+3. 観測の削除(`reverseObservationRemove-N`)は読み上げ名「このダメージを削除」のアイコンだけ(`staticTexts` が 0)、追加(`reverseAddObservationButton`)はアイコン + 「ダメージを追加」で、どちらも 36pt 以上。
+   入力エラー(`reverseObservationError-N`)・上限の注記(`reverseObservationLimitHint`)は識別子・文面そのままでアイコン + 文。不正な行があるうちは候補を出さない(不変)。
+4. 候補のカード: 型の名前(`reverseCandidateNature-<id>` = 「補正なし」「B上昇」。持ち物を含まない)、予測%(`reverseCandidatePercent-<id>`、「%」を含む)と短いラベル「予測」、SP の範囲(`reverseCandidateRange-<id>`)、
+   持ち物(`reverseCandidateItem-<id>`)。一致した候補に「ほぼ合う候補」「参考」は出ない。一致しない候補だけ「ほぼ合う候補」のバッジ(`reverseCandidateMatch-<id>`)。
+5. 厳密に合う候補が 1 件も無く候補が 1 件以上あるとき(`ReverseLabels.hasNoExactCandidate`。engine の `exactCount` のまま)、先頭に案内(`reverseNoExactNotice`)と各候補の SP の範囲に「参考」。一致があるときは出ない。
+6. 前提(`reversePremise`)は「H32 を仮定した結果です」(受けたダメージ = 攻撃側の逆算では出ない。不変)。一致件数(`reverseExactCount`)は「一致 2 件 / 候補 3 件」で「入力したダメージと一致」を含まない。
+7. 読み込み中・検索中に `ProgressView`(`activityIndicators`)が無い。4 ファイルに `ProgressView(`・`repeatForever`・`lineLimit`・`minimumScaleFactor`・色のリテラル・SF Symbols 名の直書きが無く、動きは視差効果を減らすで 0(`G05ReverseSourceRulesTests`)。
+8. 検索シート(種族・技): 空クエリの補足の文を常時出さず(`speciesSearchHint`・`moveSearchHint` は無い)、「説明」ボタン(`speciesSearchHelp`・`moveSearchHelp`。36pt 以上)を押すと文(`speciesSearchNote`・`moveSearchNote`)が出る。
+   「一致する候補がありません」は従来どおり `speciesSearchHint` に出る。閉じる(`speciesSearchCancelButton`・`moveSearchCancelButton`)は読み上げ名「閉じる」のアイコンだけ・36pt 以上で、押すと閉じる。
+9. 常に画面に出る文字(見出し・単位・ラベル・バッジ・件数・前提・計算中)は「。」を含まない(`G05ReverseTextTests.testAlwaysVisibleStringsAreNotSentences`)。文を置くのはエラー・状態の案内・単位の 1 行だけ。
+10. AX5: 新しい部品(見出し・ラベル・単位・単位の 1 行・削除/追加・候補のカード)が横にはみ出さず、タップが 36pt 以上。ダメージの側のボタンは縦積みのまま全文を見せる。禁止語なし(`GlossaryTests` に新しい語を追加)。
+
+### 新しい識別子
+
+`reverseMyHeading`・`reverseOpponentHeading`・`reverseObservationLabel-<n>`・`reverseObservationUnit-<n>`・`reverseObservationHint`・`reverseNoExactNotice`・
+`reverseCandidateNature-<id>`・`reverseCandidatePercent-<id>`・`reverseCandidateItem-<id>`・`speciesSearchHelp`・`speciesSearchNote`・`moveSearchHelp`・`moveSearchNote`。
+既存の識別子(`reverseSide-*`・`reverseObservationField-N`・`reverseObservationRemove-N`・`reverseObservationError-N`・`reverseAddObservationButton`・`reverseCandidateRow-<id>`・`reverseCandidateRange-<id>`・
+`reverseCandidateMatch-<id>`〔付け先は「ほぼ合う候補」のバッジ〕・`reversePremise`・`reverseExactCount`・`reverseLoadingIndicator`・`speciesSearch*`・`moveSearch*` ほか)は付け替えない。
+
+### 追加したテスト
+
+`G05ReverseTextTests`・`G05ReverseSourceRulesTests`(以上 PokeCalcCoreTests)、`ReverseG05UITests`。`GlossaryTests` の対象文言に新しい語を足した(追加のみ)。
+骨組みとして `PokeCalcCore/G05ReverseText.swift`(`ReverseLabels`。値は空・判定は常に false。実装者が入れる)を置いた。
+
+### 既存テストの変更(新しい語・構造への更新。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| `ReverseCandidateDisplayTests.testResultDisplay…`(`exactCountText`・`premiseText`) | 「入力したダメージと一致: 2 件 / 候補 3 件」→「一致 2 件 / 候補 3 件」、「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4(Web の語・数値の行) |
+| 同 `testPremiseUsesServerValueAndIsAbsentForAttackerSide` | 「…20(H20)と仮定…」→「H20 を仮定した結果です」、`exactCountText` の 0 件版も同じ語に | 決定 4。「32 を直書きしない」「攻撃側は出さない」の検査は同じ |
+| `AbilitySplitDisplayTests`(`exactCountText`) | 「入力したダメージと一致: 2 件 / 候補 4 件」→「一致 2 件 / 候補 4 件」 | 決定 4。「分かれた候補をそのまま数える」の検査は同じ |
+| `ReverseViewModelTests`(`premiseText`) | 「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4 |
+| `ReverseG05UITests.testSpeciesSheetNoMatchStaysAndCloseWorks` | 検索語を入れた後、検索欄の取り消し(識別子の無いシステムの「閉じる」)で検索を終えてから、シートの閉じる(`speciesSearchCancelButton`)を押す | 検索中は iOS 26 がツールバーの項目を隠す(実装前の `Button` でも同じ)。検査の内容(一致なしの案内が残る・閉じるで閉じる)は同じ |
+| `ReverseScreenUITests.testAddObservationButtonIsDisabledWithReasonAtTheLimit` | 追加ボタンが画面の下端(タブバーの裏)に寄ったときは、先にゆっくりスクロールしてから押す。最後の行を探す前も見えるまでスクロールする(補助だけ) | 追加ボタンが下端に寄るとタップがタブバーに当たって空振りし、通しで失敗した(単独では通る)。行の追加・上限の注記・無効化の検査は同じ |
+
+`ReverseCandidateDisplayTests.testMatchLabel…`(`matchLabel` の 2 つの文)は変えない(読み上げの値として残す)。
+`ReverseScreenUITests`(識別子と挙動)・`LargeTextLayoutUITests` の逆算・`UnsupportedMarksUITests`・`AbilityPickerUITests`・`FrequentOpponentsUITests`・`TeamG05UITests`(`moveSearchCancelButton`)は変えない
+(識別子・読み上げ名は不変。「閉じる」はアイコンになっても読み上げ名が同じなので `app.buttons["閉じる"]` で引ける)。
+実装で上の他に文言・手順が変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。

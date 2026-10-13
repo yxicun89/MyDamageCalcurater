@@ -741,6 +741,6 @@ final class ReverseViewModelTests: XCTestCase {
         XCTAssertEqual(result.candidates.map(\.id), ["plus@-", "neutral@-"], "サーバーの順(ADR-0010 §R4)のまま")
         XCTAssertEqual(result.candidates.map(\.spRangeText), ["B 4\u{301C}7", "B 20\u{301C}32"])
         XCTAssertEqual(result.exactCount, 1)
-        XCTAssertEqual(result.premiseText, "相手の HP の SP を 32(H32)と仮定した結果です")
+        XCTAssertEqual(result.premiseText, "H32 を仮定した結果です")
     }
 }

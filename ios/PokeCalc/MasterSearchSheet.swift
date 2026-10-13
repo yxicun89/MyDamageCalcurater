@@ -24,6 +24,7 @@ struct SpeciesSearchSheet<ViewModel: MasterSpeciesSearchProviding>: View {
         NavigationStack {
             List {
                 frequentOpponentsSection
+                MasterSearchRow.help(helpIdentifier: "speciesSearchHelp", noteIdentifier: "speciesSearchNote")
                 hintRow
                 ForEach(viewModel.speciesOptions, id: \.key) { option in
                     Button {
@@ -50,13 +51,13 @@ struct SpeciesSearchSheet<ViewModel: MasterSpeciesSearchProviding>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                        .accessibilityIdentifier("speciesSearchCancelButton")
+                    PopIconButton(
+                        systemImage: PopSymbol.close, label: CommonPartsText.close, identifier: "speciesSearchCancelButton"
+                    ) { dismiss() }
                 }
                 ToolbarItem(placement: .principal) {
                     if viewModel.isSearchingSpecies {
-                        ProgressView()
-                            .accessibilityIdentifier("speciesSearchLoadingIndicator")
+                        SearchingIndicator(identifier: "speciesSearchLoadingIndicator")
                     }
                 }
             }
@@ -134,6 +135,7 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
                     }
                     .accessibilityIdentifier("moveSearchRemoveButton")
                 }
+                MasterSearchRow.help(helpIdentifier: "moveSearchHelp", noteIdentifier: "moveSearchNote")
                 hintRow
                 if groupsByType {
                     // タイプ順は見出し(タイプ名)つきの群で出す。
@@ -157,13 +159,13 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                        .accessibilityIdentifier("moveSearchCancelButton")
+                    PopIconButton(
+                        systemImage: PopSymbol.close, label: CommonPartsText.close, identifier: "moveSearchCancelButton"
+                    ) { dismiss() }
                 }
                 ToolbarItem(placement: .principal) {
                     if viewModel.isSearchingMoves {
-                        ProgressView()
-                            .accessibilityIdentifier("moveSearchLoadingIndicator")
+                        SearchingIndicator(identifier: "moveSearchLoadingIndicator")
                     }
                 }
             }
@@ -202,10 +204,25 @@ struct MoveSearchSheet<ViewModel: MasterMoveSearchProviding>: View {
 enum MasterSearchRow {
     /// 案内文言(prompt/truncated/noMatch のいずれか。一致していれば何も出さない。ADR 4章・8章)。
     static func hint(query: String, isEmpty: Bool, reachedLimit: Bool) -> String? {
-        if query.isEmpty { return MasterSearchLabels.prompt }
+        // 空クエリの補足(MasterSearchLabels.prompt)は常時出さず「説明」ボタンの奥(`helpRow`)。
+        if query.isEmpty { return nil }
         if isEmpty { return MasterSearchLabels.noMatch }
         if reachedLimit { return MasterSearchLabels.truncated }
         return nil
+    }
+
+    /// 空クエリの補足を「説明」ボタンの奥に置く行(Web の `.ui-help`)。ボタンは 36pt 以上。
+    static func help(helpIdentifier: String, noteIdentifier: String) -> some View {
+        HStack {
+            Spacer(minLength: 0)
+            PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: helpIdentifier) {
+                Text(MasterSearchLabels.prompt)
+                    .font(TextStyleToken.body.font)
+                    .foregroundStyle(ColorToken.textPrimary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier(noteIdentifier)
+            }
+        }
     }
 
     static func species(_ option: SpeciesSummary) -> some View {
@@ -240,6 +257,19 @@ enum MasterSearchRow {
                 .accessibilityLabel("威力\(move.power)")
         }
         .frame(minHeight: CalcScreenMetrics.minimumTapSide)
+    }
+}
+
+/// 検索中の表示(静止したアイコンだけ。回り続けない。読み上げ名は「検索中」)。
+private struct SearchingIndicator: View {
+    let identifier: String
+
+    var body: some View {
+        PopIcon(PopSymbol.search)
+            .foregroundStyle(ColorToken.textSecondary.color)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("検索中")
+            .accessibilityIdentifier(identifier)
     }
 }
 
