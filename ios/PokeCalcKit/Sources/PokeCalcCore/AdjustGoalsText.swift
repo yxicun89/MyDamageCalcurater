@@ -48,7 +48,7 @@ extension AdjustText {
     public static func goalOpponentRequiredMessage(_ n: Int) -> String { "目標 \(n): 相手のポケモンを選んでください" }
     public static func goalOpponentMoveRequiredMessage(_ n: Int) -> String { "目標 \(n): 相手の技を選んでください" }
     public static func goalOwnMoveRequiredMessage(_ n: Int) -> String { "目標 \(n): 自分の技を選んでください" }
-    public static func goalNatureNotFoundMessage(_ n: Int) -> String { "目標 \(n): 相手の振り方に合う性格がマスタにありません" }
+    public static func goalNatureNotFoundMessage(_ n: Int) -> String { "目標 \(n): 相手の振り方に合う性格がデータにありません" }
 
     // MARK: - 結果
 

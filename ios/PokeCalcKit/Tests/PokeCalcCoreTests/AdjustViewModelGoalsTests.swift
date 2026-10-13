@@ -163,7 +163,7 @@ final class AdjustViewModelGoalsTests: XCTestCase {
         await Support.selectOwnAndGoalsMode(viewModel)
         await Support.addGoal(viewModel, kind: .outspeed, opponent: StubMaster.gamma.key)
         await viewModel.submit()
-        await assertRejected(fixture, "目標 1: 相手の振り方に合う性格がマスタにありません")
+        await assertRejected(fixture, "目標 1: 相手の振り方に合う性格がデータにありません")
     }
 
     // MARK: - 要求の組み立て

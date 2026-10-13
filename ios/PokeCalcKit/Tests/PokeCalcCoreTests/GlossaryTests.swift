@@ -89,6 +89,16 @@ final class GlossaryTests: XCTestCase {
             TeamLabels.spIncrease(statName: "こうげき"), TeamLabels.spDecrease(statName: "こうげき"),
             TeamLabels.spField(statName: "こうげき"),
         ])
+        // G-05 第 4 弾(ADR-0540): 調整の目標方式の文言と、作り直しで足した語(追加のみ。目標の文言はこれまで検査の対象外だった)。
+        add("G05Adjust", [
+            AdjustText.goalsModeLabel, AdjustText.addGoalButton, AdjustText.noGoalsNotice, AdjustText.goalsUnavailable,
+            AdjustText.goalBoostMoveHint, AdjustText.goalLimitHint(6), AdjustText.goalsRequiredMessage,
+            AdjustText.goalOpponentRequiredMessage(1), AdjustText.goalOpponentMoveRequiredMessage(1),
+            AdjustText.goalOwnMoveRequiredMessage(1), AdjustText.goalNatureNotFoundMessage(1),
+            AdjustText.goalsPlanHeading, AdjustText.goalsNearestHeading, AdjustText.goalsInfeasibleNotice,
+            AdjustText.goalOutcomesLabel, AdjustText.goalRecentOpponents, AdjustText.fixedSPHint, AdjustText.minSpeedHint,
+            AdjustText.stepperIncrease("B の上限"), AdjustText.stepperDecrease("B の上限"),
+        ] + AdjustGoalKind.allCases.map(AdjustText.goalKindOption))
         add("ReverseCandidateDisplay", [
             ReverseCandidateDisplay.matchLabel(exact: true), ReverseCandidateDisplay.matchLabel(exact: false),
         ])

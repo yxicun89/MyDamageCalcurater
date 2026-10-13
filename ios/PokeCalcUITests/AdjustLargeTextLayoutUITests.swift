@@ -22,7 +22,7 @@ final class AdjustLargeTextLayoutUITests: XCTestCase {
     /// 送信後(指数と 16n)に出る要素。
     private static let resultIdentifiers = [
         "adjustResultCard", "adjustStatsLine", "adjustFirepowerIndex", "adjustPhysicalBulk", "adjustSpecialBulk",
-        "adjustIndexNote", "adjustHPCurrent", "adjustHPLine-0", "adjustHPLine-1", "adjustHPLine-2", "adjustHPLine-3",
+        "adjustIndexNoteHelpButton", "adjustHPCurrent", "adjustHPLine-0", "adjustHPLine-1", "adjustHPLine-2", "adjustHPLine-3",
     ]
 
     override func setUpWithError() throws {

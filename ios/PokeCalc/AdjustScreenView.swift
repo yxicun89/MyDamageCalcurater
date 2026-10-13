@@ -7,19 +7,17 @@ import SwiftUI
 // ロジックは持たない。`AdjustViewModel`(PokeCalcCore)の状態を描き、操作を ViewModel のメソッドへつなぐだけ
 // (ADR-0500 §1)。文言はすべて `AdjustText`(PokeCalcCore)から引く。常時動くアニメーションは入れない。
 
-/// 数字キーボードの「完了」で閉じるためのフォーカス先(固定 SP の6欄と素早さの目標)。
+/// 数字キーボードの「完了」で閉じるためのフォーカス先(固定 SP の6欄・上限・素早さの目標)。
 enum AdjustFocus: Hashable {
     case fixedSP(StatKey)
     case minSpeed
+    case ceiling(StatKey)
 }
 
 struct AdjustScreenView: View {
     @State private var viewModel: AdjustViewModel
     @FocusState private var focus: AdjustFocus?
     private let backendDescription: String
-
-    /// 読み込み中インジケータの高さ(`ReverseScreenView` と同じ理由で固定する)。
-    private static let loadingIndicatorHeight: CGFloat = 24
 
     /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
     private let lifetime: ScreenLifetime
@@ -104,13 +102,11 @@ struct AdjustScreenView: View {
 
     private var loadingSlot: some View {
         Group {
+            // 静止したアイコン + 一言(回り続ける表示は置かない。ADR-0540 §5)。
             if viewModel.isLoading {
-                ProgressView(AdjustText.loadingNotice)
-                    .accessibilityIdentifier("adjustLoading")
+                PopNoticeView(kind: .loading, message: AdjustText.loadingNotice, identifier: "adjustLoading")
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: Self.loadingIndicatorHeight)
     }
 }
 
