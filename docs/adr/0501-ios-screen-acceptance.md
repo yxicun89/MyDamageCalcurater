@@ -5403,6 +5403,8 @@ API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)
 | 同 `testPremiseUsesServerValueAndIsAbsentForAttackerSide` | 「…20(H20)と仮定…」→「H20 を仮定した結果です」、`exactCountText` の 0 件版も同じ語に | 決定 4。「32 を直書きしない」「攻撃側は出さない」の検査は同じ |
 | `AbilitySplitDisplayTests`(`exactCountText`) | 「入力したダメージと一致: 2 件 / 候補 4 件」→「一致 2 件 / 候補 4 件」 | 決定 4。「分かれた候補をそのまま数える」の検査は同じ |
 | `ReverseViewModelTests`(`premiseText`) | 「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4 |
+| `ReverseG05UITests.testSpeciesSheetNoMatchStaysAndCloseWorks` | 検索語を入れた後、検索欄の取り消し(識別子の無いシステムの「閉じる」)で検索を終えてから、シートの閉じる(`speciesSearchCancelButton`)を押す | 検索中は iOS 26 がツールバーの項目を隠す(実装前の `Button` でも同じ)。検査の内容(一致なしの案内が残る・閉じるで閉じる)は同じ |
+| `ReverseScreenUITests.testAddObservationButtonIsDisabledWithReasonAtTheLimit` | 追加ボタンが画面の下端(タブバーの裏)に寄ったときは、先にゆっくりスクロールしてから押す。最後の行を探す前も見えるまでスクロールする(補助だけ) | 追加ボタンが下端に寄るとタップがタブバーに当たって空振りし、通しで失敗した(単独では通る)。行の追加・上限の注記・無効化の検査は同じ |
 
 `ReverseCandidateDisplayTests.testMatchLabel…`(`matchLabel` の 2 つの文)は変えない(読み上げの値として残す)。
 `ReverseScreenUITests`(識別子と挙動)・`LargeTextLayoutUITests` の逆算・`UnsupportedMarksUITests`・`AbilityPickerUITests`・`FrequentOpponentsUITests`・`TeamG05UITests`(`moveSearchCancelButton`)は変えない

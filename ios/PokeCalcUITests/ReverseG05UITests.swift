@@ -219,7 +219,14 @@ final class ReverseG05UITests: XCTestCase {
         let hint = element(app, "speciesSearchHint")
         XCTAssertTrue(hint.waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertEqual(hint.label, "一致する候補がありません")
-        app.buttons["speciesSearchCancelButton"].tap()
+        // 検索中は iOS 26 がツールバーの項目(閉じる)を隠すので、まず検索欄の取り消しで検索を終える。
+        // そのとき見える「閉じる」は識別子の無いシステムの取り消しボタン(シートの閉じるは識別子つき)。
+        let searchCancel = app.buttons.matching(NSPredicate(format: "label == '閉じる' AND identifier == ''")).firstMatch
+        XCTAssertTrue(searchCancel.waitForExistence(timeout: Self.existenceTimeout))
+        searchCancel.tap()
+        let close = app.buttons["speciesSearchCancelButton"]
+        XCTAssertTrue(close.waitForExistence(timeout: Self.existenceTimeout))
+        close.tap()
         XCTAssertTrue(element(app, "speciesSearchSheet").waitForNonExistence(timeout: Self.existenceTimeout))
     }
 
