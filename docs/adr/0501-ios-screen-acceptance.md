@@ -5339,6 +5339,13 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ)。API・engine・Web・ランクのメーター(`RankMeterView`)・検索シート(`MasterSearchSheet`。逆算の弾 ADR-0539)は触らない。
 前提: ADR-0539(逆算)・ADR-0540(調整)の実装が main にあること(`PopPokemonCard`・`PopSymbol.judge`・検索シートの共用部)。
 
+## G-05 調整の作り直し(ADR-0540。2026-10-13)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0353/0354)に追う。対象は
+`AdjustScreenView`・`AdjustScreenCards`・`AdjustScreenGoals`・`AdjustScreenParts`・`AdjustScreenResults`、新規の `PopPokemonCard.swift`、
+`PokeCalcCore` の調整の文言・判定(`G05AdjustText.swift`)、`PokeCalcDesign` の `PopSymbolNames`。識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ)。
+API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)は触らない。種族の検索シートと技のシートの共用部は第 3 弾(ADR-0539=逆算)の変更に従い、ここでは変えない。
+
 ## G-05 逆算の作り直し(ADR-0539。2026-10-13)
 
 方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0346)に追う。対象は
@@ -5418,6 +5425,66 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 - `AppNavigationUITests` ほか `calcLoadingIndicator` の不在を待つ検査: 識別子は文に付くので、そのまま通る。
 `CalcViewModelTests.moveSummaryText` ほか Core の既存テストは変えない(`moveSummaryText` は読み上げの値に使う)。`MasterSearchSheet` を使う既存テスト(技・種族のシート)は逆算の弾の変更に従う。
 
+| 自分・相手・目標の相手の種族 | 画像 + 名前 + 矢印のメニュー表示(`SpeciesHeaderMenuLabel`。`lineLimit(2)`・縮小つき)。タイプ・持ち物の印なし | ポケモンカード(画像かエンブレム + 名前 + タイプバッジ + 持ち物の印。メガはストーン名)。ボタンの識別子・読み上げ名は不変 |
+| 各カードの見出し | 全部が調整のアイコン | 自分 = 構築、調整の内容 = 調整、相手 = 入れ替え、目標 = 判定(盾)、結果 = 計算、覚えるポケモン = 検索(Web と同じ) |
+| 固定する能力ポイント 6 欄 | 数値欄だけ。補足(`fixedSPHint`)は `accessibilityHint` だけで見えない | − / + のアイコンボタン + 数値欄(合計の数値は従来)。補足は「説明」ボタンの奥 |
+| 上限(耐久 H・B・D、攻撃 A か C と S) | Menu の Picker(0〜32 の 33 項目) | − / + のアイコンボタン + 数値欄(既定 32) |
+| 最低素早さの欄 | 数値欄。補足は `accessibilityHint` だけで見えない | 数値欄 + 「説明」ボタン |
+| モード 6 つ・耐久の基準・攻撃の分類 | 縦の丸(`largecircle`/`circle` を直書き)の列 | 全幅のチップ(選択中は塗り + チェック)。AX5 は縦。選択の特性・識別子は不変 |
+| 目標なしの案内・空の結果・未対応の印 | 本文または caption の文字 | `PopNoticeView`(空 / 情報)。語は不変 |
+| 計算中・覚えるポケモンの読み込み中 | `ProgressView`(回り続ける) | `PopNoticeView(.loading)`(静止したアイコン + 一言) |
+| 覚えるポケモンの空・エラー・閉じる | caption の文字・赤い文字・文字のボタン「閉じる」 | `PopNoticeView`(空 / エラー)、閉じるはアイコンだけ(読み上げ「閉じる」) |
+| 目標の追加 | ピルのボタン「目標を追加」 | 「+」のタイル(識別子 `adjustAddGoalButton` 不変。上限は無効 + 理由の文) |
+| 目標カードの見出し | 「目標 n」の文字だけ | 種類のアイコン(素早さ = 速度、耐える = 判定、倒す = 計算)+ 「目標 n」+ 選んだ相手の小さなポケモンカード |
+| 目標の種類 | 縦の丸の列 | 3 択の区切りボタン(アイコン + 短い名前。選択中はチェック) |
+| 目標の相手 | 種族の検索シートだけ | 「選んだ相手から」の絵つきのタイル(相手の領域 → 各目標の相手)+ 従来の検索 |
+| 先に使う技の補足 | 常時の caption(さらに読み上げからは隠している) | 「説明」ボタンの奥(欄の `accessibilityHint` は残す) |
+| 目標の技のシート | 文字の行 + 文字の「閉じる」。選択中は直書きのチェック | 行 = タイプバッジ + 技名 + 威力(読み上げ名は技名)、閉じるはアイコンだけ、選択中は `PopSymbol.done` |
+| 発数の − / + | `systemImage: "minus"/"plus"` の直書き | `PopIconButton` + `PopSymbol.minus/add`(読み上げ名・識別子は不変) |
+| 確率のピル | `minimumScaleFactor`(縮める) | 折り返して全文(縮めない) |
+| 結論 | 文だけ | 成功 = チェック / 失敗 = × のアイコン + 従来の文(アイコンは装飾) |
+| 振り方 | 文の行(能力ポイント H 4 / A 0 …) | 文の行の下に能力ごとの横棒(装飾・幅 = 能力ポイント / 32) |
+| 指数の注・「目標を指定すると…」 | 常時の caption | 「説明」ボタンの奥(文面は不変) |
+| 目標の検査の文(性格が見つからない) | 「相手の振り方に合う性格が**マスタ**にありません」(用語集の禁止語) | 「…が**データ**にありません」(Web と同じ) |
+
+既に方針どおりで変えないもの: 領域の見出し + アイコンの `PopHeading`、送信ボタン(アイコン付きピル)、数字キーボードの「完了」、`MenuLabelChip` の Menu(性格・特性・持ち物・技・発数・確率。5 択以上・短い文字の選択)、
+メガの持ち物の固定の理由(状態の通知。1 行)、上限の理由の caption(無効の理由)、エラー・送信前の検査の文、API 不可時の表示(`ErrorBannerView`・`LoadRetryButton`。ADR-0534)、
+目標の確率のピル・相手の定番の振り方のピル(チップ)、`PillButtonStyle` の押下の縮み(視差効果を減らすで 0 秒)、「覚えるポケモン」の行(種族名だけ)、
+バックエンド表示のバッジ(`adjustBackendModeBadge`)、結果の文(語・数値・書式)。
+
+### 受け入れ条件
+
+1. 文の整理: 上の表の「直す」どおり。常に画面に出る文字(見出し・欄のラベル・ボタン・空の状態・数値の行)は「。」を含まない(`G05AdjustTextTests.testAlwaysVisibleStringsAreNotSentences`)。
+   補足の文(`fixedSPHint`・`minSpeedHint`・`goalBoostMoveHint`・`indexNote`・`minSpNotRequested`)は文面を変えず「説明」ボタンの奥(最初は出ない。押すと出る。1 文)。
+2. ポケモンカード: 自分・相手・目標の相手の種族を選ぶとカード(タイプバッジ + 持ち物の印)になる。持ち物の印は 自分 = 選んだ持ち物(メガは固定のストーン名)、相手・目標の相手 = メガだけストーン名
+   (`G05AdjustViewModelMarksTests`)。計算・逆算と共有の `SpeciesHeaderMenuLabel` に頼らない(ソース検査)。
+3. 増減ボタン: 固定する能力ポイント 6 欄と上限の − / + が 36pt 以上で、アイコンだけ、読み上げ名は「<欄の名前>を増やす/減らす」(`AdjustText.stepperIncrease/Decrease`)。
+   0(空)で − が、32 で + が押せなくなり、範囲外・読めない文字は端に丸めてから動く(`AdjustNumberStep` のテスト)。数値欄に打てる(全角数字は通さない)。合計は従来の「合計 n / 66」。
+4. 選択肢: モード・耐久の基準・攻撃の分類はチップ(選択の特性・識別子 `adjustMode-*`・`adjustBulkFocus-*`・`adjustOffenseCategory-*` は不変)。丸の直書きが無い。
+5. 目標: 空の一言(`adjustNoGoals` の語は不変)、「+」のタイル(36pt 以上)、種類は区切りボタン(アイコン + 短い名前〈8 文字まで〉。36pt 以上。`adjustGoal-n-kind-<kind>`)、
+   選んだ相手のタイルが相手の領域の相手と各目標の相手を重ねず並べ、押すとその目標の相手になる(`adjustGoal-n-recent`・`adjustGoal-n-recent-<種族キー>`)。
+   先に使う技の補足は説明ボタンの奥(`adjustGoal-n-boostMoveHelpButton`)。技のシートの閉じるはアイコンだけ(読み上げ「閉じる」・36pt 以上)、行は 36pt 以上。
+6. 結果: 結論にアイコン(成功 = チェック / 失敗 = ×)、振り方に能力ごとの横棒(`AdjustSPBar.fraction` = SP / 32 を 0〜1 に丸める)。結論の文と識別子(`adjustModeResult`・`adjustGoalOutcome-n` ほか)は不変。
+   指数の注・「目標を指定すると…」は説明ボタンの奥(`adjustIndexNoteHelpButton`・`adjustMinSpNotRequestedHelpButton`)。
+7. 状態: 計算中・覚えるポケモンの読み込み中に `ProgressView`(`activityIndicators`)が無い。空の結果・目標なし・未対応の印・覚えるポケモンの空/エラーは `PopNoticeView`。
+   覚えるポケモンの閉じるはアイコンだけ(`adjustLearnersClose`・読み上げ「閉じる」・36pt 以上)。API 不可時の表示は変わらない。
+8. 語: 目標の検査の文に禁止語(マスタ)が無い。`GlossaryTests` が目標の文言も見る。「選んだ相手から」は用語集に載る。
+9. 5 ファイルに `ProgressView(`・`repeatForever`・`lineLimit`・`minimumScaleFactor`・色のリテラル・SF Symbols 名の直書きが無く、縮み・動きは視差効果を減らすで 0 秒(`G05AdjustSourceRulesTests`)。
+10. 新しい部品(カード・増減ボタン・説明ボタン・区切りボタン・タイル・横棒)を含め、AX5 で横にはみ出さず、タップが 36pt 以上。
+
+### 新しい識別子
+
+`adjustFixedSPDown-<stat>`・`adjustFixedSPUp-<stat>`・`adjustFixedSPHelpButton`・`adjustFixedSPHint`(説明の中)・`adjustCeilingDown-<stat>`・`adjustCeilingUp-<stat>`
+(上限の数値欄は既存の `adjustCeiling-<stat>` を Picker から数値欄へ付け替える)・`adjustMinSpeedHelpButton`・`adjustMinSpeedHint`(説明の中)・`adjustIndexNoteHelpButton`・
+`adjustMinSpNotRequestedHelpButton`・`adjustGoal-<n>-boostMoveHelpButton`・`adjustGoal-<n>-boostMoveHint`(説明の中)・`adjustGoal-<n>-recent`・`adjustGoal-<n>-recent-<種族キー>`。
+既存の識別子(`adjustIndexNote`・`adjustMinSpNotRequested` は説明の中の文に付ける。`adjustFixedSP-<stat>`・`adjustMode-*`・`adjustGoal-n-*`・`adjustLearnersClose` ほか)は付け替えない。
+
+### 追加したテスト
+
+`G05AdjustTextTests`・`G05AdjustLogicTests`(`AdjustNumberStep`・`AdjustSPBar`・持ち物の印・「選んだ相手から」)・`G05AdjustSourceRulesTests`(以上 PokeCalcCoreTests)、`AdjustG05UITests`。
+`PopSymbolNamesTests` に `judge` = `shield` を追加。`GlossaryTests` に目標の文言と新しい語を追加(追加のみ)。骨組みとして `PokeCalcCore/G05AdjustText.swift`
+(値は空・判定は常に false。実装者が入れる)と `PopSymbolNames.judge`(空)を置いた。
+
 | 自分・相手のカード | 見出しが無い(カードだけ) | 見出し「自分」「相手」(`PopHeading`)をカードの上に。カードの中身(画像かエンブレム・名前・タイプバッジ・持ち物)は既に Web と同じなので変えない |
 | 持ち物の上限の注記(`reverseMyItemLimitHint`) | caption の文字 | アイコン + 一言(`PopNoticeView(.info)`)。メガ固定の理由(`reverse*ItemLockReason`)は状態の文のまま |
 | ダメージの側 | 自前の区切り(識別子・選択中の特性・AX で縦積み) | 変えない(既に方針どおり)。`lineLimit(1)`・`minimumScaleFactor` だけ外す |
@@ -5475,6 +5542,14 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 
 | テスト | 変更 | 理由 |
 |---|---|---|
+| `AdjustG05UITests.scrollTo`(新規テストの補助の修正) | 対象が窓の上半分にあるとき `swipeDown` で上方向にも戻れるようにした | 並びの上流にある要素(例: 固定 SP の説明ボタンのあとに覚えるポケモンの欄)を引くとき、下方向だけでは届かず 5 分の上限で落ちた。検査対象と期待は不変 |
+| `AdjustViewModelGoalsTests.testMissingSpeedNatureIsRejectedWithGoalNumber` | 期待の文「…性格がマスタにありません」→「…性格がデータにありません」 | 用語集の禁止語(マスタ)を Web の語「データ」に(決定 9)。検査(送信を止める・番号つき)は同じ |
+| `AdjustScreenUITests.testIndicesSubmitShowsIndicesAndHPLines` | 存在を見る識別子 `adjustIndexNote` → `adjustIndexNoteHelpButton` | 注は説明ボタンの奥に移ったため。注の文面は `AdjustG05UITests` が押して確かめる |
+| `AdjustScreenUITests.testBulkModeWithoutGoalShowsPlanAndHint` | `adjustMinSpNotRequested` の文は最初は出ず、`adjustMinSpNotRequestedHelpButton` を押すと同じ文が出る | 補足は説明ボタンの奥(決定 4)。文面の検査は同じ |
+| `AdjustLargeTextLayoutUITests` の結果の AX5 | はみ出し検査の対象 `adjustIndexNote` → `adjustIndexNoteHelpButton` | 注は説明の奥に移ったため |
+
+`AdjustScreenUITests` の他、`AdjustGoalsUITests`、`AdjustGoalsLargeTextUITests`、`AdjustLargeTextLayoutUITests` の他は変えない(識別子・読み上げ名・選択の特性は不変)。
+
 | `ReverseCandidateDisplayTests.testResultDisplay…`(`exactCountText`・`premiseText`) | 「入力したダメージと一致: 2 件 / 候補 3 件」→「一致 2 件 / 候補 3 件」、「相手の HP の SP を 32(H32)と仮定した結果です」→「H32 を仮定した結果です」 | 決定 4(Web の語・数値の行) |
 | 同 `testPremiseUsesServerValueAndIsAbsentForAttackerSide` | 「…20(H20)と仮定…」→「H20 を仮定した結果です」、`exactCountText` の 0 件版も同じ語に | 決定 4。「32 を直書きしない」「攻撃側は出さない」の検査は同じ |
 | `AbilitySplitDisplayTests`(`exactCountText`) | 「入力したダメージと一致: 2 件 / 候補 4 件」→「一致 2 件 / 候補 4 件」 | 決定 4。「分かれた候補をそのまま数える」の検査は同じ |

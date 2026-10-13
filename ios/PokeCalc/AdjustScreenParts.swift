@@ -5,16 +5,23 @@ import SwiftUI
 // AdjustScreenParts: 調整画面のカード・選択肢・欄の共通部品(AJ7。ADR-0502 §8)。
 // 色は無彩色トークンだけ、アニメーションは入れない。
 
+/// 調整画面のアイコンボタンのタップ領域の一辺(36pt に 1pt 足す。小数の座標で 36 ちょうどが 36 未満に測られないように)。
+enum AdjustMetrics {
+    static let iconButtonSide: CGFloat = CalcScreenMetrics.minimumTapSide + 1
+}
+
 /// 領域のカード: 見出し(`.isHeader`)+ 中身。中の `Text` を識別子で引けるよう `.contain` にする
 /// (ADR-0501 P6-14 §2 の申し送り)。
 struct AdjustCard<Content: View>: View {
     let title: String
+    /// 見出しのアイコン(`PopSymbol`。Web の領域ごとのアイコンと同じ割り当て)。
+    let systemImage: String
     let identifier: String
     @ViewBuilder let content: () -> Content
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
-            PopHeading(title: title, systemImage: PopSymbol.adjust)
+            PopHeading(title: title, systemImage: systemImage)
             content()
         }
         .padding(SpacingToken.x3)
@@ -79,6 +86,8 @@ struct AdjustSpeciesRow: View {
     let title: String
     let accessibilityLabel: String
     let identifier: String
+    /// ポケモンカードの持ち物の印(`AdjustViewModel.ownItemMark` など)。
+    var itemMark: String?
     let onSelect: (SpeciesSummary) -> Void
     @State private var isSearchPresented = false
 
@@ -88,8 +97,8 @@ struct AdjustSpeciesRow: View {
             Button {
                 isSearchPresented = true
             } label: {
-                if species != nil {
-                    SpeciesHeaderMenuLabel(species: species)
+                if let species {
+                    PopPokemonCard(speciesKey: species.key, name: species.nameJa, types: species.types, itemName: itemMark)
                 } else {
                     MenuLabelChip(text: AdjustText.speciesPlaceholder)
                 }
@@ -105,7 +114,8 @@ struct AdjustSpeciesRow: View {
     }
 }
 
-/// 縦に並ぶ選択肢の1つ(モード・耐久の基準・攻撃の分類。segmented にしない。5つは AX5 の幅に収まらない)。
+/// 縦に並ぶ全幅のチップ(モード・耐久の基準・攻撃の分類。segmented にしない。AX5 でも縦に積む)。
+/// 選択中は塗り + チェック。選択は選択の特性で伝える(丸の列はやめた。ADR-0540 §6)。
 struct AdjustChoiceButton: View {
     let title: String
     let isSelected: Bool
@@ -115,17 +125,26 @@ struct AdjustChoiceButton: View {
     var body: some View {
         Button(action: action) {
             HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
-                Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .accessibilityHidden(true)
+                if isSelected { PopIcon(PopSymbol.done) }
                 Text(title)
                     .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
                     .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(.vertical, SpacingToken.x1)
-            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
+            .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
+            .padding(.horizontal, SpacingToken.x3)
+            .padding(.vertical, SpacingToken.x2)
+            .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide, alignment: .leading)
+            .background(
+                PopChipStyle.fill(isSelected: isSelected),
+                in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
+                    .stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth)
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(identifier)
@@ -146,7 +165,7 @@ struct AdjustPillButton: View {
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .multilineTextAlignment(.center)
-                .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
                 .padding(.vertical, SpacingToken.x1)
                 .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
@@ -158,8 +177,16 @@ struct AdjustPillButton: View {
     }
 }
 
-/// 数字キーボードの欄(固定 SP・素早さの目標)。文字で持ち、検査は送信時(ViewModel)。
-/// 大きい文字サイズでは見えるラベルを上に積む。説明文は `accessibilityHint`。
+/// 欄の − / + の設定(範囲と識別子。読み上げ名は欄の名前から `AdjustText.stepperIncrease/Decrease`)。
+struct AdjustStepConfig {
+    let range: ClosedRange<Int>
+    let downIdentifier: String
+    let upIdentifier: String
+}
+
+/// 数字キーボードの欄(固定 SP・上限・素早さの目標)。文字で持ち、検査は送信時(ViewModel)。
+/// `step` があれば左右に − / +(`PopIconButton`。丸めと可否は `AdjustNumberStep`)。大きい文字サイズでは見えるラベルを上に積む。
+/// 説明文は `accessibilityHint`(見える補足は「説明」ボタンの奥)。
 struct AdjustNumberFieldRow: View {
     let title: String
     let hint: String?
@@ -167,18 +194,43 @@ struct AdjustNumberFieldRow: View {
     let text: Binding<String>
     let focus: FocusState<AdjustFocus?>.Binding
     let focusValue: AdjustFocus
+    var step: AdjustStepConfig?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         if dynamicTypeSize >= .accessibility1 {
             VStack(alignment: .leading, spacing: SpacingToken.x1) {
                 label
-                field
+                controls
             }
         } else {
             HStack(spacing: SpacingToken.x2) {
                 label
-                field
+                controls
+            }
+        }
+    }
+
+    private var controls: some View {
+        HStack(spacing: SpacingToken.x1) {
+            if let step {
+                PopIconButton(
+                    systemImage: PopSymbol.minus, label: AdjustText.stepperDecrease(title), identifier: step.downIdentifier,
+                    isEnabled: AdjustNumberStep.canDecrease(text: text.wrappedValue, range: step.range),
+                    minSide: AdjustMetrics.iconButtonSide
+                ) {
+                    text.wrappedValue = AdjustNumberStep.stepped(text: text.wrappedValue, delta: -1, range: step.range)
+                }
+            }
+            field
+            if let step {
+                PopIconButton(
+                    systemImage: PopSymbol.add, label: AdjustText.stepperIncrease(title), identifier: step.upIdentifier,
+                    isEnabled: AdjustNumberStep.canIncrease(text: text.wrappedValue, range: step.range),
+                    minSide: AdjustMetrics.iconButtonSide
+                ) {
+                    text.wrappedValue = AdjustNumberStep.stepped(text: text.wrappedValue, delta: 1, range: step.range)
+                }
             }
         }
     }
@@ -197,9 +249,11 @@ struct AdjustNumberFieldRow: View {
             .keyboardType(.numberPad)
             .focused(focus, equals: focusValue)
             .font(TextStyleToken.body.font.monospacedDigit())
+            .multilineTextAlignment(step == nil ? .leading : .center)
             .foregroundStyle(ColorToken.textPrimary.color)
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x2)
+            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
             .frame(maxWidth: Self.fieldMaxWidth)
             .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityLabel(title)
@@ -211,7 +265,40 @@ struct AdjustNumberFieldRow: View {
     private static let fieldMaxWidth: CGFloat = 120
 }
 
-/// 0...32 などを `Menu` の Picker で選ぶ欄(上限・発数・確率)。見えるラベルは上、大きい文字でも縦に積む。
+/// 「説明」ボタンの奥に置く補足の文(吹き出しの中。文面は変えない。識別子は文に付ける)。
+struct AdjustHelpText: View {
+    let text: String
+    let identifier: String
+
+    var body: some View {
+        Text(text)
+            .font(TextStyleToken.body.font)
+            .foregroundStyle(ColorToken.textPrimary.color)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
+/// 固定する能力ポイントの「説明」ボタン(補足は常時の文にしない)。
+struct AdjustFixedSPHelpButton: View {
+    var body: some View {
+        PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "adjustFixedSPHelpButton") {
+            AdjustHelpText(text: AdjustText.fixedSPHint, identifier: "adjustFixedSPHint")
+        }
+    }
+}
+
+/// 最低素早さの「説明」ボタン。
+struct AdjustMinSpeedHelpButton: View {
+    var body: some View {
+        PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "adjustMinSpeedHelpButton") {
+            AdjustHelpText(text: AdjustText.minSpeedHint, identifier: "adjustMinSpeedHint")
+        }
+    }
+}
+
+/// `Menu` の Picker で選ぶ欄(発数・確率)。見えるラベルは上、大きい文字でも縦に積む。
 struct AdjustPickerRow<Value: Hashable, Options: View>: View {
     let title: String
     let identifier: String
@@ -243,8 +330,11 @@ struct AdjustLearnersButton: View {
             Text(AdjustText.learnersButton)
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, SpacingToken.x3)
                 .padding(.vertical, SpacingToken.x2)
+                .frame(minHeight: CalcScreenMetrics.minimumTapSide)
                 .background(ColorToken.tableZebra.color, in: Capsule())
                 .overlay(Capsule().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
         }

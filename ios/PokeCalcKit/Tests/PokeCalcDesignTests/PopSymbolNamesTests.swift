@@ -18,6 +18,8 @@ final class PopSymbolNamesTests: XCTestCase {
         ("up", "arrow.up", PopSymbolNames.up),
         ("down", "arrow.down", PopSymbolNames.down),
         ("minus", "minus", PopSymbolNames.minus),
+        // G-05 第 4 弾(ADR-0540): 調整の「耐える」目標と「目標」の見出し(盾)。
+        ("judge", "shield", PopSymbolNames.judge),
     ]
 
     func testAssignmentMatchesDesignDoc() {
