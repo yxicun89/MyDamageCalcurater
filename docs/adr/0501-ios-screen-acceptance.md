@@ -5305,6 +5305,7 @@ API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)
 
 | テスト | 変更 | 理由 |
 |---|---|---|
+| `AdjustG05UITests.scrollTo`(新規テストの補助の修正) | 対象が窓の上半分にあるとき `swipeDown` で上方向にも戻れるようにした | 並びの上流にある要素(例: 固定 SP の説明ボタンのあとに覚えるポケモンの欄)を引くとき、下方向だけでは届かず 5 分の上限で落ちた。検査対象と期待は不変 |
 | `AdjustViewModelGoalsTests.testMissingSpeedNatureIsRejectedWithGoalNumber` | 期待の文「…性格がマスタにありません」→「…性格がデータにありません」 | 用語集の禁止語(マスタ)を Web の語「データ」に(決定 9)。検査(送信を止める・番号つき)は同じ |
 | `AdjustScreenUITests.testIndicesSubmitShowsIndicesAndHPLines` | 存在を見る識別子 `adjustIndexNote` → `adjustIndexNoteHelpButton` | 注は説明ボタンの奥に移ったため。注の文面は `AdjustG05UITests` が押して確かめる |
 | `AdjustScreenUITests.testBulkModeWithoutGoalShowsPlanAndHint` | `adjustMinSpNotRequested` の文は最初は出ず、`adjustMinSpNotRequestedHelpButton` を押すと同じ文が出る | 補足は説明ボタンの奥(決定 4)。文面の検査は同じ |
