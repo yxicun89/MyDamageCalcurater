@@ -16,6 +16,15 @@ public enum RankMeterLogic {
         case up, down, zero, off
     }
 
+    /// 段の塗りの種類(見た目)。値の入った段は濃い塗り、入っていない段は向きごとの薄い色、中央は太い目印。
+    public enum SegmentFill: Equatable, Sendable {
+        case solidUp, solidDown, tintUp, tintDown, zeroMarker
+    }
+
+    /// 値の入っていない段の薄い塗り・枠の不透明度(Web の `color-mix` 16% / 70% と同じ)。
+    public static let tintFillOpacity = 0.16
+    public static let tintStrokeOpacity = 0.70
+
     public static func clamp(_ value: Int) -> Int {
         min(RankLimits.max, max(RankLimits.min, value))
     }
@@ -51,6 +60,16 @@ public enum RankMeterLogic {
         if value > 0, step > 0, step <= value { return .up }
         if value < 0, step < 0, step >= value { return .down }
         return .off
+    }
+
+    /// 段 `step` の塗りの種類。値で塗られた段は濃い、そうでない段は 0 より左が下降の薄色・右が上昇の薄色。
+    public static func segmentFill(step: Int, value: Int) -> SegmentFill {
+        switch segmentState(step: step, value: value) {
+        case .zero: return .zeroMarker
+        case .up: return .solidUp
+        case .down: return .solidDown
+        case .off: return step < 0 ? .tintDown : .tintUp
+        }
     }
 
     /// 読み上げ用のステータス名(Web の `rankStatNameJa`。攻撃・防御・特攻・特防・素早さ)。HP にランクは無い。
