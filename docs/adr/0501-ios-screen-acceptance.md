@@ -5133,6 +5133,7 @@ iOS は API(`POST /api/calc/combo`)だけを使う。判断は ADR-0535。素早
 |---|---|---|
 | `GlossaryTests.screenStrings` | 連続技の文言(`ComboText`)を検査対象に追加 | 新しい画面の文言も禁止語を使わないことを確かめる(検査を強める変更) |
 | `ios/scripts/check-request-limits.sh` | `check ComboRequest steps maxComboSteps` を追加 | 手の上限の写しを契約と照合する(検査を強める変更) |
+| `CalcComboUITests.setUpWithError`(新規テストの修正) | `executionTimeAllowance = 600` を足した | AX5 の検査は遅いスワイプで約 260 秒かかり、既定の 300 秒に近い。ADR-0520 の上限まで許す。検査は同じ |
 | `APIPokeCalcServiceComboTests.testErrorResponsesCarryTheServerCode`(新規テストの修正) | 500 の本文の code を `internal_error` から `internal` にした | 計算・マスタの契約の `ErrorCode` に `internal_error` は無い(テストデータの誤り)。検査(サーバーの code を運ぶ)は同じ |
 
 | `ComboViewModelTests.extraKey` | 追加の手でないときは `XCTFail` してから skip | 黙って飛ばさない(検査を強める変更) |

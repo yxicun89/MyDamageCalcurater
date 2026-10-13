@@ -21,6 +21,8 @@ final class CalcComboUITests: XCTestCase {
 
     override func setUpWithError() throws {
         continueAfterFailure = false
+        // AX5 の検査は遅いスワイプで 260 秒前後かかり、300 秒(run-xcode-tests.sh の既定)に近い。上限の 600 秒まで許す(ADR-0520)。
+        executionTimeAllowance = 600
     }
 
     // MARK: - 補助
