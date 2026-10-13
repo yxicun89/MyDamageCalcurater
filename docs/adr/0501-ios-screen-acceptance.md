@@ -5347,7 +5347,7 @@ API・engine・Web・ランクのメーター・API 不可時の表示(ADR-0534)
 | ダメージの側 | 自前の区切り(識別子・選択中の特性・AX で縦積み) | 変えない(既に方針どおり)。`lineLimit(1)`・`minimumScaleFactor` だけ外す |
 | 自分の調整(定番の振り方)のピル | `lineLimit(1)`・`minimumScaleFactor` | 外して折り返す。見た目・識別子・AX5 での縦積みは変えない |
 | 技の欄 | `lineLimit(1)`・`minimumScaleFactor`、矢印 `chevron.up.chevron.down` を直書き | 折り返して全文。矢印は `PopSymbol.picker` |
-| 観測欄の名前 | 見える名前が無い(読み上げ名だけ) | 行の頭に「ダメージ1」(`reverseObservationLabel-N`。読み上げは隠す) |
+| 観測欄の名前 | 見える名前が無い(読み上げ名だけ) | 行の頭に「ダメージ1」(`reverseObservationLabel-N`。読み上げは隠さない。UITest が識別子で引くため、二重読み上げは許容) |
 | 単位 | 「%」/ HP 側は「ダメージ」(欄の名前と同じ語) | 「%」/「HP」(Web の語。`reverseObservationUnit-N`)。単位の切り替えは無い(側で決まる。ADR-0539 §2) |
 | 単位の説明 | 無い | 一覧の下に 1 行「相手の HP が減った割合(%)」/「自分の HP が減った実数値(HP)」(`reverseObservationHint`。単位が分からない欄の例外) |
 | 観測欄の削除・追加 | 削除 = `minus.circle` 直書き、追加 = `plus.circle` 直書き + 名前 | 削除 = アイコンだけ(`PopIconButton` + `PopSymbol.minus`・読み上げ名不変)、追加 = `PopSymbol.add` + 「ダメージを追加」。36pt 以上 |
