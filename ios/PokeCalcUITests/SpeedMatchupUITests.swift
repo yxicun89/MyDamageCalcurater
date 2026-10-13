@@ -29,6 +29,13 @@ import XCTest
 ///   出力 2: speedReachHint(今の振りが無い)/ speedReachLoading / speedReachError /
 ///           speedReach / speedReachRow-<PresetId> / speedReachSlower-<PresetId> / speedReachTie-<PresetId>(同速の族があるときだけ)/
 ///           speedReachFaster-<PresetId>
+///   I-ios-25(ADR-0538。Web I-web-34 に揃える。既存の識別子は付け替えず、下を新規に足す):
+///           speedConclusion(出力 1 の結論 1 行。想定が読み込めたとき)/ speedCardHeading-<id>(「最速 ・ 素早さ 145」)/
+///           speedCardNaturesToggle-<id>(カード内の折りたたみ「性格補正ごとの最小 SP」。初期は閉じる。開くまで
+///           speedCardNature-* / speedCardTie-* は画面に無い。タップ 36pt 以上)/
+///           speedReachConclusion(出力 2 の結論 1 行「最速 60 族まで抜ける」)/ speedReachListToggle(「6 つの振り方ごとの一覧を見る」。
+///           初期は閉じる。開くまで speedReachRow-* / speedReachSlower-* などは画面に無い)。
+///           speedReach(コンテナ)は結論と折りたたみを含み、読み込めたら出る(行は開いたときだけ)。
 ///   連続技: speedComboLink(連続技が計算画面に入るまで出ない)
 ///   画面に出ないもの: speedTable / speedTier-* / speedBoundary / speedFilter-* / speedMode-* / speedResult* /
 ///                    speedNeighborhood* / speedJumpToSelf / speedTablePosition
@@ -115,6 +122,22 @@ final class SpeedMatchupUITests: XCTestCase {
         XCTAssertEqual(result, .completed, "ラベルに「\(text)」が無い: \(target.label)", file: file, line: line)
     }
 
+    /// 折りたたみを開く(すでに開いていて `revealed` が見えているなら何もしない)。
+    private func openDisclosure(_ app: XCUIApplication, toggle: String, revealing revealed: String) {
+        let target = element(app, revealed)
+        if target.exists { return }
+        tap(app, toggle)
+        wait(target, "\(toggle) を開いても \(revealed) が出ない")
+    }
+
+    private func openNatures(_ app: XCUIApplication, _ cardID: String, revealing nature: String = "neutral") {
+        openDisclosure(app, toggle: "speedCardNaturesToggle-\(cardID)", revealing: "speedCardNature-\(cardID)-\(nature)")
+    }
+
+    private func openReachList(_ app: XCUIApplication, revealing preset: String = "uninvested") {
+        openDisclosure(app, toggle: "speedReachListToggle", revealing: "speedReachRow-\(preset)")
+    }
+
     private func pick(_ app: XCUIApplication, button: String, pokemonID: String) {
         tap(app, button)
         wait(element(app, "speedPokemonSheet"), "ポケモンのシートが開かない")
@@ -167,10 +190,14 @@ final class SpeedMatchupUITests: XCTestCase {
         XCTAssertFalse(element(app, "speedMatchupHint").exists)
         expectLabel(element(app, "speedCardOpponentSpeed-uninvested"), contains: "150")
         expectLabel(element(app, "speedCardHeadline-uninvested"), contains: "準速で抜ける")
+        // 折りたたみ(I-ios-25): 性格の行は開くまで画面に無い。開くと従来の行が出る。
+        XCTAssertFalse(element(app, "speedCardNature-uninvested-neutral").exists, "性格の行は初期は閉じている")
+        openNatures(app, "uninvested")
         expectLabel(element(app, "speedCardNature-uninvested-neutral"), contains: "S31 以上で抜ける")
         expectLabel(element(app, "speedCardNature-uninvested-plus"), contains: "S18 以上で抜ける")
         expectLabel(element(app, "speedCardTie-uninvested-plus"), contains: "S17 で同速")
         expectLabel(element(app, "speedCardHeadline-max-scarf"), contains: "どう振っても上を取れません")
+        openNatures(app, "max-scarf", revealing: "plus")
         expectLabel(element(app, "speedCardNature-max-scarf-plus"), contains: "上を取れません")
         XCTAssertFalse(element(app, "speedCardNature-uninvested-minus").exists, "下降の行はトリックルーム中だけ")
         XCTAssertFalse(element(app, "speedCardOrder-uninvested").exists, "今の振りを入れるまで行動順は出ない")
@@ -202,6 +229,8 @@ final class SpeedMatchupUITests: XCTestCase {
         expectLabel(element(app, "speedCardOrder-max"), contains: "後に動く")
         let reach = element(app, "speedReach")
         wait(reach, "今の振りを入れたら「これ以上」が出る")
+        XCTAssertFalse(element(app, "speedReachRow-uninvested").exists, "「これ以上」の一覧は初期は閉じている")
+        openReachList(app)
         for preset in ["uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"] {
             wait(element(app, "speedReachRow-\(preset)"), "「これ以上」の行 \(preset) が無い(表の 6 プリセットぶん)")
         }
@@ -215,12 +244,14 @@ final class SpeedMatchupUITests: XCTestCase {
         // トリックルーム: 下降の行が出て、見出し・バッジ・「これ以上」の言い換えが切り替わる。
         tap(app, "speedTrickRoom")
         expectSelected(element(app, "speedTrickRoom"), true, "トリックルームが選ばれる")
+        openNatures(app, "uninvested", revealing: "minus")
         wait(element(app, "speedCardNature-uninvested-minus"), "トリックルーム中は下降の行が出る")
         expectLabel(element(app, "speedCardHeadline-uninvested"), contains: "先に動ける")
         expectLabel(element(app, "speedCardNature-uninvested-neutral"), contains: "S29 まで振っても先に動ける")
         expectLabel(element(app, "speedCardOrder-uninvested"), contains: "後に動く")
         expectLabel(element(app, "speedReachSlower-uninvested"), contains: "146 族までは後に動く")
         expectLabel(element(app, "speedReachFaster-uninvested"), contains: "148 族以上には先に動ける")
+        openReachList(app, revealing: "max")
         XCTAssertTrue(element(app, "speedReachRow-max").exists, "トリックルームでも「これ以上」は消えない")
 
         // 今の振りを外すと、バッジと「これ以上」が消える。
@@ -228,6 +259,105 @@ final class SpeedMatchupUITests: XCTestCase {
         waitGone(element(app, "speedReach"), "今の振りを外したら「これ以上」は消える")
         XCTAssertFalse(element(app, "speedCardOrder-uninvested").exists)
         XCTAssertTrue(element(app, "speedCard-uninvested").exists, "カードは残る")
+    }
+
+    // MARK: - 2b. 結論 1 行 + 折りたたみ(I-ios-25。ADR-0538。Web I-web-34 と同じ)
+
+    func testConclusionLineAndCardHeadingsAppearAndRowsAreCollapsedByDefault() {
+        let app = launchSpeedScreen()
+        pickBoth(app)
+        wait(element(app, "speedCard-uninvested"), "カードが出ない")
+
+        // 結論 1 行。自分 A(最大 167)は無振り D(150)だけ上を取れる(既定の 4 想定のうち 1 つ)。
+        let conclusion = element(app, "speedConclusion")
+        wait(conclusion, "結論の 1 行が出ない")
+        expectLabel(conclusion, contains: "4 つの想定のうち 1 つで上を取れます")
+        // カード見出し「無振り ・ 素早さ 150」と、従来の識別子(一言見出し・相手の素早さ)が両方ある。
+        expectLabel(element(app, "speedCardHeading-uninvested"), contains: "無振り ・ 素早さ 150")
+        wait(element(app, "speedCardHeadline-uninvested"), "一言見出しは残る")
+        wait(element(app, "speedCardOpponentSpeed-uninvested"), "相手の素早さは残る")
+
+        // 折りたたみは初期は閉じる: 題は見えて、性格の行・同速は見えない。
+        let toggle = element(app, "speedCardNaturesToggle-uninvested")
+        wait(toggle, "折りたたみの題が無い")
+        expectLabel(toggle, contains: "性格補正ごとの最小 SP")
+        for id in ["speedCardNature-uninvested-neutral", "speedCardNature-uninvested-plus", "speedCardTie-uninvested-plus"] {
+            XCTAssertFalse(element(app, id).exists, "\(id) は閉じている間は見えない")
+        }
+
+        // 開くと従来の行が見える。閉じるとまた消える(他のカードは影響されない)。
+        tap(app, "speedCardNaturesToggle-uninvested")
+        wait(element(app, "speedCardNature-uninvested-neutral"), "開いたら性格の行が出る")
+        XCTAssertFalse(element(app, "speedCardNature-max-scarf-plus").exists, "他のカードの折りたたみは閉じたまま")
+        tap(app, "speedCardNaturesToggle-uninvested")
+        waitGone(element(app, "speedCardNature-uninvested-neutral"), "閉じたら消える")
+    }
+
+    func testConclusionWordingForAllAndNoneReachable() {
+        let app = launchSpeedScreen()
+        pickBoth(app)
+        wait(element(app, "speedCard-uninvested"), "カードが出ない")
+        // 無振りだけ残す → 全部届く。
+        for chip in ["neutral-max", "max", "max-scarf"] { tap(app, "speedAssumption-\(chip)") }
+        expectLabel(element(app, "speedConclusion"), contains: "1 つの想定すべてで上を取れます")
+        // 最速スカーフ(300)だけにする → どれも届かない。
+        tap(app, "speedAssumption-max-scarf")
+        tap(app, "speedAssumption-uninvested")
+        expectLabel(element(app, "speedConclusion"), contains: "どの想定でも上を取れません")
+    }
+
+    func testTrickRoomConclusionAndSummaryWording() {
+        let app = launchSpeedScreen()
+        pickBoth(app)
+        wait(element(app, "speedCard-uninvested"), "カードが出ない")
+        tap(app, "speedTrickRoom")
+        expectLabel(element(app, "speedConclusion"), contains: "先に動けます")
+        expectLabel(element(app, "speedCardNaturesToggle-uninvested"), contains: "性格補正ごとの上限 SP")
+        XCTAssertFalse(element(app, "speedCardNature-uninvested-minus").exists, "トリックルーム中も下降の行は閉じている間は見えない")
+        tap(app, "speedCardNaturesToggle-uninvested")
+        wait(element(app, "speedCardNature-uninvested-minus"), "開くと下降の行が出る(トリックルーム中だけ)")
+    }
+
+    func testReachConclusionAndListAreCollapsedByDefault() {
+        let app = launchSpeedScreen()
+        pickBoth(app)
+        tap(app, "speedCurrentToggle")
+        tap(app, "speedCurrentPreset-max")
+        wait(element(app, "speedReach"), "今の振りを入れたら「これ以上」が出る")
+        // 結論 1 行(最速の行)と、閉じた折りたたみ。
+        let conclusion = element(app, "speedReachConclusion")
+        wait(conclusion, "「これ以上」の結論の 1 行が出ない")
+        expectLabel(conclusion, contains: "最速 ")
+        expectLabel(conclusion, contains: "族まで抜ける")
+        let toggle = element(app, "speedReachListToggle")
+        wait(toggle, "一覧の折りたたみの題が無い")
+        expectLabel(toggle, contains: "6 つの振り方ごとの一覧を見る")
+        XCTAssertFalse(element(app, "speedReachRow-uninvested").exists, "一覧は初期は閉じている")
+        XCTAssertFalse(element(app, "speedReachSlower-uninvested").exists)
+
+        tap(app, "speedReachListToggle")
+        for preset in ["uninvested", "neutral-max", "max", "max-scarf", "max-plus1", "max-plus2"] {
+            wait(element(app, "speedReachRow-\(preset)"), "開いたら \(preset) の行が出る")
+        }
+        tap(app, "speedReachListToggle")
+        waitGone(element(app, "speedReachRow-uninvested"), "閉じたら消える")
+
+        // トリックルーム中の結論は言い換わる。
+        tap(app, "speedTrickRoom")
+        expectLabel(element(app, "speedReachConclusion"), contains: "族までは後に動く")
+    }
+
+    func testDisclosureTogglesAreAtLeast36ptTall() {
+        let app = launchSpeedScreen()
+        pickBoth(app)
+        tap(app, "speedCurrentToggle")
+        tap(app, "speedCurrentPreset-max")
+        for id in ["speedCardNaturesToggle-uninvested", "speedReachListToggle"] {
+            let target = element(app, id)
+            wait(target, "\(id) が無い")
+            scrollUntilHittable(app, target)
+            XCTAssertGreaterThanOrEqual(target.frame.height, 36, "\(id) のタップ領域は 36pt 以上")
+        }
     }
 
     // MARK: - 3. 失敗は入力を壊さず、他の画面に波及しない(絶対ルール 5)
