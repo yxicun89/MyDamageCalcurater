@@ -41,11 +41,7 @@ struct CalcAttackerStatBlocksView: View {
     }
 
     private func notice(_ text: String, identifier: String) -> some View {
-        Text(text)
-            .font(TextStyleToken.caption.font)
-            .foregroundStyle(ColorToken.textSecondary.color)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .accessibilityIdentifier(identifier)
+        PopNoticeView(kind: .info, message: text, identifier: identifier)
     }
 }
 
@@ -67,11 +63,8 @@ private struct AttackerStatBlockView: View {
             headingRow
             AttackerSPField(viewModel: viewModel, stat: stat, focus: focus)
             if viewModel.isSPInvalid(stat) {
-                Text(AttackerStatLabels.spInvalid(stat))
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .accessibilityIdentifier("attackerSPError-\(stat.rawValue)")
+                let message = AttackerStatLabels.spInvalid(stat)
+                PopNoticeView(kind: .error, message: message, identifier: "attackerSPError-\(stat.rawValue)")
             }
             natureChoices
             if hasUnselectableChoice {
@@ -130,8 +123,13 @@ private struct AttackerStatBlockView: View {
             Button {
                 viewModel.scheduleLatest { await $0.setAttackerNatureModifier(choice, for: stat) }
             } label: {
-                Text(AttackerStatLabels.modifierName(choice))
-                    .font(TextStyleToken.body.font)
+                HStack(spacing: SpacingToken.x1) {
+                    if isSelected { PopIcon(PopSymbol.done) }
+                    Text(AttackerStatLabels.modifierName(choice))
+                        .font(TextStyleToken.body.font)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                     .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                     .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
                     .background(Capsule().fill(PopChipStyle.fill(isSelected: isSelected)))
@@ -166,6 +164,27 @@ private struct AttackerSPField: View {
     }
 
     var body: some View {
+        HStack(spacing: SpacingToken.x2) {
+            PopIconButton(
+                systemImage: PopSymbol.minus, label: AttackerStatLabels.spDecrease(stat),
+                identifier: "attackerSPDecrease-\(stat.rawValue)", isEnabled: AttackerSPStep.canDecrease(text: draft),
+                minSide: CalcScreenMetrics.iconButtonSide
+            ) { step(by: -1) }
+            field
+            PopIconButton(
+                systemImage: PopSymbol.add, label: AttackerStatLabels.spIncrease(stat),
+                identifier: "attackerSPIncrease-\(stat.rawValue)", isEnabled: AttackerSPStep.canIncrease(text: draft),
+                minSide: CalcScreenMetrics.iconButtonSide
+            ) { step(by: 1) }
+        }
+    }
+
+    /// − / + を押したとき。欄の文字(`draft`)を書き換えるだけで、VM への反映は `onChange(of: draft)` が行う(打ったときと同じ経路)。
+    private func step(by delta: Int) {
+        draft = AttackerSPStep.stepped(text: draft, by: delta)
+    }
+
+    private var field: some View {
         TextField("", text: $draft)
             .keyboardType(.numberPad)
             .focused(focus, equals: stat)

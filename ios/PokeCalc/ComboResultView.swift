@@ -14,15 +14,7 @@ struct ComboResultView: View {
         case .idle:
             EmptyView()
         case .loading:
-            HStack(spacing: SpacingToken.x2) {
-                ProgressView()
-                Text(ComboText.loading)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityIdentifier("comboLoading")
+            PopNoticeView(kind: .loading, message: ComboText.loading, identifier: "comboLoading")
         case .failed(let message):
             VStack(alignment: .leading, spacing: SpacingToken.x2) {
                 PopNoticeView(kind: .error, message: message, identifier: "comboError")
@@ -238,7 +230,7 @@ struct ComboSelfSpeedView: View {
                 }
             }
         } label: {
-            ComboPickerLabel(text: ComboText.selfSpeedNatureOption(viewModel.selfSpeed.nature), systemImage: "chevron.up.chevron.down")
+            ComboPickerLabel(text: ComboText.selfSpeedNatureOption(viewModel.selfSpeed.nature), systemImage: PopSymbol.picker)
         }
         .accessibilityLabel(ComboText.selfSpeedNatureLabel)
         .accessibilityValue(ComboText.selfSpeedNatureOption(viewModel.selfSpeed.nature))

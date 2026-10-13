@@ -7,24 +7,24 @@
 /// 計算画面の見出し・状態の一言。
 public enum CalcScreenText {
     /// 攻撃側のポケモンカードの見出し(Web の `attackerRegionLabel`)。
-    public static let attackerHeading = ""
+    public static let attackerHeading = "攻撃側"
     /// 防御側のポケモンカードの見出し(Web の `defenderRegionLabel`)。
-    public static let defenderHeading = ""
+    public static let defenderHeading = "防御側"
     /// 計算中の一言(Web の `loadingNotice`。静止したアイコンと並べる。「…」は付けない)。
-    public static let loading = ""
+    public static let loading = "計算中"
     /// 結果の一覧の読み上げ名(Web の `resultsListLabel`)。
-    public static let resultsListLabel = ""
+    public static let resultsListLabel = "計算結果"
     /// 折りたたみ「詳細」を開いているときの読み上げの値(素早さ画面の折りたたみと同じ語)。
-    public static let disclosureOpened = ""
+    public static let disclosureOpened = "開いています"
     /// 折りたたみ「詳細」を閉じているときの読み上げの値。
-    public static let disclosureClosed = ""
+    public static let disclosureClosed = "閉じています"
 }
 
 extension AttackerStatLabels {
     /// SP の − ボタンの読み上げ名(「攻撃のSPを減らす」。用語集「共通の部品の語」の「減らす」)。
-    public static func spDecrease(_ stat: AttackStat) -> String { "" }
+    public static func spDecrease(_ stat: AttackStat) -> String { "\(spLabel(stat))を減らす" }
     /// SP の + ボタンの読み上げ名(「攻撃のSPを増やす」)。
-    public static func spIncrease(_ stat: AttackStat) -> String { "" }
+    public static func spIncrease(_ stat: AttackStat) -> String { "\(spLabel(stat))を増やす" }
 }
 
 /// 攻撃側の SP 欄の − / + ボタンが押せるかと、押したあとの文字(Web の `AttackerSPField` の `step`・`atMin`・`atMax` と同じ規則)。
@@ -35,16 +35,33 @@ public enum AttackerSPStep {
     public static let maximum = 32
 
     /// − が押せる(欄が 0 以下の整数でない。空欄は 0 として扱うので押せない。整数でない文字は押せる)。
-    public static func canDecrease(text: String) -> Bool { false }
+    public static func canDecrease(text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        if trimmed.isEmpty { return false }
+        guard let value = Int(trimmed) else { return true }
+        return value > minimum
+    }
     /// + が押せる(欄が 32 以上の整数でない)。
-    public static func canIncrease(text: String) -> Bool { false }
+    public static func canIncrease(text: String) -> Bool {
+        guard let value = Int(text.trimmingCharacters(in: .whitespaces)) else { return true }
+        return value < maximum
+    }
     /// 押したあとの欄の文字(0〜32 に丸める。整数でない文字は 0 から数える)。
-    public static func stepped(text: String, by delta: Int) -> String { text }
+    public static func stepped(text: String, by delta: Int) -> String {
+        let trimmed = text.trimmingCharacters(in: .whitespaces)
+        let current = Int(trimmed) ?? minimum
+        return String(min(maximum, max(minimum, current + delta)))
+    }
 }
 
 extension CalcViewModel {
     /// 攻撃側のカードの持ち物の印(選んだ持ち物の名前。メガ種族は固定のストーン名。持ち物なしは nil)。
-    public var attackerItemMark: String? { nil }
+    public var attackerItemMark: String? {
+        attackerItemId == nil ? nil : itemLabel(for: attackerItemId)
+    }
     /// 防御側のカードの持ち物の印(メガ種族だけ固定のストーン名。防御側の持ち物の比較は結果の下のチップで行うので、それ以外は nil)。
-    public var defenderItemMark: String? { nil }
+    public var defenderItemMark: String? {
+        if case .locked(_, let displayName) = defenderItemLock { return displayName }
+        return nil
+    }
 }

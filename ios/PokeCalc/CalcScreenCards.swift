@@ -21,8 +21,9 @@ struct AttackerCardView: View {
             Button {
                 isSpeciesSearchPresented = true
             } label: {
-                SpeciesHeaderMenuLabel(species: species)
+                speciesCardLabel(species: species, itemMark: viewModel.attackerItemMark)
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("attackerSpeciesPicker")
             // 子の `accessibilityIdentifier` は外から見えない(検索シートでも同じ制約を踏まえて
             // 別 identifier を振っている)。XCUITest が種族名の入れ替わりを検査できるよう、
@@ -36,6 +37,7 @@ struct AttackerCardView: View {
             }
 
             attackerItemMenu
+            attackerAbilityMenu
             if let reason = lockReason(for: viewModel.attackerItemLock) {
                 Text(reason)
                     .font(TextStyleToken.caption.font)
@@ -45,10 +47,7 @@ struct AttackerCardView: View {
             }
             // 持ち物の一覧が上限に達していても黙って切り捨てない(ADR-0501「issue #68 の残り」6章)。
             if viewModel.itemOptionsReachedLimit {
-                Text(MasterSearchLabels.itemsTruncated)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("attackerItemLimitHint")
+                PopNoticeView(kind: .info, message: MasterSearchLabels.itemsTruncated, identifier: "attackerItemLimitHint")
             }
         }
         .padding(SpacingToken.x3)
@@ -81,6 +80,44 @@ struct AttackerCardView: View {
     }
 }
 
+/// 特性の選択(「指定なし」+ 種族の特性。選んだ特性の名前が読み上げの値)。識別子は従来の `calcAttackerAbilityPicker`。
+extension AttackerCardView {
+    fileprivate var attackerAbilityMenu: some View {
+        let selectedName = viewModel.attackerAbilityOptions
+            .first(where: { $0.id == viewModel.attackerAbilityId })?.nameJa
+            ?? CalcConditionLabels.abilityUnspecified
+        return VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Text(CalcConditionLabels.abilityTitle)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+            Menu {
+                Button(CalcConditionLabels.abilityUnspecified) {
+                    viewModel.scheduleLatest { await $0.selectAttackerAbility(id: nil) }
+                }
+                ForEach(viewModel.attackerAbilityOptions, id: \.id) { ability in
+                    Button(ability.nameJa) {
+                        viewModel.scheduleLatest { await $0.selectAttackerAbility(id: ability.id) }
+                    }
+                }
+            } label: {
+                MenuLabelChip(text: selectedName)
+            }
+            .accessibilityValue(selectedName)
+            .accessibilityIdentifier("calcAttackerAbilityPicker")
+        }
+    }
+}
+
+/// ポケモンのカードの顔(種族がある間は `PopPokemonCard`、無い間は「-」のチップ)。攻撃側・防御側で共有する。
+@ViewBuilder
+private func speciesCardLabel(species: SpeciesSummary?, itemMark: String?) -> some View {
+    if let species {
+        PopPokemonCard(speciesKey: species.key, name: species.nameJa, types: species.types, itemName: itemMark)
+    } else {
+        MenuLabelChip(text: SpeciesHeaderMenuLabel.placeholderName)
+    }
+}
+
 /// メガ固定の理由の文(固定していなければ nil。ADR-0509 §7)。全画面で共有する。
 func lockReason(for lock: MegaItemLock) -> String? {
     switch lock {
@@ -105,8 +142,9 @@ struct DefenderCardView: View {
             Button {
                 isSpeciesSearchPresented = true
             } label: {
-                SpeciesHeaderMenuLabel(species: species)
+                speciesCardLabel(species: species, itemMark: viewModel.defenderItemMark)
             }
+            .buttonStyle(.plain)
             .accessibilityIdentifier("defenderSpeciesPicker")
             .accessibilityLabel(species?.nameJa ?? SpeciesHeaderMenuLabel.placeholderName)
             .accessibilityHint("ポケモンを変える")
@@ -115,6 +153,7 @@ struct DefenderCardView: View {
                     viewModel.scheduleLatest { await $0.selectDefender(speciesKey: option.key) }
                 }
             }
+            defenderAbilityMenu
             // メガ種族の防御側は持ち物がメガストーンに固定される(持ち物欄は無いので名前だけ見せる。ADR-0509 §8)。
             if case .locked(_, let displayName) = viewModel.defenderItemLock {
                 Text(MegaItemText.fixedItemName(displayName))
@@ -134,6 +173,34 @@ struct DefenderCardView: View {
     }
 }
 
+/// 防御側の特性の選択(「指定なし」+ 防御側の特性。識別子は従来の `calcDefenderAbilityPicker`)。
+extension DefenderCardView {
+    fileprivate var defenderAbilityMenu: some View {
+        let selectedName = viewModel.defenderAbilityOptions
+            .first(where: { $0.id == viewModel.defenderAbilityId })?.nameJa
+            ?? AbilityPickerLabels.unspecified
+        return VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            Text(AbilityPickerLabels.defenderTitle)
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+            Menu {
+                Button(AbilityPickerLabels.unspecified) {
+                    viewModel.scheduleLatest { await $0.selectDefenderAbility(id: nil) }
+                }
+                ForEach(viewModel.defenderAbilityOptions, id: \.id) { ability in
+                    Button(ability.nameJa) {
+                        viewModel.scheduleLatest { await $0.selectDefenderAbility(id: ability.id) }
+                    }
+                }
+            } label: {
+                MenuLabelChip(text: selectedName)
+            }
+            .accessibilityValue(selectedName)
+            .accessibilityIdentifier("calcDefenderAbilityPicker")
+        }
+    }
+}
+
 /// カードのヘッダーそのものを Menu のラベルにする(批評 M3d: 種族名の下に別行で
 /// 「ポケモンを変える」を置くと縦に伸びて2行がちに見えるため、1つのタップ領域にまとめる)。
 /// 3段: 1段目はエンブレムと末尾の chevron、2段目は名前だけをカード幅いっぱいに、
@@ -145,9 +212,6 @@ struct SpeciesHeaderMenuLabel: View {
     /// 種族が (まだ) 無いときのプレースホルダ(読み込み中・0件時)。`Menu` の `accessibilityLabel`
     /// 側(呼び出し元)からも参照する。逆算画面(`ReverseScreenCards.swift`)も再利用するので internal にする。
     static let placeholderName = "-"
-    /// 名前は2行まで折り返せるようにしたうえで、それでも収まらない極端なケースだけ控えめに
-    /// 縮小する(最後の手段。design.md には数値指定が無いため実装側で決める)。
-    private static let nameMinimumScaleFactor = 0.85
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
@@ -155,19 +219,15 @@ struct SpeciesHeaderMenuLabel: View {
                 SpeciesImageView(
                     speciesKey: species?.key, name: species?.nameJa ?? Self.placeholderName, types: species?.types ?? [])
                 Spacer(minLength: 0)
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(TextStyleToken.caption.font)
+                PopIcon(PopSymbol.picker)
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             Text(species?.nameJa ?? Self.placeholderName)
                 .font(TextStyleToken.heading.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
-                // まず幅を確保する: 名前だけの行でカード幅いっぱいを使い、2行まで折り返せる。
-                // 縮小は最後の手段(0.85)。
-                .lineLimit(2)
+                // 名前だけの行でカード幅いっぱいを使い、折り返して全文を出す。
                 // Menu のラベル内では複数行の既定が中央寄せになるので、2行目も左端にそろえる。
                 .multilineTextAlignment(.leading)
-                .minimumScaleFactor(Self.nameMinimumScaleFactor)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityHidden(true)
@@ -194,7 +254,7 @@ struct SpeciesEmblemView: View {
 
     /// 頭文字の色。2タイプなら先頭タイプの ink(グラデーションの始点側に載るため)。タイプ無し・未知は従来の白。
     private var inkColor: Color {
-        types.first.flatMap { TypeColorToken.inkColor(forTypeID: $0.rawValue) } ?? .white
+        types.first.flatMap { TypeColorToken.inkColor(forTypeID: $0.rawValue) } ?? ColorToken.onPrimary.color
     }
 
     var body: some View {
@@ -212,15 +272,14 @@ struct SpeciesEmblemView: View {
 }
 
 /// タイプバッジ。design.md「用途: タイプバッジ、カードのふちの光、ダメージバー、効果抜群表示」。
-/// 批評 M3a: 幅を詰められて1字ずつ縦に折り返らないよう、常に1行の自然な幅で描く。
+/// 批評 M3a: 幅を詰められて1字ずつ縦に折り返らないよう、自然な幅で描く(行数の上限は付けない)。
 struct TypeBadgeView: View {
     let type: PokeType
 
     var body: some View {
         Text(PokeTypeLabel.japaneseName(for: type))
             .font(TextStyleToken.caption.font)
-            .foregroundStyle(TypeColorToken.inkColor(forTypeID: type.rawValue) ?? .white)
-            .lineLimit(1)
+            .foregroundStyle(TypeColorToken.inkColor(forTypeID: type.rawValue) ?? ColorToken.onPrimary.color)
             .fixedSize()
             .padding(.horizontal, SpacingToken.x2)
             .padding(.vertical, SpacingToken.x1)
@@ -241,14 +300,14 @@ struct MenuLabelChip: View {
             Text(text)
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
-                .lineLimit(1)
-                .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-            Image(systemName: "chevron.up.chevron.down")
-                .font(TextStyleToken.caption.font)
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+            PopIcon(PopSymbol.picker)
                 .foregroundStyle(ColorToken.textSecondary.color)
         }
         .padding(.horizontal, SpacingToken.x3)
         .padding(.vertical, SpacingToken.x2)
+        .frame(minHeight: CalcScreenMetrics.iconButtonSide)
         .background(ColorToken.tableZebra.color, in: Capsule())
     }
 }

@@ -56,7 +56,7 @@ struct ComboSectionView: View {
         Button {
             Task { await viewModel.open() }
         } label: {
-            PopLabel(title: ComboText.addStepButton, systemImage: "plus")
+            PopLabel(title: ComboText.addStepButton, systemImage: PopSymbol.add)
         }
         .buttonStyle(PillButtonStyle(kind: .secondary))
         .accessibilityLabel(ComboText.addStepButton)
@@ -87,7 +87,7 @@ struct ComboSectionView: View {
             Button {
                 viewModel.close()
             } label: {
-                PopLabel(title: ComboText.closeButton, systemImage: "xmark")
+                PopLabel(title: ComboText.closeButton, systemImage: PopSymbol.close)
             }
             .buttonStyle(PillButtonStyle(kind: .secondary))
             .accessibilityLabel(ComboText.closeButton)
@@ -163,20 +163,22 @@ struct ComboSectionView: View {
             ? AnyLayout(VStackLayout(alignment: .leading, spacing: SpacingToken.x2))
             : AnyLayout(HStackLayout(spacing: SpacingToken.x2))
         layout {
-            ComboIconButton(
-                systemName: "arrow.up", label: ComboText.moveUp(name), identifier: "comboStepUp-\(index)", isEnabled: !isFirst
+            PopIconButton(
+                systemImage: PopSymbol.up, label: ComboText.moveUp(name), identifier: "comboStepUp-\(index)", isEnabled: !isFirst,
+                minSide: CalcScreenMetrics.iconButtonSide
             ) {
                 Task { await viewModel.moveStep(at: index, by: -1) }
             }
-            ComboIconButton(
-                systemName: "arrow.down", label: ComboText.moveDown(name), identifier: "comboStepDown-\(index)",
-                isEnabled: !isLast
+            PopIconButton(
+                systemImage: PopSymbol.down, label: ComboText.moveDown(name), identifier: "comboStepDown-\(index)",
+                isEnabled: !isLast, minSide: CalcScreenMetrics.iconButtonSide
             ) {
                 Task { await viewModel.moveStep(at: index, by: 1) }
             }
             if !isMain {
-                ComboIconButton(
-                    systemName: "xmark", label: ComboText.removeStep(name), identifier: "comboStepRemove-\(index)", isEnabled: true
+                PopIconButton(
+                    systemImage: PopSymbol.close, label: ComboText.removeStep(name), identifier: "comboStepRemove-\(index)",
+                    minSide: CalcScreenMetrics.iconButtonSide
                 ) {
                     Task { await viewModel.removeStep(at: index) }
                 }
@@ -191,7 +193,7 @@ struct ComboSectionView: View {
                 Button {
                     isAddSheetPresented = true
                 } label: {
-                    ComboPickerLabel(text: ComboText.addPickerLabel, systemImage: "plus")
+                    ComboPickerLabel(text: ComboText.addPickerLabel, systemImage: PopSymbol.add)
                 }
                 .accessibilityLabel(ComboText.addPickerLabel)
                 .accessibilityIdentifier("comboAddPicker")
@@ -224,7 +226,7 @@ struct ComboSectionView: View {
                         Button(option.label) { Task { await viewModel.selectDefender(key: option.key) } }
                     }
                 } label: {
-                    ComboPickerLabel(text: viewModel.selectedDefender?.label ?? "", systemImage: "chevron.up.chevron.down")
+                    ComboPickerLabel(text: viewModel.selectedDefender?.label ?? "", systemImage: PopSymbol.picker)
                 }
                 .accessibilityLabel(ComboText.defenderLabel)
                 .accessibilityValue(viewModel.selectedDefender?.label ?? "")
@@ -246,7 +248,7 @@ struct ComboSectionView: View {
                 isOpponentSheetPresented = true
             } label: {
                 ComboPickerLabel(
-                    text: viewModel.opponentMove?.nameJa ?? ComboText.opponentMoveNone, systemImage: "chevron.up.chevron.down")
+                    text: viewModel.opponentMove?.nameJa ?? ComboText.opponentMoveNone, systemImage: PopSymbol.picker)
             }
             .accessibilityLabel(ComboText.opponentMoveLabel)
             .accessibilityValue(viewModel.opponentMove?.nameJa ?? ComboText.opponentMoveNone)
@@ -276,9 +278,9 @@ struct ComboSectionView: View {
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
                     Spacer(minLength: SpacingToken.x2)
-                    Image(systemName: isSpeedFieldExpanded ? "chevron.up" : "chevron.down")
+                    PopIcon(PopSymbol.open)
                         .foregroundStyle(ColorToken.textSecondary.color)
-                        .accessibilityHidden(true)
+                        .rotationEffect(.degrees(isSpeedFieldExpanded ? 180 : 0))
                 }
                 .frame(minHeight: ComboMetrics.minTapHeight)
                 .contentShape(Rectangle())

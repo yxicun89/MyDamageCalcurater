@@ -23,14 +23,28 @@ struct ResultsSectionView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             if let unsupportedNotice = viewModel.unsupportedNotice {
-                Text(unsupportedNotice)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("calcUnsupportedNotice")
+                PopNoticeView(kind: .info, message: unsupportedNotice, identifier: "calcUnsupportedNotice")
             }
-            ForEach(viewModel.rows) { row in
-                ResultRowView(display: row, barColor: barColor, tierChanged: changedRowIDs.contains(row.id))
+            VStack(alignment: .leading, spacing: SpacingToken.x2) {
+                // 技の相性は結果の先頭に 1 つだけ(枠だけのバッジ。各行には繰り返さない)。
+                if let effectiveness = viewModel.moveEffectiveness {
+                    Text(EffectivenessLabel.text(effectiveness))
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, SpacingToken.x3)
+                        .padding(.vertical, SpacingToken.x1)
+                        .overlay(Capsule().stroke(barColor, lineWidth: CalcScreenMetrics.effectivenessBorderWidth))
+                        .accessibilityIdentifier("calcEffectivenessBadge")
+                }
+                ForEach(viewModel.rows) { row in
+                    ResultRowView(display: row, barColor: barColor, tierChanged: changedRowIDs.contains(row.id))
+                }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(CalcScreenText.resultsListLabel)
+            .accessibilityIdentifier("calcResults")
             if !viewModel.itemOptions.isEmpty {
                 itemComparisonSection
             }
@@ -84,29 +98,25 @@ struct ResultsSectionView: View {
             Text(CalcScreenLabels.itemComparisonTitle)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
-            // チップが折り返せるよう横スクロールにする(design.md「+持ち物のトグル」)。
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SpacingToken.x2) {
-                    ForEach(viewModel.defenderCompareItemOptions, id: \.id) { item in
-                        let isSelected = viewModel.comparedDefenderItemIds.contains(item.id)
-                        ChipButton(
-                            title: item.nameJa,
-                            isSelected: isSelected,
-                            identifier: "defenderItemToggle-\(item.id)",
-                            // 選択済みのチップは上限に達していても常に有効(解除できる。issue #110 A8・9章)。
-                            isEnabled: isSelected || !viewModel.comparedDefenderItemsReachedLimit,
-                            accessibilityName: "\(CalcScreenLabels.itemComparisonTitle): \(item.nameJa)"
-                        ) {
-                            viewModel.scheduleLatest { await $0.toggleDefenderItemComparison(itemId: item.id) }
-                        }
+            // チップは折り返して全部を見せる(横スクロールにしない)。
+            ComboWrapLayout(spacing: SpacingToken.x2) {
+                ForEach(viewModel.defenderCompareItemOptions, id: \.id) { item in
+                    let isSelected = viewModel.comparedDefenderItemIds.contains(item.id)
+                    ChipButton(
+                        title: item.nameJa,
+                        isSelected: isSelected,
+                        identifier: "defenderItemToggle-\(item.id)",
+                        // 選択済みのチップは上限に達していても常に有効(解除できる。issue #110 A8・9章)。
+                        isEnabled: isSelected || !viewModel.comparedDefenderItemsReachedLimit,
+                        accessibilityName: "\(CalcScreenLabels.itemComparisonTitle): \(item.nameJa)"
+                    ) {
+                        viewModel.scheduleLatest { await $0.toggleDefenderItemComparison(itemId: item.id) }
                     }
                 }
             }
             if viewModel.comparedDefenderItemsReachedLimit {
-                Text(RequestLimitLabels.itemVariantsReachedLimit)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("calcItemVariantLimitHint")
+                PopNoticeView(
+                    kind: .info, message: RequestLimitLabels.itemVariantsReachedLimit, identifier: "calcItemVariantLimitHint")
             }
         }
     }
@@ -120,6 +130,7 @@ struct ResultRowView: View {
     /// `ResultsSectionView` が `KOTier` の変化から判定した「このタイミングで弾ませるか」。
     let tierChanged: Bool
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var badgeScale: CGFloat = 1
 
     private static let bounceScale: CGFloat = 1.18
@@ -131,53 +142,56 @@ struct ResultRowView: View {
         display.itemId == nil ? display.presetLabel : "\(display.presetLabel)(\(display.itemLabel))"
     }
 
-    private var subtitleText: some View {
+    /// 調整名(+持ち物名)。大きい数字の下に小さく添える。
+    private var presetText: some View {
         Text(subtitle)
-            .font(TextStyleToken.body.font)
-            .foregroundStyle(ColorToken.textPrimary.color)
-            .lineLimit(1)
-            .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+            .font(TextStyleToken.caption.font)
+            .foregroundStyle(ColorToken.textSecondary.color)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .accessibilityIdentifier("calcResultPreset-\(display.id)")
     }
 
     private var percentRangeTextView: some View {
         Text(display.percentRangeText)
             .font(TextStyleToken.resultPercent.font)
             .foregroundStyle(ColorToken.textPrimary.color)
-            .lineLimit(1)
-            .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("calcResultPercent-\(display.id)")
+    }
+
+    /// 確定数のバッジ(brandPrimary の塗り + onPrimary の文字。見出しの大きさ)。
+    private var koBadge: some View {
+        Text(display.koText)
+            .font(TextStyleToken.heading.font)
+            .foregroundStyle(ColorToken.onPrimary.color)
+            .multilineTextAlignment(.leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SpacingToken.x3)
+            .padding(.vertical, SpacingToken.x1)
+            .background(ColorToken.brandPrimary.color, in: Capsule())
+            .scaleEffect(badgeScale)
+            .accessibilityIdentifier("calcResultKO-\(display.id)")
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
-            // 大きい文字サイズだと横に並べる余白が無くなるので、収まらなければ縦積みに落ちる
-            // (批評「任意」対応)。
-            ViewThatFits(in: .horizontal) {
-                HStack(alignment: .firstTextBaseline, spacing: SpacingToken.x2) {
-                    subtitleText
-                    Spacer(minLength: SpacingToken.x2)
-                    percentRangeTextView
-                }
+            // 1 行目: 大きいダメージ幅と確定数のバッジ。アクセシビリティの大きい文字サイズでは横に並べる余白が無いので縦に積む。
+            if dynamicTypeSize.isAccessibilitySize {
                 VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                    subtitleText
                     percentRangeTextView
+                    koBadge
+                }
+            } else {
+                HStack(alignment: .center, spacing: SpacingToken.x3) {
+                    percentRangeTextView.layoutPriority(1)
+                    koBadge
+                    Spacer(minLength: 0)
                 }
             }
             DamageBarView(minFraction: display.barMinFraction, maxFraction: display.barMaxFraction, color: barColor)
                 .frame(maxWidth: .infinity)
-            HStack {
-                Spacer(minLength: 0)
-                Text(display.koText)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                    .padding(.horizontal, SpacingToken.x2)
-                    .padding(.vertical, SpacingToken.x1)
-                    .background(ColorToken.tableZebra.color, in: Capsule())
-                    .scaleEffect(badgeScale)
-                    .accessibilityIdentifier("calcResultKO-\(display.id)")
-            }
+            presetText
             if let abilityText = display.abilityText {
                 Text(abilityText)
                     .font(TextStyleToken.caption.font)
@@ -253,15 +267,17 @@ struct ChipButton: View {
 
     var body: some View {
         Button(action: action) {
-            Text(title)
-                .font(TextStyleToken.body.font)
-                // チップは横スクロールできる行の中にあるので、幅を詰められて1字ずつ縦に
-                // 折り返ることが無いよう、常に自然な1行の幅で描く。
-                .lineLimit(1)
-                .fixedSize()
+            HStack(spacing: SpacingToken.x1) {
+                if isSelected { PopIcon(PopSymbol.done) }
+                Text(title)
+                    .font(TextStyleToken.body.font)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
                 .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
                 .padding(.horizontal, SpacingToken.x3)
-                .padding(.vertical, SpacingToken.x2)
+                .padding(.vertical, SpacingToken.x1)
+                .frame(minHeight: CalcScreenMetrics.minimumTapSide)
                 .background(
                     Capsule().fill(PopChipStyle.fill(isSelected: isSelected))
                 )
@@ -311,4 +327,7 @@ struct LoadRetryButton: View {
 enum CalcScreenLabels {
     /// 持ち物の比較欄の見出し(チップの読み上げ名にも使う)。
     static let itemComparisonTitle = "持ち物で比較"
+
+    /// 技の欄の威力(読み上げの値の「威力37」と同じ書式)。
+    static func movePower(_ power: Int) -> String { "威力\(power)" }
 }

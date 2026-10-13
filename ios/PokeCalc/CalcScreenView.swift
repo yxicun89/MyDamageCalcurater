@@ -33,9 +33,9 @@ struct CalcScreenView: View {
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
     private static let swapAnimationDuration: Double = 0.35
-    /// 読み込み中インジケータの高さ。出たり消えたりで下の行が上下にずれないよう、
-    /// 表示の有無に関わらず高さを固定で確保する(批評「任意」対応)。
-    private static let loadingIndicatorHeight: CGFloat = 24
+    /// 計算中の案内(アイコン + 一言)の枠の高さ。出たり消えたりで下の行が上下にずれないよう、
+    /// 表示の有無に関わらず高さを固定で確保する(批評「任意」対応)。文字の大きさに合わせて広げる。
+    @ScaledMetric(relativeTo: .body) private var loadingIndicatorHeight: CGFloat = 48
 
     /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
     private let lifetime: ScreenLifetime
@@ -65,15 +65,6 @@ struct CalcScreenView: View {
     /// ダメージバー・相性の色に使う、選択中の技のタイプ色。技が無い(読み込み中)ときは無彩色にする。
     private var moveTypeColor: Color {
         viewModel.selectedMove.flatMap { TypeColorToken.color(forTypeID: $0.type.rawValue) } ?? ColorToken.textSecondary.color
-    }
-
-    /// 「ばつぐん」のときだけ技のタイプ色を使う(design.md「色を持つのはタイプだけ」)。
-    /// 「ばつぐん」の判定自体は Core の `EffectivenessLabel.isSuperEffective(_:)` を使う。
-    private var moveSummaryColor: Color {
-        guard let effectiveness = viewModel.moveEffectiveness, EffectivenessLabel.isSuperEffective(effectiveness) else {
-            return ColorToken.textSecondary.color
-        }
-        return moveTypeColor
     }
 
     private var swapTransition: AnyTransition {
@@ -167,25 +158,18 @@ struct CalcScreenView: View {
         GlassEffectContainer(spacing: SpacingToken.x2) {
             // 文字サイズがアクセシビリティ域(`.accessibility1` 以上)まで大きいと、2枚のカードを
             // 横に並べる余白が無くなるため、縦に積む(攻撃側 → 入れ替えボタン → 防御側)。
+            // 見出しはカードの外・上に置く(カードの入れ替えの動き〈`.id`〉に巻き込まない)。
             if dynamicTypeSize >= .accessibility1 {
                 VStack(spacing: SpacingToken.x2) {
-                    AttackerCardView(viewModel: viewModel)
-                        .id(viewModel.attackerSpeciesKey)
-                        .transition(swapTransition)
+                    attackerColumn
                     swapButton
-                    DefenderCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
-                        .id(viewModel.defenderSpeciesKey)
-                        .transition(swapTransition)
+                    defenderColumn
                 }
             } else {
                 HStack(alignment: .top, spacing: SpacingToken.x2) {
-                    AttackerCardView(viewModel: viewModel)
-                        .id(viewModel.attackerSpeciesKey)
-                        .transition(swapTransition)
+                    attackerColumn
                     swapButton
-                    DefenderCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
-                        .id(viewModel.defenderSpeciesKey)
-                        .transition(swapTransition)
+                    defenderColumn
                 }
             }
         }
@@ -194,19 +178,31 @@ struct CalcScreenView: View {
         .animation(reduceMotion ? nil : .easeInOut(duration: Self.swapAnimationDuration), value: viewModel.swapTick)
     }
 
+    private var attackerColumn: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopHeading(title: CalcScreenText.attackerHeading, systemImage: PopSymbol.damage, identifier: "calcAttackerHeading")
+            AttackerCardView(viewModel: viewModel)
+                .id(viewModel.attackerSpeciesKey)
+                .transition(swapTransition)
+        }
+    }
+
+    private var defenderColumn: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            PopHeading(title: CalcScreenText.defenderHeading, systemImage: PopSymbol.judge, identifier: "calcDefenderHeading")
+            DefenderCardView(viewModel: viewModel, frequentOpponents: frequentOpponents)
+                .id(viewModel.defenderSpeciesKey)
+                .transition(swapTransition)
+        }
+    }
+
     private var swapButton: some View {
-        Button {
+        PopIconButton(
+            systemImage: PopSymbol.swap, label: "攻守を入れ替える", identifier: "swapSidesButton", minSide: CalcScreenMetrics.iconButtonSide
+        ) {
             viewModel.scheduleLatest { await $0.swapSides() }
-        } label: {
-            Image(systemName: "arrow.left.arrow.right")
-                .font(TextStyleToken.heading.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .padding(SpacingToken.x2)
-                .background(ColorToken.tableZebra.color, in: Circle())
         }
         .padding(.top, SpacingToken.x6)
-        .accessibilityIdentifier("swapSidesButton")
-        .accessibilityLabel("攻守を入れ替える")
     }
 
     /// 自分側のプリセット。カードの外、画面幅いっぱいの3等分のピルで並べる(批評 M3c:
@@ -234,13 +230,16 @@ struct CalcScreenView: View {
             Button {
                 viewModel.scheduleLatest { await $0.selectAttackerPreset(preset) }
             } label: {
-                Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
-                    .font(TextStyleToken.body.font)
+                HStack(spacing: SpacingToken.x1) {
+                    if isSelected { PopIcon(PopSymbol.done) }
+                    Text(preset.label(for: viewModel.selectedMove?.category ?? .physical))
+                        .font(TextStyleToken.body.font)
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
                     .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
-                    .lineLimit(1)
-                    .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, SpacingToken.x2)
+                    .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide)
+                    .padding(.vertical, SpacingToken.x1)
                     .background(
                         Capsule().fill(PopChipStyle.fill(isSelected: isSelected))
                     )
@@ -272,28 +271,40 @@ struct CalcScreenView: View {
         Button {
             isMoveSearchPresented = true
         } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: SpacingToken.x1) {
-                    Text(viewModel.selectedMove?.nameJa ?? "-")
-                        .font(TextStyleToken.heading.font)
-                        .foregroundStyle(ColorToken.textPrimary.color)
-                        .lineLimit(1)
-                        .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
-                    // 「威力37 / 物理 / ばつぐん(×2)」(design.md「技セレクタ 威力・分類・相性」)。
-                    // 文言の組み立ては Core の `moveSummaryText` が持つ(View にロジックを置かない)。
-                    Text(viewModel.moveSummaryText)
-                        .font(TextStyleToken.caption.font)
-                        .foregroundStyle(moveSummaryColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(CalcScreenMetrics.compactMinimumScaleFactor)
+            HStack(alignment: .center, spacing: SpacingToken.x2) {
+                // タイプバッジ + 技名 + 分類のアイコン + 威力(Web の技のトリガーと同じ並び)。狭い幅では折り返す。
+                ComboWrapLayout(spacing: SpacingToken.x2) {
+                    if let move = viewModel.selectedMove {
+                        TypeBadgeView(type: move.type)
+                        Text(move.nameJa)
+                            .font(TextStyleToken.heading.font)
+                            .foregroundStyle(ColorToken.textPrimary.color)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                        PopIcon(PopSymbol.moveCategory(move.category))
+                            .foregroundStyle(ColorToken.textSecondary.color)
+                        Text(CalcScreenLabels.movePower(move.power))
+                            .font(TextStyleToken.body.font.monospacedDigit())
+                            .foregroundStyle(ColorToken.textSecondary.color)
+                            .fixedSize(horizontal: false, vertical: true)
+                    } else {
+                        Text("-")
+                            .font(TextStyleToken.heading.font)
+                            .foregroundStyle(ColorToken.textPrimary.color)
+                    }
                 }
-                Spacer()
-                Image(systemName: "chevron.up.chevron.down")
+                .frame(maxWidth: .infinity, alignment: .leading)
+                PopIcon(PopSymbol.picker)
                     .foregroundStyle(ColorToken.textSecondary.color)
             }
             .padding(SpacingToken.x3)
+            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
             .popCard(cornerRadius: RadiusToken.input)
         }
+        .buttonStyle(.plain)
+        // 読み上げは技名、値に「威力37 / 物理 / ばつぐん(×2)」(文の要約は見える文字にしない。相性は結果の先頭のバッジ)。
+        .accessibilityLabel(viewModel.selectedMove?.nameJa ?? "-")
+        .accessibilityValue(viewModel.moveSummaryText)
         .accessibilityIdentifier("movePicker")
         .sheet(isPresented: $isMoveSearchPresented) {
             MoveSearchSheet(
@@ -306,12 +317,11 @@ struct CalcScreenView: View {
     private var loadingSlot: some View {
         Group {
             if viewModel.isLoading {
-                ProgressView()
-                    .accessibilityIdentifier("calcLoadingIndicator")
+                PopNoticeView(kind: .loading, message: CalcScreenText.loading, identifier: "calcLoadingIndicator")
             }
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: Self.loadingIndicatorHeight)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(height: loadingIndicatorHeight)
     }
 }
 

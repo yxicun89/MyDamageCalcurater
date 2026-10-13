@@ -5415,7 +5415,10 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 
 | テスト | 変更 | 理由 |
 |---|---|---|
-| (なし。実装前) | 現時点で削除・書き換えた既存テストは無い | 新しい識別子と構造は追加のテストが固定する |
+| `CalcScreenUITests.testOpeningShowsDefaultPhysicalRows` | プリセットのピルが押せるまで画面を送る(最大 6 回)ようにした。検査は同じ | 見出しと特性の欄でカードが縦に伸びた |
+| `LargeTextLayoutUITests.calcConditionsPanelIdentifiers` | `calcAttackerAbilityPicker` を外し、`calcScreenIdentifiers` へ `calcAttackerAbilityPicker`・`calcDefenderAbilityPicker` を足した | 特性の欄は「詳細」でなくカードの中 |
+| `LargeTextLayoutUITests.testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5` | 天候・フィールド・壁を「存在だけ」から `assertNoHorizontalOverflowForPrefixes`(はみ出し検査)へ強めた。コメントも直した | 横スクロールをやめて折り返す並びにした |
+| `AbilityPickerUITests`・`CalcConditionsUITests` ほか | 変更なし(通ることを確認) | 開く操作は余計になるだけで通る |
 
 実装で次が起きたら、期待の更新だけ(検査対象は減らさない)をこの表に足す。
 - `CalcScreenUITests.testOpeningShowsDefaultPhysicalRows`: 見出しと特性の欄でカードが縦に伸び、プリセットのピルが最初の画面の外に出る機種では、`isHittable` の前にスクロールを足す(検査は同じ)。

@@ -236,7 +236,7 @@ final class LargeTextLayoutUITests: XCTestCase {
     // MARK: - P6-15 (2): AX5で「詳細」パネルを開いた状態のはみ出し(issue #274・ADR-0501「issue #274」6章)
 
     /// issue #274 6章の identifier 表のうち、rawValue が個体・種族に依存しない固定の要素
-    /// (`calcConditionsPanel` 自体・急所/やけど・ランクの値と±・特性の `Menu`)。
+    /// (`calcConditionsPanel` 自体・急所/やけど・ランクの値と±)。特性の `Menu` はカードの中に移った(`calcScreenIdentifiers`。G-05 計算の弾 ADR-0541)。
     private static let calcConditionsPanelIdentifiers = [
         "calcConditionsPanel",
         "calcCondition-critical",
@@ -244,18 +244,11 @@ final class LargeTextLayoutUITests: XCTestCase {
         "rankMeter-calcAttacker",
         "rankMeterMinus-calcAttacker",
         "rankMeterPlus-calcAttacker",
-        "calcAttackerAbilityPicker",
     ]
 
-    /// 天候・フィールド・防御側の壁(`calcWeather-*`/`calcTerrain-*`/`calcDefenderScreen-*`)は
-    /// `ChipButton.swift` のコメントどおり **横スクロールの `ScrollView(.horizontal)` の中**にある
-    /// (`CalcConditionsSection.weatherSection`/`terrainSection`/`defenderScreensSection`。1行に
-    /// 全部並べる幅が無いための意図的な設計)。横スクロールの中身は「スクロールすれば見える」もので
-    /// あり、`XCUIElement.frame` がウィンドウ幅を超えるのは不具合ではなく想定どおりの挙動
-    /// (実際、最初の実行でこれらを `assertNoHorizontalOverflowForPrefixes` に含めたところ、
-    /// 2つ目以降のチップが `rightCut=true` になり誤検知した。`itemComparisonToggles` の
-    /// `defenderItemToggle-*` が既存の `calcScreenIdentifiers` に入っていないのと同じ理由で対象外にする)。
-    /// このため、はみ出し検査ではなく「(少なくとも1件は)存在する」ことだけ確かめる。
+    /// 天候・フィールド・防御側の壁(`calcWeather-*`/`calcTerrain-*`/`calcDefenderScreen-*`)。
+    /// 以前は横スクロールの中にあり「存在だけ」を確かめていたが、G-05 計算の弾(ADR-0541)で折り返す並び(`ComboWrapLayout`)になったので、
+    /// 全部が画面の幅に収まること(はみ出し検査)に強めた。
     private static let calcConditionsPanelScrollableChipPrefixes = [
         "calcWeather-",
         "calcTerrain-",
@@ -281,6 +274,9 @@ final class LargeTextLayoutUITests: XCTestCase {
         "attackerCard",
         "swapSidesButton",
         "defenderCard",
+        // 特性の欄はカードの中(G-05 計算の弾。以前は「詳細」の中)。
+        "calcAttackerAbilityPicker",
+        "calcDefenderAbilityPicker",
         "attackerPreset-none",
         "attackerPreset-aFull",
         "attackerPreset-aMax",
@@ -345,12 +341,8 @@ final class LargeTextLayoutUITests: XCTestCase {
         XCTAssertTrue(element(app, "calcConditionsPanel").waitForExistence(timeout: Self.existenceTimeout))
 
         assertNoHorizontalOverflow(app, identifiers: Self.calcScreenIdentifiers + Self.calcConditionsPanelIdentifiers)
-        // 横スクロールの中の天候・フィールド・防御側の壁は、存在(少なくとも1件描画されている)だけ確かめる
-        // (`calcConditionsPanelScrollableChipPrefixes` のコメント参照。はみ出し検査の対象外)。
-        for prefix in Self.calcConditionsPanelScrollableChipPrefixes {
-            let firstMatch = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH %@", prefix)).firstMatch
-            XCTAssertTrue(firstMatch.waitForExistence(timeout: Self.existenceTimeout), "要素が見つからない(前方一致): \(prefix)")
-        }
+        // 天候・フィールド・防御側の壁は折り返すので、はみ出し検査の対象(`calcConditionsPanelScrollableChipPrefixes` のコメント参照)。
+        assertNoHorizontalOverflowForPrefixes(app, prefixes: Self.calcConditionsPanelScrollableChipPrefixes)
     }
 
     /// 防御側のランク(issue #274。ADR-0501「防御側のランクの受け入れ条件」)を AX5 で開いたとき、
