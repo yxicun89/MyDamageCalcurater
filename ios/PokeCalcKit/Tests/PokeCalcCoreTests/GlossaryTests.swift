@@ -89,6 +89,14 @@ final class GlossaryTests: XCTestCase {
             TeamLabels.spIncrease(statName: "こうげき"), TeamLabels.spDecrease(statName: "こうげき"),
             TeamLabels.spField(statName: "こうげき"),
         ])
+        // G-05 第 3 弾(ADR-0539): 逆算の作り直しで足した文言(追加のみ)。
+        add("G05Reverse", [
+            ReverseLabels.myRegion, ReverseLabels.opponentRegion, ReverseLabels.unitLabel(.percent), ReverseLabels.unitLabel(.damage),
+            ReverseLabels.observationLabel(1), ReverseLabels.observationHint(side: .defender),
+            ReverseLabels.observationHint(side: .attacker), ReverseLabels.predictedPercent, ReverseLabels.closeCandidate,
+            ReverseLabels.referenceRange, ReverseLabels.noExactNotice, ReverseLabels.loading, ReverseLabels.assumedHP(32),
+            ReverseLabels.exactCount(exact: 2, total: 3),
+        ])
         add("ReverseCandidateDisplay", [
             ReverseCandidateDisplay.matchLabel(exact: true), ReverseCandidateDisplay.matchLabel(exact: false),
         ])
