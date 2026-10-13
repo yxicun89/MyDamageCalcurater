@@ -4989,6 +4989,15 @@ team-svc が技 0 個のメンバーの `moveIds` を省くのに Web が必須�
 
 追記(ゲートの失敗と対処。2026-10-12): `SpeedMatchupLargeTextUITests.testSpeedMatchupInputNoHorizontalOverflowAtAX5` が「画面に出なかった要素」で落ちた。原因は本物で、ランクのメーターの `DragGesture` が ScrollView の縦スクロールを奪い、画面中央(slow swipe の開始点)がメーターに当たると 30 回スワイプしても進まなかった。対処はアプリ側: ドラッグを `RankHorizontalPan`(`UIGestureRecognizerRepresentable` の UIPanGestureRecognizer。最初の速度が水平優勢のときだけ begin。判定は `RankMeterLogic.isHorizontalDrag`)に替え、縦は始まらせない。期待は変えていない。`CalcDefenderRanksUITests` の縦スワイプ試験に「メーターの上から始めても画面がスクロールする」検査を追加。他の3件(`AdjustGoalsUITests.testUnavailableGoals…`・`AdjustScreenUITests.testUnsupportedMarkNoticeIsShown`・`CalcAttackerStatsUITests.testSelectingSpecialMove…`)は単独では再現せず、修正後の上記クラス一式(48 件)と合わせて成功した(同じ原因の可能性が高い:スクロールが進まない)。
 
+## ランクのメーターの ±0 の見た目(ADR-0533 追記。2026-10-13)
+
+テストの変更・削除なし。追加のみ: `RankMeterLogicTests.testFillOpacityConstants`・`testSegmentFillTable`(±0 / +2 / -3 / +6 / -6 の 13 段の塗り)・`testSegmentFillClampsOutOfRangeValue`。
+既存の `segmentState` の検査と UITest(識別子・value「±0」・label「攻撃」・37pt)は不変。
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| (なし) | - | 見た目の追加のみで、読み上げ・操作・識別子は変えていない |
+
 ## 構築編集の中のタイプバランス・別画面の廃止(ADR-0532。2026-10-12)
 
 受け入れ条件は ADR-0532「受け入れ条件」1〜6。構築編集の 6 枠の下に「タイプバランス」の節(`teamBalanceSection`)。
