@@ -300,6 +300,7 @@ struct CalcScreenView: View {
             .padding(SpacingToken.x3)
             .frame(minHeight: CalcScreenMetrics.minimumTapSide)
             .popCard(cornerRadius: RadiusToken.input)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         // 読み上げは技名、値に「威力37 / 物理 / ばつぐん(×2)」(文の要約は見える文字にしない。相性は結果の先頭のバッジ)。

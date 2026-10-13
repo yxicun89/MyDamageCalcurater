@@ -135,7 +135,7 @@ struct AdjustChoiceButton: View {
             .foregroundStyle(PopChipStyle.foreground(isSelected: isSelected))
             .padding(.horizontal, SpacingToken.x3)
             .padding(.vertical, SpacingToken.x2)
-            .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.minimumTapSide, alignment: .leading)
+            .frame(maxWidth: .infinity, minHeight: CalcScreenMetrics.iconButtonSide, alignment: .leading)
             .background(
                 PopChipStyle.fill(isSelected: isSelected),
                 in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous)
