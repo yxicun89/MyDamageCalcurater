@@ -8,7 +8,9 @@ import XCTest
 final class CalcComboUITests: XCTestCase {
     private static let defaultPhysicalRowIDs = ["none@-", "hp@-", "hb_boost@-", "hb@-", "hb_full@-"]
     private static let existenceTimeout: TimeInterval = 5
-    private static let maxScrollAttempts = 12
+    private static let maxScrollAttempts = 40
+    /// スワイプのあと、慣性が止まるのを待つ秒数。
+    private static let settleWait: TimeInterval = 0.2
     private static let minTapSize: CGFloat = 36
     private static let overflowTolerance: CGFloat = 1
     private static let ax5ContentSizeCategory = "UICTContentSizeCategoryAccessibilityXXXL"
@@ -44,16 +46,28 @@ final class CalcComboUITests: XCTestCase {
         return app
     }
 
+    /// 画面を上下に少しずつ動かす。既定の `swipeUp()` は勢い(慣性)で 1 回に画面 1 枚ぶん以上動き、AX5 の長い画面で
+    /// 44pt ほどの欄を飛び越えることがある。ゆっくりスワイプして慣性を小さくし、動きが止まるのを待つ。
+    private func scrollStep(_ app: XCUIApplication, towardsBottom: Bool) {
+        let screen = element(app, "calcScreen")
+        if towardsBottom {
+            screen.swipeUp(velocity: .slow)
+        } else {
+            screen.swipeDown(velocity: .slow)
+        }
+        Thread.sleep(forTimeInterval: Self.settleWait)
+    }
+
     private func scrollUntilHittable(_ app: XCUIApplication, _ target: XCUIElement, file: StaticString = #filePath, line: UInt = #line) {
         XCTAssertTrue(target.waitForExistence(timeout: Self.existenceTimeout), "要素が無い: \(target)", file: file, line: line)
         var attempts = 0
         while !target.isHittable && attempts < Self.maxScrollAttempts {
-            element(app, "calcScreen").swipeUp()
+            scrollStep(app, towardsBottom: true)
             attempts += 1
         }
         attempts = 0
         while !target.isHittable && attempts < Self.maxScrollAttempts {
-            element(app, "calcScreen").swipeDown()
+            scrollStep(app, towardsBottom: false)
             attempts += 1
         }
         XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)", file: file, line: line)
