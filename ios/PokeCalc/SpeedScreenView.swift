@@ -157,6 +157,7 @@ private struct SpeedSelfSection: View {
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .popCard(cornerRadius: RadiusToken.card)
+        .modifier(SpeedAccentBand(color: speedAccentColor(viewModel.selfAccentTypeID)))
         .accessibilityElement(children: .contain)
     }
 
@@ -234,6 +235,7 @@ private struct SpeedOpponentSection: View {
         .padding(SpacingToken.x3)
         .frame(maxWidth: .infinity, alignment: .leading)
         .popCard(cornerRadius: RadiusToken.card)
+        .modifier(SpeedAccentBand(color: speedAccentColor(viewModel.opponentAccentTypeID)))
         .accessibilityElement(children: .contain)
     }
 

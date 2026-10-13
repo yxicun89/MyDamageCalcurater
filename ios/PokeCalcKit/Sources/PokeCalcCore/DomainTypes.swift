@@ -259,14 +259,39 @@ public struct Move: Equatable, Sendable {
     /// 威力(0 は変化技/固定ダメージ)。
     public var power: Int
     public var priority: Int
+    /// 追加効果のうち確率 100% でランクを変えるもの(連続技が使う。ADR-0535)。無ければ nil。
+    public var effect: MoveRankEffect?
 
-    public init(id: String, nameJa: String, type: PokeType, category: MoveCategory, power: Int, priority: Int = 0) {
+    public init(
+        id: String, nameJa: String, type: PokeType, category: MoveCategory, power: Int, priority: Int = 0,
+        effect: MoveRankEffect? = nil
+    ) {
         self.id = id
         self.nameJa = nameJa
         self.type = type
         self.category = category
         self.power = power
         self.priority = priority
+        self.effect = effect
+    }
+}
+
+/// ランクを変える追加効果の対象(契約 `Move.effect.Target`)。
+public enum MoveEffectTarget: String, Sendable, Hashable {
+    /// 自分(契約の `self`)。
+    case user = "self"
+    /// 相手(契約の `target`)。
+    case opponent = "target"
+}
+
+/// 確率 100% でランクを変える追加効果(契約 `Move.effect` のうち `Chance` が 100 のもの)。
+public struct MoveRankEffect: Equatable, Sendable {
+    public var target: MoveEffectTarget
+    public var stages: RankBlock
+
+    public init(target: MoveEffectTarget, stages: RankBlock) {
+        self.target = target
+        self.stages = stages
     }
 }
 

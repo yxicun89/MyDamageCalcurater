@@ -7,6 +7,78 @@ import SwiftUI
 // 状態の描き分け(案内 / 読み込み中 / 失敗 / 結果)だけを持ち、語の選び方は `SpeedMatchupDisplayBuilder` が決める。
 // 固定高にしない。届かない・同速・行動順は文字で言う(色だけに頼らない)。
 
+/// 端の帯の色(タイプ ID からタイプ色、未選択・未知は brandPrimary)。
+func speedAccentColor(_ typeID: String?) -> Color {
+    typeID.flatMap { TypeColorToken.color(forTypeID: $0) } ?? ColorToken.brandPrimary.color
+}
+
+/// カード・結論の左端に縦の帯を重ねる(色だけに頼らない: 文言は別にある)。
+struct SpeedAccentBand: ViewModifier {
+    let color: Color
+    func body(content: Content) -> some View {
+        content.overlay(alignment: .leading) {
+            Capsule().fill(color).frame(width: 4).padding(.vertical, SpacingToken.x2)
+        }
+    }
+}
+
+/// 結論の 1 行。
+private struct SpeedConclusionLine: View {
+    let text: String
+    let identifier: String
+    let accent: Color
+
+    var body: some View {
+        Text(text)
+            .font(TextStyleToken.heading.font)
+            .foregroundStyle(ColorToken.textPrimary.color)
+            .multilineTextAlignment(.leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(SpacingToken.x3)
+            .padding(.leading, SpacingToken.x1)
+            .popCard(cornerRadius: RadiusToken.card)
+            .modifier(SpeedAccentBand(color: accent))
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier(identifier)
+    }
+}
+
+/// 折りたたみ(題のボタン + 開いたときだけ描く中身)。題は 36pt 以上・固定高にしない。
+/// `DisclosureGroup` は題の識別子がボタンと内側の三角の両方に付いて UI テストで 2 件に見えるため、ボタンを自前で持つ。
+private struct SpeedDisclosure<Content: View>: View {
+    let title: String
+    let identifier: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SpacingToken.x2) {
+            Button {
+                isExpanded.toggle()
+            } label: {
+                HStack(spacing: SpacingToken.x2) {
+                    Text(title)
+                        .font(TextStyleToken.body.font)
+                        .foregroundStyle(ColorToken.textPrimary.color)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .foregroundStyle(ColorToken.textSecondary.color)
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: 40)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityValue(isExpanded ? "開いています" : "閉じています")
+            .accessibilityIdentifier(identifier)
+            if isExpanded {
+                content
+            }
+        }
+    }
+}
+
 /// 出力 1: 想定ごとのカード。
 struct SpeedMatchupSection: View {
     let viewModel: SpeedMatchupViewModel
@@ -34,8 +106,12 @@ struct SpeedMatchupSection: View {
             if let speed = matchup.selfSpeed {
                 SpeedHint(text: SpeedLabels.selfSpeed(speed), identifier: "speedSelfSpeed")
             }
+            if let conclusion = viewModel.matchupConclusion {
+                SpeedConclusionLine(
+                    text: conclusion, identifier: "speedConclusion", accent: speedAccentColor(viewModel.opponentAccentTypeID))
+            }
             ForEach(viewModel.matchupCards) { card in
-                SpeedMatchupCard(card: card)
+                SpeedMatchupCard(card: card, trickRoom: viewModel.trickRoom, accent: speedAccentColor(viewModel.opponentAccentTypeID))
             }
         }
     }
@@ -44,13 +120,18 @@ struct SpeedMatchupSection: View {
 /// 想定 1 つぶんのカード: 見出し・相手の素早さ・性格ごとの行・同速・行動順のバッジ。
 private struct SpeedMatchupCard: View {
     let card: SpeedMatchupCardDisplay
+    let trickRoom: Bool
+    let accent: Color
+    @State private var naturesExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
-            Text(card.assumptionLabel)
+            Text(card.heading)
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .accessibilityIdentifier("speedCardHeading-\(card.id)")
             Text(card.headline)
                 .font(TextStyleToken.heading.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
@@ -66,13 +147,23 @@ private struct SpeedMatchupCard: View {
             if let badge = card.orderBadge {
                 orderBadge(badge)
             }
-            ForEach(card.rows) { row in
-                natureRow(row)
+            SpeedDisclosure(
+                title: trickRoom ? SpeedMatchupLabels.naturesSummaryTrickRoom : SpeedMatchupLabels.naturesSummary,
+                identifier: "speedCardNaturesToggle-\(card.id)", isExpanded: $naturesExpanded
+            ) {
+                VStack(alignment: .leading, spacing: SpacingToken.x2) {
+                    ForEach(card.rows) { row in
+                        natureRow(row)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .padding(SpacingToken.x3)
+        .padding(.leading, SpacingToken.x1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .popCard(cornerRadius: RadiusToken.card)
+        .modifier(SpeedAccentBand(color: accent))
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("speedCard-\(card.id)")
     }
@@ -132,6 +223,7 @@ private struct SpeedMatchupCard: View {
 /// 出力 2:「これ以上」。今の振りを入れたときだけ出る(入れていなければ案内)。
 struct SpeedReachSection: View {
     let viewModel: SpeedMatchupViewModel
+    @State private var listExpanded = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
@@ -153,8 +245,20 @@ struct SpeedReachSection: View {
             ErrorBannerView(message: failure.message, identifier: "speedReachError")
         case .loaded:
             VStack(alignment: .leading, spacing: SpacingToken.x3) {
-                ForEach(viewModel.reachRows) { row in
-                    SpeedReachRow(row: row)
+                if let conclusion = viewModel.reachConclusion {
+                    SpeedConclusionLine(
+                        text: conclusion, identifier: "speedReachConclusion", accent: speedAccentColor(viewModel.selfAccentTypeID))
+                }
+                SpeedDisclosure(
+                    title: SpeedMatchupLabels.reachListSummary(count: viewModel.reachRows.count),
+                    identifier: "speedReachListToggle", isExpanded: $listExpanded
+                ) {
+                    VStack(alignment: .leading, spacing: SpacingToken.x3) {
+                        ForEach(viewModel.reachRows) { row in
+                            SpeedReachRow(row: row)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)

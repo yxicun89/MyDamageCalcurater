@@ -34,6 +34,8 @@ public enum RequestLimits {
     public static let maxAdjustHits = 10
     /// `AdjustGoalsRequest.goals.maxItems`。調整の「目標」の件数の上限(F-11。ADR-0331 §5・ADR-0525)。
     public static let maxAdjustGoals = 6
+    /// `ComboRequest.steps.maxItems`(連続技の手の数の上限。engine の `MaxComboSteps`。ADR-0535)。
+    public static let maxComboSteps = 3
 
     // MARK: - お気に入り(ADR-0227・ADR-0511): api/openapi.yaml の写し。`check-request-limits.sh` が契約と照合する
 

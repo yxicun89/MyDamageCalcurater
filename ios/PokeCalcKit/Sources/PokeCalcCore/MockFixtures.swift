@@ -44,6 +44,20 @@ struct MockFixtures {
         /// 技の機構(openapi `MasterMove.mechanisms` と同じ値。ADR-0121)。無ければ通常の技。
         /// モックはこれを未対応の印(`target: move`)にする(ADR-0501「P6-17」4章)。
         let mechanisms: [String]?
+        /// ランクを変える追加効果(契約 `Move.effect` と同じ形。無ければ効果なし。連続技のモックが使う)。
+        let effect: EffectEntry?
+
+        struct EffectEntry: Decodable {
+            let chance: Int
+            let target: String
+            let stages: [String: Int]
+
+            enum CodingKeys: String, CodingKey {
+                case chance = "Chance"
+                case target = "Target"
+                case stages = "Stages"
+            }
+        }
     }
 
     struct ItemEntry: Decodable {
@@ -100,9 +114,54 @@ struct MockFixtures {
     /// `displayChancePercent=100.0`(同 §3.4)。`guaranteed=false` の `chancePercent` は
     /// engine の実式(複数発の乱数計算)ではなく、フィクスチャらしく見せるための概算値。
     let calcResultsByKey: [String: CalcResultEntry]
+    /// 連続技の決め打ちの結果(`combo-results.json`)。
+    let combo: ComboFixture
+
+    /// `combo-results.json` の形(アプリ内だけの固定フィクスチャ。openapi の契約とは無関係)。
+    struct ComboFixture: Decodable {
+        struct Line: Decodable {
+            struct Range: Decodable {
+                let min: Int
+                let max: Int
+            }
+            let selfSpeed: Int
+            let selfFirst: Range
+            let opponentFirst: Range
+        }
+        struct Step: Decodable {
+            let selfSpeed: Int
+            let line: Line
+            /// 相手の素早さが分かる(`from_defender`)ときの行動順(契約 `ComboTurnOrder` の値)。
+            let knownOrder: String
+        }
+        struct Total: Decodable {
+            let minDamage: Int
+            let maxDamage: Int
+            let minPercent: Double
+            let maxPercent: Double
+            let defenderHP: Int
+            let ko: KO
+        }
+        struct KO: Decodable {
+            let chancePercent: Double
+            let guaranteed: Bool
+            let displayChancePercent: Double
+        }
+        struct OpponentAttack: Decodable {
+            let selfHp: Int
+            let minActions: Int
+            let maxActions: Int
+            let fastSurviveChancePercent: Double
+            let slowSurviveChancePercent: Double
+        }
+        let steps: [Step]
+        let knownOpponentSpeed: Int
+        let total: Total
+        let opponentAttack: OpponentAttack
+    }
 
     /// `Resources/` 直下の JSON ファイル名(拡張子なし)。`fixtureURLs()` と `load()` の両方が使う。
-    static let resourceNames = ["species", "moves", "items", "natures", "calc-results", "adjust-results"]
+    static let resourceNames = ["species", "moves", "items", "natures", "calc-results", "adjust-results", "combo-results"]
 
     static func fixtureURLs() throws -> [URL] {
         try resourceNames.map { name in
@@ -123,7 +182,7 @@ struct MockFixtures {
         for (name, url) in zip(resourceNames, urls) { byName[name] = url }
         guard let speciesURL = byName["species"], let movesURL = byName["moves"],
               let itemsURL = byName["items"], let naturesURL = byName["natures"],
-              let calcResultsURL = byName["calc-results"]
+              let calcResultsURL = byName["calc-results"], let comboURL = byName["combo-results"]
         else {
             throw PokeCalcError(code: PokeCalcError.Code.fixtureMissing, message: "モックのリソース構成が不正")
         }
@@ -132,7 +191,8 @@ struct MockFixtures {
             moves: try decode([MoveEntry].self, from: movesURL),
             items: try decode([ItemEntry].self, from: itemsURL),
             natures: try decode([NatureEntry].self, from: naturesURL),
-            calcResultsByKey: try decode([String: CalcResultEntry].self, from: calcResultsURL)
+            calcResultsByKey: try decode([String: CalcResultEntry].self, from: calcResultsURL),
+            combo: try decode(ComboFixture.self, from: comboURL)
         )
     }
 }
