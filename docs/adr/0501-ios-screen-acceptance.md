@@ -5213,6 +5213,7 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 | `TeamScreenUITests.testNewTeamOpensEditorWithSixEmptySlots` | 空の一覧の案内が「新しい構築」を含む → 一言「まだ構築がありません」。`slotEmptyHint-N` の文 → 存在しない | 決定 1・3。他の検査(6 枠・欄・未保存の印なし)は同じ |
 | `LargeTextLayoutUITests` の構築編集の AX5 | はみ出し検査の対象 `slotEmptyHint-1` → `teamSlotGrid` | 案内の文を廃止し、格子に置き換えたため |
 | `TeamBalanceUITests.scrollUntilHittable`(AX5 のタイプバランス) | 既定の最大スワイプ数 60 → 100 | AX5 では 6 枠のタイルの格子(1 列)と SP の行が増えて画面が長くなり、節までの送りが 60 回では届かないことがあったため(検査は同じ) |
+| `CalcAttackerStatsUITests.tapUntilSelected` | 押し直し 1 回 → 「ゆっくりスクロール(velocity .slow)→ 止まるのを待つ → 押す」を選択されるまで最大 3 回。要素がバーの下に潜っていたら引き下げる | 性格ボタンが上のナビゲーションバーの下(上端 y=86)に止まり、上寄りのタップがバーに当たって不安定だったため(team 変更と無関係。期待値は同じ) |
 
 タイプバランスの技ピッカー(`BalanceMemberCard`・`BalanceMoveRangeView`)は `MoveSearchSheet` の `noneLabel` 既定を使うため、先頭行の語が「外す」から「(なし)」に変わる(Web の語に揃う。識別子 `moveSearchRemoveButton` は不変で、UITest はこの語を参照していない)。SP の数値欄は ASCII の数字だけを通す(全角数字は受け付けない)。
 
