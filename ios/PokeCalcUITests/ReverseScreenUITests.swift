@@ -7,6 +7,8 @@ import XCTest
 final class ReverseScreenUITests: XCTestCase {
     /// `Resources/items.json` の唯一の架空持ち物(相手の持ち物候補トグルの対象。`CalcScreenUITests` と同じ)。
     private static let mockItemID = "test-item-berry"
+    /// 追加ボタンの下端が画面の下から、この余白(タブバーの高さ + 余裕)より内側にあるときは先にスクロールする。
+    private static let bottomClearance: CGFloat = 140
     private static let existenceTimeout: TimeInterval = 5
     /// `Resources/species.json` の2番目。逆算画面の既定の自分(先頭の種族)とは別の種族にして、
     /// 構築から呼び出したときに種族が実際に変わったことを検査できるようにする(P6-2d)。
@@ -162,7 +164,22 @@ final class ReverseScreenUITests: XCTestCase {
         for _ in 1..<maxObservations {
             XCTAssertFalse(element(app, "reverseObservationLimitHint").exists, "上限の手前では理由を出さない")
             XCTAssertTrue(addButton.isEnabled)
+            // 追加ボタンが画面の下端(タブバーの裏)に寄ると、押したつもりがタブバーに当たって空振りする。
+            // 下端に近いときは、ボタンが中ほどに来るまでゆっくりスクロールしてから押す。
+            var scrolls = 0
+            while addButton.frame.maxY > app.windows.firstMatch.frame.height - Self.bottomClearance && scrolls < 3 {
+                app.swipeUp(velocity: .slow)
+                RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+                scrolls += 1
+            }
             addButton.tap()
+        }
+        // 最後の行は画面の下端に寄って見えないことがある(見えない要素は探せない)。見えるまでゆっくりスクロールして待つ。
+        var attempts = 0
+        while !element(app, "reverseObservationField-\(maxObservations - 1)").exists && attempts < 5 {
+            app.swipeUp(velocity: .slow)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+            attempts += 1
         }
         XCTAssertTrue(element(app, "reverseObservationField-\(maxObservations - 1)").waitForExistence(timeout: Self.existenceTimeout))
         XCTAssertTrue(element(app, "reverseObservationLimitHint").waitForExistence(timeout: Self.existenceTimeout))

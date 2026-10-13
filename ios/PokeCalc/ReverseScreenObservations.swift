@@ -12,10 +12,8 @@ struct ReverseObservationListView: View {
     /// テンキーの「完了」ボタンで閉じるための共有フォーカス(行をまたいで1つ)。
     var focusedObservationID: FocusState<Int?>.Binding
 
-    /// 単位の文言(% は観測%、実点数はダメージの単位が無いので短い接尾辞にする)。
-    private var unitLabel: String {
-        viewModel.observationKind == .percent ? "%" : "ダメージ"
-    }
+    /// 単位の語(与えたダメージ = 「%」、受けたダメージ = 「HP」。単位はダメージの側で決まるので切り替えは無い。ADR-0539 §2)。
+    private var unitLabel: String { ReverseLabels.unitLabel(viewModel.observationKind) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
@@ -25,22 +23,27 @@ struct ReverseObservationListView: View {
                     focusedObservationID: focusedObservationID
                 )
             }
+            // 単位が分からない欄の例外として、一覧の下に単位の 1 行を 1 つだけ置く(1 カード 1 行まで)。
+            Text(ReverseLabels.observationHint(side: viewModel.side))
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reverseObservationHint")
             Button {
                 viewModel.addObservation()
             } label: {
-                Label("ダメージを追加", systemImage: "plus.circle")
+                PopLabel(title: "ダメージを追加", systemImage: PopSymbol.add)
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.brandPrimary.color)
+                    .frame(minHeight: CalcScreenMetrics.minimumTapSide)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
             .disabled(viewModel.observationsReachedLimit)
-            .padding(.top, SpacingToken.x1)
+            .opacity(viewModel.observationsReachedLimit ? CalcScreenMetrics.disabledChipOpacity : 1)
             .accessibilityIdentifier("reverseAddObservationButton")
             if viewModel.observationsReachedLimit {
-                Text(RequestLimitLabels.observationsReachedLimit)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.textSecondary.color)
-                    .accessibilityIdentifier("reverseObservationLimitHint")
+                PopNoticeView(kind: .info, message: RequestLimitLabels.observationsReachedLimit, identifier: "reverseObservationLimitHint")
             }
         }
     }
@@ -62,6 +65,12 @@ private struct ReverseObservationRowView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
+            // 見える名前(行の頭)。欄の読み上げ名(「ダメージ1(%)」)は下の欄が持つ。
+            Text(ReverseLabels.observationLabel(index + 1))
+                .font(TextStyleToken.caption.font)
+                .foregroundStyle(ColorToken.textSecondary.color)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("reverseObservationLabel-\(index)")
             HStack(spacing: SpacingToken.x2) {
                 TextField(
                     "",
@@ -85,29 +94,23 @@ private struct ReverseObservationRowView: View {
                 .padding(.vertical, SpacingToken.x2)
                 .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
                 .accessibilityIdentifier("reverseObservationField-\(index)")
-                .accessibilityLabel("ダメージ\(index + 1)(\(unitLabel))")
+                .accessibilityLabel("\(ReverseLabels.observationLabel(index + 1))(\(unitLabel))")
 
                 Text(unitLabel)
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.textSecondary.color)
+                    .accessibilityIdentifier("reverseObservationUnit-\(index)")
 
-                Button {
+                // 削除は通常の操作(エラーではない)ので danger にしない(PopIconButton の既定色)。
+                PopIconButton(
+                    systemImage: PopSymbol.minus, label: "このダメージを削除",
+                    identifier: "reverseObservationRemove-\(index)"
+                ) {
                     viewModel.scheduleLatest { await $0.removeObservation(id: row.id) }
-                } label: {
-                    // danger はエラー表示用の色(design.md「色を持つのはタイプだけ」の例外は danger のみ)。
-                    // 削除はエラーではない通常の操作なので textSecondary にする。
-                    Image(systemName: "minus.circle")
-                        .foregroundStyle(ColorToken.textSecondary.color)
                 }
-                .buttonStyle(.plain)
-                .accessibilityIdentifier("reverseObservationRemove-\(index)")
-                .accessibilityLabel("このダメージを削除")
             }
             if let visibleErrorMessage {
-                Text(visibleErrorMessage)
-                    .font(TextStyleToken.caption.font)
-                    .foregroundStyle(ColorToken.danger.color)
-                    .accessibilityIdentifier("reverseObservationError-\(index)")
+                PopNoticeView(kind: .error, message: visibleErrorMessage, identifier: "reverseObservationError-\(index)")
             }
         }
     }
