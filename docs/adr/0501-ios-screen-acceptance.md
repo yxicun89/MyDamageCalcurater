@@ -5330,3 +5330,83 @@ API・engine・Web・タイプバランスの節(`TeamBalanceSection`)・ラン�
 `TeamScreenUITests` の他(種族の選択・技シートの検索・入れ替え・外す・保存・戻る・カード・削除の 2 段階)、`TeamBalanceUITests`、`CalcScreenUITests`・`ReverseScreenUITests`(構築から選ぶ)は変えない
 (識別子・読み上げ名は不変)。`TeamLabels.emptyList` の値を変えるが、固定していた既存テストは無い。実装で上の他に文言・手順が変わるテストが出たら、同じ方針
 (期待の更新だけ・検査対象は減らさない)でこの表に足す。
+
+## G-05 計算の作り直し(ADR-0541。2026-10-13)
+
+方針は design.md「見た目の作り直し方針(G-05)」・「iOS の追い方(G-05)」。Web の決定(ADR-0339/0344/0345)に追う。対象は Calc 系 6 ファイル
+(`CalcScreenView`・`CalcScreenCards`・`CalcAttackerStatBlocksView`・`CalcConditionsSection`・`CalcScreenResults`・`CalcScreenStyleHelpers`)、連続技の節 3 ファイル
+(`ComboSectionView`・`ComboSectionParts`・`ComboResultView`。部品の置き換えと規約の確認だけ)、`PopComponents.swift` の `PopSymbol`、Core の計算の文言・判定。
+識別子と読み上げ名は不変(下の「新しい識別子」を足すだけ)。API・engine・Web・ランクのメーター(`RankMeterView`)・検索シート(`MasterSearchSheet`。逆算の弾 ADR-0539)は触らない。
+前提: ADR-0539(逆算)・ADR-0540(調整)の実装が main にあること(`PopPokemonCard`・`PopSymbol.judge`・検索シートの共用部)。
+
+### 現状の洗い出し(文で説明している箇所・Web と構造や語が違う箇所)
+
+| 画面・部品 | 今 | 直す |
+|---|---|---|
+| 攻撃側・防御側カード | 見出しの文字が無い(読み上げ名だけ)。顔は `SpeciesHeaderMenuLabel`(画像 + 矢印 + 名前 + バッジ。名前は `lineLimit(2)` + 縮小、矢印は直書き) | 見出し「攻撃側」「防御側」(`PopHeading`)+ `PopPokemonCard`(持ち物の印つき) |
+| 特性の欄 | 「詳細」の中(攻撃側の特性・防御側の特性) | カードの中(持ち物の下)。Web のカードは ポケモン・持ち物・特性 |
+| 持ち物の上限の注記 | caption の文字 | `PopNoticeView(.info)`(アイコン + 一言) |
+| 攻守入れ替え | 矢印の直書きの丸いボタン | `PopIconButton` + `PopSymbol.swap` |
+| 技の欄 | 名前 + 要約の文(「威力37 / 物理 / ばつぐん(×2)」。`lineLimit(1)` + 縮小)、矢印は直書き | タイプバッジ + 技名 + 分類アイコン + 威力。要約は読み上げの値へ |
+| プリセットのピル | `lineLimit(1)` + 縮小。選択中は塗りだけ | 折り返す。塗り + チェック |
+| SP の欄 | 数値欄だけ | − / + のアイコンボタン + 数値欄(0 / 32 で止まる) |
+| SP の誤り・各案内 | caption の文字 | `PopNoticeView(.error)` / `(.info)`(アイコン + 文) |
+| 性格補正の 3 択 | 自前の区切りボタン(選択中は塗りだけ) | そのまま + 選択中のチェック |
+| 結果の行 | 調整名 + 幅 → バー → 小さい確定数(右)。調整は body、`lineLimit(1)` + 縮小 | 大きい幅の数字 + 確定数のバッジ(塗り)→ バー → 調整・特性(caption) |
+| 技の相性 | 技の欄の要約の文の中(ばつぐんだけ色付き) | 結果の先頭に枠だけのバッジ 1 つ(`等倍` ほか全部) |
+| 計算中 | `ProgressView`(回り続ける) | `PopNoticeView(.loading)`(静止したアイコン +「計算中」) |
+| 「詳細」 | 名前 + 矢印の直書き(上下の切り替え) | アイコン(`PopSymbol.open`)+ 名前。開閉は読み上げの値 |
+| 条件・持ち物比較のチップ | 横スクロールの行(隠れる)。`ChipButton` は `lineLimit(1)` | 折り返す並び。`lineLimit` 無し・36pt 以上・選択中のチェック |
+| 共有部品 | `MenuLabelChip`・`SpeciesHeaderMenuLabel` の矢印の直書き・`lineLimit`、`TypeBadgeView` の `lineLimit(1)`、`?? .white` | `PopSymbol.picker`、`lineLimit` 無し、`ColorToken.onPrimary` |
+| 連続技の節 | `ProgressView`、SF Symbols の直書き、`ComboIconButton`(44pt) | `PopNoticeView(.loading)`、`PopSymbol`、`PopIconButton`(文言・識別子・機能は不変) |
+
+既に方針どおりで変えないもの: 結果の行の確定数の弾みと触覚(操作時のみ・視差効果を減らすで無し)、ダメージバー、API 不可時の表示(`ErrorBannerView`・「もう一度」)、
+ランクのメーター、メガ固定の理由と防御側の固定の表示(状態の通知)、`PillButtonStyle`、条件のチップ(急所・やけど・天候・フィールド・壁)、
+性格補正の無効 + 理由の 1 行、数字キーボードの「完了」、「カスタム」「(この技で使用)」の印、未対応の印の文(状態の通知)、
+画像かエンブレム(`SpeciesImageView`)、構築から選ぶ入口(ADR-0537)、お気に入り・履歴の復元の通知(ADR-0536)、連続技の機能・文言・識別子。
+Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iOS の機能に無く、この弾の対象外。
+
+### 受け入れ条件
+
+1. 見出し「攻撃側」「防御側」(`calcAttackerHeading`・`calcDefenderHeading`)がそれぞれのカード(`attackerCard`・`defenderCard`)の上にある。回り続ける読み込み表示(`activityIndicators`)が無い。
+2. ポケモン・持ち物(攻撃側のみ)・特性(攻撃側・防御側)の欄がカードの中にあり、36pt 以上。「詳細」を開いても特性の欄は 1 つだけ(詳細の中に増えない)。識別子・値は不変。
+3. SP は − / + のボタン(`attackerSPDecrease-<stat>`・`attackerSPIncrease-<stat>`。読み上げ「攻撃のSPを減らす/増やす」)と数値欄で、すべて 36pt 以上。0 で − が、32 で + が押せない。
+   範囲外の整数(33)・読めない文字は誤り(`attackerSPError-<stat>`)のまま計算せず、33 では + が押せず − で 32 に戻る。
+4. 結果の行の 1 行目に大きいダメージ幅(`calcResultPercent-<id>`)と確定数のバッジ(`calcResultKO-<id>`)が並び、調整・持ち物の小さい行(`calcResultPreset-<id>`)がその下。
+5. 技の相性は結果の先頭に 1 つだけ(`calcEffectivenessBadge`。モックの既定は「等倍」)で、行より上。結果の一覧のコンテナの読み上げ名は「計算結果」(`calcResults`)。
+6. 技の欄(`movePicker`)は 36pt 以上、読み上げ名に技名、値に 威力・相性(要約の文は見える文字にしない)。攻守入れ替え(`swapSidesButton`)はアイコンだけ・36pt 以上・読み上げ名は不変。
+7. プリセット・性格補正の 3 択・条件のチップ・持ち物の比較のチップは 36pt 以上で、選択の特性(`isSelected`)は従来のまま、選択中はチェックの印も付く。
+   条件・比較のチップは横スクロールにせず折り返し、全部が画面の幅に収まる。
+8. 「詳細」(`calcConditionsToggle`)は 36pt 以上で、読み上げの値が「閉じています」→ 開くと「開いています」。中身は 急所・やけど・天候・フィールド・壁・ランク。
+9. 計算中は静止したアイコン + 「計算中」(`calcLoadingIndicator`)。連続技の計算中(`comboLoading`)も静止した表示。
+10. 連続技の節: 次の技(`comboOpenButton`)・手の上へ/下へ/外す(`comboStep*`)は 36pt 以上。機能・文言・識別子・読み上げ名は不変。
+11. Calc 系 6 ファイル + 連続技 3 ファイルに `ProgressView(`・`repeatForever`・`lineLimit`・`minimumScaleFactor`・色のリテラル/システム色・SF Symbols 名の直書きが無く、動きは視差効果を減らすで 0 秒(`G05CalcSourceRulesTests`)。
+12. 新しい部品(見出し・カード・SP のボタン・折り返すチップ)を含め、AX5 で横にはみ出さず、タップが 36pt 以上(`CalcG05UITests.testNewPartsDoNotOverflowAtAX5`)。
+13. 常に画面に出る語(見出し・計算中・読み上げ名)は「。」を含まず、禁止語を含まない(`G05CalcTextTests`)。
+
+### 新しい識別子
+
+`calcAttackerHeading`・`calcDefenderHeading`・`attackerSPDecrease-<stat>`・`attackerSPIncrease-<stat>`・`calcEffectivenessBadge`・`calcResults`・`calcResultPreset-<id>`。
+既存の識別子(`attackerCard`・`defenderCard`・`attackerSpeciesPicker`・`calcAttackerAbilityPicker`・`calcDefenderAbilityPicker`・`movePicker`・`swapSidesButton`・`attackerPreset-*`・
+`attackerNature-*`・`attackerSPField-*`・`attackerSPError-*`・`calcConditionsToggle`・`calcConditionsPanel`・`calcWeather-*` ほか・`calcResultRow-*`・`calcResultPercent-*`・`calcResultKO-*`・
+`calcResultAbility-*`・`calcLoadingIndicator`・`comboLoading` ほか)は付け替えない。廃止: なし。
+
+### 追加したテスト
+
+`G05CalcTextTests`・`G05CalcLogicTests`(`AttackerSPStep`・`attackerItemMark`/`defenderItemMark`)・`G05CalcSourceRulesTests`(以上 PokeCalcCoreTests)、`CalcG05UITests`(AX5 を含む)。
+骨組みとして `PokeCalcCore/G05CalcText.swift`(値は空・判定は常に「押せない」・印は nil。実装者が入れる)を置いた。
+禁止語の検査は `GlossaryTests` に足さず `G05CalcTextTests` で完結させた(逆算・調整の弾も同じファイルを変えるため、衝突を避けた)。
+
+### 既存テストの変更(新しい構造への更新。検査は弱めていない)
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| (なし。実装前) | 現時点で削除・書き換えた既存テストは無い | 新しい識別子と構造は追加のテストが固定する |
+
+実装で次が起きたら、期待の更新だけ(検査対象は減らさない)をこの表に足す。
+- `CalcScreenUITests.testOpeningShowsDefaultPhysicalRows`: 見出しと特性の欄でカードが縦に伸び、プリセットのピルが最初の画面の外に出る機種では、`isHittable` の前にスクロールを足す(検査は同じ)。
+- `LargeTextLayoutUITests` の「詳細」のはみ出し検査: 天候・フィールド・壁は横スクロールでなくなる。`calcConditionsPanelScrollableChipPrefixes`(存在だけ見る)を、はみ出し検査の対象へ移す(強める変更。コメントも直す)。
+  特性の欄(`calcAttackerAbilityPicker`)は「詳細」でなくカードの中になるので、`calcConditionsPanelIdentifiers` から `calcScreenIdentifiers` へ移す。
+- `AbilityPickerUITests`・`CalcConditionsUITests` の「詳細を開いてから特性の欄を探す」操作: 特性の欄は詳細を開かなくても出る。開く操作は余計になるだけで通る。必要なら開く操作を外し、「詳細に特性が無い」検査はここで足した `CalcG05UITests` が持つ。
+- `AppNavigationUITests` ほか `calcLoadingIndicator` の不在を待つ検査: 識別子は文に付くので、そのまま通る。
+`CalcViewModelTests.moveSummaryText` ほか Core の既存テストは変えない(`moveSummaryText` は読み上げの値に使う)。`MasterSearchSheet` を使う既存テスト(技・種族のシート)は逆算の弾の変更に従う。
