@@ -11,7 +11,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [calc, pokedex, balance, speed, judge, record, team]
+        values: [calc, pokedex, balance, speed, record, team]
   policyTypes:
     - Ingress
   ingress:

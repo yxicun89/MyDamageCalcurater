@@ -41,7 +41,7 @@
 - **gateway**: ブラウザ・iOS からの唯一の入口。
 - **calc-svc**: ダメージ計算の API(engine を呼ぶだけ)。
 - **pokedex-svc**: ポケモン・技・持ち物などのマスタデータの検索・提供。
-- **balance-svc / speed-svc / judge-svc**: タイプバランス・素早さ比較・判定のそれぞれの API。
+- **balance-svc / speed-svc**: タイプバランス・素早さ比較のそれぞれの API。判定(judge-svc)は ADR-0715 で廃止した。
 - **record-svc / team-svc**: 計算の履歴・構築の保存(TiDB。NATS 経由で非同期に保存し、落ちても計算は止まらない)。
 - **MySQL**: マスタデータの保存先(pokedex-svc だけが触る)。
 

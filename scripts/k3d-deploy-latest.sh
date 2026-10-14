@@ -4,7 +4,7 @@
 # (例: pokedex に新しいエンドポイントが無い)ことがあるため。
 #
 # 対象: pokedex の DB(migrate-up)・pokedex(サーバー)・pokedex-importer(CronJob・import-k8s が使う)・
-# calc・gateway・web・judge・balance・speed・M2(NATS・TiDB・record・team。scripts/k3d-m2-deploy.sh。ADR-0226)。
+# calc・gateway・web・balance・speed・M2(NATS・TiDB・record・team。scripts/k3d-m2-deploy.sh。ADR-0226)。
 # M2 が準備できなくても(TiDB の起動失敗等)他のサービスの入れ替えは続け、理由を表示して最後に非ゼロで終わる。
 # balance・speed は実データの read model(data/generated/readmodel。`make pokedex-export` の出力)で入れる。
 # 無ければ balance・speed は入れ替えず、理由を表示して最後に非ゼロで終わる(黙って成功扱いにしない)。
@@ -95,8 +95,6 @@ make --no-print-directory api-k3d-deploy
 ./scripts/images-k3d.sh || echo "deploy-latest: 画像の配置に失敗(画像なしで続行。make images-k3d で再試行)" >&2
 echo "== web"
 make --no-print-directory web-k3d-deploy
-echo "== judge"
-make --no-print-directory judge-k3d-deploy
 
 # M2(NATS・TiDB・record・team)。失敗しても他のサービスの入れ替えは済んでいるので続行し、最後に非ゼロで終わる。
 # calc・gateway・pokedex は計算を TiDB に依存しない(CLAUDE.md 絶対ルール5)。

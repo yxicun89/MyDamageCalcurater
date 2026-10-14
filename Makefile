@@ -34,7 +34,7 @@ GEN_STALE := ./scripts/ensure-gen.sh stale
 export GEN_FORCE
 
 .PHONY: gen
-gen: gen-go gen-sql gen-ts balance-gen speed-gen judge-gen ## OpenAPI / sqlc のコード生成(変更が無ければ何もしない。強制は GEN_FORCE=1)
+gen: gen-go gen-sql gen-ts balance-gen speed-gen ## OpenAPI / sqlc のコード生成(変更が無ければ何もしない。強制は GEN_FORCE=1)
 
 .PHONY: gen-go
 gen-go: ## Go サーバ/型を api/openapi.yaml から生成(services/internal/api/openapi.gen.go)
@@ -63,7 +63,7 @@ gen-clean: ## Git に置かない生成物を消す(iOS も。次の make gen・
 
 # Go の生成物だけ(Web の依存を入れずに Go をビルド・テストできるようにする)
 .PHONY: gen-go-all
-gen-go-all: gen-go gen-sql balance-gen speed-gen judge-gen
+gen-go-all: gen-go gen-sql balance-gen speed-gen
 
 ## --- テスト -----------------------------------------------------------
 .PHONY: test
@@ -136,7 +136,7 @@ lint: gen-go-all ## gofmt / go vet / shell・Node構文チェック
 	@$(MAKE) --no-print-directory check-publishable-selftest
 
 # staticcheck(tools/go.mod の tool ディレクティブで版固定。issue #331)。警告が1件でもあれば失敗する。
-# ビルドタグ付きのファイルも解析する(vet と同じタグ)。balance・speed・judge は別モジュールのため GOWORK=off。
+# ビルドタグ付きのファイルも解析する(vet と同じタグ)。balance・speed は別モジュールのため GOWORK=off。
 # engine はタグ無しだと golden 専用の定数を未使用と誤検知するため、タグ付きだけ解析する。
 # 生成コードは staticcheck.conf の checks で外す(各モジュールのルートに置く)。
 .PHONY: staticcheck
@@ -144,7 +144,7 @@ staticcheck: gen-go-all ## staticcheck(固定版)を全モジュール・全ビ�
 	@sc="$$(cd tools && $(GO) tool -n staticcheck)" && \
 	cd engine && "$$sc" -tags golden ./... && "$$sc" -tags allspecies ./... && cd ../services && \
 	"$$sc" ./... && "$$sc" -tags mysql ./pokedex/... && "$$sc" -tags tidb ./record/... ./team/... && "$$sc" -tags nats ./calc/... && cd ../tools && \
-	"$$sc" ./... && cd ../services/balance && GOWORK=off "$$sc" ./... && cd ../speed && GOWORK=off "$$sc" ./... && cd ../judge && GOWORK=off "$$sc" ./...
+	"$$sc" ./... && cd ../services/balance && GOWORK=off "$$sc" ./... && cd ../speed && GOWORK=off "$$sc" ./...
 
 .PHONY: build
 build: gen-go-all ## 実装済みGoモジュールをビルド(Web/WASMは後続タスク)
@@ -369,7 +369,7 @@ pokedex-registry-push: ## pokedex(server イメージ)をクラスタ内共有�
 .PHONY: k8s-render
 # 各レーンの overlay も描画する(issue #261・#321)。どれか1つでも描画できなければ lint を失敗させる。
 # local/api・local/web・local/mysql・local/nats は Component なので、local・local-api・local-web の描画で確かめる。
-k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize judge-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・judge・observability・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
+k8s-render: k8s-render-kubectl api-kustomize web-kustomize balance-kustomize speed-kustomize ## kustomize で全レーンの overlay(local・cloud・tidb・local-api・local-web・balance・speed・observability・Argo CD の AppProject)が描画できることを確かめる(apply はしない)
 	@kubectl kustomize deploy/k8s/overlays/cloud >/dev/null
 	@kubectl kustomize deploy/k8s/overlays/local/tidb >/dev/null
 	@kubectl kustomize deploy/argocd >/dev/null
@@ -425,7 +425,6 @@ tidy: ## go mod tidy(全モジュール)
 	@cd tools && $(GO) mod tidy
 	@cd services/balance && GOWORK=off $(GO) mod tidy
 	@cd services/speed && GOWORK=off $(GO) mod tidy
-	@cd services/judge && GOWORK=off $(GO) mod tidy
 
 .PHONY: deps-outdated
 deps-outdated: ## 古くなった依存の一覧を表示する(ネットワーク使用。失敗しても一覧を出す。make test には含めない)
@@ -441,8 +440,6 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 	@cd services/balance && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Go: services/speed (go list -m -u all) =="
 	@cd services/speed && GOWORK=off $(GO) list -m -u all 2>&1 || true
-	@echo "== Go: services/judge (go list -m -u all) =="
-	@cd services/judge && GOWORK=off $(GO) list -m -u all 2>&1 || true
 	@echo "== Node: tools/golden (npm outdated) =="
 	@if [ -f tools/golden/package.json ]; then cd tools/golden && (npm outdated || true); else echo "(tools/golden/package.json が無い)"; fi
 	@echo "== Node: tools/importer (npm outdated) =="
@@ -452,7 +449,6 @@ deps-outdated: ## 古くなった依存の一覧を表示する(ネットワー�
 
 include services/balance/Makefile
 include services/speed/Makefile
-include services/judge/Makefile
 include services/gateway/Makefile
 include web/Makefile
 include ios/Makefile

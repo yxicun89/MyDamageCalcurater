@@ -10,7 +10,7 @@
 
 | パス | files | 責務 |
 |---|---:|---|
-| `.` | 11 | ルート: Makefile(includes: balance/speed/judge/gateway/web/ios)・go.work・CLAUDE.md/AGENTS.md・README・KICKOFF 系・.env.example(MYSQL_ROOT_PASSWORD のみ) |
+| `.` | 11 | ルート: Makefile(includes: balance/speed/gateway/web/ios)・go.work・CLAUDE.md/AGENTS.md・README・KICKOFF 系・.env.example(MYSQL_ROOT_PASSWORD のみ) |
 | `.claude` | 1 | Claude Code のプロジェクト設定(settings.json: 権限・フック) |
 | `.claude/agents` | 4 | サブエージェント定義(critic・implementer・quick-scanner・spec-writer) |
 | `.claude/skills/improve` | 1 | スキル /improve |
@@ -96,16 +96,6 @@
 | `services/internal/api` | 4 | ルート openapi.yaml の生成物(サーバ/型)と設定・契約の門番テスト |
 | `services/internal/master` | 9 | DB 行 → engine 型の写像と効果定義の厳格デコード(calc・pokedex 共用) |
 | `services/internal/version` | 1 | ビルド情報(ldflags で Version) |
-| `services/judge` | 5 | judge-svc(素早さ×確定数判定。別 module)。Dockerfile・Makefile・README |
-| `services/judge/api` | 1 | judge の openapi.yaml |
-| `services/judge/cmd/api` | 3 | judge の main・環境変数の読み込み |
-| `services/judge/deploy/k8s/base` | 4 | judge の Deployment・Service(Ingress なし。ADR-0416) |
-| `services/judge/deploy/k8s/overlays/local` | 1 | ローカル overlay(image :local) |
-| `services/judge/internal/api` | 2 | oapi-codegen 生成物と設定 |
-| `services/judge/internal/client` | 6 | pokedex-svc・calc-svc への HTTP クライアント |
-| `services/judge/internal/httpapi` | 4 | HTTP アダプタ(outspeed-and-ko) |
-| `services/judge/internal/judge` | 4 | 素早さ計算・性格解決のドメイン |
-| `services/judge/scripts` | 1 | smoke |
 | `services/pokedex` | 3 | pokedex-svc(マスタ API・DB・importer。services module 内)。Dockerfile・README |
 | `services/pokedex/cmd/import` | 3 | pokedex-import(照合・投入 CLI) |
 | `services/pokedex/cmd/migrate` | 1 | pokedex-migrate(golang-migrate 実行) |
@@ -165,7 +155,6 @@
 | `web/src/master/example` | 5 | 架空の例マスタ(種族・技・持ち物・特性・性格) |
 | `web/src/screens` | 19 | 計算・逆算・タイプバランス画面 |
 | `web/src/speed` | 6 | 素早さ画面と speedClient |
-| `web/src/judge` | 6 | 判定画面(JudgeScreen)と judgeClient(judge-svc の生成型 `judge.gen.ts`)。main 取り込み後に追加(JD5) |
 | `web/src/styles` | 6 | デザイントークン CSS |
 | `web/src/test` | 12 | テスト共通部品 |
 | `web/src/ui` | 2 | UI 補助(motion) |
@@ -236,8 +225,7 @@ flowchart LR
 | mysql | StatefulSet(local のみ) | `mysql:9.7.2@sha256:…` | 基底の既定 | 3306 | `mysql` headless(clusterIP None) | なし | PVC `data` 1Gi | `deploy/k8s/overlays/local/mysql/` |
 | balance | Deployment | `pokecalc/balance:0.1.0` | `/balance-api` | 8080 | `balance` 80 | `balance` `/api/balance` | read model ファイル | `services/balance/deploy/k8s/base/`、`services/balance/Dockerfile:13` |
 | speed | Deployment | `pokecalc/speed:0.1.0` | `/speed-api` | 8080 | `speed` 80 | `speed` `/api/speed` | read model ファイル | `services/speed/deploy/k8s/base/`、`services/speed/Dockerfile:23` |
-| judge | Deployment | `pokecalc/judge:0.1.0` | `/judge-api` | 8080 | `judge` 80 | `judge` `/api/judge` | なし | `services/judge/deploy/k8s/base/`、`services/judge/Dockerfile:23` |
-
+| judge | Deployment | `pokecalc/judge:0.1.0` | `/judge-api` | 8080 | `judge` 80 | `judge` `/api/judge` | なし 
 - 共通(mysql を除く): `runAsNonRoot`・`readOnlyRootFilesystem`・requests 10m/16Mi・limits 100〜200m/64Mi・probe は `/healthz`(calc の readiness だけ `/readyz`)。mysql は `mysqladmin ping` の exec probe・256Mi/512Mi。calc・gateway は `GOMEMLIMIT=56MiB`。
 - ローカル overlay は image を `pokecalc/{calc,gateway,web,balance,speed,judge}:local` に差し替える(`deploy/k8s/overlays/local/{api,web}/kustomization.yaml`、`services/*/deploy/k8s/overlays/local*/`)。pokedex 系(server・migrate・importer)は `up.sh` が `:0.1.0` で build → `k3d image import`(`scripts/up.sh:8-10,48-49,54-55,80-81`)。
 - balance・speed・judge は `deploy/k8s/base` の resources に**含まれない**(`deploy/k8s/base/kustomization.yaml`)。各サービスの `Makefile` ターゲットが個別に apply する。
@@ -264,8 +252,7 @@ flowchart LR
 | `readmodel.Export` | `services/pokedex/internal/adapters/readmodel/readmodel.go` | balance・speed 用 JSON 出力(組み立ては `app.ExportReadModel`) |
 | `balance httpapi.Dependencies`(`TypeChart`・`PokemonTypes`・`Moves`・`Abilities`・`PokemonCatalog`) | `services/balance/internal/httpapi/server.go:50` | nil の依存は 503 `master_unavailable`。Provider IF は `services/balance/internal/balance/{defense,pokemon,move,ability,recommend}.go` |
 | `speed httpapi.Dependencies`・`speed.PokemonProvider` | `services/speed/internal/httpapi/server.go:33`・`services/speed/internal/speed/pokemon.go:22` | 同上 |
-| `judge httpapi.Dependencies`(`Pokedex`・`Calc`・`ChoiceScarfItemID`)・`client.Pokedex`/`client.Calc` | `services/judge/internal/httpapi/server.go:24`・`services/judge/internal/client/{pokedex,calc}.go` | 上流 HTTP クライアント。未設定なら 503 |
-| `CalcEngine`・`EngineResult<T>` | `web/src/engine/types.ts:306,299` | 画面が使う計算の差し替え口(WASM / API) |
+| `judge httpapi.Dependencies`(`Pokedex`・`Calc`・`ChoiceScarfItemID`)・`client.Pokedex`/`client.Calc` | `CalcEngine`・`EngineResult<T>` | `web/src/engine/types.ts:306,299` | 画面が使う計算の差し替え口(WASM / API) |
 | `createWasmEngine`・`WasmLoader` | `web/src/engine/wasmEngine.ts:142` | WASM 実装。遅延ロード |
 | `createApiEngine` | `web/src/api/apiEngine.ts:229` | API 実装(実体 → ID の写像して POST) |
 | `MasterSource`・`MasterSources` | `web/src/master/types.ts:67,115` | 架空例(offline)/ pokedex API(online) |

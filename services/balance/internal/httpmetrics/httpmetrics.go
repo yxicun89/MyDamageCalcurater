@@ -4,7 +4,7 @@
 // http_request_duration_seconds{method,path} using the default client_golang buckets
 // (ADR-0406 §1〜3).
 //
-// balance・speed・judge (each its own Go module) carry an identical copy of this file
+// balance・speed (each its own Go module) carry an identical copy of this file
 // (ADR-0406 §2: no shared module dependency across service lanes). Any change here must be
 // mirrored there.
 package httpmetrics

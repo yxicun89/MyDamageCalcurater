@@ -66,7 +66,6 @@ data/local/
 services/internal/api/openapi.gen.go
 services/balance/internal/api/openapi.gen.go
 services/speed/internal/api/openapi.gen.go
-services/judge/internal/api/openapi.gen.go
 services/pokedex/internal/store/db.go
 services/pokedex/internal/store/models.go
 services/pokedex/internal/store/pokedex.sql.go
@@ -74,7 +73,6 @@ services/pokedex/internal/store/querier.go
 web/src/api/openapi.gen.ts
 web/src/api/balance.gen.ts
 web/src/speed/speed.gen.ts
-web/src/judge/judge.gen.ts
 # iOS の生成物は対象(ios/scripts/openapi-targets.sh)が増えても漏れないよう、まとめて無視する
 ios/PokeCalcKit/Sources/*/Generated
 ios/.gen-stamps/

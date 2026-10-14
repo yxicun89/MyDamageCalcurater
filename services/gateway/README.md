@@ -15,7 +15,6 @@ flowchart LR
   GW -->|"/api/team/*"| Team["team-svc"]
   GW -->|"/api/balance/*"| Balance["balance-svc"]
   GW -->|"/api/speed/*"| Speed["speed-svc"]
-  GW -->|"/api/judge/*"| Judge["judge-svc"]
   GW -->|"それ以外(GET/HEAD)"| Web["web(静的配信)"]
   GW -.->|"/assets/*"| Assets["MinIO(未設定なら404)"]
 ```
@@ -39,9 +38,8 @@ flowchart LR
 | `GATEWAY_POKEDEX_URL` | いいえ(base の既定は `http://pokedex`) | pokedex-svc の基底 URL。DB が空のクラスタでは初回の `make import-k8s` を実行するまで 503 |
 | `GATEWAY_RECORD_URL` | いいえ | record-svc の基底 URL(ADR-0209 §10・P5-3)。未設定なら `/api/record/*` は 503。**deployment.yaml への配線は未実施(P5-3b)** |
 | `GATEWAY_TEAM_URL` | いいえ | team-svc の基底 URL(ADR-0213・P5-4)。未設定なら `/api/team/*` は 503。**deployment.yaml への配線は未実施(P5-4b)** |
-| `GATEWAY_BALANCE_URL` | いいえ | balance-svc の基底 URL(issue #284)。未設定なら `/api/balance/*` は 503。base の deployment.yaml で `http://balance` に配線済み(ADR-0414)。speed・judge も配線済み |
+| `GATEWAY_BALANCE_URL` | いいえ | balance-svc の基底 URL(issue #284)。未設定なら `/api/balance/*` は 503。base の deployment.yaml で `http://balance` に配線済み(ADR-0414)。speed も配線済み |
 | `GATEWAY_SPEED_URL` | いいえ | speed-svc の基底 URL(issue #284)。未設定なら `/api/speed/*` は 503。base の deployment.yaml で `http://speed` に配線済み(ADR-0416) |
-| `GATEWAY_JUDGE_URL` | いいえ | judge-svc の基底 URL(issue #284)。未設定なら `/api/judge/*` は 503。base の deployment.yaml で `http://judge` に配線済み(ADR-0416) |
 | `GATEWAY_ASSETS_URL` | いいえ | 画像配信(MinIO)の基底 URL。未設定なら `/assets/*` は 404 |
 | `GATEWAY_WEB_URL` | いいえ | Web の静的配信の基底 URL。設定時は予約パス以外の GET/HEAD を転送 |
 | `GATEWAY_CORS_ALLOWED_ORIGINS` | いいえ | カンマ区切りの許可オリジン(完全一致)。空なら CORS ヘッダを付けない |
@@ -57,12 +55,10 @@ flowchart LR
 | `/api/team/*` | team-svc(未設定なら503) | あり |
 | `/api/balance/*` | balance-svc(未設定なら503) | あり(`/api/balance/healthz` 完全一致のみ例外) |
 | `/api/speed/*` | speed-svc(未設定なら503) | あり(`/api/speed/healthz` 完全一致のみ例外) |
-| `/api/judge/*` | judge-svc(未設定なら503) | あり(`/api/judge/healthz` 完全一致のみ例外) |
 | `/assets/*`(GET / HEAD) | assets の上流 | なし |
 | `GET /healthz` | gateway 自身 | なし |
 | それ以外 | `GATEWAY_WEB_URL` 未設定なら 404。設定時は GET / HEAD を Web へ転送 | なし |
 
-`/api/balance/*`・`/api/speed/*`・`/api/judge/*` は末尾の完全一致 `healthz` パスだけヘッダ検証を課さない
 (3サービスの契約 `publicHealth`。ADR-0202 §3・issue #284 参照)。`/api/balance` そのもの(末尾スラッシュ無し)・
 `/api/balancex` は上表のどれにも一致しないため404(pokedex・record・team と同じ規則)。
 

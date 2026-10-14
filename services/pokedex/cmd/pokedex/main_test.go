@@ -122,7 +122,7 @@ func waitForListen(t *testing.T, addr string) {
 	}
 }
 
-// 受け入れ条件1: http.Server が ADR-0111 決定1の値(balance/judge と同じ)で構成されている。
+// 受け入れ条件1: http.Server が ADR-0111 決定1の値(balance と同じ)で構成されている。
 // 名前(定数)ではなく実際の値を固定する(定数名だけ変わっても検知できるように)。
 func TestHTTPServerTimeouts(t *testing.T) {
 	srv := newHTTPServer("127.0.0.1:0", http.NotFoundHandler())

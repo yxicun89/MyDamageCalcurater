@@ -52,7 +52,7 @@ const (
 // 実際に渡った PoolConfig を横取りして検証できるようにするため。ADR-0112 決定3)。
 var openPool = db.OpenPool
 
-// HTTP タイムアウトと shutdown timeout(ADR-0111 決定1。services/balance・services/judge と同じ値)。
+// HTTP タイムアウトと shutdown timeout(ADR-0111 決定1。services/balance と同じ値)。
 // shutdown timeout は10秒(calc-svc・gateway の5秒とは異なる値。ADR-0111 実装時の申し送り3)。
 const (
 	readHeaderTimeout = 5 * time.Second
