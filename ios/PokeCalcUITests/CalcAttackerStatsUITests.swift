@@ -133,6 +133,8 @@ final class CalcAttackerStatsUITests: XCTestCase {
     private func selectSpecialMove(_ app: XCUIApplication) {
         let movePicker = element(app, "movePicker")
         scrollUntilHittable(app, movePicker)
+        // 上端がナビゲーションバーの下に潜ると、上から 25% を狙うタップがバーに当たる(tapUntilSelected と同じ対策)。
+        settleBelowNavigationBar(app, movePicker)
         tapUpperPart(movePicker)
         XCTAssertTrue(element(app, "moveSearchSheet").waitForExistence(timeout: Self.existenceTimeout))
         let field = app.searchFields.firstMatch

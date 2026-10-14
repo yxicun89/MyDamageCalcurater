@@ -191,7 +191,7 @@ private struct AttackerSPField: View {
             .font(TextStyleToken.body.font.monospacedDigit())
             .foregroundStyle(ColorToken.textPrimary.color)
             .padding(.horizontal, SpacingToken.x3)
-            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
+            .frame(minHeight: CalcScreenMetrics.iconButtonSide)
             .background(ColorToken.tableZebra.color, in: RoundedRectangle(cornerRadius: RadiusToken.input, style: .continuous))
             .accessibilityLabel(AttackerStatLabels.spLabel(stat))
             .accessibilityIdentifier("attackerSPField-\(stat.rawValue)")
