@@ -158,6 +158,7 @@ final class CalcViewModelSpeedHandoffTests: XCTestCase {
     /// 先頭ページ(空の検索)の外の種族も、詳細を引いて入れる(素早さ画面は全ポケモンから選べる)。
     func testSpeciesOutsideTheFirstPageIsResolved() async throws {
         let stub = StubBulkMaster.makeService()
+        await stub.setMoveLookupMode(.immediate)  // 先頭ページの外の技は個別に引ける設定(既定の .notFound だと selectAttacker でも同じ誤りになる)
         let viewModel = await loadedViewModel(stub)
         await viewModel.openFromSpeed(
             handoff(attacker: StubBulkMaster.hiddenSpecies.key, defender: StubBulkMaster.mixedSpecies.key))

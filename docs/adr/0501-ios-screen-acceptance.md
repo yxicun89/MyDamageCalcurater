@@ -5604,3 +5604,5 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 実装で上の他に変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。
 
 実装の結果(2026-10-15): 既存のテストは 1 件も変えていない(上の表のとおり)。`SpeedMatchupUITests` の「`speedComboLink` が無い」は未選択の画面を見ているので、リンクを出す配線を足しても成り立つ。
+
+追記(2026-10-15): 新規テスト `CalcViewModelSpeedHandoffTests.testSpeciesOutsideTheFirstPageIsResolved` の準備に `setMoveLookupMode(.immediate)` を足した(テストデータの修正)。先頭ページの外の種族は覚える技も先頭ページの外にあり、スタブの既定 `.notFound` だと `selectAttacker` でも同じ誤り(覚える技が見つからない)になるため。検査(種族が辞書に入る・名前が出る・誤りが出ない)は同じ。
