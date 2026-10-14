@@ -10,7 +10,7 @@
 ## 何が動くか
 
 - ブラウザ(Web): ダメージ計算・逆算・素早さ比較・構築ビルダー(構築編集の中でタイプバランスも見られる)。オフライン(WASM。架空の例データ)とオンライン(API。実データ)の両方
-- サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・judge・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
+- サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
 - iOS アプリ(SwiftUI。`make ios-test`)
 - 別アプリ「欲しいものリスト」: 欲しいものを画像で並べ、各サイトの目安価格と検索リンクを出す(Web〈PWA〉・iOS・API・夜間の価格取得。[apps/wishlist/README.md](apps/wishlist/README.md))
 - 未実装: `make assets`(画像の変換・配信。終了コード 2)と、k3d の有無で変わる E2E の一部(クラスタ分は `make up` が前提)
@@ -88,7 +88,7 @@ make build
 ```sh
 make gen                                          # 生成物は Git に置かない。go を直接使う前に1回(ADR-0807)
 (cd engine && go vet ./... && go build ./...)
-(cd services && go vet ./... && go build ./...)   # balance・speed・judge は別モジュール。make lint / make build が検査する
+(cd services && go vet ./... && go build ./...)   # balance・speed は別モジュール。make lint / make build が検査する
 (cd tools && go vet ./... && go build ./...)
 ```
 
@@ -108,7 +108,7 @@ kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存�
 
 | パス | 役割 |
 |---|---|
-| `api/openapi.yaml` | ダメージ計算・gateway・pokedex 等の API 契約(balance・speed・judge は `services/<名前>/api/openapi.yaml`。DECISIONS 2026-09-21) |
+| `api/openapi.yaml` | ダメージ計算・gateway・pokedex 等の API 契約(balance・speed は `services/<名前>/api/openapi.yaml`。DECISIONS 2026-09-21) |
 | `engine/` | 純粋 Go の計算ロジックとテスト |
 | `services/` | Go サービス用モジュール、OpenAPI 生成コード |
 | `tools/golden/` / `testdata/golden/` | 外部実装によるテストベクタ生成・照合データ |

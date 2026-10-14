@@ -40,7 +40,7 @@
 | [type-balance-design.md](type-balance-design.md) | タイプバランスチェッカーの設計 |
 | [type-balance-test-strategy.md](type-balance-test-strategy.md) | タイプバランスのテスト戦略 |
 | [speed-design.md](speed-design.md) | 素早さ比較サービスの設計 |
-| [judge-design.md](judge-design.md) | 判定サービス(素早さ×確定数)の設計 |
+| [judge-design.md](judge-design.md) | 判定サービス(素早さ×確定数)の設計(廃止済み。ADR-0715) |
 | [audit-r1.md](audit-r1.md) | R-1 コーディング規約違反の監査結果 |
 
 ## 手順書(runbooks/)

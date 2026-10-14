@@ -1,7 +1,7 @@
 package deploytest_test
 
 // issue #298: 64Mi の limit を持つ Go サービスは GOMEMLIMIT で GC を OOMKill の前に働かせる。
-// calc・gateway は deploy/k8s/base/<サービス>/ に、balance・judge・speed は services/<サービス>/deploy/k8s/base/ に
+// calc・gateway は deploy/k8s/base/<サービス>/ に、balance・speed は services/<サービス>/deploy/k8s/base/ に
 // Deployment を持つ(置き場所が違うだけで、守る不変条件は同じ)。値は limits.memory との関係で検査し、数値は直書きしない:
 // limits.memory の 75% 以上 かつ limits.memory 未満(calc の 56MiB / 64Mi = 87.5% が基準)。
 
@@ -18,7 +18,6 @@ var goMemLimitDeployments = map[string]string{
 	"calc":    "deploy/k8s/base/calc/deployment.yaml",
 	"gateway": "deploy/k8s/base/gateway/deployment.yaml",
 	"balance": "services/balance/deploy/k8s/base/deployment.yaml",
-	"judge":   "services/judge/deploy/k8s/base/deployment.yaml",
 	"speed":   "services/speed/deploy/k8s/base/deployment.yaml",
 	// ADR-0220 §1
 	"record": "deploy/k8s/base/record/deployment.yaml",

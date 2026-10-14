@@ -53,7 +53,7 @@ render_plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n k8s-render 2>/dev/n
 for overlay in deploy/k8s/overlays/local deploy/k8s/overlays/cloud deploy/k8s/overlays/local/tidb \
   deploy/k8s/overlays/local-api deploy/k8s/overlays/local-web \
   services/balance/deploy/k8s/overlays/gitops services/speed/deploy/k8s/overlays/gitops \
-  services/judge/deploy/k8s/overlays/local deploy/argocd deploy/k8s/base/observability; do
+  deploy/argocd deploy/k8s/base/observability; do
   if echo "$render_plan" | grep -qE "kubectl kustomize [^ ]*${overlay} "; then
     ok "k8s-render が ${overlay} を描画する"
   else
@@ -77,9 +77,9 @@ else
 fi
 
 # issue #295: 全 *-k3d-deploy は、最初の kubectl / k3d より前に共通の context ガードを呼ぶ(-n の出力で順序を見る)。
-# issue #291: 5つの直接デプロイは k3d-deploy-tagged.sh 経由(先頭で require-k3d-context.sh を呼ぶ。
+# issue #291: 4つの直接デプロイは k3d-deploy-tagged.sh 経由(先頭で require-k3d-context.sh を呼ぶ。
 # 別クラスタなら docker・apply に触らないことは k3d-deploy-tagged_test.sh が確かめる)。
-for target in api-k3d-deploy balance-k3d-deploy speed-k3d-deploy judge-k3d-deploy web-k3d-deploy \
+for target in api-k3d-deploy balance-k3d-deploy speed-k3d-deploy web-k3d-deploy \
   balance-k3d-deploy-readmodel speed-k3d-deploy-readmodel; do
   plan=$("$MAKE_BIN" -C "$ROOT" --no-print-directory -n "$target" 2>/dev/null)
   guard_line=$(echo "$plan" | grep -nE "(require-k3d-context|k3d-deploy-tagged)\.sh ${target}" | head -n 1 | cut -d: -f1)

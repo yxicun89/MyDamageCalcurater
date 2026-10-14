@@ -39,9 +39,9 @@ func envWith(mutate func(map[string]string)) map[string]string {
 // 環境変数の名前は運用(k8s の manifest・README)が依存するので固定する。
 func TestEnvNames(t *testing.T) {
 	got := []string{envAddr, envMetricsAddr, envCalcURL, envPokedexURL, envRecordURL, envTeamURL, envBalanceURL, envSpeedURL,
-		envJudgeURL, envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL, envImagesDir}
+		envAssetsURL, envCORSAllowedOrigins, envUpstreamTimeout, envWebURL, envImagesDir}
 	want := []string{"GATEWAY_ADDR", "GATEWAY_METRICS_ADDR", "GATEWAY_CALC_URL", "GATEWAY_POKEDEX_URL", "GATEWAY_RECORD_URL", "GATEWAY_TEAM_URL",
-		"GATEWAY_BALANCE_URL", "GATEWAY_SPEED_URL", "GATEWAY_JUDGE_URL", "GATEWAY_ASSETS_URL",
+		"GATEWAY_BALANCE_URL", "GATEWAY_SPEED_URL", "GATEWAY_ASSETS_URL",
 		"GATEWAY_CORS_ALLOWED_ORIGINS", "GATEWAY_UPSTREAM_TIMEOUT", "GATEWAY_WEB_URL", "GATEWAY_IMAGES_DIR"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("環境変数名 = %q, want %q", got, want)
@@ -50,9 +50,9 @@ func TestEnvNames(t *testing.T) {
 
 // wantConfig は config の比較用の平たい形(*url.URL は String で比べる。nil は "")。
 type wantConfig struct {
-	addr, calc, pokedex, record, team, balance, speed, judge, assets, web string
-	origins                                                               []string
-	timeout                                                               time.Duration
+	addr, calc, pokedex, record, team, balance, speed, assets, web string
+	origins                                                        []string
+	timeout                                                        time.Duration
 }
 
 func flatten(c config) wantConfig {
@@ -70,7 +70,6 @@ func flatten(c config) wantConfig {
 		team:    str(c.Gateway.TeamURL, c.Gateway.TeamURL == nil),
 		balance: str(c.Gateway.BalanceURL, c.Gateway.BalanceURL == nil),
 		speed:   str(c.Gateway.SpeedURL, c.Gateway.SpeedURL == nil),
-		judge:   str(c.Gateway.JudgeURL, c.Gateway.JudgeURL == nil),
 		assets:  str(c.Gateway.AssetsURL, c.Gateway.AssetsURL == nil),
 		web:     str(c.Gateway.WebURL, c.Gateway.WebURL == nil),
 		origins: c.Gateway.CORSAllowedOrigins,
@@ -80,7 +79,7 @@ func flatten(c config) wantConfig {
 
 func equalConfig(a, b wantConfig) bool {
 	return a.addr == b.addr && a.calc == b.calc && a.pokedex == b.pokedex && a.record == b.record && a.team == b.team &&
-		a.balance == b.balance && a.speed == b.speed && a.judge == b.judge && a.assets == b.assets && a.web == b.web &&
+		a.balance == b.balance && a.speed == b.speed && a.assets == b.assets && a.web == b.web &&
 		slices.Equal(a.origins, b.origins) && a.timeout == b.timeout
 }
 
@@ -95,7 +94,7 @@ func TestLoadConfig(t *testing.T) {
 		{"最小(CALC_URL だけ)は既定値", envWith(nil), defaults},
 		{"空の任意値は未設定と同じ", envWith(func(e map[string]string) {
 			e[envAddr], e[envPokedexURL], e[envAssetsURL], e[envCORSAllowedOrigins], e[envUpstreamTimeout] = "", "", "", "", ""
-			e[envRecordURL], e[envTeamURL], e[envBalanceURL], e[envSpeedURL], e[envJudgeURL] = "", "", "", "", ""
+			e[envRecordURL], e[envTeamURL], e[envBalanceURL], e[envSpeedURL] = "", "", "", ""
 			e[envWebURL] = ""
 		}), defaults},
 		{"すべて指定", envWith(func(e map[string]string) {
@@ -105,7 +104,6 @@ func TestLoadConfig(t *testing.T) {
 			e[envTeamURL] = "http://team.example.test:8080"
 			e[envBalanceURL] = "http://balance.example.test:8080"
 			e[envSpeedURL] = "http://speed.example.test:8080"
-			e[envJudgeURL] = "http://judge.example.test:8080"
 			e[envAssetsURL] = "http://minio.example.test:9000"
 			e[envCORSAllowedOrigins] = "https://app.example.test, http://localhost:5173"
 			e[envUpstreamTimeout] = "250ms"
@@ -114,7 +112,7 @@ func TestLoadConfig(t *testing.T) {
 			addr: "127.0.0.1:9090", calc: testCalcURL,
 			pokedex: "http://pokedex.example.test:8080", record: "http://record.example.test:8080",
 			team: "http://team.example.test:8080", balance: "http://balance.example.test:8080",
-			speed: "http://speed.example.test:8080", judge: "http://judge.example.test:8080",
+			speed:   "http://speed.example.test:8080",
 			assets:  "http://minio.example.test:9000",
 			web:     "http://web.example.test:8080",
 			origins: []string{"https://app.example.test", "http://localhost:5173"}, timeout: 250 * time.Millisecond,
@@ -165,7 +163,6 @@ func TestLoadConfigRejects(t *testing.T) {
 		{"TEAM_URL が不正", envWith(func(e map[string]string) { e[envTeamURL] = "::" })},
 		{"BALANCE_URL が不正", envWith(func(e map[string]string) { e[envBalanceURL] = "::" })},
 		{"SPEED_URL が不正", envWith(func(e map[string]string) { e[envSpeedURL] = "::" })},
-		{"JUDGE_URL が不正", envWith(func(e map[string]string) { e[envJudgeURL] = "::" })},
 		{"ASSETS_URL が http(s) でない", envWith(func(e map[string]string) { e[envAssetsURL] = "s3://bucket" })},
 		// ADR-0205: GATEWAY_WEB_URL は http/https・ホスト必須・クエリ無し。
 		{"WEB_URL にスキームが無い", envWith(func(e map[string]string) { e[envWebURL] = "web" })},

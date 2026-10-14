@@ -1,4 +1,4 @@
-# Traefik(kube-system)から、Ingress の向き先(gateway・balance・speed・judge)の Pod ポート 8080 へ。
+# Traefik(kube-system)から、Ingress の向き先(gateway・balance・speed)の Pod ポート 8080 へ。
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -10,7 +10,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/name
         operator: In
-        values: [gateway, balance, speed, judge]
+        values: [gateway, balance, speed]
   policyTypes:
     - Ingress
   ingress:

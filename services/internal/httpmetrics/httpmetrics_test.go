@@ -9,7 +9,7 @@ package httpmetrics_test
 //	(*Metrics).Middleware() echo.MiddlewareFunc
 //	(*Metrics).Handler() echo.HandlerFunc   // Prometheus text format を返す
 //
-// 同じ内容のテストが services/balance・speed・judge の internal/httpmetrics にも複製されている
+// 同じ内容のテストが services/balance・speed の internal/httpmetrics にも複製されている
 // (ADR-0406 §2: 共有 Go module を作らず、1ファイルを複製する)。ここを直したら4箇所とも直すこと。
 
 import (

@@ -287,7 +287,7 @@ ADR を書く時点で `ls docs/adr` と `git branch -r` をもう一度見て�
 | CB-4 | 【実装済み 2026-10-12。データレーンが代行】API: `POST /api/calc/combo` と公開 `Move.effect`(確率 100% の効果だけ)。`make gen`、calc-svc のハンドラ、gateway の経路(前方一致のまま。テストで固定)。応答の形は WASM(CB-5)と同じ。未知の技は 422 ではなく 400 `unknown_move`(HTTP の語彙。ADR-0253) | API | CB-3(CB-1 は変化技の手に必要) | 中 | 0253 |
 | CB-5 | 【実装済み 2026-10-12】WASM: `engine/wasmapi` に連続技、`wasmexpect` の期待値 | データ(engine) | CB-3 | 小〜中 | 0179 に追記 |
 | CB-6 | 【段階 A 実装済み 2026-10-12: エンジン層〈calcCombo の API/WASM・公開 Move.effect・要求の組み立て〉。段階 B 実装済み 2026-10-12: 計算画面の「連続技」の節〈ADR-0359。web/src/screens/ComboSection.tsx〉。段階 C 実装済み 2026-10-12: 素早さの種族の例〈`POST /api/speed/v1/reach`〈raw〉の準速の族〉・素早さ画面→計算タブの導線・フォーカスと通知。I-web-32 実装済み 2026-10-12: 自分の素早さの入力〈SP・性格補正・ランク〉と素早さ画面からの引き継ぎ〈スカーフは API に項目が無く持ち越し〉〉】Web: 案 A(§4-3)。素早さ表の例は speed の reach(raw)を呼ぶ | Web | CB-4(オフラインは CB-5) | 中〜大(結果の表示と入力で 2 つに分けてよい) | 0356 の予定だったが 0359(ADR 番号の振り直し) |
-| CB-7 | 判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |
+| CB-7 | 【実装済み 2026-10-12】判定の廃止: judge-svc・`web/src/judge`・iOS の判定・gitops の overlay と Application・Makefile の judge ターゲット。素早さの式は CB-2 で engine に移っている | 判定 | CB-6 | 中 | 0715 |
 | CB-8 | 【実装済み 2026-10-12: 受け入れ条件は ADR-0501「連続技(CB-8 / I-ios-20)」・テストは PokeCalcCoreTests の Combo* と CalcComboUITests。素早さ画面からの導線は I-ios-21 に分けた】iOS: 案 A を `CalcScreenView` に | iOS | CB-4 | 中 | 0531 の予定だったが 0535(ADR 番号の振り直し) |
 | CB-4b | 【実装済み 2026-10-12】 CB-5 が main に入ったら、同じ入力を `POST /api/calc/combo` と `wasmapi` の `calcCombo` に通して値を突き合わせるテスト(AC-18。parity_test.go の流儀)と、公開 `Move.effect`(PascalCase)をそのまま WASM の技の `effect` に渡して受け付けるテストを足す | API / データ(engine) | CB-4・CB-5 | 小 | 0253 に追記 |
 
