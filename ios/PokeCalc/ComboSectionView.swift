@@ -19,6 +19,8 @@ struct ComboSectionView: View {
     private let openFromSpeed: (SpeedComboHandoff) async -> Void
     private let onHandoffApplied: () -> Void
     @State private var handledToken = 0
+    /// 引き継ぎの 3 手順を走らせる Task の持ち主。画面の `.task` の取り消し(タブを離れる)から切り離し、最後まで反映する。
+    @State private var handoffRunner = ComboHandoffRunner()
     @AccessibilityFocusState private var isHeadingFocused: Bool
 
     init(
@@ -53,9 +55,14 @@ struct ComboSectionView: View {
     private func applyOpenRequest() async {
         guard let openRequest, openRequest.token != handledToken else { return }
         handledToken = openRequest.token
-        await openFromSpeed(openRequest.handoff)
-        await viewModel.updateContext(calc.comboContext)
-        await viewModel.applyHandoff(openRequest.handoff)
+        let calc = calc, viewModel = viewModel, openFromSpeed = openFromSpeed
+        handoffRunner.start {
+            await openFromSpeed(openRequest.handoff)
+            guard !Task.isCancelled else { return }
+            await viewModel.updateContext(calc.comboContext)
+            guard !Task.isCancelled else { return }
+            await viewModel.applyHandoff(openRequest.handoff)
+        }
     }
 
     private var section: some View {
@@ -331,5 +338,17 @@ struct ComboSectionView: View {
             next[keyPath: keyPath].toggle()
             Task { await viewModel.setSpeedField(next) }
         }
+    }
+}
+
+/// 引き継ぎの Task を持つ。新しい要求が来たら古い Task を取り消してから始める(古い続きが新しい入力を上書きしない)。
+/// 構造化されない Task なので、画面の `.task` が取り消されても(タブを離れても)最後まで走る(ADR-0531 の `.retained`)。
+@MainActor
+final class ComboHandoffRunner {
+    private var task: Task<Void, Never>?
+
+    func start(_ work: @escaping @MainActor () async -> Void) {
+        task?.cancel()
+        task = Task { @MainActor in await work() }
     }
 }

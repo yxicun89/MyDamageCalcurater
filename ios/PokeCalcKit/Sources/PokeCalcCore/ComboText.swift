@@ -110,7 +110,7 @@ public enum ComboText {
     /// iOS だけ: 性格を ID で送るため、置き換えた組の性格がデータに無いと送れない(ADR-0535 §7)。
     public static let selfSpeedNatureUnavailable = "選んだ素早さの性格補正に合う性格がデータにありません"
 
-    // MARK: 素早さ画面からの引き継ぎ(I-ios-21。ADR-0542 §4〜§5)。骨組み: 値は implementer が ComboHandoffTextTests に合わせて入れる。
+    // MARK: 素早さ画面からの引き継ぎ(I-ios-21。ADR-0542 §4〜§5)。
 
     /// こだわりスカーフを反映できない 1 行(Web の `comboScreenText.selfSpeed.scarfIgnored` と同じ語)。
     public static let handoffScarfIgnored = "素早さ画面で指定したこだわりスカーフは、連続技の計算では反映できません。"

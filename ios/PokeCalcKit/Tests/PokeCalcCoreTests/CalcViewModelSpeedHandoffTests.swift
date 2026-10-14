@@ -197,4 +197,32 @@ final class CalcViewModelSpeedHandoffTests: XCTestCase {
         XCTAssertFalse(viewModel.natureOptions.isEmpty)
         XCTAssertFalse(viewModel.rows.isEmpty)
     }
+
+    /// 取り消された引き継ぎは、片側だけ書き換えない・計算しない(タブを離れて画面の .task が取り消されたとき。ADR-0542 §2)。
+    func testCancelledHandoffChangesNeitherSideAndDoesNotCalculate() async throws {
+        let stub = makeStub()
+        let viewModel = await loadedViewModel(stub)
+        let before = await stub.bulkRequests.count
+        let task = Task { await viewModel.openFromSpeed(handoff(attacker: StubMaster.gamma.key, defender: StubMaster.alpha.key)) }
+        task.cancel()
+        await task.value
+        XCTAssertEqual(viewModel.attackerSpeciesKey, StubMaster.alpha.key)
+        XCTAssertEqual(viewModel.defenderSpeciesKey, StubMaster.beta.key)
+        let after = await stub.bulkRequests.count
+        XCTAssertEqual(after, before)
+    }
+
+    /// 取り消されても、続けて呼び直せば最後まで入る(取り消しが状態を壊さない)。
+    func testHandoffAfterACancelledOneStillApplies() async throws {
+        let stub = makeStub()
+        let viewModel = await loadedViewModel(stub)
+        let sent = handoff(attacker: StubMaster.gamma.key, defender: StubMaster.alpha.key)
+        let task = Task { await viewModel.openFromSpeed(sent) }
+        task.cancel()
+        await task.value
+        await viewModel.openFromSpeed(sent)
+        XCTAssertEqual(viewModel.attackerSpeciesKey, StubMaster.gamma.key)
+        XCTAssertEqual(viewModel.defenderSpeciesKey, StubMaster.alpha.key)
+        XCTAssertNil(viewModel.error)
+    }
 }

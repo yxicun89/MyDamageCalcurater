@@ -1,7 +1,6 @@
 // ComboHandoff: 素早さ画面 →「この相手で連続技を計算」→ 計算タブの連続技(I-ios-21。ADR-0542・ADR-0501「素早さ画面から連続技へ」)。
 //
-// spec-writer の骨組み(コンパイルを通すだけ。値は仮)。実装は implementer が ComboHandoffTests・AppNavigationComboOpenTests・
-// CalcViewModelSpeedHandoffTests・ComboViewModelHandoffTests・ComboHandoffTextTests を通す形で書く。
+// テスト: ComboHandoffPlanTests・CalcViewModelSpeedHandoffTests・ComboViewModelHandoffTests・ComboHandoffTextTests。
 // Web の対応: `web/src/app/comboOpenRequest.ts`(token)・`ComboSection.tsx` の openToken / openSpeed(I-web-32)。
 
 /// 計算タブへ渡す「連続技を開く」要求。`token` はルート(`AppNavigationModel.openCombo`)が 1 ずつ進める。

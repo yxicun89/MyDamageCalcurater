@@ -114,6 +114,10 @@ public final class ComboViewModel {
         let old = context
         guard newContext != old else { return }
         context = newContext
+        // 文脈が無いときに受けた SP は、結果が出たときに攻撃側の残りの SP へ丸め直す。
+        if let new = newContext, let sp = selfSpeed.sp {
+            selfSpeed.sp = ComboSelfSpeed.clampSP(sp, for: new.attacker)
+        }
         guard let new = newContext else {
             generation += 1
             state = .idle
@@ -236,13 +240,13 @@ public final class ComboViewModel {
 
     // MARK: - 素早さ画面からの引き継ぎ(I-ios-21。ADR-0542 §3〜§5)
 
-    /// 「こだわりスカーフは反映できない」の 1 行を出すか。骨組み: 実装は implementer。
+    /// 「こだわりスカーフは反映できない」の 1 行を出すか。
     public private(set) var handoffScarfNoticeVisible = false
 
-    /// 素早さ画面からの引き継ぎを受けた回数(View はこの値の変化でフォーカスと読み上げを 1 回だけ行う)。骨組み: 実装は implementer。
+    /// 素早さ画面からの引き継ぎを受けた回数(View はこの値の変化でフォーカスと読み上げを 1 回だけ行う)。
     public private(set) var appliedHandoffCount = 0
 
-    /// 素早さ画面の値を受け取り、節を広げて自分の素早さを上書きする。骨組み: 実装は implementer(ComboViewModelHandoffTests を通す)。
+    /// 素早さ画面の値を受け取り、節を広げて自分の素早さを上書きする。
     public func applyHandoff(_ handoff: SpeedComboHandoff) async {
         var input = ComboHandoffPlan.selfSpeedInput(for: handoff)
         if let sp = input.sp, let context { input.sp = ComboSelfSpeed.clampSP(sp, for: context.attacker) }

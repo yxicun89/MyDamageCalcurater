@@ -180,4 +180,24 @@ final class ComboViewModelHandoffTests: XCTestCase {
         XCTAssertTrue(viewModel.isVisible)
         XCTAssertTrue(viewModel.isExpanded, "結果が出たら開いた状態で出る")
     }
+
+    // MARK: - 境界値・文脈が後から届く場合
+
+    func testBoundaryRanksAndFullSPAreCarriedAsIs() async {
+        let (viewModel, _) = await makeViewModel()
+        await viewModel.applyHandoff(handoff(speed: SpeedInvestment(sp: 32, nature: .plus), rank: 6))
+        XCTAssertEqual(viewModel.selfSpeed, ComboSelfSpeedInput(sp: 32, nature: .plus, rank: 6))
+        await viewModel.applyHandoff(handoff(speed: SpeedInvestment(sp: 0, nature: .minus), rank: -6))
+        XCTAssertEqual(viewModel.selfSpeed, ComboSelfSpeedInput(sp: 0, nature: .minus, rank: -6))
+    }
+
+    /// 文脈が無いとき受けた SP は、結果が出たあとで攻撃側の残りの SP へ丸め直す。
+    func testSPReceivedWithoutContextIsClampedWhenTheContextArrives() async {
+        let (viewModel, _) = await makeViewModel(context: nil)
+        await viewModel.applyHandoff(handoff(speed: SpeedInvestment(sp: 32, nature: .neutral), rank: 0))
+        XCTAssertEqual(viewModel.selfSpeed.sp, 32)
+        await viewModel.updateContext(
+            ComboStub.context(attacker: ComboStub.individual(sp: StatBlock(hp: 32, atk: 32, def: 0, spa: 0, spd: 0, spe: 0))))
+        XCTAssertEqual(viewModel.selfSpeed.sp, 2)
+    }
 }

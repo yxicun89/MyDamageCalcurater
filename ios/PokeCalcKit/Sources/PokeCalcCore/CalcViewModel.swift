@@ -411,12 +411,12 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     }
 
     /// 素早さ画面の「この相手で連続技を計算」(I-ios-21。ADR-0542 §2): 攻撃側 = 自分・防御側 = 相手の種族を入れる。
-    /// 骨組み: 実装は implementer(CalcViewModelSpeedHandoffTests を通す)。
     public func openFromSpeed(_ handoff: SpeedComboHandoff) async {
         await load()
         let attackerKey = await resolvedSpeciesKey(handoff.attackerPokemonID, current: attackerSpeciesKey)
         let defenderKey = await resolvedSpeciesKey(handoff.defenderPokemonID, current: defenderSpeciesKey)
-        guard attackerKey != nil || defenderKey != nil else { return }
+        // 取り消されたときは何も書き換えない(片側だけ入って結果が古いまま、を作らない。ADR-0542 §2)。
+        guard !Task.isCancelled, attackerKey != nil || defenderKey != nil else { return }
         let token = beginInput()
         if let defenderKey {
             defenderSpeciesKey = defenderKey
@@ -555,6 +555,8 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         didLoad = true
         let task = Task { @MainActor in
             await self.performLoad()
+            // 取り消されて終わったときは読み込み済みと数えない(待っていた側・次の呼び出しがやり直せる)。
+            if Task.isCancelled { self.didLoad = false }
             self.loadInFlight = nil
         }
         loadInFlight = task
