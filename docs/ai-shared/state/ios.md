@@ -1,6 +1,6 @@
 ## iOS
 Lane: iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい)
-Active: なし(2026-10-03: P6-20・21・23・24・25 を main 統合。残る Next は他レーン待ちか後続の小タスク)
+Active: なし(2026-10-14: G-05 の iOS 版〈全画面〉・連続技・判定撤去・API 失敗表示まで main 統合。残る Next は I-ios-21 と実機の目視確認)
 Branch: 次は main から feat/ios-<名前> か fix/ios-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-ios。旧 feat/ios-p6 は main に統合済み)
 Status: **M3(iPhone で使える)は完了**。P6-1(ADR-0500)・P6-2a 計算画面・契約追従・P6-2b 逆算画面・P6-2c 構築ビルダー
 (一覧・編集・ニックネーム)・P6-2d(構築から個体を呼び出す配線)・P6-3・P6-4(手順書 `docs/runbooks/ios-device-install.md`)・
@@ -85,3 +85,7 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 2026-10-12(構築編集の中のタイプバランス。ブランチ feat/ios-balance-in-team。ADR-0532): ADR-0421 段階 2'・4 と ADR-0422 段階 C の iOS 分。構築編集の 6 枠の下に「タイプバランス」の節(`TeamBalanceSection`)。下書き(`balanceParty`。空き枠は無視)を `BalanceViewModel.setParty` へ(300ms)。おすすめは limit 5・候補ごとのタイル(8 個+もっと見る。タップで最初の空き枠・満杯は押せない)。相性の色は弱点=赤・耐性=水色系・無効=灰(印+文字)。`skewedAttackTypes` を読む(表示はしない)。別画面 `BalanceScreenView`・`BalanceFeature`・`FeatureEntry.link`・`loadTeam` を削除。UI テスト用の架空の応答は `POKECALC_MOCK_BALANCE=fixture`(既定のモックは接続先なしのまま)。技範囲チェッカーは節の末尾に残した(Web に無い。外すかは別判断)。
 
 2026-10-12(判定の撤去。ブランチ feat/ios-judge-retire。ADR-0715・ADR-0501「判定の撤去」・I-ios-18): iOS の判定機能(Judge* の画面・PokeCalcCore の判定・PokeCalcJudgeAPI・JudgeContractSync*・UI テスト・RequestLimits の判定定数・sim-run の judge)を撤去。FeatureVisibility は仕組みだけ残し既定の非表示 ID は空。判定レーンが judge-svc を消せる状態(iOS 側は契約ファイルを読まない)。
+
+2026-10-14(まとめ。iOS レーンの今回のラウンド): main に統合済み — #756 ランクのメーター(ADR-0533)・#754 バランスを構築編集へ(ADR-0532)・#772 判定の撤去(ADR-0715)・#773 接続先なしとサーバーの失敗の表示(ADR-0534)・#774 このアプリについて/お気に入り・履歴(G-05 第1弾。ADR-0536)・#775 連続技(CB-8。ADR-0535)・#779 ランクの ±0 の見た目(ADR-0533 追記)・#780 構築(G-05 第2弾。ADR-0537)・#781 素早さの結論1行+折りたたみ(ADR-0538)・#782 逆算(G-05 第3弾。ADR-0539)・#783 調整(G-05 第4弾。ADR-0540)・#784 計算(G-05 第5弾。ADR-0541)。G-05 の iOS 版はこれで全画面。
+運用メモ: UI テストの 2 並列(ゲート既定)は AX5 系が毎回別の 1〜2 件落ちたため、直列(`IOS_TEST_PARALLEL=0`)で流すと安定した(約 1.5 時間)。ナビゲーションバーの下に潜った要素を上から 25% で押すとバーに当たる不具合は、テスト補助で引き戻して直した(`settleBelowNavigationBar`)。高さの検査は 36pt ちょうどだと浮動小数誤差で 35.99… になるため、アイコンだけのボタンと入力欄は 37pt を渡す。
+Next: ①I-ios-21(素早さ画面 → 計算タブの引き継ぎ。ADR-0535 で持ち越し)②`MasterSearchSheet` の技の分類アイコンを `PopSymbol.moveCategory` に置換 ③実機での目視確認(`docs/verify.md`。ランクのメーターの縦スクロール・VoiceOver の adjustable・G-05 全画面・連続技・素早さの折りたたみ)。
