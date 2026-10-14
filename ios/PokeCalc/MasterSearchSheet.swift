@@ -247,7 +247,7 @@ enum MasterSearchRow {
                 .font(TextStyleToken.body.font)
                 .foregroundStyle(ColorToken.textPrimary.color)
             Spacer(minLength: SpacingToken.x2)
-            Image(systemName: MoveRowLabels.categorySymbol(move.category))
+            Image(systemName: PopSymbol.moveCategory(move.category))
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .accessibilityLabel(MoveCategoryLabel.japaneseName(for: move.category))
@@ -292,14 +292,6 @@ struct MoveTypeEmblem: View {
 }
 
 private enum MoveRowLabels {
-    static func categorySymbol(_ category: MoveCategory) -> String {
-        switch category {
-        case .physical: "figure.boxing"
-        case .special: "sparkles"
-        case .status: "circle.dashed"
-        }
-    }
-
     static func detail(_ move: Move) -> String {
         "\(PokeTypeLabel.japaneseName(for: move.type))、\(MoveCategoryLabel.japaneseName(for: move.category))、威力\(move.power)"
     }
