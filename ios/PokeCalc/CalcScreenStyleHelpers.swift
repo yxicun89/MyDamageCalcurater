@@ -19,4 +19,8 @@ enum CalcScreenMetrics {
     static let disabledChipOpacity: Double = 0.4
     /// 攻撃側の「攻撃」「特攻」ブロックの入力・選択肢の最小の高さ(design.md のタップ範囲 36pt 以上。ADR-0518)。
     static let minimumTapSide: CGFloat = 36
+    /// アイコンだけのボタン(攻守入れ替え・SP の − / +)の一辺。画面の座標が小数のとき、ちょうど 36 だと測定の誤差で 36 未満に見えるので少し大きく渡す。
+    /// 技の相性バッジ(枠だけ)の線の太さ。
+    static let effectivenessBorderWidth: CGFloat = 2
+    static let iconButtonSide: CGFloat = 37
 }

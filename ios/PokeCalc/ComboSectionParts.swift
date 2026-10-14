@@ -43,10 +43,8 @@ struct ComboPickerLabel: View {
                 .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: SpacingToken.x2)
-            Image(systemName: systemImage)
-                .font(TextStyleToken.caption.font)
+            PopIcon(systemImage)
                 .foregroundStyle(ColorToken.textSecondary.color)
-                .accessibilityHidden(true)
         }
         .padding(.horizontal, SpacingToken.x3)
         .padding(.vertical, SpacingToken.x2)
@@ -69,8 +67,8 @@ struct ComboToggleButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: SpacingToken.x2) {
-                Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                    .accessibilityHidden(true)
+                // 選択中だけチェックを出す(オフは丸を出さない。状態は選択の特性と塗りで伝わる)。
+                if isOn { PopIcon(PopSymbol.done) }
                 Text(title)
                     .font(TextStyleToken.body.font)
                     .multilineTextAlignment(.leading)
@@ -96,32 +94,6 @@ struct ComboToggleButton: View {
     }
 }
 
-/// 手の上へ・下へ・外す(記号だけのボタン。名前は読み上げ用)。
-struct ComboIconButton: View {
-    let systemName: String
-    let label: String
-    let identifier: String
-    let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(TextStyleToken.body.font)
-                .foregroundStyle(ColorToken.textPrimary.color)
-                .frame(minWidth: ComboMetrics.minTapHeight, minHeight: ComboMetrics.minTapHeight)
-                .background(ColorToken.surfaceCard.color, in: Circle())
-                .overlay(Circle().stroke(ColorToken.borderHairline.color, lineWidth: CalcScreenMetrics.hairlineBorderWidth))
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-        .opacity(isEnabled ? 1 : CalcScreenMetrics.disabledChipOpacity)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier(identifier)
-    }
-}
-
 /// ランク変化のチップ(「攻撃 +1」「相手の素早さ -1」)。上昇は brandPrimary・下降は warning(ランクのメーターと同じ意味)。
 /// 色だけに頼らず、文字の符号と矢印でも向きを出す。
 struct ComboRankChipsView: View {
@@ -133,8 +105,7 @@ struct ComboRankChipsView: View {
                 ForEach(Array(chips.enumerated()), id: \.offset) { _, chip in
                     let color = chip.direction == .up ? ColorToken.brandPrimary.color : ColorToken.warning.color
                     HStack(spacing: SpacingToken.x1) {
-                        Image(systemName: chip.direction == .up ? "arrow.up" : "arrow.down")
-                            .accessibilityHidden(true)
+                        PopIcon(chip.direction == .up ? PopSymbol.up : PopSymbol.down)
                         Text(chip.text)
                             .fixedSize(horizontal: false, vertical: true)
                     }

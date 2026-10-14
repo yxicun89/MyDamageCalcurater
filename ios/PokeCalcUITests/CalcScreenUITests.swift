@@ -10,6 +10,7 @@ final class CalcScreenUITests: XCTestCase {
     /// `Resources/items.json` の唯一の架空持ち物(比較トグルの対象)。
     private static let mockItemID = "test-item-berry"
     private static let existenceTimeout: TimeInterval = 5
+    private static let maxScrollAttempts = 6
     /// `Resources/species.json` の2番目。計算画面の既定の攻撃側(先頭の種族)とは別の種族にして、
     /// 構築から呼び出したときに種族が実際に変わったことを検査できるようにする(P6-2d)。
     private static let secondMockSpeciesName = "テストモンに"
@@ -104,7 +105,13 @@ final class CalcScreenUITests: XCTestCase {
 
         // 批評 M3c: プリセットのチップがカード内に収まりきらず「無振り」が見切れていた。
         // 画面幅いっぱいの3等分の行にしたので、3つとも画面内でタップできること。
+        // 見出しと特性の欄でカードが縦に伸び、プリセットが最初の画面の外に出る機種があるので、押せるところまで送る(検査は同じ)。
         XCTAssertTrue(app.buttons["attackerPreset-aFull"].waitForExistence(timeout: Self.existenceTimeout))
+        var attempts = 0
+        while !app.buttons["attackerPreset-aFull"].isHittable && attempts < Self.maxScrollAttempts {
+            element(app, "calcScreen").swipeUp()
+            attempts += 1
+        }
         XCTAssertTrue(app.buttons["attackerPreset-aFull"].isHittable)
         XCTAssertTrue(app.buttons["attackerPreset-aMax"].isHittable)
         XCTAssertTrue(app.buttons["attackerPreset-none"].isHittable)

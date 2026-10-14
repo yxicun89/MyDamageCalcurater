@@ -3,7 +3,7 @@ import PokeCalcDesign
 import SwiftUI
 
 // CalcConditionsSection: 計算画面の「詳細」(急所・やけど・天候・フィールド・防御側の壁・
-// 攻撃側のランク・攻撃側の特性。issue #274。ADR-0501「issue #274」6章・8章)。
+// 攻撃側のランク。issue #274。ADR-0501「issue #274」6章・8章)。
 //
 // 既定は閉じる。ロジックは持たず、`CalcViewModel` の状態を描いて操作を async メソッドへ
 // つなぐだけ(ADR-0500 §1)。開閉の折りたたみだけ View 側の `@State`(6章の identifier 表の備考)。
@@ -15,6 +15,8 @@ struct CalcConditionsSection: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     /// 既定で閉じる(6章)。
     @State private var isExpanded = false
+    /// 開いているときの開閉アイコンの回転(下向き → 上向き)。
+    private static let openedIconRotation: Double = 180
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x1) {
@@ -32,18 +34,23 @@ struct CalcConditionsSection: View {
                 isExpanded.toggle()
             }
         } label: {
-            HStack {
+            HStack(spacing: SpacingToken.x2) {
+                // 開いているときは向きを反転する(静止した表示。アイコンは装飾で、状態は読み上げの値が持つ)。
+                PopIcon(PopSymbol.open)
+                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .rotationEffect(.degrees(isExpanded ? Self.openedIconRotation : 0))
                 Text(CalcConditionLabels.sectionTitle)
                     .font(TextStyleToken.body.font)
                     .foregroundStyle(ColorToken.textPrimary.color)
-                Spacer()
-                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                    .foregroundStyle(ColorToken.textSecondary.color)
+                    .fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
             }
+            .frame(minHeight: CalcScreenMetrics.minimumTapSide)
             .padding(SpacingToken.x3)
             .popCard(cornerRadius: RadiusToken.input)
         }
         .buttonStyle(.plain)
+        .accessibilityValue(isExpanded ? CalcScreenText.disclosureOpened : CalcScreenText.disclosureClosed)
         .accessibilityIdentifier("calcConditionsToggle")
     }
 
@@ -51,8 +58,6 @@ struct CalcConditionsSection: View {
         VStack(alignment: .leading, spacing: SpacingToken.x2) {
             criticalAndBurnRow
             rankSection
-            abilitySection
-            defenderAbilitySection
             weatherSection
             terrainSection
             defenderScreensSection
@@ -103,12 +108,12 @@ struct CalcConditionsSection: View {
         Text(title)
             .font(TextStyleToken.caption.font)
             .foregroundStyle(ColorToken.textSecondary.color)
-            .lineLimit(1)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     /// 急所・攻撃側のやけど(横並びのトグル。3章の並び)。
     private var criticalAndBurnRow: some View {
-        HStack(spacing: SpacingToken.x2) {
+        ComboWrapLayout(spacing: SpacingToken.x2) {
             ChipButton(
                 title: CalcConditionLabels.critical,
                 isSelected: viewModel.isCritical,
@@ -152,66 +157,17 @@ struct CalcConditionsSection: View {
         }
     }
 
-    /// 攻撃側の特性: 「指定なし」+ 種族の特性名(いまの攻撃側の `attackerAbilityOptions`。4章)。
-    private var abilitySection: some View {
-        let selectedName = viewModel.attackerAbilityOptions
-            .first(where: { $0.id == viewModel.attackerAbilityId })?.nameJa
-            ?? CalcConditionLabels.abilityUnspecified
-        return sectionRow(CalcConditionLabels.abilityTitle) {
-            Menu {
-                Button(CalcConditionLabels.abilityUnspecified) {
-                    viewModel.scheduleLatest { await $0.selectAttackerAbility(id: nil) }
-                }
-                ForEach(viewModel.attackerAbilityOptions, id: \.id) { ability in
-                    Button(ability.nameJa) {
-                        viewModel.scheduleLatest { await $0.selectAttackerAbility(id: ability.id) }
-                    }
-                }
-            } label: {
-                MenuLabelChip(text: selectedName)
-            }
-            .accessibilityIdentifier("calcAttackerAbilityPicker")
-        }
-    }
-
-    /// 防御側の特性: 「指定なし」+ 防御側の特性名(`defenderAbilityOptions`。ADR-0501「P6-19」3章)。
-    /// 「詳細」を開いている間だけ選択肢を読む(`.task`。開いていなければ読まない)。
-    private var defenderAbilitySection: some View {
-        let selectedName = viewModel.defenderAbilityOptions
-            .first(where: { $0.id == viewModel.defenderAbilityId })?.nameJa
-            ?? AbilityPickerLabels.unspecified
-        return sectionRow(AbilityPickerLabels.defenderTitle) {
-            Menu {
-                Button(AbilityPickerLabels.unspecified) {
-                    viewModel.scheduleLatest { await $0.selectDefenderAbility(id: nil) }
-                }
-                ForEach(viewModel.defenderAbilityOptions, id: \.id) { ability in
-                    Button(ability.nameJa) {
-                        viewModel.scheduleLatest { await $0.selectDefenderAbility(id: ability.id) }
-                    }
-                }
-            } label: {
-                MenuLabelChip(text: selectedName)
-            }
-            .accessibilityValue(selectedName)
-            .accessibilityIdentifier("calcDefenderAbilityPicker")
-        }
-        // 防御側の詳細は `DefenderCardView` が種族の変更ごとに読む(ここで重ねて読まない。ADR-0509 §4)。
-    }
-
     /// 天候(1つ選ぶピル。既定 なし)。
     private var weatherSection: some View {
         sectionRow(CalcConditionLabels.weatherTitle) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SpacingToken.x2) {
-                    ForEach(Weather.allCases, id: \.self) { weather in
-                        ChipButton(
-                            title: WeatherLabel.japaneseName(for: weather),
-                            isSelected: viewModel.weather == weather,
-                            identifier: "calcWeather-\(weather.rawValue)"
-                        ) {
-                            viewModel.scheduleLatest { await $0.selectWeather(weather) }
-                        }
+            ComboWrapLayout(spacing: SpacingToken.x2) {
+                ForEach(Weather.allCases, id: \.self) { weather in
+                    ChipButton(
+                        title: WeatherLabel.japaneseName(for: weather),
+                        isSelected: viewModel.weather == weather,
+                        identifier: "calcWeather-\(weather.rawValue)"
+                    ) {
+                        viewModel.scheduleLatest { await $0.selectWeather(weather) }
                     }
                 }
             }
@@ -221,37 +177,32 @@ struct CalcConditionsSection: View {
     /// フィールド(1つ選ぶピル。既定 なし)。
     private var terrainSection: some View {
         sectionRow(CalcConditionLabels.terrainTitle) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SpacingToken.x2) {
-                    ForEach(Terrain.allCases, id: \.self) { terrain in
-                        ChipButton(
-                            title: TerrainLabel.japaneseName(for: terrain),
-                            isSelected: viewModel.terrain == terrain,
-                            identifier: "calcTerrain-\(terrain.rawValue)"
-                        ) {
-                            viewModel.scheduleLatest { await $0.selectTerrain(terrain) }
-                        }
+            ComboWrapLayout(spacing: SpacingToken.x2) {
+                ForEach(Terrain.allCases, id: \.self) { terrain in
+                    ChipButton(
+                        title: TerrainLabel.japaneseName(for: terrain),
+                        isSelected: viewModel.terrain == terrain,
+                        identifier: "calcTerrain-\(terrain.rawValue)"
+                    ) {
+                        viewModel.scheduleLatest { await $0.selectTerrain(terrain) }
                     }
                 }
             }
         }
     }
 
-    /// 防御側の壁(3つ独立のトグル。重ねて張れる)。横スクロールにするのは、見出しと同じ行に
-    /// 置いたことで残り幅が狭くなり、3つとも並べると小さい画面では収まらないため。
+    /// 防御側の壁(3つ独立のトグル。重ねて張れる)。残り幅に収まらなければ折り返す。
     private var defenderScreensSection: some View {
         sectionRow(CalcConditionLabels.defenderScreensTitle) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: SpacingToken.x2) {
-                    ForEach(ScreenKind.allCases, id: \.self) { kind in
-                        let isOn = viewModel.defenderScreens.isOn(kind)
-                        ChipButton(
-                            title: ScreenKindLabel.japaneseName(for: kind),
-                            isSelected: isOn,
-                            identifier: "calcDefenderScreen-\(kind.rawValue)"
-                        ) {
-                            viewModel.scheduleLatest { await $0.setDefenderScreen(kind, isOn: !isOn) }
-                        }
+            ComboWrapLayout(spacing: SpacingToken.x2) {
+                ForEach(ScreenKind.allCases, id: \.self) { kind in
+                    let isOn = viewModel.defenderScreens.isOn(kind)
+                    ChipButton(
+                        title: ScreenKindLabel.japaneseName(for: kind),
+                        isSelected: isOn,
+                        identifier: "calcDefenderScreen-\(kind.rawValue)"
+                    ) {
+                        viewModel.scheduleLatest { await $0.setDefenderScreen(kind, isOn: !isOn) }
                     }
                 }
             }

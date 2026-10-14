@@ -167,6 +167,15 @@ enum PopSymbol {
     static let myRegion = "person"
     static let opponentRegion = "person.2"
 
+    /// 技の分類のアイコン(物理 = 拳、特殊 = きらめき、変化 = 点線の丸。Web の `PopSymbol.moveCategory` と同じ割り当て)。意味は隣の文字(読み上げの値)が持つ。
+    static func moveCategory(_ category: MoveCategory) -> String {
+        switch category {
+        case .physical: return "figure.boxing"
+        case .special: return "sparkles"
+        case .status: return "circle.dashed"
+        }
+    }
+
     /// 画面の入口(`AppFeature.id`。区切り・画面の中の行)に付ける装飾アイコン。未知の ID は汎用の「情報」。
     static func forFeature(id: String) -> String {
         switch id {
