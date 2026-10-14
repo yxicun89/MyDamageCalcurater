@@ -55,7 +55,7 @@
 
 - **タイプバランス**: 手持ちの防御相性・攻撃範囲からタイプの穴を診断し、ふさぐ候補を提案する → [type-balance-design.md](type-balance-design.md)(テストは [type-balance-test-strategy.md](type-balance-test-strategy.md))
 - **素早さ比較**: 使用可能な全ポケモンの素早さ表と、自分のポケモンの位置を見せる → [speed-design.md](speed-design.md)
-- **判定**: 道具・調整・技構成で、想定した相手を抜いて倒せるかを1回で確認する → [judge-design.md](judge-design.md)
+- **判定**: 想定した相手を抜いて倒せるかの確認。判定サービスは ADR-0715 で廃止し、計算画面の連続技と調整の目標で確認する(経緯: [judge-design.md](judge-design.md))
 - 3機能のユーザー要望の原文は plan の TB・SP・JD 節([plan/tb.md](plan/tb.md)・[plan/speed.md](plan/speed.md)・[plan/judge.md](plan/judge.md))。実装状況の正も plan([plan.md](plan.md) の索引)
 
 ### あれば便利(マストではない)
@@ -85,10 +85,10 @@ Web (React)  ────────┼─▶ gateway (Echo) ─┬▶ pokedex-
 importer (CronJob) ─▶ MySQL
 ```
 
-- 上の図は v3 時点。現行の構成図は [architecture.md](architecture.md) が正(balance-svc・speed-svc・judge-svc を含む)
+- 上の図は v3 時点。現行の構成図は [architecture.md](architecture.md) が正(balance-svc・speed-svc を含む)
 - 計算エンジンは**純粋なGoパッケージ**(I/Oなし)。calc-svc と WASM の両方から利用
-- API契約は OpenAPI(仕様先行)。実態は**4本**: ダメージ計算・gateway・pokedex 等は `api/openapi.yaml`、balance・speed・judge は
-  サービスごとの `services/{balance,speed,judge}/api/openapi.yaml`(サービスローカル契約。DECISIONS.md 2026-09-21、ADR-0012)。
+- API契約は OpenAPI(仕様先行)。実態は**4本**: ダメージ計算・gateway・pokedex 等は `api/openapi.yaml`、balance・speed は
+  サービスごとの `services/{balance,speed}/api/openapi.yaml`(サービスローカル契約。DECISIONS.md 2026-09-21、ADR-0012)。
   Go(Echo)/ TypeScript / Swift のコードを生成
 - 計算イベントはNATS経由で非同期保存(TiDB障害時も計算は止めない)
 

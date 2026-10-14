@@ -16,7 +16,6 @@ flowchart LR
     Pokedex["pokedex-svc<br/>services/pokedex"]
     Balance["balance-svc<br/>services/balance"]
     Speed["speed-svc<br/>services/speed"]
-    Judge["judge-svc<br/>services/judge"]
     Record["record-svc<br/>services/record<br/>(計画中。M2)"]
     Team["team-svc<br/>services/team<br/>(計画中。M2)"]
     MySQL[("MySQL<br/>pokedex DB")]
@@ -31,7 +30,6 @@ flowchart LR
   GW --> Calc & Pokedex
   Web -- gateway /api/balance --> Balance
   Web -- gateway /api/speed --> Speed
-  Web -- gateway /api/judge --> Judge
   Calc -- 内部API: マスタ --> Pokedex
   Pokedex --> MySQL
   Import --> MySQL
@@ -55,10 +53,9 @@ flowchart LR
 | engine | ダメージ・確定数・一括計算・逆算・実数値(I/O なし) | データ | [engine/](../engine/README.md) |
 | pokedex-svc / importer | マスタの DB・取込(calc・Showdown・PokeAPI)・マスタ API | データ | [services/pokedex/](../services/pokedex/README.md) |
 | calc-svc | 計算 API(engine を呼ぶだけ) | API | [services/calc/](../services/calc/README.md) |
-| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed・judge も gateway が転送(各自の Ingress は撤去。ADR-0414・0416) | API | [services/gateway/](../services/gateway/README.md) |
+| gateway | ダメージ計算の入口(ルーティング・端末ID・/assets)。balance・speed も gateway が転送(各自の Ingress は撤去。ADR-0414・0416) | API | [services/gateway/](../services/gateway/README.md) |
 | balance-svc | 構築のタイプバランス | タイプバランス | [services/balance/](../services/balance/README.md) |
 | speed-svc | 素早さ比較 | 素早さ | [services/speed/](../services/speed/README.md) |
-| judge-svc | 素早さ×ダメージ連動の判定(抜けるか・倒せるか)。pokedex-svc・calc-svc の公開 API を呼ぶだけ | 判定 | [services/judge/](../services/judge/README.md) |
 | Web | 画面(API とオフライン WASM を切り替え)。計算・逆算・タイプバランス・素早さの画面を持つ | Web | [web/](../web/README.md) |
 | iOS | iPhoneアプリ。ダメージ計算・逆算・構築のみ(タイプバランス・素早さ・判定は未着手) | iOS | [ios/](../ios/README.md) |
 | record-svc(計画中) | 計算履歴・お気に入り(TiDB record DB)。calc-svc の計算イベントを NATS JetStream 経由で非同期に受ける | 未定(M2) | — |
@@ -80,7 +77,7 @@ flowchart LR
 
 ## Kustomize overlay
 
-`deploy/k8s/base`(gateway・calc・pokedex・web の Deployment/Service/Ingress)と、balance・speed・judge 各サービス自身の
+`deploy/k8s/base`(gateway・calc・pokedex・web の Deployment/Service/Ingress)と、balance・speed 各サービス自身の
 `deploy/k8s/base`(Ingress なし)を、環境ごとの overlay で組み合わせる。
 
 | overlay | 用途 |

@@ -1,8 +1,8 @@
 package httpapi_test
 
 // /metrics(Prometheus text format)をテストから読むための最小の道具(ADR-0406。P7-1)。
-// 6サービス(gateway・pokedex・calc・balance・speed・judge)の httpapi に同じ内容を複製している
-// (サービスごとにテストパッケージが違い、balance・speed・judge は独立 go.mod のため。ADR-0406 §2)。
+// 5サービス(gateway・pokedex・calc・balance・speed)の httpapi に同じ内容を複製している
+// (サービスごとにテストパッケージが違い、balance・speed は独立 go.mod のため。ADR-0406 §2)。
 
 import (
 	"net/http"

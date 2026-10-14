@@ -46,27 +46,27 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 | 4 | GET | `/api/pokedex/moves/{key}` | `getMove` | `key` | pokedex `search.go:202` `GetMove`(使用可能集合の外も返す) | 200・404・503 | — | MySQL(`GetMove`) |
 | 5 | GET | `/api/pokedex/items` | `searchItems` | `q`・`limit` | pokedex `search.go:133` `SearchItems` | 200・503 | 400 | MySQL |
 | 6 | GET | `/api/pokedex/natures` | `listNatures` | — | pokedex `search.go:219` `ListNatures`(0 行 → 503) | 200・503 | — | MySQL(`ListNatures`) |
-| 7 | POST | `/api/calc` | `calcDamage` | 本文 `CalcRequest` | calc `server.go:177` `CalcDamage` | 200・400・500・503 | — | `MemoryStore`・`engine.CalcDamage` |
-| 8 | POST | `/api/calc/bulk` | `calcBulk` | 本文 `BulkCalcRequest` | calc `server.go:223` `CalcBulk` | 200・400・500・503 | — | `engine.CalcBulk` |
-| 9 | POST | `/api/calc/reverse` | `calcReverse` | 本文 `ReverseRequest` | calc `server.go:277` `CalcReverse` | 200・400・500・503 | — | `engine.CalcReverse` |
+| 7 | POST | `/api/calc` | `calcDamage` | 本文 `CalcRequest` | calc `server.go:216` `CalcDamage` | 200・400・500・503 | — | `MemoryStore`・`engine.CalcDamage` |
+| 8 | POST | `/api/calc/bulk` | `calcBulk` | 本文 `BulkCalcRequest` | calc `server.go:232` `CalcBulk` | 200・400・500・503 | — | `engine.CalcBulk` |
+| 9 | POST | `/api/calc/reverse` | `calcReverse` | 本文 `ReverseRequest` | calc `server.go:251` `CalcReverse` | 200・400・500・503 | — | `engine.CalcReverse` |
 | 10 | GET | `/internal/pokedex/master` | `getMasterExport` | — | pokedex `master.go:19` `GetMasterExport` | 200・503 | — | MySQL(全テーブル)。ID ヘッダ不要。gateway は 404 |
 
 契約と実装のずれ(記録のみ。修正は API レーンの範囲):
 - #1〜#3・#5 は契約の `responses` に 400 が無いが、実装は 400(#1 の `limit` 説明文だけが 400 `invalid_input` に言及)。#2 も 400 が契約に無い。
 - calc/pokedex は同じ生成ラッパ(`services/internal/api`)を共有するため、担当外の操作は手書きの 404 スタブで塞ぐ(§4・§5)。
 
-## 4. calc-svc の全ルート(`services/calc/internal/httpapi/server.go:50` / `readiness.go:23`)
+## 4. calc-svc の全ルート(`services/calc/internal/adapters/httpapi/server.go:65` / `readiness.go:26`。ARCH S3〈ADR-0252〉で `internal/adapters/` の下へ移った。calc の行番号は移行後の版。調整・連続技のルートは本表に未掲載)
 
 | メソッド | パス | ID ヘッダ | ハンドラ | 結果 |
 |---|---|---|---|---|
-| POST | `/api/calc`・`/api/calc/bulk`・`/api/calc/reverse` | 必須(生成ラッパ。UUID 形式は見ない) | `registerCalcRoutes` `server.go:70` → `wrapper.Calc*`。k3d(URL 方式)は `registerDeferredCalcRoutes` `readiness.go:42` | 200 / 400 / 500 / マスタ未取得の間 503 `master_unavailable` |
-| GET | `/healthz` | 不要 | `healthzHandler` `server.go:92` | 200(常に) |
-| GET | `/readyz` | 不要 | `readyzHandler` `server.go:63`(deferred は `readiness.go:31`) | 200。deferred でマスタ未取得 → 503 `master_unavailable` |
-| GET | `/api/pokedex/species`・`/api/pokedex/species/:key`・`/api/pokedex/moves`・`/api/pokedex/moves/:key`・`/api/pokedex/items`・`/api/pokedex/natures` | 不要(ラッパ非経由) | `registerPokedexNotFoundRoutes` `server.go:82` | 404 `not_found`(担当外) |
-| その他(`/internal/*`・メソッド違い含む) | — | — | `httpErrorHandler` `server.go:116` | 404 `not_found` |
+| POST | `/api/calc`・`/api/calc/bulk`・`/api/calc/reverse` | 必須(生成ラッパ。UUID 形式は見ない) | `registerCalcRoutes` `server.go:90` → `wrapper.Calc*`。k3d(URL 方式)は `registerDeferredCalcRoutes` `readiness.go:50` | 200 / 400 / 500 / マスタ未取得の間 503 `master_unavailable` |
+| GET | `/healthz` | 不要 | `healthzHandler` `server.go:127` | 200(常に) |
+| GET | `/readyz` | 不要 | `readyzHandler` `server.go:83`(deferred は `readiness.go:39`) | 200。deferred でマスタ未取得 → 503 `master_unavailable` |
+| GET | `/api/pokedex/species`・`/api/pokedex/species/:key`・`/api/pokedex/moves`・`/api/pokedex/moves/:key`・`/api/pokedex/items`・`/api/pokedex/natures` | 不要(ラッパ非経由) | `registerPokedexNotFoundRoutes` `server.go:116` | 404 `not_found`(担当外) |
+| その他(`/internal/*`・メソッド違い含む) | — | — | `httpErrorHandler` `server.go:151` | 404 `not_found` |
 
-- 手書きスタブの理由: ラッパ経由だとヘッダ/クエリ検証が先に走り「担当外は常に not_found」が崩れる(`server.go:76-80` のコメント)。
-- 上限: 本文 1MiB(`maxRequestBodyBytes` `server.go:32`)、件数上限は [request-flows.md §2](request-flows.md)。
+- 手書きスタブの理由: ラッパ経由だとヘッダ/クエリ検証が先に走り「担当外は常に not_found」が崩れる(`server.go:106-115` のコメント)。
+- 上限: 本文 1MiB(`maxRequestBodyBytes` `server.go:40`)、件数上限は [request-flows.md §2](request-flows.md)。
 
 ## 5. pokedex-svc の全ルート(`services/pokedex/internal/httpapi/server.go:32`)
 

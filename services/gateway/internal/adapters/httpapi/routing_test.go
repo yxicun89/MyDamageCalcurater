@@ -46,8 +46,6 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 			"balance", "/api/balance/v1/team-balance/analyze", ""},
 		{"speed 一覧(issue #284)", http.MethodGet, "/api/speed/v1/table?format=single", validHeaders(), nil,
 			"speed", "/api/speed/v1/table", "format=single"},
-		{"judge 判定(issue #284)", http.MethodPost, "/api/judge/v1/outspeed-and-ko", validHeaders(), calcBody,
-			"judge", "/api/judge/v1/outspeed-and-ko", ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -60,16 +58,14 @@ func TestRoutesReachTheirUpstream(t *testing.T) {
 				// TeamURL は newTestEnv の既定では未設定(team_routing_test.go の前提を壊さないため)。
 				env = newTeamTestEnv(t)
 			case "balance":
-				// BalanceURL は newTestEnv の既定では未設定(balance_speed_judge_routing_test.go の前提を壊さないため)。
+				// BalanceURL は newTestEnv の既定では未設定(balance_speed_routing_test.go の前提を壊さないため)。
 				env = newBalanceTestEnv(t)
 			case "speed":
 				env = newSpeedTestEnv(t)
-			case "judge":
-				env = newJudgeTestEnv(t)
 			}
 			target := map[string]*fakeUpstream{
 				"calc": env.calc, "pokedex": env.pokedex, "assets": env.assets, "record": env.record, "team": env.team,
-				"balance": env.balance, "speed": env.speed, "judge": env.judge,
+				"balance": env.balance, "speed": env.speed,
 			}[tt.upstream]
 			target.respond(upstreamResponse{
 				status: http.StatusOK, contentType: "application/json; charset=utf-8",
@@ -156,7 +152,7 @@ func TestUpstreamResponsesPassThroughUnchanged(t *testing.T) {
 
 // AC-G3: gateway が扱わないパス・メソッドは 404 not_found(Error 形式)で、どの上流にも届かない。
 // `/api/balance`(末尾スラッシュ無し)は pokedex・record・team と同じ「前方一致は `/api/balance/` から」
-// の規則で一致しない(issue #284。balance_speed_judge_routing_test.go に prefix-exact のケースがある)。
+// の規則で一致しない(issue #284。balance_speed_routing_test.go に prefix-exact のケースがある)。
 // ドットセグメントで別のルート(上流の /healthz など)へ抜けることもできない。
 func TestUnroutedPathsAreNotFound(t *testing.T) {
 	tests := []struct {

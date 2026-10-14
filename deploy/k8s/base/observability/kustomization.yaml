@@ -7,7 +7,6 @@ resources:
   - servicemonitors/balance.yaml
   - servicemonitors/calc.yaml
   - servicemonitors/gateway.yaml
-  - servicemonitors/judge.yaml
   - servicemonitors/pokedex.yaml
   - servicemonitors/record.yaml
   - servicemonitors/speed.yaml

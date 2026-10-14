@@ -5,7 +5,7 @@
 // 形の規則(ADR-0204 で変わった点。詳細は ADR-0301 §5 追記):
 //   - 相性表は MasterExport **本体**に含める(types / typeChart)。CALC_TYPECHART_PATH は廃止された
 //     (services/calc/cmd/calc/main.go。設定されていると calc-svc は起動しない)ので、別出しにしない。
-//   - calc-svc のローダー(services/calc/internal/master/export.go)は未知のフィールドをエラーにするので、
+//   - calc-svc のローダー(services/calc/internal/adapters/master/export.go)は未知のフィールドをエラーにするので、
 //     画面だけの追加フィールド(species.learnset)は書かない。種族・技・持ち物・特性・性格は
 //     MasterExport の形(MasterSpecies / MasterMove / MasterItem / MasterAbility / MasterNature)にそろえる。
 //   - 効果(items / abilities の effect)のキーは共通マスタ(services/internal/master/effects.go)が受け付ける

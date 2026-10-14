@@ -10,7 +10,6 @@
 //	GATEWAY_TEAM_URL              team-svc の基底 URL。任意(未設定なら /api/team/* は 503。ADR-0213)
 //	GATEWAY_BALANCE_URL           balance-svc の基底 URL。任意(未設定なら /api/balance/* は 503。issue #284)
 //	GATEWAY_SPEED_URL             speed-svc の基底 URL。任意(未設定なら /api/speed/* は 503。issue #284)
-//	GATEWAY_JUDGE_URL             judge-svc の基底 URL。任意(未設定なら /api/judge/* は 503。issue #284)
 //	GATEWAY_ASSETS_URL            画像配信の基底 URL。任意(未設定なら /assets/* は 404)
 //	GATEWAY_IMAGES_DIR            ローカル画像(tools/assets の出力)のディレクトリ。任意(未設定なら /images/* は 404。ADR-0808)
 //	GATEWAY_WEB_URL               Web の静的配信の基底 URL。任意(設定時は予約パス以外の GET / HEAD を転送。ADR-0205)
@@ -46,7 +45,6 @@ const (
 	envTeamURL            = "GATEWAY_TEAM_URL"
 	envBalanceURL         = "GATEWAY_BALANCE_URL"
 	envSpeedURL           = "GATEWAY_SPEED_URL"
-	envJudgeURL           = "GATEWAY_JUDGE_URL"
 	envAssetsURL          = "GATEWAY_ASSETS_URL"
 	envCORSAllowedOrigins = "GATEWAY_CORS_ALLOWED_ORIGINS"
 	envUpstreamTimeout    = "GATEWAY_UPSTREAM_TIMEOUT"
@@ -149,14 +147,6 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 		}
 	}
 
-	var judge *url.URL
-	if raw, ok := lookup(envJudgeURL); ok && raw != "" {
-		judge, err = parseUpstreamURL(raw)
-		if err != nil {
-			return config{}, fmt.Errorf("%w: %s が不正: %v", errInvalidConfig, envJudgeURL, err)
-		}
-	}
-
 	var assets *url.URL
 	if raw, ok := lookup(envAssetsURL); ok && raw != "" {
 		assets, err = parseUpstreamURL(raw)
@@ -208,7 +198,6 @@ func loadConfig(lookup func(string) (string, bool)) (config, error) {
 			TeamURL:            team,
 			BalanceURL:         balance,
 			SpeedURL:           speed,
-			JudgeURL:           judge,
 			AssetsURL:          assets,
 			WebURL:             web,
 			ImagesDir:          imagesDir,

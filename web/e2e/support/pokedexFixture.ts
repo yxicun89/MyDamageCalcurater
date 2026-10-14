@@ -4,7 +4,7 @@
 // なぜ要るか: `make e2e` の `web-e2e-online` は calc-svc だけを起動する設計(ADR-0301 §5・ADR-0306 の
 // 「k3d 不要」)だが、P4-16(ADR-0304)以降「オンライン」モードのマスタは pokedex-svc の公開 API から
 // 読む(createOnlineMasterSource)。calc-svc は担当外の pokedex の操作を意図的に 404 で返す
-// (services/calc/internal/httpapi/server.go の registerPokedexNotFoundRoutes。ADR-0301 §5 追記の R1)ため、
+// (services/calc/internal/adapters/httpapi/server.go の registerPokedexNotFoundRoutes。ADR-0301 §5 追記の R1)ため、
 // オンラインのマスタが読めない。calc-svc / pokedex-svc 本体には触らず、Web 側だけで完結させる。
 //
 // 責務の分け方: **応答を作るのは下の純粋関数だけ**で、HTTP の待ち受けは pokedexFixtureServer.mjs が持つ。

@@ -119,7 +119,7 @@ S = 100(`Percent`)/ 1000(`PercentTenths`)、v = 観測値、`x = S·damage − v
 | 経路 | 変換 | 場所 |
 |---|---|---|
 | WASM | 件数検査 → DTO 変換 → `validateIndividual`(既知側)・`validateSpecies`(推定側)→ `CalcReverse` → 表示%は `tenthPercent`(小数 1 桁の JSON 数値) | `engine/wasmapi/requests.go:276` `reverseRequest.run` |
-| calc-svc | 観測はキーの有無で「ちょうど 1 つ」を数え直す(engine は 0 を未指定とみなすため)→ `CalcReverse` → `natureId` を性格の構造値から逆引き・表示%は tenths ÷ 10 | `services/calc/internal/httpapi/convert.go:209` `convertObservations`、`:304` `reverseResultFrom` |
+| calc-svc | 観測はキーの有無で「ちょうど 1 つ」を数え直す(engine は 0 を未指定とみなすため)→ `CalcReverse` → `natureId` を性格の構造値から逆引き・表示%は tenths ÷ 10 | `services/calc/internal/domain/validate.go:63` `ConvertObservations`(手順は `services/calc/internal/app/service.go:159` `Reverse`)、`services/calc/internal/adapters/httpapi/convert.go:283` `reverseResultFrom`(ARCH S3〈ADR-0252〉後の版) |
 
 ## 9. 限界(コードと ADR で確認できるもの)
 

@@ -1,6 +1,6 @@
 ## Judge
-Lane: 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めてもよい)
-Active: issue 235 第2段(特性・持ち物の素早さ補正をマスタの効果データで反映。ADR-0714。実装・テスト完了、critic・PR 待ち)。issue 271(判定画面の未対応の印。ADR-0713。実装・テスト完了、critic・PR 待ち)。issue 235 追加分(status・まひ。ADR-0712。実装完了、critic・PR 待ち)。issue 309(判定画面の技 select・調整プリセット・「詳細」・欄ごとの検証エラー。ADR-0711。実装・テスト完了、critic・PR 待ち)
+Lane: 判定(素早さ×ダメージ連動。廃止済み: ADR-0715。どの AI が進めてもよい)
+Active: なし。判定サービスは ADR-0715(CB-7)で廃止した(Web #753・iOS #772・サービス側の削除)。実クラスタの Argo CD `pokecalc-judge` と Pod の削除はユーザー確認後。以下は廃止前の記録。旧Active: issue 235 第2段(特性・持ち物の素早さ補正をマスタの効果データで反映。ADR-0714。実装・テスト完了、critic・PR 待ち)。issue 271(判定画面の未対応の印。ADR-0713。実装・テスト完了、critic・PR 待ち)。issue 235 追加分(status・まひ。ADR-0712。実装完了、critic・PR 待ち)。issue 309(判定画面の技 select・調整プリセット・「詳細」・欄ごとの検証エラー。ADR-0711。実装・テスト完了、critic・PR 待ち)
 Branch: 次は main から feat/judge-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-judge)
 Status: JD0(基盤。PR #92)・JD1(判定API本体。PR #118)・JD2(場の効果。PR #127)・JD3(複数の相手候補。PR #143)・
 JD4(返り討ち判定。PR #169)・JD5(Web の画面。PR #182。ADR-0705)まで全段階が完了。`POST /api/judge/v1/outspeed-and-ko`
@@ -15,7 +15,7 @@ Status(追記): 2026-10-02 issue #235 第1段(素早さに反映した補正・�
 第2段(特性・持ち物の素早さ補正のデータ駆動)はデータレーンへの依頼(DECISIONS.md)待ち。#258 は PR #419・#449 で overlay まで統合、Argo CD への登録・sync は未実施。
 Status(追記): 2026-10-03 issue #235 追加分: 判定に `status`(状態異常)を足し、まひを素早さに反映(ADR-0712。連結・丸めのあと floor(x×50/100)、`*SpeedApplied` の末尾に `paralysis`、全 status を calc-svc へ転送)。Web に「状態異常」select。
 Status(追記): 2026-10-04 判定の画面は非表示(目的の作り直し待ち。ユーザー決定。docs/usability-round2.md F-07)。サービス・契約(0.3.0)・コード・単体テストは残す。Web のタブは Web レーン、iOS の入口は iOS レーンが登録を外す。
-Next: 判定の目的の再設計は、ユーザーの指示待ち(候補: 調整の画面で一度に確認できる形。docs/usability-round2.md F-11)。それまで画面は非表示で、サービス・契約・コードは残す。デプロイ順(ADR-0714 §6): calc-svc・Web → master-release の再取り込み → judge。過去の経緯: issue 235 第2段(ADR-0714)・issue 271 判定画面の未対応の印(ADR-0713)・issue 235 追加分(ADR-0712)は main 統合済み。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
+Next: なし(廃止済み)。旧: 判定の目的の再設計は、ユーザーの指示待ち(候補: 調整の画面で一度に確認できる形。docs/usability-round2.md F-11)。それまで画面は非表示で、サービス・契約・コードは残す。デプロイ順(ADR-0714 §6): calc-svc・Web → master-release の再取り込み → judge。過去の経緯: issue 235 第2段(ADR-0714)・issue 271 判定画面の未対応の印(ADR-0713)・issue 235 追加分(ADR-0712)は main 統合済み。軽微な積み残しは解消済み(2026-09-25。`attacker`単数の`Individual`にも`defenders`候補と
 同じ大文字小文字厳密なキー検査〈`individualWireKeys`〉を適用。PR #342 main 統合済み)。
 issue #234(moveId/natureId の形式検証。ADR-0706)も解消(2026-09-25。critic 2ラウンド。PR #365 main 統合済み):
 名前付きスキーマ `MoveId`/`NatureId`(pattern `^[a-z0-9]+(-[a-z0-9]+)*$`・maxLength 64)を契約に追加し、

@@ -1,6 +1,6 @@
 ## API
 Lane: API(calc-svc・gateway・契約テスト。`api/openapi.yaml` の持ち主。どの AI が進めてもよい)
-Active: ARCH S3a(calc のヘキサゴナル移行の前半〈計算・一括・逆算〉。ブランチ refactor/api-s3-calc-hexagonal。PR 作成済み・CI 待ち。2026-10-12)
+Active: ARCH S3 の critic 軽微指摘の整理(I-api-6。ブランチ refactor/api-s3b-calc-adjust。PR 作成・CI 待ち。2026-10-15)
 Branch: なし(作業ディレクトリ ~/MyDamageCalcurater-api。直近の PR: #463・#468・#469・#483・#488・#490・#506・#510・#536・#539・#542 はすべて main 統合済み)
 Status: Phase 3・issue #110(ADR-0208。PR #130)・issue #103の設計(M2保存データの保持・削除・端末ID境界。ADR-0209。critic PASS。PR #150)は main に統合済み
 Status(追記 2026-10-12): ARCH S4(record-svc のヘキサゴナル移行。ADR-0254・I-api-3)を**データレーンが代行**して実装(ブランチ feat/arch-s4-record。G6 解消・record を archcheck の未移行の一覧から外した。振る舞いは不変)
@@ -99,5 +99,6 @@ Status(追記 2026-10-09): 計算履歴の一覧 API(`GET /api/record/calc-histo
 Status(追記 2026-10-12): ARCH S3a(docs/plan/architecture-adoption.md §6・ADR-0252)。calc-svc を `internal/domain`(列挙・個体・メガ持ち物・観測・対戦の状態の検証、`Code`・`FromEngine`)/
 `internal/app`(計算・一括・逆算の手順。ポート `Master`・`EventPublisher`・`Expired`)/`internal/adapters/{httpapi,master,events}` にそろえた。
 振る舞い不変(openapi 不変・code/ステータス・失敗の順番・イベントの中身)。calc を tools/archcheck の未移行の一覧から外した。
-Next(S3b): 調整(`adapters/httpapi/adjust.go` の 5 操作)の手順を app へ移す。今は `resolveIndividual`・`parseFormat` 等の薄い関数が app・domain に委ねている。
+Next(S3b): 調整(`adapters/httpapi/adjust.go` の 5 操作)の手順を app へ移す。今は `resolveIndividual`・`parseFormat` 等の薄い関数が app・domain に委ねている。→ 2026-10-12 に S3b 完了(上の追記)。
+Status(追記 2026-10-15): S3 の critic 軽微指摘を整理(I-api-6。ブランチ refactor/api-s3b-calc-adjust)。`httpErrorFrom` は語彙に無い失敗を固定文の internal + ログに(応答は errorBodyFor の既定と同じで不変)。app の逆算の観測順・締め切りのテスト、domain の単体テスト(境界値・Code 写像)を追加。ADR-0252 の `make test-nats`、docs/impl(architecture・api-endpoints・request-flows・reverse-estimation・verify-mapping)の calc の古いパス・行番号・ファイル数、他レーンのコメントの古いパスを直した。振る舞い・openapi は不変。
 Status(追記 2026-10-12): ARCH S7(I-api-5。データレーンが代行)。gateway の `internal/httpapi` を `internal/adapters/httpapi` へ移し、`domain`・`app` は doc.go だけ。振る舞い不変。gateway を archcheck の未移行の一覧から外した。
