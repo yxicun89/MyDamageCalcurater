@@ -1,6 +1,6 @@
 # 実装構成
 
-- 基準: `origin/main` 3379b03(2026-09-24)。根拠は `path:行` か関数名。推測は書かず、未確認は「カバレッジ」節に列挙。
+- 基準: `origin/main` 3379b03(2026-09-24)。calc-svc の行・ファイル数は ARCH S3(ADR-0252)後に更新(2026-10-15)。根拠は `path:行` か関数名。推測は書かず、未確認は「カバレッジ」節に列挙。
 - 全体図・コンポーネント一覧は [../architecture.md](../architecture.md)(judge-svc が未掲載)。本書はその実装側。
 - 関連: [request-flows.md](request-flows.md)(処理フロー)・[api-endpoints.md](api-endpoints.md)(全ルート)・[config-env.md](config-env.md)(環境変数・ConfigMap・Secret)。
 
@@ -85,8 +85,11 @@
 | `services/calc` | 3 | calc-svc(計算 API。services module 内)。Dockerfile・README |
 | `services/calc/calctest` | 1 | テスト専用の共通部品(例マスタ) |
 | `services/calc/cmd/calc` | 3 | calc の main・設定・マスタ取得ループ |
-| `services/calc/internal/adapters/httpapi` | 16 | HTTP 境界(3操作・エラー写像・件数上限・readiness) |
-| `services/calc/internal/adapters/master` | 6 | マスタ一式(MasterExport)の取得・検証・Store |
+| `services/calc/internal/adapters/events` | 3 | 計算イベントの発行(NATS。`app.EventPublisher` の実装) |
+| `services/calc/internal/adapters/httpapi` | 44 | HTTP 境界(厳格デコード・生成型 ⇄ app の写し・エラー写像・件数上限・readiness。計算・一括・逆算・調整・連続技) |
+| `services/calc/internal/adapters/master` | 13 | マスタ一式(MasterExport)の取得・検証・Store(`app.Master` の実装) |
+| `services/calc/internal/app` | 8 | ユースケース(計算・一括・逆算・調整・連続技の手順)とポート(`Master`・`EventPublisher`・`Expired`) |
+| `services/calc/internal/domain` | 9 | 純粋な核(列挙・入力の検証、調整の値域、失敗の語彙 `Code`・`FromEngine`) |
 | `services/calc/testdata` | 1 | 架空のマスタ一式(master.example.json) |
 | `services/gateway` | 4 | gateway(唯一の入口。Echo リバースプロキシ)。Dockerfile・Makefile・README |
 | `services/gateway/cmd/gateway` | 3 | gateway の main・環境変数の読み込み |
@@ -175,7 +178,7 @@ Go module(`go.work:3-10`): `./engine`・`./services`(calc・gateway・pokedex・
 
 | 利用元 | engine を import | 共通生成物 `services/internal/api` | `services/internal/master` |
 |---|---|---|---|
-| calc | 5 ファイル | 6 ファイル | 1 ファイル(`calc/internal/adapters/master`) |
+| calc(ARCH S3 後に数え直し) | 15 ファイル(domain 4・app 6・adapters 5) | 12 ファイル(adapters だけ。domain・app は import しない。ADR-0811) | 1 ファイル(`calc/internal/adapters/master`) |
 | gateway | なし | 4 ファイル(エラー型のみ) | なし |
 | pokedex | 4 | 4 | 7(importer・readmodel・cmd/import) |
 | balance | **なし**(独自の相性表を埋め込む) | なし(自前の `internal/api`) | なし |
@@ -244,9 +247,9 @@ flowchart LR
 | `engine.KOChance` / `ComputeKO` | `engine/ko.go:10,17` | 確定数・確率 |
 | `wasmapi.Calc`/`CalcBulk`/`CalcReverse`(JSON 文字列 ⇄ 文字列) | `engine/wasmapi/wasmapi.go:74,80,86` | WASM/JS 境界。DTO は `dto.go`、リクエスト `requests.go` |
 | `httpapi.Config`・`gateway`(`ReverseProxy` ×4) | `services/gateway/internal/adapters/httpapi/server.go:29,49` | ルーティング・検証・CORS |
-| `master.Store`(Species/Move/Item/Ability/Nature/NatureID/TypeChart) | `services/calc/internal/adapters/master/master.go:20` | calc が計算に使うマスタ参照口。実装 `MemoryStore`(`:41`) |
-| `master.Source`(`FileSource`・`HTTPSource`) | `services/calc/internal/adapters/master/export.go:378,384,401` | MasterExport の入手元 |
-| `calc httpapi.Server`(`api.ServerInterface` 実装)・`StoreFunc` | `services/calc/internal/adapters/httpapi/server.go:35`・`readiness.go:19` | 3 操作。マスタ未取得の間は 503 |
+| `app.Master`(Species/Move/Item/Ability/Nature/NatureID/MegaRequiredItem/TypeChart)・別名 `master.Store` | `services/calc/internal/app/ports.go:14`・`services/calc/internal/adapters/master/master.go:24` | calc が計算に使うマスタ参照口(ポートは app で宣言。ADR-0252)。実装 `MemoryStore`(`:27`) |
+| `master.Source`(`FileSource`・`HTTPSource`) | `services/calc/internal/adapters/master/export.go:452,458,475` | MasterExport の入手元 |
+| `calc httpapi.Server`(`api.ServerInterface` 実装)・`StoreFunc` | `services/calc/internal/adapters/httpapi/server.go:44`・`readiness.go:21` | 計算・一括・逆算・調整・連続技。手順は `app.Service`(`services/calc/internal/app`)。マスタ未取得の間は 503 |
 | `store.Querier`(sqlc 生成) | `services/pokedex/internal/store/querier.go:11` | pokedex の DB アクセス唯一の口 |
 | `pokedex httpapi.Server` | `services/pokedex/internal/adapters/httpapi/server.go` | 検索 8 操作 + `/internal/pokedex/master`。手順は `app.Service`(`services/pokedex/internal/app`) |
 | `readmodel.Export` | `services/pokedex/internal/adapters/readmodel/readmodel.go` | balance・speed 用 JSON 出力(組み立ては `app.ExportReadModel`) |
@@ -265,7 +268,7 @@ flowchart LR
 | 検証する側 | 対象 | 検証内容 | 失敗時 |
 |---|---|---|---|
 | gateway | `/api/calc*`・`/api/pokedex/*` のみ(`routing.go:107` `requiresHeaderCheck`) | 各ヘッダがちょうど1つ・非空・正準 UUID `8-4-4-4-12`(`headers.go:19,51`) | 欠落・空 → 400 `missing_header`(優先)/ 不正・重複 → 400 `invalid_header` |
-| calc | 3 操作 | 欠落・空のみ(`server.go:164` `checkHeaders`)+ 生成ラッパの重複検出(`server.go:131` `errorBodyFor`) | 同上。UUID 形式は見ない |
+| calc | 3 操作 | 欠落・空のみ(`server.go:203` `checkHeaders`)+ 生成ラッパの重複検出(`server.go:170` `errorBodyFor`) | 同上。UUID 形式は見ない |
 | pokedex | 公開 6 操作(`/internal` は不要) | 生成ラッパ(`errors.go:80` `errorBodyFor`) | `missing_header` / `invalid_header` |
 | balance・speed | 業務エンドポイント | gateway と同じ正準 UUID(各 `requestctx.go` の複製。ADR-0413・ADR-0606) | 400 `missing_header` / `invalid_header` |
 | judge | 業務エンドポイント | 非空のみ(`server.go:79`) | 400 `invalid_request`(gateway 系と語彙が異なる) |
@@ -278,7 +281,7 @@ flowchart LR
 - 契約: `api/openapi.yaml` の `GET /internal/pokedex/master`(operationId `getMasterExport`)。tag `internal`、ヘッダ不要。
 - 実装: pokedex-svc のみ(`services/pokedex/internal/adapters/httpapi/server.go` 登録、`master.go` `GetMasterExport`。組み立ては `app/master.go`)。DB 全行を使用可能集合で絞らず返す。データ未投入・DB 不通は 503 `master_unavailable`。
 - 公開しない: gateway は先頭セグメント `internal` を予約語にして 404 `not_found`(`routing.go:32,48`)。空セグメント `//internal/...` も先に 404(`routing.go:95`、ADR-0205)。calc は担当外で 404(`readiness.go` `GetMasterExport`)。
-- 利用者: calc-svc 起動時の `HTTPSource.Fetch`(`services/calc/internal/adapters/master/export.go:435`)。取得までは calc の 3 操作と `/readyz` が 503。取得後の再取得はしない(マスタ更新は calc の再起動で反映。ADR-0204 §3)。
+- 利用者: calc-svc 起動時の `HTTPSource.Fetch`(`services/calc/internal/adapters/master/export.go:509`)。取得までは calc の 3 操作と `/readyz` が 503。取得後の再取得はしない(マスタ更新は calc の再起動で反映。ADR-0204 §3)。
 
 ## 8. マスタデータの扱い(pokedex)
 
