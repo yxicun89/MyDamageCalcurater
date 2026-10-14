@@ -46,7 +46,6 @@ const (
 	renderTidbDir     = "deploy/k8s/overlays/local/tidb"
 	renderBalanceDir  = "services/balance/deploy/k8s/overlays/local"
 	renderSpeedDir    = "services/speed/deploy/k8s/overlays/local"
-	renderJudgeDir    = "services/judge/deploy/k8s/overlays/local"
 	recordMigrateFile = "deploy/k8s/base/record/job-migrate.yaml"
 	teamMigrateFile   = "deploy/k8s/base/team/job-migrate.yaml"
 )
@@ -193,7 +192,7 @@ func loadWorld(t *testing.T) npWorld {
 		}
 	}
 	// Pod とサービスは、各レーンの local overlay(gitops overlay と同じ base)から集める。
-	for _, dir := range []string{renderLocalDir, renderBalanceDir, renderSpeedDir, renderJudgeDir, renderTidbDir} {
+	for _, dir := range []string{renderLocalDir, renderBalanceDir, renderSpeedDir, renderTidbDir} {
 		for _, doc := range kustomizeRenderDocs(t, dir) {
 			w.addDoc(doc)
 		}
@@ -481,9 +480,9 @@ type npFlow struct {
 func app(name string) func(npWorld) npPod { return func(w npWorld) npPod { return w.pods[name] } }
 func ext(p npPod) func(npWorld) npPod     { return func(npWorld) npPod { return p } }
 
-// 8080 で受ける pokecalc のサービス(balance・speed・judge は各レーンの Pod だが同じ namespace に入る)。
+// 8080 で受ける pokecalc のサービス(balance・speed は各レーンの Pod だが同じ namespace に入る)。
 // record・team は ADR-0220 §2 で追加(/metrics と ServiceMonitor を持つ)。
-var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "judge", "record", "team"}
+var httpServices = []string{"gateway", "calc", "pokedex", "balance", "speed", "record", "team"}
 
 func allowedFlows() []npFlow {
 	var f []npFlow
@@ -491,11 +490,11 @@ func allowedFlows() []npFlow {
 		f = append(f, npFlow{why, from, to, port})
 	}
 	// 入口: Traefik(kube-system)→ Ingress の向き先。web・calc・pokedex は Ingress の向き先ではない。
-	for _, n := range []string{"gateway", "balance", "speed", "judge"} {
+	for _, n := range []string{"gateway", "balance", "speed"} {
 		add("Traefik → "+n+"(Ingress)", ext(traefikPod), app(n), podPort)
 	}
-	// gateway の上流。balance・speed・judge は issue #284 の配線(GATEWAY_*_URL)が入ると必要になる。
-	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "judge", "record", "team"} {
+	// gateway の上流。balance・speed は issue #284 の配線(GATEWAY_*_URL)が入ると必要になる。
+	for _, n := range []string{"calc", "pokedex", "web", "balance", "speed", "record", "team"} {
 		add("gateway → "+n, app("gateway"), app(n), podPort)
 	}
 	// record・team は計算イベントを購読する(ADR-0212・ADR-0213 §5。ADR-0220 §2)。
@@ -504,8 +503,6 @@ func allowedFlows() []npFlow {
 	}
 	add("calc → pokedex(内部 API /internal/pokedex/master)", app("calc"), app("pokedex"), podPort)
 	add("calc → nats", app("calc"), app("nats"), natsPort)
-	add("judge → pokedex", app("judge"), app("pokedex"), podPort)
-	add("judge → calc", app("judge"), app("calc"), podPort)
 	// DB
 	for _, n := range []string{"pokedex", "pokedex-migrate", "pokedex-import", "balance", "speed"} {
 		// balance・speed は initContainer readmodel-export(pokedex export)のため。ADR-0412 §4
@@ -546,7 +543,6 @@ func deniedFlows() []npFlow {
 	// 最小権限: 必要な相手だけ
 	add("calc → mysql", app("calc"), app("mysql"), mysqlPort)
 	add("gateway → mysql", app("gateway"), app("mysql"), mysqlPort)
-	add("judge → mysql", app("judge"), app("mysql"), mysqlPort)
 	add("balance → pokedex", app("balance"), app("pokedex"), podPort)
 	add("speed → pokedex", app("speed"), app("pokedex"), podPort)
 	add("pokedex → calc", app("pokedex"), app("calc"), podPort)

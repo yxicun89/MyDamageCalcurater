@@ -2,7 +2,7 @@
 // (calc・pokedex): a whole-handler deadline and a concurrency limit that answers 503 with
 // Retry-After instead of queueing work it cannot finish in time (ADR-0801, issue #299).
 //
-// balance・speed・judge (each its own Go module) carry an identical copy of this file
+// balance・speed (each its own Go module) carry an identical copy of this file
 // (ADR-0406 §2 precedent: no shared module dependency across service lanes; a byte-equality test
 // in each module catches drift). Any change here must be mirrored there.
 package httpguard

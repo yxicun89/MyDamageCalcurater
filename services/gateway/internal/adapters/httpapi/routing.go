@@ -19,7 +19,6 @@ const (
 	routeTeam
 	routeBalance
 	routeSpeed
-	routeJudge
 	routeAssets
 	routeImages
 	routeWeb
@@ -28,7 +27,7 @@ const (
 // 名前は httpmetrics の path ラベルに使う(固定集合。routeNone は未知のパス)。
 var routeKindNames = map[routeKind]string{
 	routeNone: "none", routeHealthz: "healthz", routeCalc: "calc", routePokedex: "pokedex", routeRecord: "record",
-	routeTeam: "team", routeBalance: "balance", routeSpeed: "speed", routeJudge: "judge", routeAssets: "assets", routeImages: "images", routeWeb: "web",
+	routeTeam: "team", routeBalance: "balance", routeSpeed: "speed", routeAssets: "assets", routeImages: "images", routeWeb: "web",
 }
 
 // String は routeKind のラベル名("calc" 等)。
@@ -48,7 +47,6 @@ const (
 	prefixTeam    = "/api/team/"
 	prefixBalance = "/api/balance/"
 	prefixSpeed   = "/api/speed/"
-	prefixJudge   = "/api/judge/"
 	prefixAssets  = "/assets/"
 	prefixImages  = "/images/"
 )
@@ -110,9 +108,6 @@ func matchRoute(method, path string) (routeKind, bool) {
 	case strings.HasPrefix(path, prefixSpeed):
 		// /api/speed そのもの・/api/speedx は一致しない → 404(同上)。
 		return routeSpeed, true
-	case strings.HasPrefix(path, prefixJudge):
-		// /api/judge そのもの・/api/judgex は一致しない → 404(同上)。
-		return routeJudge, true
 	case strings.HasPrefix(path, prefixAssets):
 		if method != http.MethodGet && method != http.MethodHead {
 			return routeNone, false
@@ -155,14 +150,14 @@ func hasEmptySegment(path string) bool {
 	return false
 }
 
-// requiresHeaderCheck は /api/* のルート(calc・pokedex・record・team・balance・speed・judge)にだけ
+// requiresHeaderCheck は /api/* のルート(calc・pokedex・record・team・balance・speed)にだけ
 // X-Device-Id / X-Session-Id の検証を課す(ADR-0202 §4。/assets・/healthz・CORS プリフライトは課さない)。
-// balance・speed・judge は自分自身でも同じ検証を複製して持つ(issue #236。各サービスの
+// balance・speed は自分自身でも同じ検証を複製して持つ(issue #236。各サービスの
 // internal/httpapi/requestctx 相当)が、gateway 経由になったことでここでも先に検証がかかる
 // (二重になるが害はない。複製側の削除は各レーンの判断。issue #284)。
 //
-// 例外: /api/{balance,speed,judge}/healthz(完全一致のみ。前方一致にしない)はヘッダ検証を課さない。
-// 3サービスの契約(services/{balance,speed,judge}/api/openapi.yaml の publicHealth)・ADR-0600/ADR-0700は
+// 例外: /api/{balance,speed}/healthz(完全一致のみ。前方一致にしない)はヘッダ検証を課さない。
+// 2サービスの契約(services/{balance,speed}/api/openapi.yaml の publicHealth)・ADR-0600/ADR-0700は
 // Ingress 越しの疎通確認用としてヘッダ不要と明記しており、gateway 経由になっても同じ契約を守る必要がある
 // (ADR-0202 §3 追記。issue #284 critic 指摘)。/api/balance/healthzz や /api/balance/healthz/x のような
 // 似た別パスまで緩めないよう完全一致で判定する。
@@ -174,8 +169,6 @@ func requiresHeaderCheck(kind routeKind, path string) bool {
 		return path != prefixBalance+"healthz"
 	case routeSpeed:
 		return path != prefixSpeed+"healthz"
-	case routeJudge:
-		return path != prefixJudge+"healthz"
 	default:
 		return false
 	}

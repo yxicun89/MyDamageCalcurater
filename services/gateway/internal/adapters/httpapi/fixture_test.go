@@ -121,20 +121,19 @@ func mustParseURL(t *testing.T, raw string) *url.URL {
 	return u
 }
 
-// testEnv は9つの上流の偽物と、それらに向けた gateway のハンドラ。web・record・team・balance・speed・
-// judge の偽物は常に起動するが、Config の対応する URL フィールドに入るのは newWebTestEnv /
-// newRecordTestEnv / newTeamTestEnv / newBalanceTestEnv / newSpeedTestEnv / newJudgeTestEnv のときだけ
+// testEnv は8つの上流の偽物と、それらに向けた gateway のハンドラ。web・record・team・balance・speed の偽物は常に起動するが、Config の対応する URL フィールドに入るのは newWebTestEnv /
+// newRecordTestEnv / newTeamTestEnv / newBalanceTestEnv / newSpeedTestEnv のときだけ
 // (newTestEnv では未設定 = 従来どおり。ADR-0209 §10 の record_routing_test.go・ADR-0213 の
-// team_routing_test.go・issue #284 の balance_speed_judge_routing_test.go が前提にする)。
+// team_routing_test.go・issue #284 の balance_speed_routing_test.go が前提にする)。
 type testEnv struct {
-	calc, pokedex, assets, web, record, team, balance, speed, judge *fakeUpstream
-	handler                                                         http.Handler
-	metrics                                                         http.Handler // メトリクス専用ポート側(#216)
+	calc, pokedex, assets, web, record, team, balance, speed *fakeUpstream
+	handler                                                  http.Handler
+	metrics                                                  http.Handler // メトリクス専用ポート側(#216)
 }
 
 // enabledUpstreams は buildTestEnv がどの上流を Config に設定するかを選ぶ(newTestEnv では全て false)。
 type enabledUpstreams struct {
-	web, record, team, balance, speed, judge bool
+	web, record, team, balance, speed bool
 }
 
 // newTestEnv は既定の Config(calc・pokedex・assets の上流・許可オリジン2つ・タイムアウト 2s。他の上流は
@@ -179,12 +178,6 @@ func newSpeedTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
 	return buildTestEnv(t, enabledUpstreams{speed: true}, mutate...)
 }
 
-// newJudgeTestEnv は newTestEnv に加えて JudgeURL を judge の偽物に向けた gateway を作る(issue #284)。
-func newJudgeTestEnv(t *testing.T, mutate ...func(*Config)) *testEnv {
-	t.Helper()
-	return buildTestEnv(t, enabledUpstreams{judge: true}, mutate...)
-}
-
 func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config)) *testEnv {
 	t.Helper()
 	env := &testEnv{
@@ -196,7 +189,6 @@ func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config
 		team:    newFakeUpstream(t, "team"),
 		balance: newFakeUpstream(t, "balance"),
 		speed:   newFakeUpstream(t, "speed"),
-		judge:   newFakeUpstream(t, "judge"),
 	}
 	cfg := Config{
 		CalcURL:            env.calc.url(t),
@@ -221,9 +213,6 @@ func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config
 	if enabled.speed {
 		cfg.SpeedURL = env.speed.url(t)
 	}
-	if enabled.judge {
-		cfg.JudgeURL = env.judge.url(t)
-	}
 	for _, m := range mutate {
 		m(&cfg)
 	}
@@ -236,9 +225,9 @@ func buildTestEnv(t *testing.T, enabled enabledUpstreams, mutate ...func(*Config
 	return env
 }
 
-// upstreams は9つの上流を名前つきで返す(「どこにも届かない」の検査用。未設定でも含める)。
+// upstreams は8つの上流を名前つきで返す(「どこにも届かない」の検査用。未設定でも含める)。
 func (e *testEnv) upstreams() []*fakeUpstream {
-	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web, e.record, e.team, e.balance, e.speed, e.judge}
+	return []*fakeUpstream{e.calc, e.pokedex, e.assets, e.web, e.record, e.team, e.balance, e.speed}
 }
 
 // assertNoUpstreamReached はどの上流にもリクエストが届いていないことを確かめる。

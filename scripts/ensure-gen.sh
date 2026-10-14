@@ -20,7 +20,6 @@ go_ts_files() {
 services/internal/api/openapi.gen.go
 services/balance/internal/api/openapi.gen.go
 services/speed/internal/api/openapi.gen.go
-services/judge/internal/api/openapi.gen.go
 services/pokedex/internal/store/db.go
 services/pokedex/internal/store/models.go
 services/pokedex/internal/store/pokedex.sql.go

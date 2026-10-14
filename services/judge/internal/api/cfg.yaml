@@ -1,5 +1,0 @@
-package: api
-output: judge/internal/api/openapi.gen.go
-generate:
-  models: true
-  echo5-server: true

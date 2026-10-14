@@ -10,7 +10,7 @@ package httpmetrics_test
 //	(*Metrics).Handler() echo.HandlerFunc   // Prometheus text format を返す
 //
 // services/internal/httpmetrics/httpmetrics_test.go の複製(import パスだけが違う)。同じ内容のテストが
-// services/internal・balance・speed・judge の4箇所にある
+// services/internal・balance・speed の3箇所にある
 // (ADR-0406 §2: 共有 Go module を作らず、1ファイルを複製する)。ここを直したら4箇所とも直すこと。
 
 import (

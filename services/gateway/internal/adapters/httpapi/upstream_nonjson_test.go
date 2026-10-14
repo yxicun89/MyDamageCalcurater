@@ -22,21 +22,19 @@ func TestNonJSONUpstream5xxIsNormalized(t *testing.T) {
 			upstreamResponse{status: http.StatusBadGateway, contentType: "text/html", body: "<h1>Bad Gateway</h1>"}},
 		{"pokedex 504 text/plain", http.MethodGet, "/api/pokedex/natures", func(e *testEnv) *fakeUpstream { return e.pokedex },
 			upstreamResponse{status: http.StatusGatewayTimeout, contentType: "text/plain", body: "Gateway Timeout"}},
-		{"judge 502 text/html", http.MethodGet, "/api/judge/healthz", func(e *testEnv) *fakeUpstream { return e.judge },
-			upstreamResponse{status: http.StatusBadGateway, contentType: "text/html", body: "<h1>Bad Gateway</h1>"}},
 		{"balance 504 text/plain", http.MethodGet, "/api/balance/healthz", func(e *testEnv) *fakeUpstream { return e.balance },
 			upstreamResponse{status: http.StatusGatewayTimeout, contentType: "text/plain", body: "Gateway Timeout"}},
 		{"speed 500 text/plain", http.MethodGet, "/api/speed/healthz", func(e *testEnv) *fakeUpstream { return e.speed },
 			upstreamResponse{status: http.StatusInternalServerError, contentType: "text/plain", body: "Gateway Timeout"}},
-		{"Content-Type 無しの 503", http.MethodGet, "/api/judge/healthz", func(e *testEnv) *fakeUpstream { return e.judge },
+		{"Content-Type 無しの 503", http.MethodGet, "/api/speed/healthz", func(e *testEnv) *fakeUpstream { return e.speed },
 			upstreamResponse{status: http.StatusServiceUnavailable}},
-		{"Retry-After は引き継がない", http.MethodGet, "/api/judge/healthz", func(e *testEnv) *fakeUpstream { return e.judge },
+		{"Retry-After は引き継がない", http.MethodGet, "/api/speed/healthz", func(e *testEnv) *fakeUpstream { return e.speed },
 			upstreamResponse{status: http.StatusServiceUnavailable, contentType: "text/html", body: "Gateway Timeout",
 				header: http.Header{"Retry-After": []string{"30"}}}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			env := buildTestEnv(t, enabledUpstreams{balance: true, speed: true, judge: true})
+			env := buildTestEnv(t, enabledUpstreams{balance: true, speed: true})
 			up := tc.upstream(env)
 			up.respond(tc.resp)
 
