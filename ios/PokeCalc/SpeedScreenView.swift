@@ -37,9 +37,8 @@ struct SpeedScreenView: View {
                 SpeedSelfSection(viewModel: viewModel, pickerTarget: $pickerTarget)
                 SpeedOpponentSection(viewModel: viewModel, pickerTarget: $pickerTarget)
                 SpeedFieldSection(viewModel: viewModel)
-                SpeedMatchupSection(viewModel: viewModel)
+                SpeedMatchupSection(viewModel: viewModel, onOpenCombo: onOpenCombo)
                 SpeedReachSection(viewModel: viewModel)
-                comboLink
             }
             .padding(SpacingToken.x4)
         }
@@ -50,26 +49,6 @@ struct SpeedScreenView: View {
         .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
         .sheet(item: $pickerTarget) { target in
             SpeedPokemonSheet(viewModel: viewModel, target: target)
-        }
-    }
-
-    /// 「この相手で連続技を計算」。`comboHandoff` が nil の間(連続技が未実装・ポケモン未選択)は出さない。
-    @ViewBuilder
-    private var comboLink: some View {
-        if let handoff = viewModel.comboHandoff, let onOpenCombo {
-            Button {
-                onOpenCombo(handoff)
-            } label: {
-                Text(SpeedMatchupLabels.comboLink)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(SpacingToken.x3)
-                    .popCard(cornerRadius: RadiusToken.card)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("speedComboLink")
         }
     }
 }

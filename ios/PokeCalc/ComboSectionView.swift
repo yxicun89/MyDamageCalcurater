@@ -14,8 +14,21 @@ struct ComboSectionView: View {
     @State private var isOpponentSheetPresented = false
     @State private var isSpeedFieldExpanded = false
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    /// 素早さ画面から連続技を開く要求(ADR-0542)。処理済みの token を覚えて、同じ要求を入れ直さない。
+    private let openRequest: ComboOpenRequest?
+    private let openFromSpeed: (SpeedComboHandoff) async -> Void
+    private let onHandoffApplied: () -> Void
+    @State private var handledToken = 0
+    @AccessibilityFocusState private var isHeadingFocused: Bool
 
-    init(calc: CalcViewModel, combo: any ComboCalcService, master: any PokeCalcService, speed: (any SpeedService)?) {
+    init(
+        calc: CalcViewModel, combo: any ComboCalcService, master: any PokeCalcService, speed: (any SpeedService)?,
+        openRequest: ComboOpenRequest? = nil, openFromSpeed: @escaping (SpeedComboHandoff) async -> Void = { _ in },
+        onHandoffApplied: @escaping () -> Void = {}
+    ) {
+        self.openRequest = openRequest
+        self.openFromSpeed = openFromSpeed
+        self.onHandoffApplied = onHandoffApplied
         self.calc = calc
         _viewModel = State(initialValue: ComboViewModel(comboService: combo, master: master, speedService: speed))
     }
@@ -28,6 +41,21 @@ struct ComboSectionView: View {
             }
         }
         .task(id: calc.comboContext) { await viewModel.updateContext(calc.comboContext) }
+        .task(id: openRequest?.token) { await applyOpenRequest() }
+        .onChange(of: viewModel.appliedHandoffCount) {
+            isHeadingFocused = true
+            AccessibilityNotification.Announcement(ComboText.handoffAnnouncement).post()
+            onHandoffApplied()
+        }
+    }
+
+    /// 計算画面の攻守 → 結果の文脈 → 連続技の節、の順に入れる(新しい token のときだけ)。
+    private func applyOpenRequest() async {
+        guard let openRequest, openRequest.token != handledToken else { return }
+        handledToken = openRequest.token
+        await openFromSpeed(openRequest.handoff)
+        await viewModel.updateContext(calc.comboContext)
+        await viewModel.applyHandoff(openRequest.handoff)
     }
 
     private var section: some View {
@@ -37,6 +65,7 @@ struct ComboSectionView: View {
                 .foregroundStyle(ColorToken.textPrimary.color)
                 .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
+                .accessibilityFocused($isHeadingFocused)
             if viewModel.isExpanded {
                 expandedContent
             } else {

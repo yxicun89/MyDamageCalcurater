@@ -410,6 +410,41 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
         await restoreCalc(calc, teamID: FavoriteLoad.sourceTeamID, memberID: favorite.id)
     }
 
+    /// 素早さ画面の「この相手で連続技を計算」(I-ios-21。ADR-0542 §2): 攻撃側 = 自分・防御側 = 相手の種族を入れる。
+    /// 骨組み: 実装は implementer(CalcViewModelSpeedHandoffTests を通す)。
+    public func openFromSpeed(_ handoff: SpeedComboHandoff) async {
+        await load()
+        let attackerKey = await resolvedSpeciesKey(handoff.attackerPokemonID, current: attackerSpeciesKey)
+        let defenderKey = await resolvedSpeciesKey(handoff.defenderPokemonID, current: defenderSpeciesKey)
+        guard attackerKey != nil || defenderKey != nil else { return }
+        let token = beginInput()
+        if let defenderKey {
+            defenderSpeciesKey = defenderKey
+            resetDefenderAbility()
+            if !toggledDefenderItemIds.isEmpty, megaInfo[defenderKey] == nil {
+                _ = await loadDefenderDetail()
+                guard token == latestRequestToken else { return }
+            }
+        }
+        if let attackerKey {
+            let previousLock = attackerItemLock
+            attackerSpeciesKey = attackerKey
+            await applyAttackerChangeAndRecalculate(token: token, previousLock: previousLock)
+        } else {
+            await recalculate(token: token)
+        }
+    }
+
+    /// 入れる種族のキー(今と同じ・引けない側は nil)。辞書に無ければ詳細を引いて辞書に入れる。
+    private func resolvedSpeciesKey(_ key: String, current: String) async -> String? {
+        guard key != current else { return nil }
+        if speciesDictionary[key] == nil {
+            guard let detail = try? await service.species(key: key), detail.key == key else { return nil }
+            speciesDictionary[key] = SpeciesSummary(detail: detail)
+        }
+        return key
+    }
+
     /// `loadHistoryCalc` / `loadFavoriteCalc` の共通の実体。`teamID`・`memberID` は攻撃側の出どころの印。
     private func restoreCalc(_ calc: CalcHistoryCalc, teamID: String, memberID: String) async {
         await load()
@@ -511,8 +546,24 @@ public final class CalcViewModel: MasterSpeciesSearchProviding, MasterMoveSearch
     /// マスタを読み、既定の入力(攻撃側=先頭・防御側=2番目・技=先頭のダメージ技・A特化・持ち物なし・比較なし)
     /// を選んで一括計算を1回呼ぶ(規則3)。2回目以降の呼び出しは何もしない(読み込み済みのため)。
     public func load() async {
+        // 読み込み中に別の呼び出し(素早さ画面からの引き継ぎなど)が来たら、終わるまで待つ。
+        if let task = loadInFlight {
+            await task.value
+            return
+        }
         guard !didLoad else { return }
         didLoad = true
+        let task = Task { @MainActor in
+            await self.performLoad()
+            self.loadInFlight = nil
+        }
+        loadInFlight = task
+        await withTaskCancellationHandler { await task.value } onCancel: { task.cancel() }
+    }
+
+    private var loadInFlight: Task<Void, Never>?
+
+    private func performLoad() async {
         let token = beginInput()
         isLoading = true
         do {

@@ -82,6 +82,8 @@ private struct SpeedDisclosure<Content: View>: View {
 /// 出力 1: 想定ごとのカード。
 struct SpeedMatchupSection: View {
     let viewModel: SpeedMatchupViewModel
+    /// 「この相手で連続技を計算」(ADR-0542 §6)。nil なら出さない。
+    var onOpenCombo: ((SpeedComboHandoff) -> Void)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: SpacingToken.x3) {
@@ -89,8 +91,23 @@ struct SpeedMatchupSection: View {
                 title: viewModel.trickRoom ? SpeedMatchupLabels.matchupRegionTrickRoom : SpeedMatchupLabels.matchupRegion,
                 systemImage: PopSymbol.speed)
             content
+            comboLink
         }
         .accessibilityElement(children: .contain)
+    }
+
+    /// `comboHandoff` が nil の間(ポケモン未選択)は出さない。想定カードの直下。
+    @ViewBuilder
+    private var comboLink: some View {
+        if let handoff = viewModel.comboHandoff, let onOpenCombo {
+            Button {
+                onOpenCombo(handoff)
+            } label: {
+                PopLabel(title: SpeedMatchupLabels.comboLink, systemImage: PopSymbol.damage)
+            }
+            .buttonStyle(PillButtonStyle(kind: .secondary))
+            .accessibilityIdentifier("speedComboLink")
+        }
     }
 
     @ViewBuilder

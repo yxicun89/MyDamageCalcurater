@@ -110,6 +110,19 @@ public enum ComboText {
     /// iOS だけ: 性格を ID で送るため、置き換えた組の性格がデータに無いと送れない(ADR-0535 §7)。
     public static let selfSpeedNatureUnavailable = "選んだ素早さの性格補正に合う性格がデータにありません"
 
+    // MARK: 素早さ画面からの引き継ぎ(I-ios-21。ADR-0542 §4〜§5)。骨組み: 値は implementer が ComboHandoffTextTests に合わせて入れる。
+
+    /// こだわりスカーフを反映できない 1 行(Web の `comboScreenText.selfSpeed.scarfIgnored` と同じ語)。
+    public static let handoffScarfIgnored = "素早さ画面で指定したこだわりスカーフは、連続技の計算では反映できません。"
+    /// 「説明」ボタンの奥の箇条(1 行 1 文)。引き継ぐもの・引き継がないもの。
+    public static let handoffHelpLines: [String] = [
+        "自分と相手のポケモン、素早さのSP・性格補正・ランクを引き継ぎます",
+        "こだわりスカーフとまひは、連続技に指定する項目が無いので引き継ぎません",
+        "追い風とトリックルームは、この節の「素早さの場」で選びます",
+    ]
+    /// 引き継いで節を開いたときの読み上げ(VoiceOver のお知らせ)。
+    public static let handoffAnnouncement = "素早さ画面の自分と相手で連続技を開きました"
+
     public static func selfSpeedNatureOption(_ nature: ComboSelfSpeedNature) -> String {
         switch nature {
         case .keep: return "計算画面の性格のまま"
