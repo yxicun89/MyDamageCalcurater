@@ -64,6 +64,8 @@ final class CalcAttackerStatsUITests: XCTestCase {
             attempts += 1
         }
         XCTAssertTrue(target.isHittable, "スクロールしてもタップできない: \(target)")
+        // 上端がナビゲーションバーの下に潜ると、上から 25% を狙うタップがバーに当たる。引き戻してから返す。
+        settleBelowNavigationBar(app, target)
     }
 
     /// 要素の上のほうをタップする(行の中央が画面の下端に当たらないように)。

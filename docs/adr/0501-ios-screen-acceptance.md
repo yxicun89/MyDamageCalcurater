@@ -5415,7 +5415,7 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 
 | テスト | 変更 | 理由 |
 |---|---|---|
-| `CalcAttackerStatsUITests.selectSpecialMove` | 技の欄をタップする前に `settleBelowNavigationBar` を呼ぶ(`tapUntilSelected` と同じ補助) | 技の欄の上端がナビゲーションバーの下に潜ると、上から 25% を狙うタップがバーに当たりシートが開かない。検査は同じ |
+| `CalcAttackerStatsUITests.selectSpecialMove`・`scrollUntilHittable` | 技の欄をタップする前、および `scrollUntilHittable` の最後に `settleBelowNavigationBar` を呼ぶ(`tapUntilSelected` と同じ補助。SP 欄の `typeSP` も同じ原因で落ちたため) | 技の欄の上端がナビゲーションバーの下に潜ると、上から 25% を狙うタップがバーに当たりシートが開かない。検査は同じ |
 | `CalcScreenUITests.testOpeningShowsDefaultPhysicalRows` | プリセットのピルが押せるまで画面を送る(最大 6 回)ようにした。検査は同じ | 見出しと特性の欄でカードが縦に伸びた |
 | `LargeTextLayoutUITests.calcConditionsPanelIdentifiers` | `calcAttackerAbilityPicker` を外し、`calcScreenIdentifiers` へ `calcAttackerAbilityPicker`・`calcDefenderAbilityPicker` を足した | 特性の欄は「詳細」でなくカードの中 |
 | `LargeTextLayoutUITests.testCalcScreenConditionsPanelNoHorizontalOverflowAtAX5` | 天候・フィールド・壁を「存在だけ」から `assertNoHorizontalOverflowForPrefixes`(はみ出し検査)へ強めた。コメントも直した | 横スクロールをやめて折り返す並びにした |
