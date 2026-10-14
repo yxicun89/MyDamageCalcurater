@@ -63,7 +63,8 @@ func errFromEngine(err error) error {
 }
 
 // httpErrorFrom は app・domain の失敗を httpError に写す(nil は nil)。
-// domain.Code は契約の ErrorCode と同じ文字列(contract_test の TestDomainCodesAreContractErrorCodes が固定する)。
+// domain.Code は契約の ErrorCode と同じ文字列(app_mapping_test の TestDomainCodesAreContractErrorCodes が固定する)。
+// app・domain のどちらの語彙でもない失敗は、errorBodyFor の既定と同じく固定文の internal(500)にし、詳細はログにだけ残す。
 func httpErrorFrom(err error) error {
 	if err == nil {
 		return nil
@@ -79,7 +80,8 @@ func httpErrorFrom(err error) error {
 		}
 		return newError(api.ErrorCode(de.Code), "%s", de.Message)
 	}
-	return err
+	slog.Error("calc-svc: 想定外のエラー", "error", err)
+	return newError(api.Internal, "%s", messageInternal)
 }
 
 // --- 厳格デコード(engine/wasmapi の decodeStrict と同じ振る舞い) --------------

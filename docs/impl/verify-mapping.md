@@ -4,7 +4,7 @@
 - 2026-09-25 に verify-m1.md を再構成した(§3 初回準備・§4 `make deploy-latest`・§5 自動確認・§6 ブラウザ〈6-1 オフライン / 6-2 オンライン〉・§7 iOS)。本書の §1 の表の「画面確認 #n」は旧 §4 の番号で、新しい §6-1 の 1〜9 と §6-2 に対応する。
 - 基準: `origin/main` 取り込み後(3379b03 + 更新)。行番号は同時点。
 - 詳細は重複させずリンク: コマンドの裏側 [runbook-commands.md](runbook-commands.md) / ターゲット [make-targets.md](make-targets.md) / ルート・ステータス [api-endpoints.md](api-endpoints.md) / 処理フロー [request-flows.md](request-flows.md) / リソースとポート [k8s-local.md](k8s-local.md) / DB [db-mysql.md](db-mysql.md) / 環境変数 [config-env.md](config-env.md)。
-- 略記: `gw` = `services/gateway/internal/adapters/httpapi`、`calc` = `services/calc/internal/httpapi`、`pdx` = `services/pokedex/internal/httpapi`。
+- 略記: `gw` = `services/gateway/internal/adapters/httpapi`、`calc` = `services/calc/internal/adapters/httpapi`(calc の行番号は ARCH S3〈ADR-0252〉の後の版)、`pdx` = `services/pokedex/internal/httpapi`。
 
 ## 1. verify-m1.md の各項目 → 検証対象
 
@@ -85,7 +85,7 @@
 |---|---|---|---|---|---|
 | 0 | `:119` | `GET /api/pokedex/natures`(入手元の判別) | 200 → `master=pokedex` / 503 `upstream_unavailable` → 例データ / 503 `master_unavailable` → 未投入(`import-k8s` の案内) / それ以外は失敗 | gateway → pokedex-svc(`pdx`)。`master_unavailable` は `pdx/errors.go:51`(DB 失敗・マスタ不完全)、`upstream_unavailable` は gateway が上流に届かない(`gw/proxy.go:61`)/ `PokedexURL` が nil(`gw/server.go:32`) | ADR-0206 §3・§4 |
 | 0a | `:163,179` | `GET /api/pokedex/species?limit=1`、`/moves?limit=200` | 200 | pokedex-svc の検索(`pdx/search.go`)。計算に使う ID を**実データから**引く(マスタを直書きしない) | ADR-0206 |
-| 1 | `:232` | `POST /api/calc`(候補の技を先頭から最大 10 件) | 200、`maxDamage >= 1`、`rolls` 16 個、`category":"physical"` | gateway `checkAPIHeaders` → calc `CalcDamage`(`calc/server.go:177`)→ engine。[request-flows.md](request-flows.md) §1 | ADR-0200・0206 |
+| 1 | `:232` | `POST /api/calc`(候補の技を先頭から最大 10 件) | 200、`maxDamage >= 1`、`rolls` 16 個、`category":"physical"` | gateway `checkAPIHeaders` → calc `CalcDamage`(`calc/server.go:216`)→ engine。[request-flows.md](request-flows.md) §1 | ADR-0200・0206 |
 | 2 | `:255` | `POST /api/calc/bulk` | 200、`rows` が 1 行以上 | calc の bulk。[request-flows.md](request-flows.md) §2 | ADR-0009 |
 | 3 | `:262` | `POST /api/calc/reverse`(1 の `maxDamage` を観測に) | 200、`candidates` が 1 件以上 | calc の reverse(engine 総当たり) | ADR-0010 |
 | 4a | `:267` | 同 `/api/calc` を**ヘッダ無し** | **400 `missing_header`** | gateway `checkAPIHeaders`(`gw/headers.go:19`)。**上流に届く前に gateway が弾く = 期待どおり** | ADR-0202 §4 |
@@ -115,12 +115,12 @@
 | `000`(8080) | ホスト | k3d クラスタ・loadbalancer が止まっている、またはポート競合 | `k3d cluster list`、`lsof -nP -iTCP:8080 -sTCP:LISTEN`。診断用の 5173 なら `make web-k3d-open` 未実行 |
 | `502`(rollout 直後) | Traefik | 終了中の Pod に振り分け。smoke は自動再試行 | 待つ。続くなら `kubectl -n pokecalc rollout status deployment/<名前>`、`get endpoints` |
 | `503` + JSON `upstream_unavailable` | gateway → 上流 | gateway が上流(calc/pokedex/web)に接続できない・`GATEWAY_UPSTREAM_TIMEOUT` 超過。`GATEWAY_POKEDEX_URL` / `GATEWAY_WEB_URL` 未設定でも同じ(`gw/server.go:32`) | `kubectl -n pokecalc get pods,endpoints`、`logs deployment/gateway`、`kubectl -n pokecalc exec deploy/gateway -- env`([config-env.md](config-env.md)) |
-| `503` + JSON `master_unavailable` | calc / pokedex | pokedex の DB が未投入・不完全、または calc がまだマスタを取得できていない(`calc/readiness.go:21`) | `make import-k8s` → `wait`。`kubectl -n pokecalc logs deployment/calc`(起動時の取得。[request-flows.md](request-flows.md) §4)、`get pods`(pokedex Running か) |
+| `503` + JSON `master_unavailable` | calc / pokedex | pokedex の DB が未投入・不完全、または calc がまだマスタを取得できていない(`calc/readiness.go:26`) | `make import-k8s` → `wait`。`kubectl -n pokecalc logs deployment/calc`(起動時の取得。[request-flows.md](request-flows.md) §4)、`get pods`(pokedex Running か) |
 | `503`(JSON でない / Traefik の本文) | Traefik | Service に Ready な Endpoint が無い | `kubectl -n pokecalc get endpoints`、`describe ingress <名前>` |
 | `404` + JSON `not_found` | gateway | ルートが無い。**`/internal/*` は意図どおり**。ほか: メソッド違い(`GET /api/calc` は 404)、`.` / `..`・連続スラッシュ(`gw/routing.go:81,95`) | `matchRoute`(`gw/routing.go:59`)と [api-endpoints.md](api-endpoints.md) §2 |
 | `404`(JSON でない) | Traefik / nginx | gateway の Ingress 不在、または web の `/api` / `/assets/*` の 404(想定) | `kubectl -n pokecalc get ingress`([k8s-local.md](k8s-local.md) §6)、`web/nginx.conf:32-46` |
 | `400` + `missing_header` / `invalid_header` | gateway(`gw/headers.go:19`) | `X-Device-Id` / `X-Session-Id` が無い・非 UUID。**smoke の異常系は正常** | ブラウザ: `web/src/api/apiEngine.ts:240-241` が付与(ID は `clientIds.ts`)。curl は 2 ヘッダを足す |
-| `400` + `invalid_json` / `unknown_field` / `invalid_enum` | calc(`calc/errors.go:95`、`convert.go:16`) | 本文の不正 | `logs deployment/calc`、[api-endpoints.md](api-endpoints.md) §4・§9 |
+| `400` + `invalid_json` / `unknown_field` / `invalid_enum` | calc(`calc/errors.go:93` `decodeStrict`、列挙は `services/calc/internal/domain/enum.go:16`) | 本文の不正 | `logs deployment/calc`、[api-endpoints.md](api-endpoints.md) §4・§9 |
 | `400` + `unknown_species` 等(`unknown_*`) | calc(`convert.go:117,165`) | マスタに無い ID(例データの ID を実マスタに送った等) | pokedex の `GET /api/pokedex/species` で ID を確認 |
 | `400` + `missing_header` / `invalid_header` / `invalid_request` | balance・speed / judge | balance・speed はヘッダ起因が `missing_header`/`invalid_header`、judge は `invalid_request`([architecture.md](architecture.md) §6) | 各サービスの表([api-endpoints.md](api-endpoints.md) §6・§7) |
 | `422` + `unknown_pokemon` / `unknown_move` / `unknown_ability` | balance / speed | read model に無い ID | `data/generated/readmodel`(balance/speed の read model) |

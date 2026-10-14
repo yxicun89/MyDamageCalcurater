@@ -32,7 +32,7 @@ S3(docs/plan/architecture-adoption.md §6)で calc-svc を `internal/domain`・`
 
 ## 影響
 
-- `services/calc/internal/{httpapi,master,events}` は `internal/adapters/` の下に移った。`make test` の NATS のテストの対象パスと、
+- `services/calc/internal/{httpapi,master,events}` は `internal/adapters/` の下に移った。`make test-nats` の NATS のテストの対象パスと、
   Web の `exportSnapshot.contract.test.ts` が読む `export.go` のパスを追従させた。
 - calc は tools/archcheck の未移行の一覧から外れ、向きの検査の対象になった。
 - 振る舞い(openapi.yaml・エラーの code とステータス・失敗の順番・イベントの中身)は変えない。
@@ -46,3 +46,9 @@ S3(docs/plan/architecture-adoption.md §6)で calc-svc を `internal/domain`・`
 - 振る舞い(検査の順番・code・文言・応答・ログ)は変えない。調整は計算イベントを発行しない(ADR-0250 §7)。
   締め切りの確認(`Expired`)は移行前の調整に無かったので足さない(guard の締め切りはこれまでどおり効く)。
   足すかどうかは振る舞いの変更なので別の判断にする。
+
+## 追記 S3 の整理(2026-10-15。critic の軽微指摘)
+
+- adapters/httpapi の `httpErrorFrom` は、app・domain の語彙(`domain.Error`・`app.ErrDeadlineExceeded`)に無い失敗を
+  そのまま返さず、固定文の internal(500)にしてログにだけ詳細を残す。応答は従来の `errorBodyFor` の既定と同じなので振る舞いは変わらない
+  (写しの責務を `httpErrorFrom` 1 か所に寄せる)。テストは `app_mapping_test.go` の `TestHTTPErrorFromMapping`。

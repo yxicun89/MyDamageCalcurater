@@ -199,7 +199,7 @@ func TestContractHasRecordOperations(t *testing.T) {
 			}
 			// api.GetSpec() が埋め込む仕様は oapi-codegen が生成した Go のメソッド名
 			// (PascalCase)に正規化された operationId を持つ(openapi.yaml 自体は lowerCamelCase。
-			// calc-svc の calc/internal/master/contract_test.go の TestGetMasterExportRoute と
+			// calc-svc の calc/internal/adapters/master/contract_test.go の TestGetMasterExportRoute と
 			// 同じ理由で EqualFold にする)。
 			if !strings.EqualFold(op.OperationID, o.operationID) {
 				t.Errorf("operationId = %q, want %q(大文字小文字を無視して比較)", op.OperationID, o.operationID)

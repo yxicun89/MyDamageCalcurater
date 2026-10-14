@@ -217,22 +217,59 @@ func TestBulkPublishesEnvelopeAndNatureIDs(t *testing.T) {
 	}
 }
 
-// 逆算は観測の検証を持ち物候補の解決の後・個体の検証の前に行う。
-func TestReverseObservationOrder(t *testing.T) {
-	base := ReverseRequest{
+// reverseBase は観測を持たない逆算のリクエスト(観測は各テストで足す)。
+func reverseBase() ReverseRequest {
+	return ReverseRequest{
 		Format: domain.Enum{Value: "single", Known: true}, Side: engine.ReverseSide("defender"),
 		Known: validCalc().Attacker, UnknownSpeciesKey: speciesB, MoveID: moveTackle,
 	}
+}
+
+// 逆算の観測の検証は、持ち物候補の解決より後・個体の検証(ValidateIndividual)より前に行う。
+// 観測が無ければ no_observation、持ち物候補が解決できなければ観測が無くても unknown_item、
+// 個体が不正でも観測が無ければ no_observation(観測があれば個体の invalid_input)。
+func TestReverseObservationOrder(t *testing.T) {
 	svc := New(newFakeMaster(t), nil, nil)
 
-	noObs := base
-	if _, err := svc.Reverse(context.Background(), Meta{}, noObs); codeOf(t, err) != domain.CodeNoObservation {
+	if _, err := svc.Reverse(context.Background(), Meta{}, reverseBase()); codeOf(t, err) != domain.CodeNoObservation {
 		t.Errorf("観測なし: %v", err)
 	}
-	badItem := base
+
+	badItem := reverseBase()
 	missing := "no-such-item"
 	badItem.ItemCandidates = &[]*string{&missing}
 	if _, err := svc.Reverse(context.Background(), Meta{}, badItem); codeOf(t, err) != domain.CodeUnknownItem {
 		t.Errorf("持ち物候補の解決が観測の検証より後になった: %v", err)
+	}
+
+	badIndividual := reverseBase()
+	badIndividual.Known.SP = engine.Stats{Atk: engine.MaxSPPerStat + 1}
+	if _, err := svc.Reverse(context.Background(), Meta{}, badIndividual); codeOf(t, err) != domain.CodeNoObservation {
+		t.Errorf("個体の検証が観測の検証より先になった: %v", err)
+	}
+	damage := 10
+	badIndividual.Observations = []domain.Observation{{Damage: &damage}}
+	if _, err := svc.Reverse(context.Background(), Meta{}, badIndividual); codeOf(t, err) != domain.CodeInvalidInput {
+		t.Errorf("観測が妥当なら個体の不正は invalid_input のはず: %v", err)
+	}
+}
+
+// 逆算も締め切りを入力の検証の後・engine の前に見る(ADR-0801)。過ぎていれば探索も発行もしない。
+func TestReverseDeadlineCheckedAfterValidation(t *testing.T) {
+	expired := func(context.Context) bool { return true }
+	pub := &recordingPublisher{}
+	svc := New(newFakeMaster(t), pub, expired)
+
+	damage := 10
+	req := reverseBase()
+	req.Observations = []domain.Observation{{Damage: &damage}}
+	if _, err := svc.Reverse(context.Background(), Meta{}, req); !errors.Is(err, ErrDeadlineExceeded) {
+		t.Errorf("Reverse の err = %v, want ErrDeadlineExceeded", err)
+	}
+	if _, err := svc.Reverse(context.Background(), Meta{}, reverseBase()); codeOf(t, err) != domain.CodeNoObservation {
+		t.Errorf("検証の失敗が締め切りより後になった: %v", err)
+	}
+	if len(pub.events) != 0 {
+		t.Errorf("締め切りを過ぎたのに発行した: %+v", pub.events)
 	}
 }

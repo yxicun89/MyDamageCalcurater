@@ -41,7 +41,7 @@ func blockingServer(t *testing.T) *httptest.Server {
 		case <-r.Context().Done():
 		}
 	})
-	t.Cleanup(func() { close(done) }) // server.Close より先に走る(Cleanup は後入れ先出し。services/calc/internal/master/source_test.go と同じ前例)
+	t.Cleanup(func() { close(done) }) // server.Close より先に走る(Cleanup は後入れ先出し。services/calc/internal/adapters/master/source_test.go と同じ前例)
 	return server
 }
 

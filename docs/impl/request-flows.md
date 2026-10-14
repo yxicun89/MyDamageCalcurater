@@ -1,7 +1,7 @@
 # 主要な処理フロー
 
-- 基準: `origin/main` 3379b03。行番号はこの版。全ルートは [api-endpoints.md](api-endpoints.md)、構成は [architecture.md](architecture.md)。
-- 略記: `gw` = `services/gateway/internal/adapters/httpapi`、`calc` = `services/calc/internal/httpapi`、`gen` = `services/internal/api/openapi.gen.go`。
+- 基準: `origin/main` 3379b03。行番号はこの版(calc-svc の行だけはヘキサゴナル移行 ARCH S3〈ADR-0252〉の後の版に更新した)。全ルートは [api-endpoints.md](api-endpoints.md)、構成は [architecture.md](architecture.md)。
+- 略記: `gw` = `services/gateway/internal/adapters/httpapi`、`calc` = `services/calc/internal/adapters/httpapi`、`app` = `services/calc/internal/app`、`domain` = `services/calc/internal/domain`、`gen` = `services/internal/api/openapi.gen.go`。
 
 ## 1. POST /api/calc(gateway 経由。ダメージ計算)
 
@@ -17,8 +17,8 @@ sequenceDiagram
   T->>G: Ingress "/" (Prefix) → Service gateway:80 → :8080
   G->>G: CORS → dot/empty segment → matchRoute → checkAPIHeaders
   G->>C: calcProxy (ReverseProxy) → http://calc/api/calc
-  C->>C: wrapper → checkHeaders → decodeStrict → parseFormat
-  C->>S: resolveIndividual ×2 / resolveMove (Species, Nature, Ability, Item, Move)
+  C->>C: wrapper → checkHeaders → decodeStrict → app.Service.Calc → domain.ParseFormat
+  C->>S: app.ResolveIndividual ×2 / app.ResolveMove (Species, Nature, Ability, Item, Move)
   C->>E: DamageInput{…, TypeChart: store.TypeChart()}
   E-->>C: DamageResult{Rolls[16], KO, Effectiveness, STAB}
   C-->>G: 200 CalcResult (rolls・%は tenths/10)
@@ -33,17 +33,17 @@ sequenceDiagram
 | 4 | `gw/routing.go:59` `matchRoute` | `/api/calc` と `/api/calc/*` → `routeCalc`。未知パスは 404(ヘッダ無しでも) | 404 `not_found` |
 | 5 | `gw/headers.go:19` `checkAPIHeaders` | 2 ヘッダが各 1 つ・非空・正準 UUID | 400 `missing_header` / `invalid_header` |
 | 6 | `gw/server.go:156` → `proxy.go:40` `newReverseProxy` | `Rewrite`: `SetURL(GATEWAY_CALC_URL)`・`SetXForwarded`。上流ヘッダの CORS を除去し許可オリジンだけ付与(`:52`) | 接続不可/タイムアウト → 503 `upstream_unavailable`(`:61`) |
-| 7 | `calc/server.go:50` `NewHandler` → `:72` `e.POST("/api/calc", wrapper.CalcDamage)` | `gen:1339` `CalcDamage` がヘッダ必須を検証(本文は検証しない) | 400 `missing_header`/`invalid_header`(`server.go:131` `errorBodyFor`) |
-| 8 | `calc/readiness.go:23` `NewDeferredHandler`(k3d の実運用。`CALC_MASTER_URL` 方式) | `current()` が nil の間は 503。取得済みなら `NewServer(store)` の生成ラッパへ | 503 `master_unavailable` |
-| 9 | `calc/server.go:177` `CalcDamage` → `errors.go:95` `decodeStrict`(`limitedBody`: 1MiB) | 未知フィールド拒否・末尾ゴミ拒否 | 400 `invalid_json` / `unknown_field` |
-| 10 | `calc/convert.go:16,23,33` | format・status・teraType の列挙検証(ID 解決より先) | 400 `invalid_enum` |
-| 11 | `calc/convert.go:117` `resolveIndividual`、`:165` `resolveMove`、`:89` `parseField` | ID → `engine` 型。`Store` は `calc/internal/master/master.go:20` | 400 `unknown_species`/`unknown_nature`/`unknown_ability`/`unknown_item`/`unknown_move` |
-| 12 | `calc/errors.go:85` `validateIndividual` → `engine.Individual.Validate` | SP 範囲(各 0..32・合計 ≤ 66)・ランク・種族値 1..255・タイプの重複・効果の補正値の範囲等 | 400 `invalid_input` |
-| 13 | `engine/damage.go:192` `CalcDamage` | 相性(`TypeChart.Effectiveness` `typechart.go:206`)→ 無効判定 → 基礎ダメージ(整数 floor)→ 16 乱数 × `pokeRound`(4096 基準)→ `ComputeKO`(`ko.go:17`) | `errFromEngine`(`errors.go:74`)で sentinel → code |
-| 14 | `calc/convert.go:261` `calcResultFrom` | `rolls`・確定数・表示 %(tenths ÷ 10) | — |
+| 7 | `calc/server.go:65` `NewHandler` → `:92` `e.POST("/api/calc", wrapper.CalcDamage)` | `gen:1339` `CalcDamage` がヘッダ必須を検証(本文は検証しない) | 400 `missing_header`/`invalid_header`(`server.go:170` `errorBodyFor`) |
+| 8 | `calc/readiness.go:26` `NewDeferredHandler`(k3d の実運用。`CALC_MASTER_URL` 方式) | `current()` が nil の間は 503。取得済みなら `NewServer(store)` の生成ラッパへ | 503 `master_unavailable` |
+| 9 | `calc/server.go:216` `CalcDamage` → `errors.go:93` `decodeStrict`(`limitedBody`: 1MiB) | 未知フィールド拒否・末尾ゴミ拒否 | 400 `invalid_json` / `unknown_field` |
+| 10 | `domain/enum.go:16,24,35`(契約に含まれるかは adapters が生成型の `Valid()` で判定し `domain.Enum` で渡す。ADR-0252 決定1) | format・status・teraType の列挙検証(ID 解決より先) | 400 `invalid_enum` |
+| 11 | `app/resolve.go:12` `ResolveIndividual`、`:60` `ResolveMove`、`domain/enum.go:57` `ParseField` | ID → `engine` 型。ポートは `app.Master`(`app/ports.go`)、実装の別名 `Store` は `services/calc/internal/adapters/master/master.go:24` | 400 `unknown_species`/`unknown_nature`/`unknown_ability`/`unknown_item`/`unknown_move` |
+| 12 | `domain/validate.go:12` `ValidateIndividual` → `engine.Individual.Validate` | SP 範囲(各 0..32・合計 ≤ 66)・ランク・種族値 1..255・タイプの重複・効果の補正値の範囲等 | 400 `invalid_input` |
+| 13 | `engine/damage.go:192` `CalcDamage` | 相性(`TypeChart.Effectiveness` `typechart.go:206`)→ 無効判定 → 基礎ダメージ(整数 floor)→ 16 乱数 × `pokeRound`(4096 基準)→ `ComputeKO`(`ko.go:17`) | `domain.FromEngine`(`domain/errors.go:100`)で sentinel → code、`httpErrorFrom`(`calc/errors.go`)で HTTP へ |
+| 14 | `calc/convert.go:242` `calcResultFrom` | `rolls`・確定数・表示 %(tenths ÷ 10) | — |
 
 - 計算はイベント保存に依存しない(record/team は未実装で呼ばない。CLAUDE.md 絶対ルール5)。
-- `make dev`(k8s なし)では `CALC_MASTER_PATH`(ファイル方式)で `NewHandler`(`calc/server.go:50`)を使う。マスタは即時ロードで、503 経路は無い。
+- `make dev`(k8s なし)では `CALC_MASTER_PATH`(ファイル方式)で `NewHandler`(`calc/server.go:65`)を使う。マスタは即時ロードで、503 経路は無い。
 
 ## 2. POST /api/calc/bulk と /api/calc/reverse
 
@@ -51,11 +51,11 @@ sequenceDiagram
 
 | 操作 | ハンドラ | 追加の検証・解決 | engine | 応答写像 |
 |---|---|---|---|---|
-| bulk | `calc/server.go:223` `CalcBulk` | `limits.go:25` `checkBulkLimits`(presets ≤ 8・itemVariants ≤ 64 かつ重複なし)→ `resolveSpecies("defenderSpeciesKey")`・`resolveItems` | `engine/bulk.go:214` `CalcBulk`(防御側プリセット × 持ち物候補) | `convert.go:279` `bulkResultFrom` |
-| reverse | `calc/server.go:277` `CalcReverse` | `limits.go:34` `checkReverseLimits`(itemCandidates ≤ 64・observations ≤ 16・maxCandidates 0..128)→ `convert.go:209` `convertObservations` | `engine/reverse.go:301` `CalcReverse`(総当たり探索) | `convert.go:304` `reverseResultFrom` |
+| bulk | `calc/server.go:232` `CalcBulk` | `limits.go:25` `checkBulkLimits`(presets ≤ 8・itemVariants ≤ 64 かつ重複なし)→ `app.Service.Bulk`(`app/service.go:85`)の `resolveSpecies("defenderSpeciesKey")`・`resolveItems` | `engine/bulk.go:214` `CalcBulk`(防御側プリセット × 持ち物候補) | `convert.go:261` `bulkResultFrom` |
+| reverse | `calc/server.go:251` `CalcReverse` | `limits.go:34` `checkReverseLimits`(itemCandidates ≤ 64・observations ≤ 16・maxCandidates 0..128)→ `app.Service.Reverse`(`app/service.go:159`)の `domain.ConvertObservations`(`domain/validate.go:63`) | `engine/reverse.go:301` `CalcReverse`(総当たり探索) | `convert.go:283` `reverseResultFrom` |
 
 - 件数上限は契約の `maxItems` と実装の定数(`limits.go:15-21`)を揃える(生成ラッパは本文スキーマを検証しないため。ADR-0208 §3)。
-- 上限超過は 400 `invalid_input`(`checkItemIDLimit` `limits.go:51`)。`duplicate_preset`・`unknown_preset`・`no_observation` などは engine の sentinel(`errors.go:56` `engineSentinels`)。
+- 上限超過は 400 `invalid_input`(`checkItemIDLimit` `limits.go:51`)。`duplicate_preset`・`unknown_preset`・`no_observation` などは engine の sentinel(`domain/errors.go:66` `engineSentinels`)。
 
 ## 3. マスタ参照 GET /api/pokedex/*(gateway → pokedex-svc → MySQL)
 
@@ -109,10 +109,10 @@ sequenceDiagram
 | # | 場所 | 内容 |
 |---|---|---|
 | 1 | `services/calc/cmd/calc/main.go:80` `loadConfig` | `CALC_MASTER_URL` と `CALC_MASTER_PATH` はちょうど 1 つ。`CALC_TYPECHART_PATH` が設定されていたら起動エラー |
-| 2 | `main.go:120` `newHandler` | URL 方式はすぐ HTTP 起動し `fetchMasterLoop`(`:151`)で再試行。`NewDeferredHandler`(`readiness.go:23`)に `atomic.Pointer` を渡す |
-| 3 | `calc/internal/master/export.go:435` `HTTPSource.Fetch` | `GET {base}/internal/pokedex/master`。200 以外 → `ErrMasterUnavailable`、本文不正 → `ErrInvalidMaster`(上限 `maxMasterExportBytes`) |
+| 2 | `main.go:120` `newHandler` | URL 方式はすぐ HTTP 起動し `fetchMasterLoop`(`:151`)で再試行。`NewDeferredHandler`(`readiness.go:26`)に `atomic.Pointer` を渡す |
+| 3 | `services/calc/internal/adapters/master/export.go:509` `HTTPSource.Fetch` | `GET {base}/internal/pokedex/master`。200 以外 → `ErrMasterUnavailable`、本文不正 → `ErrInvalidMaster`(上限 `maxMasterExportBytes`) |
 | 4 | `pokedex/internal/httpapi/master.go:19,27` | `data_versions` が 0 件なら `errEmpty`(= 未投入)→ 503 |
-| 5 | `export.go:52` `FromExport` | 相性表(`buildTypeChart` `:94`)・特性・持ち物・種族・技・性格を検証して `MemoryStore`(engine 型)化。DB 行 → engine 型の写像は `services/internal/master` |
+| 5 | `export.go:52` `FromExport` | 相性表(`buildTypeChart` `:95`)・特性・持ち物・種族・技・性格を検証して `MemoryStore`(engine 型)化。DB 行 → engine 型の写像は `services/internal/master` |
 | 6 | `readiness.go` | 取得まで calc の 3 操作と `/readyz` は 503 `master_unavailable`、`/healthz` は 200。取得後の再取得なし |
 
 - pokedex が未投入(`make import-k8s` 前)のとき、calc は 503 のまま再試行し続ける。`api-smoke` は 503 を見て架空 ID にフォールバックする(`services/gateway/scripts/smoke.sh` の `master_source=example`)。
