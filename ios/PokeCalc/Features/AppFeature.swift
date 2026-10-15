@@ -82,6 +82,10 @@ struct FeatureContext {
     let path: Binding<NavigationPath>
     /// ダメージタブ(計算画面)へ移る。空の状態の「計算へ」が使う。
     var openCalc: () -> Void = {}
+    /// 素早さ画面の「この相手で連続技を計算」: 計算タブへ移り、連続技の節へ値を渡す(ADR-0542)。
+    var openCombo: (SpeedComboHandoff) -> Void = { _ in }
+    /// 計算画面が受け取る「連続技を開く」要求(タブの根にだけ渡す。ADR-0542 §1)。
+    var comboOpenRequest: ComboOpenRequest? = nil
 }
 
 /// `NavigationPath` に積む画面の行き先(値だけで、状態は持たない)。

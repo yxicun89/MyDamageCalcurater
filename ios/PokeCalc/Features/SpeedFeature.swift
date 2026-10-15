@@ -22,6 +22,6 @@ struct SpeedFeature: AppFeature {
 
     @MainActor func destination(in context: FeatureContext) -> AnyView {
         guard let speed = context.services.resolve((any SpeedService).self) else { return unavailableView() }
-        return AnyView(SpeedScreenView(service: speed))
+        return AnyView(SpeedScreenView(service: speed, onOpenCombo: context.openCombo))
     }
 }

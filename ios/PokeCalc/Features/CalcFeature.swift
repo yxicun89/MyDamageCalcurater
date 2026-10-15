@@ -30,6 +30,7 @@ struct CalcFeature: AppFeature {
                 frequentOpponentsService: context.core.frequentOpponents,
                 favoritesService: context.services.resolve((any FavoritesService).self),
                 comboService: context.services.resolve((any ComboCalcService).self),
-                speedService: context.services.resolve((any SpeedService).self)))
+                speedService: context.services.resolve((any SpeedService).self),
+                comboOpenRequest: context.comboOpenRequest))
     }
 }

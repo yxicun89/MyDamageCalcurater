@@ -49,7 +49,7 @@ iOS の担当項目。表の F-番号は usability-round2.md §3。進める順�
 - [x] **I-ios-18(ADR-0715。ADR-0501「判定の撤去」)判定機能の撤去**: ユーザー方針「判定画面ではなくダメージ計算の拡張」。`Judge*` の画面・`PokeCalcCore` の判定・生成物 `PokeCalcJudgeAPI`・契約同期テスト・UI テスト・`RequestLimits` の判定の定数・`sim-run.sh` の judge を機能ごと撤去(削除したテストは ADR-0501 に全件記録)。`FeatureVisibility` は仕組みだけ残した。judge-svc の削除はこの後に判定レーンが行う。
 
 - [x] **I-ios-20(CB-8。ADR-0535。受け入れ条件は ADR-0501「連続技(CB-8 / I-ios-20)」)計算画面の「連続技」**: 結果の下に節(案 A。Web の ADR-0359 と同じ構成・語)。`POST /api/calc/combo` を別プロトコル `ComboCalcService` で呼ぶ。手は最大 3・追加の手は攻撃技かランクを変える変化技・相手の振りは結果の行から・相手の技・相手の素早さ・自分の素早さ(SP・性格補正・ランク)・素早さの場・素早さの基本値の例(reach)・失敗は節の中だけ+「もう一度」。
-- [ ] **I-ios-21(CB-8 の続き。ADR-0535「今回は対象外」)素早さ画面 → 計算タブの「この相手で連続技を計算」**: タブをまたいで自分・相手・素早さの入力を計算画面へ渡す仕組み(ルートの token)を足し、連続技の節を広げる。スカーフは反映できない旨の注記。I-ios-20 の後。
+- [x] **I-ios-21(CB-8 の続き。ADR-0535「今回は対象外」→ ADR-0542)素早さ画面 → 計算タブの「この相手で連続技を計算」**: タブをまたいで自分・相手・素早さの入力を計算画面へ渡す仕組み(ルートの token)を足し、連続技の節を広げる。スカーフは反映できない旨の注記。I-ios-20 の後。【仕様とテスト先行 2026-10-15: 受け入れ条件と既存テストの表は ADR-0501「素早さ画面から連続技へ(I-ios-21)」。テストは `ComboHandoffPlanTests`・`CalcViewModelSpeedHandoffTests`・`ComboViewModelHandoffTests`・`ComboHandoffTextTests`・`SpeedToComboSourceRulesTests`・`SpeedToComboUITests`(実装者が通す)】
 
 - [x] **I-ios-24(ADR-0533 追記)ランクのメーターの ±0(未入力)の見た目**: 枠だけで寂しい問題を Web(ADR-0357 追記)に揃えて直す。値のない段は下降側 `warning`・上昇側 `brandPrimary` を薄く(塗り 16%・枠 70%)、中央 0 は余白つきの太い縦棒、無効時は不透明度を下げる。塗りの決定は `RankMeterLogic.segmentFill`(XCTest 済み)。読み上げ・操作・識別子は不変。
 

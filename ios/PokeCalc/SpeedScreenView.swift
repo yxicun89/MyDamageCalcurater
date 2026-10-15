@@ -5,14 +5,14 @@ import SwiftUI
 // SpeedScreenView: 素早さ画面(相手を選んで上を取る最低ライン。I-speed-4c。ADR-0610 追記)。
 //
 // ロジックは持たない。`SpeedMatchupViewModel`(PokeCalcCore)の状態を描き、操作をメソッドへつなぐだけ(ADR-0500 §1)。
-// 縦の 1 本のスクロール: 入力(自分 / 相手 / 場)→ 出力 1(想定ごとのカード)→ 出力 2(「これ以上」)→ 連続技へのリンク。
+// 縦の 1 本のスクロール: 入力(自分 / 相手 / 場)→ 出力 1(想定ごとのカード)→ 連続技へのリンク(想定カードの直下)→ 出力 2(「これ以上」)。
 // 表と周辺パネルは出さない。固定高にしない(長い文言は折り返す。AX5 でも横にはみ出さない)。
 // 色だけに頼らない(バッジ・行は文字でも区別する)。常時動くアニメーションは入れない。
 
 struct SpeedScreenView: View {
     @State private var viewModel: SpeedMatchupViewModel
     @State private var pickerTarget: SpeedPickerTarget?
-    /// 連続技(計算画面)へ渡す先。nil の間は連続技へのリンクを出さない(連続技 CB-8 が入るまで)。
+    /// 連続技(計算画面)へ渡す先。nil の間は連続技へのリンクを出さない。
     private let onOpenCombo: ((SpeedComboHandoff) -> Void)?
 
     /// 画面の持ち方(タブ・区切りは `.retained`。ADR-0531 §2)。離れたときに送信を取り消すかを決める。
@@ -37,9 +37,8 @@ struct SpeedScreenView: View {
                 SpeedSelfSection(viewModel: viewModel, pickerTarget: $pickerTarget)
                 SpeedOpponentSection(viewModel: viewModel, pickerTarget: $pickerTarget)
                 SpeedFieldSection(viewModel: viewModel)
-                SpeedMatchupSection(viewModel: viewModel)
+                SpeedMatchupSection(viewModel: viewModel, onOpenCombo: onOpenCombo)
                 SpeedReachSection(viewModel: viewModel)
-                comboLink
             }
             .padding(SpacingToken.x4)
         }
@@ -50,26 +49,6 @@ struct SpeedScreenView: View {
         .cancelsPendingWorkOnDisappear(lifetime) { viewModel.cancelPendingWork() }
         .sheet(item: $pickerTarget) { target in
             SpeedPokemonSheet(viewModel: viewModel, target: target)
-        }
-    }
-
-    /// 「この相手で連続技を計算」。`comboHandoff` が nil の間(連続技が未実装・ポケモン未選択)は出さない。
-    @ViewBuilder
-    private var comboLink: some View {
-        if let handoff = viewModel.comboHandoff, let onOpenCombo {
-            Button {
-                onOpenCombo(handoff)
-            } label: {
-                Text(SpeedMatchupLabels.comboLink)
-                    .font(TextStyleToken.body.font)
-                    .foregroundStyle(ColorToken.textPrimary.color)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(SpacingToken.x3)
-                    .popCard(cornerRadius: RadiusToken.card)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("speedComboLink")
         }
     }
 }

@@ -30,6 +30,8 @@ struct CalcScreenView: View {
     /// お気に入り(計算つき)から開いたときの、復元するお気に入りと一覧での見出し(F-09・ADR-0524)。履歴から開いたときは nil。
     private let restoringFavorite: RestoringFavorite?
     @State private var didRestore = false
+    /// 素早さ画面から連続技を開く要求(ADR-0542)。nil は一度も要求されていない。
+    private let comboOpenRequest: ComboOpenRequest?
 
     /// design.md「攻守入れ替え: カードが入れ替わる(0.35秒)」。
     private static let swapAnimationDuration: Double = 0.35
@@ -45,8 +47,10 @@ struct CalcScreenView: View {
         frequentOpponentsService: (any FrequentOpponentsService)? = nil,
         favoritesService: (any FavoritesService)? = nil, restoring: CalcHistoryCalc? = nil,
         restoringFavorite: RestoringFavorite? = nil, lifetime: ScreenLifetime = .retained,
-        comboService: (any ComboCalcService)? = nil, speedService: (any SpeedService)? = nil
+        comboService: (any ComboCalcService)? = nil, speedService: (any SpeedService)? = nil,
+        comboOpenRequest: ComboOpenRequest? = nil
     ) {
+        self.comboOpenRequest = comboOpenRequest
         self.lifetime = lifetime
         _viewModel = State(
             initialValue: CalcViewModel(service: service, teamStore: teamStore))
@@ -76,7 +80,17 @@ struct CalcScreenView: View {
             )
     }
 
+    /// 連続技の節へ送るときの目印と、送る動きの長さ(視差効果を減らすでは動かさない)。
+    private static let comboAnchorID = "calcComboSectionAnchor"
+    private static let scrollAnimationDuration: Double = 0.3
+
     var body: some View {
+        ScrollViewReader { proxy in
+            scrollContent(proxy)
+        }
+    }
+
+    private func scrollContent(_ proxy: ScrollViewProxy) -> some View {
         ScrollView {
             VStack(alignment: .leading, spacing: SpacingToken.x4) {
                 backendBadge
@@ -104,7 +118,17 @@ struct CalcScreenView: View {
                 loadingSlot
                 ResultsSectionView(viewModel: viewModel, barColor: moveTypeColor)
                 if let comboService {
-                    ComboSectionView(calc: viewModel, combo: comboService, master: service, speed: speedService)
+                    ComboSectionView(
+                        calc: viewModel, combo: comboService, master: service, speed: speedService,
+                        openRequest: comboOpenRequest,
+                        openFromSpeed: { await viewModel.openFromSpeed($0) },
+                        onHandoffApplied: {
+                            withAnimation(reduceMotion ? nil : .easeInOut(duration: Self.scrollAnimationDuration)) {
+                                proxy.scrollTo(Self.comboAnchorID, anchor: .top)
+                            }
+                        }
+                    )
+                    .id(Self.comboAnchorID)
                 }
                 if favoritePin.isAvailable {
                     FavoritePinSection(calc: viewModel, pin: favoritePin)

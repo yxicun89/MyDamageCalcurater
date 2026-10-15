@@ -131,7 +131,12 @@ struct RootView: View {
                     }
                     feature.destination(
                         in: FeatureContext(core: core, services: services, teamStore: teamStore, path: path(for: featureID),
-                            openCalc: { navigation.select(featureID: "calc") }))
+                            openCalc: { navigation.select(featureID: "calc") },
+                            openCombo: {
+                                navigation.openCombo($0, featureID: "calc")
+                                paths["calc"] = NavigationPath()
+                            },
+                            comboOpenRequest: navigation.comboOpenRequest))
                         .frame(maxHeight: .infinity)
                 }
                 .popScreenBackground()

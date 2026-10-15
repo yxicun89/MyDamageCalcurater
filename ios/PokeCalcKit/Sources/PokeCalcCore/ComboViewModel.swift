@@ -114,6 +114,10 @@ public final class ComboViewModel {
         let old = context
         guard newContext != old else { return }
         context = newContext
+        // 文脈が無いときに受けた SP は、結果が出たときに攻撃側の残りの SP へ丸め直す。
+        if let new = newContext, let sp = selfSpeed.sp {
+            selfSpeed.sp = ComboSelfSpeed.clampSP(sp, for: new.attacker)
+        }
         guard let new = newContext else {
             generation += 1
             state = .idle
@@ -214,12 +218,14 @@ public final class ComboViewModel {
         let clamped = sp.map { value in context.map { ComboSelfSpeed.clampSP(value, for: $0.attacker) } ?? value }
         guard clamped != selfSpeed.sp else { return }
         selfSpeed.sp = clamped
+        handoffScarfNoticeVisible = false
         await recalculate()
     }
 
     public func setSelfSpeedNature(_ nature: ComboSelfSpeedNature) async {
         guard nature != selfSpeed.nature else { return }
         selfSpeed.nature = nature
+        handoffScarfNoticeVisible = false
         await recalculate()
     }
 
@@ -228,6 +234,28 @@ public final class ComboViewModel {
         let clamped = rank.map { min(RankLimits.max, max(RankLimits.min, $0)) }
         guard clamped != selfSpeed.rank else { return }
         selfSpeed.rank = clamped
+        handoffScarfNoticeVisible = false
+        await recalculate()
+    }
+
+    // MARK: - 素早さ画面からの引き継ぎ(I-ios-21。ADR-0542 §3〜§5)
+
+    /// 「こだわりスカーフは反映できない」の 1 行を出すか。
+    public private(set) var handoffScarfNoticeVisible = false
+
+    /// 素早さ画面からの引き継ぎを受けた回数(View はこの値の変化でフォーカスと読み上げを 1 回だけ行う)。
+    public private(set) var appliedHandoffCount = 0
+
+    /// 素早さ画面の値を受け取り、節を広げて自分の素早さを上書きする。
+    public func applyHandoff(_ handoff: SpeedComboHandoff) async {
+        var input = ComboHandoffPlan.selfSpeedInput(for: handoff)
+        if let sp = input.sp, let context { input.sp = ComboSelfSpeed.clampSP(sp, for: context.attacker) }
+        selfSpeed = input
+        handoffScarfNoticeVisible = ComboHandoffPlan.scarfIgnored(for: handoff)
+        appliedHandoffCount += 1
+        isExpanded = true
+        guard isVisible else { return }
+        await loadCandidates()
         await recalculate()
     }
 

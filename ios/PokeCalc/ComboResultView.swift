@@ -174,6 +174,22 @@ struct ComboSelfSpeedView: View {
                 .font(TextStyleToken.caption.font)
                 .foregroundStyle(ColorToken.textSecondary.color)
                 .fixedSize(horizontal: false, vertical: true)
+            if viewModel.handoffScarfNoticeVisible {
+                PopNoticeView(kind: .info, message: ComboText.handoffScarfIgnored, identifier: "comboScarfIgnored")
+            }
+            if viewModel.appliedHandoffCount > 0 {
+                PopHelpButton(title: CommonPartsText.help, systemImage: PopSymbol.help, identifier: "comboHandoffHelpButton") {
+                    VStack(alignment: .leading, spacing: SpacingToken.x2) {
+                        ForEach(Array(ComboText.handoffHelpLines.enumerated()), id: \.offset) { index, line in
+                            Text(line)
+                                .font(TextStyleToken.body.font)
+                                .foregroundStyle(ColorToken.textPrimary.color)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("comboHandoffHelpLine-\(index)")
+                        }
+                    }
+                }
+            }
             ComboField(label: ComboText.selfSpeedRankLabel) {
                 RankMeterView(
                     field: "comboSelfSpeed", fieldName: ComboText.selfSpeedRankLabel,
@@ -185,6 +201,14 @@ struct ComboSelfSpeedView: View {
             }
         }
         .accessibilityElement(children: .contain)
+        // 引き継ぎ・外部の変更で SP が変わったら欄にも映す(入力中の値と同じなら何もしない)。
+        .onChange(of: viewModel.selfSpeed.sp) { _, newValue in
+            let text = newValue.map(String.init) ?? ""
+            if Int(spText) != newValue || (newValue == nil && !spText.isEmpty) { spText = text }
+        }
+        .onAppear {
+            if let sp = viewModel.selfSpeed.sp, spText.isEmpty { spText = String(sp) }
+        }
     }
 
     private var spField: some View {

@@ -97,6 +97,20 @@ public struct AppNavigationModel: Equatable, Sendable {
         selectedTab = tab
         visitedFeatureIDs.insert(featureID)
     }
+
+    // MARK: - 素早さ画面 → 計算タブの連続技(I-ios-21。ADR-0542)
+
+    /// 計算画面へ渡す「連続技を開く」要求(最後の 1 件)。nil は一度も要求していない。
+    /// `openCombo` が token を 1 進めて置く(ADR-0542 §1)。
+    public private(set) var comboOpenRequest: ComboOpenRequest? = nil
+
+    /// 素早さ画面の「この相手で連続技を計算」: 要求を置き(token +1)、`featureID`(計算画面)のタブ・区切りへ移る。
+    /// タブに属さない画面 ID なら何もしない。
+    public mutating func openCombo(_ handoff: SpeedComboHandoff, featureID: String) {
+        guard tab(of: featureID) != nil else { return }
+        comboOpenRequest = ComboOpenRequest(token: (comboOpenRequest?.token ?? 0) + 1, handoff: handoff)
+        select(featureID: featureID)
+    }
 }
 
 /// ナビゲーションの文言(1 か所に持つ。coding-rules §2)。

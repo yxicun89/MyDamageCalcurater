@@ -5565,3 +5565,45 @@ Web にあって iOS に無いもの(「対戦の状態」。Web ADR-0340)は iO
 `ReverseScreenUITests`(識別子と挙動)・`LargeTextLayoutUITests` の逆算・`UnsupportedMarksUITests`・`AbilityPickerUITests`・`FrequentOpponentsUITests`・`TeamG05UITests`(`moveSearchCancelButton`)は変えない
 (識別子・読み上げ名は不変。「閉じる」はアイコンになっても読み上げ名が同じなので `app.buttons["閉じる"]` で引ける)。
 実装で上の他に文言・手順が変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。
+
+## 素早さ画面から連続技へ(I-ios-21。ADR-0542。2026-10-15。spec-writer: 受け入れ条件とテストのみ。実装はしない)
+
+素早さ画面の「この相手で連続技を計算」で、ダメージタブの計算画面へ移り、攻撃側 = 自分・防御側 = 相手を入れ、連続技の節を広げて
+「自分の素早さ」(SP・性格補正・ランク)を入れる(Web の CB-6 段階 C2・I-web-32 と同じ項目)。判断は ADR-0542。API・engine・サービスは変えない。
+
+### 受け入れ条件
+
+| ID | 条件(検証するテスト) |
+|---|---|
+| AC-h1 | ルート(`AppNavigationModel`)が「連続技を開く」要求(`ComboOpenRequest` = token + `SpeedComboHandoff`)を持つ。`openCombo` は token を 1 進めて計算の区切りへ移る(逆算を見ていても計算へ。他のタブの区切りは変えない)。同じ値でも押すたびに進む。タブ・区切りを移っても要求は変わらず、計算画面は入れ直さない。タブに属さない画面 ID では何もしない。`FeatureContext` 経由で計算画面(タブの根)と素早さ画面へ配線する(`ComboHandoffPlanTests`・`SpeedToComboSourceRulesTests`) |
+| AC-h2 | 計算画面には攻撃側・防御側の種族だけを入れる。違う側はピッカーと同じ規則で変わり、同じ側は何も変えない(技・特性・持ち物を残す)。場・急所・やけど・ランク・攻撃側の SP と性格補正・比較する持ち物は触らない。計算は変わる側があるときだけちょうど 1 回。先頭ページの外の種族も入る。データに無い種族の側は黙って変えない(エラーにしない)。初期の読み込みの途中に届いても読み込みに上書きされない(`CalcViewModelSpeedHandoffTests`・`SpeedToComboUITests.testLinkFillsTheComboSectionAndKeepsOtherCalcInputs`) |
+| AC-h3 | 連続技の節は広がり、「自分の素早さ」を丸ごと上書きする: 今の振りがあれば SP・性格補正(上昇/補正なし/下降 → 上がる/補正なし/下がる)・ランク、無ければ SP 未入力・「計算画面の性格のまま」・ランク。SP は残りの上限に丸める。節の他の入力(手・相手の振り・相手の技・相手の素早さ・素早さの場)は触らない。手がメインだけなら計算しない。計算中の条件なら 1 回計算し直す。結果が無いときは値を持ち、結果が出たら開いて出る(`ComboHandoffPlanTests`・`ComboViewModelHandoffTests`・`SpeedToComboUITests`) |
+| AC-h4 | スカーフは反映しない。指定していたら自分の素早さの下に 1 行「素早さ画面で指定したこだわりスカーフは、連続技の計算では反映できません。」(`comboScarfIgnored`。Web と同じ語)。自分の素早さを変える・スカーフなしで引き継ぎ直すと消える。引き継いで開いたときは「説明」(`comboHandoffHelpButton`)の奥に、引き継ぐもの・引き継がないものの 1 行 1 文の箇条(`comboHandoffHelpLine-<n>`)(`ComboViewModelHandoffTests`・`ComboHandoffTextTests`・`SpeedToComboUITests`) |
+| AC-h5 | 引き継ぐと節がスクロールせずに見える位置に来る(`ScrollViewReader`。視差効果を減らすでは動きなし)。VoiceOver のフォーカスを節の見出しへ移し(`@AccessibilityFocusState`)、「素早さ画面の自分と相手で連続技を開きました」を 1 回読み上げる。合図は `ComboViewModel.appliedHandoffCount`(受け取るたびに 1 進み、利用者の操作では進まない)。常時の動きは無い(`ComboViewModelHandoffTests`・`SpeedToComboSourceRulesTests`・`SpeedToComboUITests`) |
+| AC-h6 | 素早さ画面のボタン「この相手で連続技を計算」(`speedComboLink`。既存の語・識別子)は、自分と相手を選んだときだけ、想定のカードの直下・「これ以上」の上に出る。ボタンとして読み上げ、36pt 以上・`lineLimit` 無し。押すとダメージタブへ移る。計算タブに画面を積んでいても、計算画面の根と節を見せる(`SpeedToComboUITests`・`SpeedToComboSourceRulesTests`) |
+| AC-h7 | タブを移って戻っても入力が壊れない: 節で変えた自分の素早さ・計算画面の入力・素早さ画面の入力はそのまま。もう一度押すと素早さ画面の値で入れ直す。AX5 でボタン・スカーフの 1 行・「説明」・自分の素早さの欄が横にはみ出さず、「説明」は 36pt 以上(`SpeedToComboUITests`) |
+| AC-h8 | 文言に docs/glossary.md の禁止語が無い。パレット K のトークンだけ・SF Symbols は `PopSymbol` 経由・`ProgressView`/`lineLimit` 無し(計算画面・連続技の節のファイルは既存の `G05CalcSourceRulesTests` がそのまま見る)。ランクのメーター(ADR-0533)・API 不可時の表示(ADR-0534)・既存の識別子と読み上げ名は変えない(`ComboHandoffTextTests`・`G05CalcSourceRulesTests`・既存の UITest) |
+
+### 新しいテスト
+
+- PokeCalcCoreTests: `ComboHandoffPlanTests`(写し方・ルートの token)、`CalcViewModelSpeedHandoffTests`(計算画面の上書き規則)、
+  `ComboViewModelHandoffTests`(節の上書き規則・スカーフの 1 行・合図)、`ComboHandoffTextTests`(文言・禁止語)、`SpeedToComboSourceRulesTests`(配線・フォーカス・読み上げ・素早さ画面のボタン)
+- PokeCalcUITests: `SpeedToComboUITests`(ボタンの位置と大きさ、引き継ぎと計算画面の入力の保持、タブの往復と押し直し、積んだ画面からの戻り、AX5)。
+  直列(`IOS_TEST_PARALLEL=0`)で通る前提。`executionTimeAllowance = 600`。ナビゲーションバーの下に潜った要素は `settleBelowNavigationBar`(`CalcAttackerStatsUITests` と同じ補助)で引き戻してから押す。
+
+### 既存テストの変更
+
+なし。次の既存テストは連続技へのリンクに触れるが、変えずに成り立つ。
+
+| テスト | 変えない理由 |
+|---|---|
+| `SpeedMatchupUITests.testPickingBothPokemonShowsOneCardPerAssumptionAndNoTable` の「`speedComboLink` が無い」 | ポケモンを選ぶ前に見ている。AC-h6 でも未選択では出さないので成り立つ(メッセージの「未実装の間」は古いが、検査は弱めない) |
+| `SpeedMatchupViewModelInputTests.testComboHandoffIsNilWhileTheComboIsNotAvailable`・`testComboHandoffNeedsBothPokemonAndCarriesTheAttackerInputs` | `SpeedMatchupViewModel` の既定(`comboAvailable: false`)と `comboHandoff` の形は変えない |
+| `SpeedMatchupLabelsTests`(`comboLink`) | 語は変えない |
+
+実装で上の他に変わるテストが出たら、同じ方針(期待の更新だけ・検査対象は減らさない)でこの表に足す。
+
+実装の結果(2026-10-15): 既存のテストは 1 件も変えていない(上の表のとおり)。`SpeedMatchupUITests` の「`speedComboLink` が無い」は未選択の画面を見ているので、リンクを出す配線を足しても成り立つ。
+レビュー対応で足したテスト(既存の変更なし): `CalcViewModelSpeedHandoffTests`(取り消された引き継ぎは両側とも変えず計算しない・取り消しのあとで呼び直せば入る)、`ComboViewModelHandoffTests`(ランク ±6 と SP 0/32 の境界・文脈が後から届いたときの SP の丸め直し)。
+
+追記(2026-10-15): 新規テスト `CalcViewModelSpeedHandoffTests.testSpeciesOutsideTheFirstPageIsResolved` の準備に `setMoveLookupMode(.immediate)` を足した(テストデータの修正)。先頭ページの外の種族は覚える技も先頭ページの外にあり、スタブの既定 `.notFound` だと `selectAttacker` でも同じ誤り(覚える技が見つからない)になるため。検査(種族が辞書に入る・名前が出る・誤りが出ない)は同じ。
