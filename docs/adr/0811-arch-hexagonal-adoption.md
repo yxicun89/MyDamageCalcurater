@@ -47,4 +47,5 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S8 | balance の internal/balance を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(判断は ADR-0423) | 2026-10-21 完了(データレーンが代行。balance を未移行の一覧から外した) |
 | S9 | speed の internal/speed を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(手順が無い)。振る舞い・契約 0.7.0・engine との一致テストは変えない | 2026-10-21 完了(データレーンが代行。speed を未移行の一覧から外した) |
 | S2 | judge の移行(CB-7 で judge を廃止するため対象外) | 対象外 |
-| W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |
+| I0 | iOS: `PokeCalcCore` で生成モジュールを import してよいのは `API*.swift` だけ、を `GeneratedImportRulesTests` で検査(§5.3。既知の違反は無し) | 2026-10-21 完了(データレーンが代行) |
+| W0〜W2 | Web の import の向きの検査 | 未着手 |

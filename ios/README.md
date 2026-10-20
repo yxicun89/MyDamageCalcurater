@@ -77,6 +77,13 @@ API の生成物は Git に置かない(ADR-0807)。`make ios-*` は前段で `m
 
 構築の Showdown 形式の書き出し・取り込みは廃止した(G-03・[ADR-0528](../docs/adr/0528-ios-remove-showdown-import-export.md))。
 
+## 依存の向き(ヘキサゴナル採用 I0)
+
+`PokeCalcCore` の中で、API の生成モジュール(`scripts/openapi-targets.sh` の全対象。`PokeCalcAPI` ほか)を import してよいのは `API*.swift`(アダプタ)だけ。
+ViewModel・`*DomainTypes.swift`・モックは Service プロトコルと自分の型だけを使う。
+検査は `PokeCalcKit/Tests/PokeCalcCoreTests/GeneratedImportRulesTests.swift`(ソースの import 行を読む。`swift test` で走る)。
+既知の違反は無く、例外の一覧は空(ADR-0811、`docs/plan/architecture-adoption.md` §5.3)。
+
 ## 関連 ADR
 
 [0500](../docs/adr/0500-ios-app-architecture.md)(構成・生成・モック・設定・テスト)・
