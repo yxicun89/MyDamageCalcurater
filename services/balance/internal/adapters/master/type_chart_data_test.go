@@ -21,7 +21,7 @@ func TestEmbeddedTypeChartMatchesSharedData(t *testing.T) {
 		t.Fatalf("read shared type chart: %v", err)
 	}
 	if !bytes.Equal(shared, embeddedTypeChartJSON) {
-		t.Fatalf("internal/master/data/typechart.json differs from %s; run make balance-sync-typechart", sharedTypeChartPath)
+		t.Fatalf("internal/adapters/master/data/typechart.json differs from %s; run make balance-sync-typechart", sharedTypeChartPath)
 	}
 }
 
