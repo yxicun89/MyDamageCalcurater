@@ -8,6 +8,7 @@ Status: 2026-10-04 全フェーズの実装完了。フェーズ1(#572・#581・
 2026-10-11 フェーズ5(使用感の改善ループ 1 周目。apps/wishlist/docs/ux-loop.md・phase5-spec.md): API(#718)・Web と取得の不具合(#722)・iOS(この PR)。
 トークンと Yahoo の appid を廃止(8080 は 127.0.0.1 だけ。ADR-0810・#712)。iOS は #723。
 2026-10-12 API をヘキサゴナル(domain・app・adapters)に再配置(動作は不変。apps/wishlist/docs/arch-spec.md。向きは internal/archtest で検査)。
-Next: ユーザーに作り直した画面を触ってもらい、感想から 2 周目(ux-loop.md に追記)。iPhone は Tailscale を入れてから(apps/wishlist/docs/verify.md §7・§8)。
+2026-10-21 夜間の refresher が 10/20・10/21 と起動されていなかった(スリープ明けに CronJob の controller が評価しない)。注釈の付け直しで実行され成功。運用への提案は decisions/2026-10-21-cronjob-missed-after-sleep.md。
+Next: 2 周目(選んだジャンルだけ名前)の感想を聞き、3 周目(ux-loop.md に追記)。iPhone は Tailscale を入れてから(apps/wishlist/docs/verify.md §7・§8)。
 取得しないもの: ドラゴンスター(Cloudflare で取得不可)。リンクのみ: Amazon・プレバン・魂ウェブ・ポケセン。
 既定案で進行・ユーザー未確認: decisions/2026-10-04-wishlist-phase4-plan.md(辞書・推移・公式の販売状況の作り方)
