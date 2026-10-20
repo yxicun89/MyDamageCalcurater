@@ -313,9 +313,9 @@ describe("人数は大きい数字・仮想敵はカード", () => {
 
 describe("文を出し続けない", () => {
   test("待機の状態に説明の段落(<p>)が無い", () => {
-    const { container } = renderScreen();
-    // 構築の節が自分で出す「ポケモンを選ぶと…」の案内(.team-balance__empty)は節の文言で、パネルの説明ではない。
-    expect(container.querySelectorAll("p:not(.team-balance__empty)")).toHaveLength(0);
+    // 本物の節はメンバー 0 体だとパネルを描画しないので、パネルを実際に描画する directPanel で待機状態を作る。
+    const { container } = renderBalanceTestBed({ master, client: createInstantClient(), directPanel: true });
+    expect(container.querySelectorAll("p")).toHaveLength(0);
   });
 });
 
