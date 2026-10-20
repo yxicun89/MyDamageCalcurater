@@ -3,7 +3,7 @@
 // 追加・削除ボタンは ui-button、計算中・エラーは ui-notice、結果の表は ui-table(ゼブラ)。
 // 既存のクラス(balance-*)・アクセシブルな名前(group「メンバーn」・table の aria-label)・role・テキストは変えない。
 
-import { act, render, screen, within } from "@testing-library/react";
+import { act, screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/balance.gen";
@@ -11,7 +11,7 @@ import type { BalanceClient } from "../api/balanceClient";
 import { balanceScreenText } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { BalanceHarness } from "./balanceTestHarness";
+import { renderBalanceTestBed } from "../test/balanceTestBed";
 
 type Schemas = components["schemas"];
 
@@ -29,7 +29,7 @@ function createClient(overrides: Partial<BalanceClient> = {}): BalanceClient {
 
 function renderScreen(client: BalanceClient = createClient()): UserEvent {
   const user = userEvent.setup();
-  render(<BalanceHarness master={master} client={client} />);
+  renderBalanceTestBed({ master, client });
   return user;
 }
 

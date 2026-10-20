@@ -14,7 +14,6 @@ import { exampleMasterSource } from "../master/exampleSource";
 import { SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterData } from "../master/types";
 import type { RecordClient } from "../record/recordClient";
-import { BalanceHarness } from "../balance/balanceTestHarness";
 import { ReverseScreen } from "../screens/ReverseScreen";
 import { SpeciesSearchField } from "../screens/SpeciesSearchField";
 import { createFakeEngine } from "../test/fakeEngine";
@@ -23,6 +22,7 @@ import { createFakeSpeciesSearch } from "../test/onlineMaster";
 import { TeamScreen } from "../team/TeamScreen";
 import { PokemonImagesProvider } from "./PokemonImagesContext";
 import { parsePokemonImageManifest } from "./pokemonImages";
+import { BalanceTestBed } from "../test/balanceTestBed";
 
 type Schemas = components["schemas"];
 
@@ -205,10 +205,10 @@ describe("逆算・構築の編集枠・タイプバランスの枠", () => {
       coverage: pending,
       threats: pending,
       recommendations: pending,
-    } as unknown as ComponentProps<typeof BalanceHarness>["client"];
+    } as unknown as ComponentProps<typeof BalanceTestBed>["client"];
     render(
       <PokemonImagesProvider manifest={manifestOf([first.key])}>
-        <BalanceHarness master={master} client={client} />
+        <BalanceTestBed master={master} client={client} />
       </PokemonImagesProvider>,
     );
     const group = screen.getByRole("group", { name: "メンバー1" });

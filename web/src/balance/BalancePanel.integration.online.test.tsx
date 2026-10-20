@@ -17,7 +17,7 @@
 //   - A-9 の元の懸念(技が無いまま誤解を招く診断を出す)が、新しい条件でも再発しないこと
 //   - capabilities を省いた既存のマスタ(オフライン相当)では今までどおり
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import type { components } from "../api/balance.gen";
@@ -29,7 +29,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import { ONLINE_MASTER_CAPABILITIES, SPECIES_SEARCH_DEBOUNCE_MS } from "../master/onlineSource";
 import type { MasterCapabilities, MasterData, MasterSpecies, MasterSpeciesSearch } from "../master/types";
 import { createFakeSpeciesSearch, limitedMaster, type FakeSpeciesSearch } from "../test/onlineMaster";
-import { BalanceHarness } from "./balanceTestHarness";
+import { BalanceTestBed, renderBalanceTestBed } from "../test/balanceTestBed";
 
 type Schemas = components["schemas"];
 type AnalyzeMembers = Schemas["AnalyzeRequest"]["members"];
@@ -175,12 +175,12 @@ function renderScreen(
     ? userEvent.setup({ advanceTimers: vi.advanceTimersByTime.bind(vi) })
     : userEvent.setup();
   const client = countingClient(options);
-  const rendered = render(<BalanceHarness master={master} client={client} masterSearch={search} />);
+  const rendered = renderBalanceTestBed({ master, client, masterSearch: search });
   return {
     user,
     client,
     rerenderMaster: (next) => {
-      rendered.rerender(<BalanceHarness master={next} client={client} masterSearch={search} />);
+      rendered.rerender(<BalanceTestBed master={next} client={client} masterSearch={search} />);
     },
     advance: (ms) => {
       act(() => {
@@ -242,15 +242,18 @@ describe.each<[string, MasterCapabilities, SearchFactory]>([
 
   test("パーティ・仮想敵の入力は残すが、全部 disabled にする", () => {
     renderScreen(limitedMaster(example, capabilities), search());
-    for (const group of [memberGroup(1), threatGroup(1)]) {
-      expect(speciesField(group)).toBeDisabled();
-      expect(within(group).getByRole("combobox", { name: balanceScreenText.abilityLabel })).toBeDisabled();
-      for (const slot of [1, 2, 3, 4]) {
-        expect(moveField(group, slot)).toBeDisabled();
-      }
+    const group = memberGroup(1);
+    expect(speciesField(group)).toBeDisabled();
+    expect(within(group).getByRole("combobox", { name: balanceScreenText.abilityLabel })).toBeDisabled();
+    for (const slot of [1, 2, 3, 4]) {
+      expect(moveField(group, slot)).toBeDisabled();
     }
     expect(screen.getByRole("button", { name: balanceScreenText.addMemberLabel })).toBeDisabled();
-    expect(screen.getByRole("button", { name: balanceScreenText.addThreatLabel })).toBeDisabled();
+    // 構築の節は、使えないとき仮想敵の入力欄ごと出さない(disabled で残さない)。
+    expect(
+      screen.queryByRole("group", { name: balanceScreenText.threatGroupLabel(1) }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: balanceScreenText.addThreatLabel })).not.toBeInTheDocument();
   });
 
   test("balance API を1本も呼ばない(誤解を招く診断を出さない)", async () => {

@@ -21,7 +21,7 @@ import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
 import { accessibleNameOf, describedByTextsOf, visibleLabelOf } from "../test/accessibleName";
 import { createFakeEngine } from "../test/fakeEngine";
-import { BalanceHarness } from "../balance/balanceTestHarness";
+import { renderBalanceTestBed } from "../test/balanceTestBed";
 import { CalcScreen } from "./CalcScreen";
 import { ReverseScreen } from "./ReverseScreen";
 
@@ -64,7 +64,7 @@ function renderReverse(): { user: UserEvent } {
 
 function renderBalance(): { user: UserEvent } {
   const user = userEvent.setup();
-  render(<BalanceHarness master={master} client={createSilentBalanceClient()} />);
+  renderBalanceTestBed({ master, client: createSilentBalanceClient() });
   return { user };
 }
 

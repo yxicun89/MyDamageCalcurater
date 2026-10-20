@@ -10,7 +10,7 @@
 //   - CSS: 升目の色の組は popPalette.test.ts の検査済みの組だけ・44px・横スクロールの包み・常時動かない
 // 読み上げ用の名前・API の呼び方・状態の流れは既存のテスト(BalancePanel.integration*.test.tsx)が守る。
 
-import { render, screen, within } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, test } from "vitest";
@@ -21,7 +21,7 @@ import type { MasterData, MasterSpecies } from "../master/types";
 import { contrastRatio } from "../test/colorContrast";
 import { declarationMap, parseCss, rulesInAtRules, splitSelectors, topLevelRules } from "../test/cssRules";
 import { localPath } from "../test/localPath";
-import { BalanceHarness } from "./balanceTestHarness";
+import { renderBalanceTestBed } from "../test/balanceTestBed";
 
 type Schemas = components["schemas"];
 
@@ -135,7 +135,7 @@ function species(index: number): MasterSpecies {
 
 function renderScreen(): { user: UserEvent; container: HTMLElement } {
   const user = userEvent.setup();
-  const { container } = render(<BalanceHarness master={master} client={createInstantClient()} />);
+  const { container } = renderBalanceTestBed({ master, client: createInstantClient() });
   return { user, container };
 }
 
@@ -313,7 +313,8 @@ describe("人数は大きい数字・仮想敵はカード", () => {
 
 describe("文を出し続けない", () => {
   test("待機の状態に説明の段落(<p>)が無い", () => {
-    const { container } = renderScreen();
+    // 本物の節はメンバー 0 体だとパネルを描画しないので、パネルを実際に描画する directPanel で待機状態を作る。
+    const { container } = renderBalanceTestBed({ master, client: createInstantClient(), directPanel: true });
     expect(container.querySelectorAll("p")).toHaveLength(0);
   });
 });
