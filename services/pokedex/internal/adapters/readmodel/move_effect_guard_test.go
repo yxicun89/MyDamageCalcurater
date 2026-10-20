@@ -5,7 +5,7 @@ package readmodel_test
 // 理由(ADR-0107):
 //   - judge は read model のファイルを読まない(ADR-0700 §2・§4(4): リクエストごとに公開 API を呼ぶ)。
 //     技の追加効果を運ぶのは内部 export の MasterMove.effect(→ calc-svc)。
-//   - services/balance/internal/master/moves.go の LoadMoves は DisallowUnknownFields を使い、
+//   - services/balance/internal/adapters/master/moves.go の LoadMoves は DisallowUnknownFields を使い、
 //     services/balance/schema/moves.schema.json も additionalProperties: false。
 //     moves.json にフィールドを足すと別レーン(タイプバランス)の読み込みがその場で壊れる。
 //

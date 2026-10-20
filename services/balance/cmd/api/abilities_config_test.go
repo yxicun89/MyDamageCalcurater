@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
-	"example.com/pokecalc/services/balance/internal/balance"
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
+	"example.com/pokecalc/services/balance/internal/domain"
 )
 
 // TB3: BALANCE_ABILITIES_PATH(ADR-0017 §2。空文字は未設定扱い)。
@@ -63,11 +63,11 @@ func TestAbilityProviderFromEnvLoadsExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Ability(ability-9001) error = %v", err)
 	}
-	want := balance.Ability{AbilityID: "ability-9001", Effects: []balance.AbilityEffect{{Kind: balance.AbilityEffectImmune, AttackType: balance.TypeGround}}}
+	want := domain.Ability{AbilityID: "ability-9001", Effects: []domain.AbilityEffect{{Kind: domain.AbilityEffectImmune, AttackType: domain.TypeGround}}}
 	if !reflect.DeepEqual(ability, want) {
 		t.Errorf("Ability(ability-9001) = %+v, want %+v", ability, want)
 	}
-	if _, err := provider.Ability("ability-9999"); !errors.Is(err, balance.ErrUnknownAbility) {
+	if _, err := provider.Ability("ability-9999"); !errors.Is(err, domain.ErrUnknownAbility) {
 		t.Errorf("Ability(ability-9999) error = %v, want ErrUnknownAbility", err)
 	}
 }

@@ -31,10 +31,12 @@ services/balance/
 ├─ cmd/api/                # 起動・環境変数の読み込み・graceful shutdown
 ├─ cmd/checkreadmodel/     # export の read model をサービスと同じ loader で検証するツール(ADR-0402・0403)
 ├─ internal/api/           # oapi-codegen の生成物(手で編集しない。make balance-gen)
-├─ internal/balance/       # 純粋な Go のコア(I/O なし。相性・集計・おすすめ・技範囲)
-├─ internal/httpapi/       # Echo の HTTP アダプタ(検証・判定順・エラー変換・同時実行上限)
-├─ internal/httpmetrics/   # GET /metrics(他サービスと同一の複製。ADR-0406 §2)
-├─ internal/master/        # read model と同梱の相性表の loader(検証に失敗したら起動しない)
+├─ internal/domain/        # 純粋な Go のコア(I/O なし。相性・集計・おすすめ・技範囲。ADR-0811 S8)
+├─ internal/app/           # ユースケース層(今は doc.go だけ。各操作は domain の関数を 1 回呼ぶだけ)
+├─ internal/adapters/httpapi/      # Echo の HTTP アダプタ(検証・判定順・エラー変換・同時実行上限)
+├─ internal/adapters/httpguard/    # 過負荷のガード(締め切り・同時実行上限。他サービスと同一の複製)
+├─ internal/adapters/httpmetrics/  # GET /metrics(他サービスと同一の複製。ADR-0406 §2)
+├─ internal/adapters/master/       # read model と同梱の相性表の loader(検証に失敗したら起動しない)
 ├─ schema/                 # read model の JSON Schema(pokedex export 向け。ADR-0402)
 ├─ testdata/               # 架空データの example
 ├─ scripts/                # smoke(架空データ版・実データ版)
@@ -52,11 +54,11 @@ services/balance/
   (`GATEWAY_BALANCE_URL=http://balance`。issue #284・ADR-0414)。端末ID・セッションIDの検証は gateway でも掛かる。
 - リソースは requests 10m/16Mi・limits 100m/64Mi、`GOMEMLIMIT=56MiB`(§8)。HPA は付けていない(軽量 API のため。必要になってから)。
 
-## 4. 計算の考え方(`internal/balance`)
+## 4. 計算の考え方(`internal/domain`)
 
 - **倍率は整数**(基準 4 = 等倍。0・1・2・4・8・16)。float は使わない。特性込みの倍率は**既約分数**で持つ(×3/4・×5/4 など。ADR-0017)。
 - 分類: ×4 弱点 / ×2 弱点 / ×1 等倍 / ×1/2 耐性 / ×1/4 耐性 / ×0 無効。倍率の `source` は `type`(タイプ由来)か `ability`(特性由来)を区別する。
-- 相性表は**コードに持たない**。ダメージ計算レーンの `testdata/golden/typechart.json` の複製(`internal/master/data/typechart.json`。
+- 相性表は**コードに持たない**。ダメージ計算レーンの `testdata/golden/typechart.json` の複製(`internal/adapters/master/data/typechart.json`。
   `make balance-sync-typechart`)から読む(ADR-0013・0015)。
 - 特性は正規化された効果データ(無効・吸収・特定タイプの倍率変更・効果抜群の軽減)を介して計算する。ID の巨大な switch は作らない(ADR-0017)。
 

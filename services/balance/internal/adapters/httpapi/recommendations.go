@@ -1,0 +1,208 @@
+package httpapi
+
+import (
+	"errors"
+	"example.com/pokecalc/services/balance/internal/adapters/httpguard"
+	"net/http"
+
+	"example.com/pokecalc/services/balance/internal/api"
+	"example.com/pokecalc/services/balance/internal/domain"
+	"github.com/labstack/echo/v5"
+)
+
+// RecommendTeamTypes is the TB5 recommendation endpoint (ADR-0401).
+func (h handler) RecommendTeamTypes(c *echo.Context, _ api.RecommendTeamTypesParams) error {
+	return recommendations(c, h.deps, h.slots)
+}
+
+// recommendations implements the TB5 recommendation endpoint (ADR-0401 §2〜6), reusing the
+// TB4 request/resolve helpers (validateThreatsEntry, resolveThreats*, resolveError):
+// a recommendations member has the same shape as a threats entry.
+//
+// Validation order (ADR-0401 §6, the same flavor as TB4 §4/§6): header (400, via
+// requireRequestContext) → body (400/413: members count 1..6, per-member pokemonId/
+// moveIds/abilityId, limit range 1..20) → pokemon read model or catalog absent, move
+// read model absent while any moveId is named, or ability read model absent while any
+// abilityId is named (503) → unknown pokemonId → unknown moveId → unknown abilityId
+// (422; request order, the first one) → 200. Every other failure (provider failure, nil
+// chart, invalid move/ability data) answers 500 with a fixed message.
+func recommendations(c *echo.Context, deps Dependencies, slots chan struct{}) error {
+	c.Request().Body = http.MaxBytesReader(c.Response(), c.Request().Body, maxAnalyzeBodyBytes)
+	request, err := decodeJSONBody[api.RecommendationsRequest](c.Request())
+	if err != nil {
+		if errors.Is(err, errRequestTooLarge) {
+			return c.JSON(http.StatusRequestEntityTooLarge, api.Error{
+				Code:    api.RequestTooLarge,
+				Message: err.Error(),
+			})
+		}
+		return c.JSON(http.StatusBadRequest, api.Error{
+			Code:    api.InvalidRequest,
+			Message: err.Error(),
+		})
+	}
+
+	if err := validateCount(c, len(request.Members), "members"); err != nil {
+		return err
+	}
+
+	entries := make([]api.ThreatsRequestPokemon, len(request.Members))
+	var hasMoveID, hasAbilityID bool
+	for i, member := range request.Members {
+		entry := api.ThreatsRequestPokemon(member)
+		entryHasMoveID, entryHasAbilityID, err := validateThreatsEntry(entry)
+		if err != nil {
+			return badRequest(c, err.Error())
+		}
+		entries[i] = entry
+		hasMoveID = hasMoveID || entryHasMoveID
+		hasAbilityID = hasAbilityID || entryHasAbilityID
+	}
+
+	limit := domain.DefaultRecommendationLimit
+	if request.Limit != nil {
+		limit = *request.Limit
+		if limit < domain.MinRecommendationLimit || limit > domain.MaxRecommendationLimit {
+			return c.JSON(http.StatusBadRequest, api.Error{
+				Code:    api.InvalidRequest,
+				Message: "limit must be between 1 and 20",
+			})
+		}
+	}
+
+	// ADR-0401 §6: pokemon read model or catalog absent → move read model absent (with a
+	// named moveId) → ability read model absent (with a named abilityId).
+	if deps.PokemonTypes == nil || deps.PokemonCatalog == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the pokemon type read model is not configured",
+		})
+	}
+	if hasMoveID && deps.Moves == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the move read model is not configured",
+		})
+	}
+	if hasAbilityID && deps.Abilities == nil {
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.MasterUnavailable,
+			Message: "the ability read model is not configured",
+		})
+	}
+
+	members, err := resolveThreatsPokemon(deps, entries)
+	if err != nil {
+		return resolveError(c, err)
+	}
+	if err := resolveThreatsMoves(deps, entries, members); err != nil {
+		return resolveError(c, err)
+	}
+	if err := resolveThreatsAbilities(deps, entries, members); err != nil {
+		return resolveError(c, err)
+	}
+
+	if httpguard.Expired(c.Request().Context()) {
+		return overloaded(c)
+	}
+
+	// ADR-0409: take a concurrency slot just before the catalog scan, without waiting.
+	select {
+	case slots <- struct{}{}:
+		defer func() { <-slots }()
+	default:
+		c.Response().Header().Set("Retry-After", "1")
+		return c.JSON(http.StatusServiceUnavailable, api.Error{
+			Code:    api.Overloaded,
+			Message: "too many recommendations are being computed; retry shortly",
+		})
+	}
+
+	catalog, err := deps.PokemonCatalog.AllPokemon()
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	recommendation, err := domain.RecommendTypes(deps.TypeChart, members, catalog, deps.Abilities, limit)
+	if err != nil {
+		return internalError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, toRecommendationsResponse(recommendation))
+}
+
+func toRecommendationsResponse(r domain.Recommendation) api.RecommendationsResponse {
+	skewed := toRecommendationTypes(r.SkewedAttackTypes)
+	return api.RecommendationsResponse{
+		SkewedAttackTypes: &skewed,
+		DefenseHoles:      toRecommendationTypes(r.DefenseHoles),
+		OffenseHoles:      toRecommendationTypes(r.OffenseHoles),
+		Candidates:        toTypeCandidates(r.Candidates),
+		AbilityOptions:    toAbilityOptions(r.AbilityOptions),
+	}
+}
+
+func toRecommendationTypes(types []domain.TypeID) []api.TypeId {
+	result := make([]api.TypeId, len(types))
+	for i, t := range types {
+		result[i] = api.TypeId(t)
+	}
+	return result
+}
+
+func toTypeCandidates(candidates []domain.TypeCandidate) []api.TypeCandidate {
+	result := make([]api.TypeCandidate, len(candidates))
+	for i, candidate := range candidates {
+		result[i] = api.TypeCandidate{
+			Types:          toRecommendationTypes(candidate.Types),
+			DefenseCovered: toRecommendationTypes(candidate.DefenseCovered),
+			OffenseCovered: toRecommendationTypes(candidate.OffenseCovered),
+			Weaknesses:     candidate.Weaknesses,
+			Pokemon:        toCandidatePokemon(candidate.Pokemon),
+		}
+	}
+	return result
+}
+
+func toCandidatePokemon(pokemon []domain.RecommendedPokemon) []api.CandidatePokemon {
+	result := make([]api.CandidatePokemon, len(pokemon))
+	for i, p := range pokemon {
+		result[i] = api.CandidatePokemon{
+			PokemonId:  p.PokemonID,
+			Types:      toRecommendationTypes(p.Types),
+			ExactMatch: p.ExactMatch,
+		}
+		if p.NameJa != "" {
+			name := p.NameJa
+			result[i].NameJa = &name
+		}
+	}
+	return result
+}
+
+func toAbilityOptions(options []domain.AbilityOption) []api.AbilityOption {
+	result := make([]api.AbilityOption, len(options))
+	for i, option := range options {
+		result[i] = api.AbilityOption{
+			AttackType: api.TypeId(option.AttackType),
+			Pokemon:    toAbilityOptionPokemon(option.Pokemon),
+		}
+	}
+	return result
+}
+
+func toAbilityOptionPokemon(pokemon []domain.AbilityPokemon) []api.AbilityOptionPokemon {
+	result := make([]api.AbilityOptionPokemon, len(pokemon))
+	for i, p := range pokemon {
+		result[i] = api.AbilityOptionPokemon{
+			PokemonId:  p.PokemonID,
+			AbilityId:  p.AbilityID,
+			Multiplier: api.DefenseMultiplier(p.Multiplier.String()),
+		}
+		if p.NameJa != "" {
+			name := p.NameJa
+			result[i].NameJa = &name
+		}
+	}
+	return result
+}

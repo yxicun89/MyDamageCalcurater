@@ -83,7 +83,7 @@ gateway(G3・G4)経由で到達。ID ヘッダは `/internal` 以外の 9 操作
 
 ## 6. balance-svc(`services/balance`。gateway の `/api/balance/*` が転送。独自の Ingress は無い。ADR-0414)
 
-`internal/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは gateway と同じ正準形 UUID 検証(ADR-0413)、欠落は 400 `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
+`internal/adapters/httpapi/server.go:101` `New` が `api.RegisterHandlersWithOptions` で登録(業務 5 操作に `requireRequestContext`)。ID ヘッダは gateway と同じ正準形 UUID 検証(ADR-0413)、欠落は 400 `missing_header`・不正/重複は `invalid_header`(`requestctx.go`)。本文上限 16KiB(`maxAnalyzeBodyBytes`)。
 
 | # | メソッド | パス | operationId | ID ヘッダ | ハンドラ | 契約のステータス |
 |---|---|---|---|---|---|---|

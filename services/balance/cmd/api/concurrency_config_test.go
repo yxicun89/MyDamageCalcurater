@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"example.com/pokecalc/services/balance/internal/httpapi"
+	"example.com/pokecalc/services/balance/internal/adapters/httpapi"
 )
 
 // issue #298(ADR-0409): BALANCE_MAX_CONCURRENT_RECOMMENDATIONS(recommendations の同時実行数の上限。ハードコードしない)。

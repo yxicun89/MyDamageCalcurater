@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
 )
 
 // Read model file names inside the directory (ADR-0403).

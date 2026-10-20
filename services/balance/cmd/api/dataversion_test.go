@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
 )
 
 func TestDataVersionFromEnv(t *testing.T) {

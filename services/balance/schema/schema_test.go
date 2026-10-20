@@ -1,7 +1,7 @@
 // Package schema holds the JSON Schema (draft 2020-12) definitions of the balance read
 // models (services/balance/README.md "read model schema"). These tests are the only
 // consumer of github.com/santhosh-tekuri/jsonschema/v6 in this module: production code
-// never validates against these schemas at runtime, the loaders in internal/master do.
+// never validates against these schemas at runtime, the loaders in internal/adapters/master do.
 package schema
 
 import (
@@ -46,7 +46,7 @@ func validateString(t *testing.T, sch *jsonschema.Schema, doc string) error {
 }
 
 // TestExamplesSatisfySchema checks (a): every fictional example the loaders already accept
-// (testdata/*.example.json), and the real embedded type chart (internal/master/data/
+// (testdata/*.example.json), and the real embedded type chart (internal/adapters/master/data/
 // typechart.json, byte-identical to testdata/golden/typechart.json per ADR-0015), validate
 // against the schema meant to describe the same shape.
 func TestExamplesSatisfySchema(t *testing.T) {
@@ -59,7 +59,7 @@ func TestExamplesSatisfySchema(t *testing.T) {
 		{"pokemon-types.schema.json", "../testdata/pokemon-types.example.json"},
 		{"moves.schema.json", "../testdata/moves.example.json"},
 		{"abilities.schema.json", "../testdata/abilities.example.json"},
-		{"type-chart.schema.json", "../internal/master/data/typechart.json"},
+		{"type-chart.schema.json", "../internal/adapters/master/data/typechart.json"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.schema, func(t *testing.T) {
@@ -74,7 +74,7 @@ func TestExamplesSatisfySchema(t *testing.T) {
 
 // TestPokemonTypesSchemaRejectsInvalidDocuments checks (b): representative documents the
 // loader (master.LoadPokemonTypes) already rejects are also rejected by the schema. The
-// literal documents mirror internal/master/pokemon_types_test.go's "unknown entry field",
+// literal documents mirror internal/adapters/master/pokemon_types_test.go's "unknown entry field",
 // "schemaVersion 2" and "three types" cases.
 func TestPokemonTypesSchemaRejectsInvalidDocuments(t *testing.T) {
 	t.Parallel()
@@ -101,7 +101,7 @@ func TestPokemonTypesSchemaRejectsInvalidDocuments(t *testing.T) {
 }
 
 // ADR-0401 §5 (2026-09-22 update): the schema must accept the new limit of 4 abilityIds
-// (some species have four ability slots), matching internal/master's loader.
+// (some species have four ability slots), matching internal/adapters/master's loader.
 func TestPokemonTypesSchemaAcceptsFourAbilityIDs(t *testing.T) {
 	t.Parallel()
 
@@ -112,7 +112,7 @@ func TestPokemonTypesSchemaAcceptsFourAbilityIDs(t *testing.T) {
 	}
 }
 
-// TestMovesSchemaRejectsInvalidDocuments mirrors internal/master/moves_test.go's
+// TestMovesSchemaRejectsInvalidDocuments mirrors internal/adapters/master/moves_test.go's
 // "unknown entry field", "schemaVersion 2" and "unknown category" cases.
 func TestMovesSchemaRejectsInvalidDocuments(t *testing.T) {
 	t.Parallel()
@@ -136,7 +136,7 @@ func TestMovesSchemaRejectsInvalidDocuments(t *testing.T) {
 	}
 }
 
-// TestAbilitiesSchemaRejectsInvalidDocuments mirrors internal/master/abilities_test.go's
+// TestAbilitiesSchemaRejectsInvalidDocuments mirrors internal/adapters/master/abilities_test.go's
 // "unknown ability field", "schemaVersion 2" and "unknown kind" cases, plus the per-kind
 // required/forbidden field combinations of ADR-0017 §2.
 func TestAbilitiesSchemaRejectsInvalidDocuments(t *testing.T) {
@@ -165,7 +165,7 @@ func TestAbilitiesSchemaRejectsInvalidDocuments(t *testing.T) {
 	}
 }
 
-// minimalTypeChart mirrors internal/master/type_chart_data_test.go's minimalChart helper,
+// minimalTypeChart mirrors internal/adapters/master/type_chart_data_test.go's minimalChart helper,
 // so the representative documents below match the loader's own fixtures.
 func minimalTypeChart(schemaVersion, extraTopLevel, effectiveness string) string {
 	return `{"schemaVersion":` + schemaVersion + extraTopLevel +
@@ -174,7 +174,7 @@ func minimalTypeChart(schemaVersion, extraTopLevel, effectiveness string) string
 		`"effectiveness":{` + effectiveness + `}}`
 }
 
-// TestTypeChartSchemaRejectsInvalidDocuments mirrors internal/master/type_chart_data_test.go's
+// TestTypeChartSchemaRejectsInvalidDocuments mirrors internal/adapters/master/type_chart_data_test.go's
 // "unknown field", "schema version 2" and "invalid code 3" cases.
 func TestTypeChartSchemaRejectsInvalidDocuments(t *testing.T) {
 	t.Parallel()

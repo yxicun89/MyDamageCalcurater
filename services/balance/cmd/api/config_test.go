@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"example.com/pokecalc/services/balance/internal/balance"
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
+	"example.com/pokecalc/services/balance/internal/domain"
 )
 
 const examplePokemonTypesPath = "../../testdata/pokemon-types.example.json"
@@ -70,10 +70,10 @@ func TestPokemonTypeProviderFromEnvLoadsExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("PokemonTypes(9001-000) error = %v", err)
 	}
-	if fmt.Sprint(types) != fmt.Sprint([]balance.TypeID{balance.TypeFire, balance.TypeFlying}) {
+	if fmt.Sprint(types) != fmt.Sprint([]domain.TypeID{domain.TypeFire, domain.TypeFlying}) {
 		t.Errorf("PokemonTypes(9001-000) = %v, want [fire flying]", types)
 	}
-	if _, err := provider.PokemonTypes("9999-999"); !errors.Is(err, balance.ErrUnknownPokemon) {
+	if _, err := provider.PokemonTypes("9999-999"); !errors.Is(err, domain.ErrUnknownPokemon) {
 		t.Errorf("PokemonTypes(9999-999) error = %v, want ErrUnknownPokemon", err)
 	}
 }

@@ -8,8 +8,8 @@ HTTP の契約の正は [`api/openapi.yaml`](api/openapi.yaml)。手順書は [`
 flowchart LR
   Client["Web / iOS"] -->|"/api/balance/v1/team-balance/* , /move-range/*"| HTTP
   subgraph balance["balance-svc"]
-    HTTP["internal/httpapi<br/>検証・判定順・応答"] --> Core["internal/balance<br/>純粋 Go(相性・集計・おすすめ)"]
-    Master["internal/master<br/>read model の loader"] --> Core
+    HTTP["internal/adapters/httpapi<br/>検証・判定順・応答"] --> Core["internal/domain<br/>純粋 Go(相性・集計・おすすめ)"]
+    Master["internal/adapters/master<br/>read model の loader"] --> Core
   end
   Chart["同梱の相性表<br/>(testdata/golden/typechart.json の複製)"] --> Master
   RM["read model(JSON)<br/>ポケモン・技・特性"] -->|"BALANCE_*_PATH"| Master
@@ -22,9 +22,10 @@ flowchart LR
 | パス | 役割 |
 |---|---|
 | `api/openapi.yaml` | 外部 API 契約の正(`make balance-gen` で `internal/api` を生成) |
-| `internal/balance` | 純粋 Go のコア。倍率は整数と既約分数(float なし)。analyze / coverage / threats / recommendations の計算 |
-| `internal/master` | read model(ポケモン・技・特性)と同梱の相性表の loader。検証に失敗したら起動しない |
-| `internal/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
+| `internal/domain` | 純粋 Go のコア(ADR-0811 S8)。倍率は整数と既約分数(float なし)。analyze / coverage / threats / recommendations の計算 |
+| `internal/adapters/master` | read model(ポケモン・技・特性)と同梱の相性表の loader。検証に失敗したら起動しない |
+| `internal/app` | ユースケース層(今は doc.go だけ。各操作は domain の関数を 1 回呼ぶだけ) |
+| `internal/adapters/httpapi` | HTTP の検証・判定順(400 → 413 → 503 → 422 → 200、それ以外は 500)・応答の変換 |
 | `internal/api` | oapi-codegen の生成物(手で書かない) |
 | `cmd/api` | 起動・環境変数の読み込み・graceful shutdown |
 | `cmd/checkreadmodel` | export の read model をサービスと同じ loader で検証する |

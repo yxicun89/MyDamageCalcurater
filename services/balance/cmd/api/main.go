@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/pokecalc/services/balance/internal/balance"
-	"example.com/pokecalc/services/balance/internal/httpapi"
-	"example.com/pokecalc/services/balance/internal/httpguard"
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/httpapi"
+	"example.com/pokecalc/services/balance/internal/adapters/httpguard"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
+	"example.com/pokecalc/services/balance/internal/domain"
 )
 
 const (
@@ -82,7 +82,7 @@ func main() {
 	// *master.PokemonTypeReadModel implements both. A comma-ok assertion keeps an unset
 	// read model an untyped nil interface rather than a nil PokemonCatalog wrapping a
 	// nil *PokemonTypeReadModel.
-	pokemonCatalog, _ := pokemonTypes.(balance.PokemonCatalog)
+	pokemonCatalog, _ := pokemonTypes.(domain.PokemonCatalog)
 
 	server := &http.Server{
 		Addr: ":" + port,

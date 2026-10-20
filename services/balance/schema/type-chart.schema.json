@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://pokecalc.example.com/schema/balance/type-chart.schema.json",
   "title": "balance type chart data",
-  "description": "The type matchup table embedded from testdata/golden/typechart.json (ADR-0013 P1-13.1, ADR-0015). services/balance/internal/master/type_chart_data.go is the executable version of the same contract; the embedded copy must be byte-identical to the shared golden file (TestEmbeddedTypeChartMatchesSharedData).",
+  "description": "The type matchup table embedded from testdata/golden/typechart.json (ADR-0013 P1-13.1, ADR-0015). services/balance/internal/adapters/master/type_chart_data.go is the executable version of the same contract; the embedded copy must be byte-identical to the shared golden file (TestEmbeddedTypeChartMatchesSharedData).",
   "type": "object",
   "additionalProperties": false,
   "required": [

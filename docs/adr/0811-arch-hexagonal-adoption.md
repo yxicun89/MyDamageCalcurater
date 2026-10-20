@@ -44,5 +44,6 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S5 | pokedex の検索・内部 API・readiness・read model を domain・app・adapters へ(判断は ADR-0180。importer は対象外) | 2026-10-12 完了(pokedex を未移行の一覧から外した) |
 | S6 | team の構築の検証・手順・失効ジョブを domain・app・adapters へ(判断は ADR-0255) | 2026-10-12 完了(team を未移行の一覧から外した。データレーンが代行) |
 | S7 | gateway の httpapi を adapters へ。domain・app は doc.go だけ(転送だけ) | 2026-10-12 完了(データレーンが代行。gateway を未移行の一覧から外した) |
-| S2・S8・S9 | judge・balance・speed の移行 | 未着手 |
+| S8 | balance の internal/balance を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(判断は ADR-0423) | 2026-10-21 完了(データレーンが代行。balance を未移行の一覧から外した) |
+| S2・S9 | judge・speed の移行 | 未着手 |
 | W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |
