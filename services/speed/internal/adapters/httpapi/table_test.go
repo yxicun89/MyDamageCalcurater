@@ -8,21 +8,21 @@ import (
 	"strings"
 	"testing"
 
+	"example.com/pokecalc/services/speed/internal/adapters/master"
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/master"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 const (
 	tablePath          = "/api/speed/v1/table"
-	examplePokemonPath = "../../testdata/pokemon.example.json"
+	examplePokemonPath = "../../../testdata/pokemon.example.json"
 )
 
 // allPresetIDs は ADR-0601 §2 の表の順(API の PresetId の enum の順と同じ)。
 var allPresetIDs = []api.PresetId{api.PresetIdUninvested, api.PresetIdNeutralMax, api.PresetIdMax, api.PresetIdMaxScarf, api.PresetIdMaxPlus1, api.PresetIdMaxPlus2}
 
 // exampleProvider は testdata/pokemon.example.json(架空の 8 体)の read model。
-func exampleProvider(t *testing.T) speed.PokemonProvider {
+func exampleProvider(t *testing.T) domain.PokemonProvider {
 	t.Helper()
 	provider, err := master.LoadPokemonFile(examplePokemonPath)
 	if err != nil {
@@ -46,7 +46,7 @@ func decodeTable(t *testing.T, raw string) api.TableResponse {
 func TestPresetEnumMatchesCore(t *testing.T) {
 	t.Parallel()
 
-	presets := speed.Presets()
+	presets := domain.Presets()
 	got := make([]api.PresetId, len(presets))
 	for i, p := range presets {
 		got[i] = api.PresetId(p.ID)
@@ -203,12 +203,12 @@ func TestTableHidesInternalErrors(t *testing.T) {
 	t.Parallel()
 
 	secret := "open /secret/path/pokemon.json: permission denied"
-	invalidRoster := speed.Roster{RegulationID: "example", Pokemon: []speed.Pokemon{
+	invalidRoster := domain.Roster{RegulationID: "example", Pokemon: []domain.Pokemon{
 		{PokemonID: "9001-000", NameJa: "テストsecretフセイ", Types: []string{"normal"}, BaseSpeed: 0},
 	}}
 	tests := []struct {
 		name     string
-		provider speed.PokemonProvider
+		provider domain.PokemonProvider
 	}{
 		{"provider のエラー", fakeProvider{err: errors.New(secret)}},
 		// read model は検証済みなので通常起きないが、計算のエラーも 500 の固定文言(ADR-0601 §5)。

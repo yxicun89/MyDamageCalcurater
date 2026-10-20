@@ -8,10 +8,10 @@ import (
 	"regexp"
 	"sort"
 
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
+	"example.com/pokecalc/services/speed/internal/adapters/httpmetrics"
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/httpguard"
-	"example.com/pokecalc/services/speed/internal/httpmetrics"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 	"github.com/labstack/echo/v5"
 )
 
@@ -34,7 +34,7 @@ var pokemonIDPattern = regexp.MustCompile(`^\d{4}-\d{3}$`)
 type Dependencies struct {
 	// DataVersion は起動時に読んだ read model の版(metadata.json)。空は版不明で、ヘルスに出さない(ADR-0138)。
 	DataVersion string
-	Pokemon     speed.PokemonProvider
+	Pokemon     domain.PokemonProvider
 
 	// Guard bounds concurrent requests and puts a deadline on the whole handler (issue #299,
 	// ADR-0801). The zero value disables both, which keeps tests that build Dependencies
@@ -99,7 +99,7 @@ func (h handler) GetSpeedPosition(c *echo.Context, _ api.GetSpeedPositionParams)
 // getSpeedTable implements the body of GetSpeedTable. deps is passed explicitly, matching
 // the listPokemon convention in this file.
 func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableParams) error {
-	presets, err := speed.NormalizePresets(requestedPresetIDs(params))
+	presets, err := domain.NormalizePresets(requestedPresetIDs(params))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, api.Error{
 			Code:    api.InvalidRequest,
@@ -121,7 +121,7 @@ func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableP
 	if httpguard.Expired(c.Request().Context()) {
 		return overloaded(c)
 	}
-	table, err := speed.BuildTable(roster, presets, speed.TableField{
+	table, err := domain.BuildTable(roster, presets, domain.TableField{
 		Tailwind:  params.Tailwind != nil && *params.Tailwind,
 		TrickRoom: params.TrickRoom != nil && *params.TrickRoom,
 	})
@@ -134,25 +134,25 @@ func getSpeedTable(c *echo.Context, deps Dependencies, params api.GetSpeedTableP
 
 // requestedPresetIDs converts the query parameter to the core's PresetID, defaulting to
 // every preset in ADR-0601 §2 order when presets is omitted.
-func requestedPresetIDs(params api.GetSpeedTableParams) []speed.PresetID {
+func requestedPresetIDs(params api.GetSpeedTableParams) []domain.PresetID {
 	if params.Presets == nil {
-		defs := speed.Presets()
-		ids := make([]speed.PresetID, len(defs))
+		defs := domain.Presets()
+		ids := make([]domain.PresetID, len(defs))
 		for i, p := range defs {
 			ids[i] = p.ID
 		}
 		return ids
 	}
-	ids := make([]speed.PresetID, len(*params.Presets))
+	ids := make([]domain.PresetID, len(*params.Presets))
 	for i, id := range *params.Presets {
-		ids[i] = speed.PresetID(id)
+		ids[i] = domain.PresetID(id)
 	}
 	return ids
 }
 
-// toTableResponse は speed.Table を生成型 api.TableResponse に詰め替える。Types はコアの
+// toTableResponse は domain.Table を生成型 api.TableResponse に詰め替える。Types はコアの
 // slice を共有しないよう複製する(listPokemon と同じ)。
-func toTableResponse(table speed.Table) api.TableResponse {
+func toTableResponse(table domain.Table) api.TableResponse {
 	presets := make([]api.PresetId, len(table.Presets))
 	for i, id := range table.Presets {
 		presets[i] = api.PresetId(id)

@@ -1,8 +1,8 @@
 package main
 
 import (
-	"example.com/pokecalc/services/speed/internal/master"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/adapters/master"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 // pokemonPathEnv は speed 内の暫定 read model の場所(ADR-0600 §4)。
@@ -17,7 +17,7 @@ const (
 // pokemonProviderFromEnv は SPEED_POKEMON_PATH の read model を読む。
 // 未設定または空文字: (nil, nil)(型なしの nil インターフェース。API は 503)。
 // 設定されているのに読めない・不正: エラー(main は非 0 で終了する)。
-func pokemonProviderFromEnv(lookup func(string) (string, bool)) (speed.PokemonProvider, error) {
+func pokemonProviderFromEnv(lookup func(string) (string, bool)) (domain.PokemonProvider, error) {
 	path, ok := lookup(pokemonPathEnv)
 	if !ok || path == "" {
 		return nil, nil

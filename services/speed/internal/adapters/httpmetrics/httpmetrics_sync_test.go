@@ -8,7 +8,7 @@ import (
 
 // 正は services/internal/httpmetrics/httpmetrics.go(ADR-0406 §2)。このモジュールの複製は
 // バイト一致でなければならない(package 名も同じなので正規化はしない)。正本や複製が無い場合も失敗にする。
-const sharedHTTPMetricsPath = "../../../internal/httpmetrics/httpmetrics.go"
+const sharedHTTPMetricsPath = "../../../../internal/httpmetrics/httpmetrics.go"
 
 func TestCopyMatchesSharedHTTPMetrics(t *testing.T) {
 	t.Parallel()

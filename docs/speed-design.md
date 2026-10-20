@@ -25,9 +25,11 @@ services/speed/
 ├─ cmd/api/                # 起動・設定の読み込み(環境変数)
 ├─ cmd/checkreadmodel/     # デプロイ前に read model をサービスと同じ loader で検証するツール(ADR-0603)
 ├─ internal/api/           # oapi-codegen の生成物(手で編集しない。make speed-gen)
-├─ internal/speed/         # 純粋な Go のコア(I/O なし。engine を呼ぶ)
-├─ internal/httpapi/       # Echo の HTTP アダプタ(検証・エラー変換)
-├─ internal/master/        # read model の読み込み(SP0〜SP3 は架空データ、SP4 以降は pokedex export の実データ。同じ loader)
+├─ internal/domain/        # 純粋な Go のコア(I/O なし。engine を呼ぶ。旧 internal/speed。ADR-0811)
+├─ internal/app/           # ユースケース層(手順が無いので doc.go だけ)
+├─ internal/adapters/httpapi/  # Echo の HTTP アダプタ(検証・エラー変換)
+├─ internal/adapters/master/   # read model の読み込み(SP0〜SP3 は架空データ、SP4 以降は pokedex export の実データ。同じ loader)
+├─ internal/adapters/httpguard・httpmetrics/ # services/internal の複製(同期テストで一致を確認)
 ├─ testdata/               # 架空データの example
 ├─ scripts/                # smoke・k3d への read model デプロイ・GitOps の検査・イメージの push
 └─ deploy/
@@ -117,9 +119,9 @@ services/speed/
 
 | 層 | 対象 | 置き場所 | 実行 |
 |---|---|---|---|
-| ユニット | 素早さの計算(スカーフ・ランク・性格の組合せ)・表の行・位置の判定。境界値は SP 0/32・ランク ±6・無効な入力の拒否 | `services/speed/internal/speed/` | `make speed-test` |
-| API(httpapi) | 表・位置・ポケモン一覧・ヘッダ検証・エラー本文・メトリクス。契約は `services/speed/api/openapi.yaml` が正 | `services/speed/internal/httpapi/` | `make speed-test` |
-| read model | マスタの読込・検証(`internal/master`)と、起動前確認(`cmd/checkreadmodel`)・設定(`cmd/api`) | `services/speed/internal/master/`・`cmd/` | `make speed-test` |
+| ユニット | 素早さの計算(スカーフ・ランク・性格の組合せ)・表の行・位置の判定。境界値は SP 0/32・ランク ±6・無効な入力の拒否 | `services/speed/internal/domain/` | `make speed-test` |
+| API(httpapi) | 表・位置・ポケモン一覧・ヘッダ検証・エラー本文・メトリクス。契約は `services/speed/api/openapi.yaml` が正 | `services/speed/internal/adapters/httpapi/` | `make speed-test` |
+| read model | マスタの読込・検証(`internal/adapters/master`)と、起動前確認(`cmd/checkreadmodel`)・設定(`cmd/api`) | `services/speed/internal/adapters/master/`・`cmd/` | `make speed-test` |
 | Web | 画面の振る舞い(preset/カスタム/実数値の入力・範囲外の検証・エラーの日本語表示・絞り込み)と API クライアント | `web/src/speed/*.test.ts(x)` | `make web-test`(`cd web && npm test -- speed`) |
 | スモーク | 起動したサービスへの疎通(ヘッダ欠落 400・表・位置・不正入力 400・未知ポケモン 422) | `services/speed/scripts/smoke.sh`・`smoke-readmodel.sh`(実データ) | `make speed-smoke`・`make speed-smoke-readmodel`(クラスタ・サービスの起動が必要) |
 

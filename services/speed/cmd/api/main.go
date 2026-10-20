@@ -10,8 +10,8 @@ import (
 	"syscall"
 	"time"
 
-	"example.com/pokecalc/services/speed/internal/httpapi"
-	"example.com/pokecalc/services/speed/internal/httpguard"
+	"example.com/pokecalc/services/speed/internal/adapters/httpapi"
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
 )
 
 const (

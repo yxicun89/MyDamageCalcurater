@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 const positionPath = "/api/speed/v1/position"
@@ -208,7 +208,7 @@ func TestPositionAcceptsBodyAtSizeLimit(t *testing.T) {
 func TestPositionRejectsInvalidBody(t *testing.T) {
 	t.Parallel()
 
-	minRaw, maxRaw := speed.RawSpeedRange()
+	minRaw, maxRaw := domain.RawSpeedRange()
 	tests := []struct {
 		name string
 		body string
@@ -293,7 +293,7 @@ func TestPositionRejectsInvalidBody(t *testing.T) {
 func TestPositionRawAcceptsRangeBoundaries(t *testing.T) {
 	t.Parallel()
 
-	minRaw, maxRaw := speed.RawSpeedRange()
+	minRaw, maxRaw := domain.RawSpeedRange()
 	for _, value := range []int{minRaw, maxRaw} {
 		recorder := serve(Dependencies{Pokemon: exampleProvider(t)}, newPositionRequest(validHeaders, fmt.Sprintf(`{"mode":"raw","value":%d}`, value)))
 		if recorder.Code != http.StatusOK {
@@ -653,12 +653,12 @@ func TestPositionHidesInternalErrors(t *testing.T) {
 
 	secret := "open /secret/path/pokemon.json: permission denied"
 	// read model は検証済みなので通常起きないが、表の組み立てが失敗しても 500 の固定文言。
-	invalidRoster := speed.Roster{RegulationID: "example", Pokemon: []speed.Pokemon{
+	invalidRoster := domain.Roster{RegulationID: "example", Pokemon: []domain.Pokemon{
 		{PokemonID: "9001-000", NameJa: "テストsecretフセイ", Types: []string{"normal"}, BaseSpeed: 0},
 	}}
 	tests := []struct {
 		name     string
-		provider speed.PokemonProvider
+		provider domain.PokemonProvider
 		body     string
 	}{
 		{"provider のエラー", fakeProvider{err: errors.New(secret)}, `{"mode":"raw","value":200}`},
@@ -692,7 +692,7 @@ func TestMinimalPresetEnumMatchesCore(t *testing.T) {
 	t.Parallel()
 
 	want := []api.MinimalPresetId{api.MinimalPresetIdUninvested, api.MinimalPresetIdNeutralMax, api.MinimalPresetIdMax}
-	presets := speed.MinimalPresets()
+	presets := domain.MinimalPresets()
 	got := make([]api.MinimalPresetId, len(presets))
 	for i, p := range presets {
 		got[i] = api.MinimalPresetId(p.ID)
@@ -717,15 +717,15 @@ func TestNatureEnumMatchesCore(t *testing.T) {
 
 	pairs := []struct {
 		apiID api.NatureId
-		core  speed.NatureEffect
+		core  domain.NatureEffect
 	}{
-		{api.Minus, speed.NatureMinus},
-		{api.Neutral, speed.NatureNeutral},
-		{api.Plus, speed.NaturePlus},
+		{api.Minus, domain.NatureMinus},
+		{api.Neutral, domain.NatureNeutral},
+		{api.Plus, domain.NaturePlus},
 	}
 	for _, pair := range pairs {
 		if string(pair.apiID) != string(pair.core) {
-			t.Errorf("api.NatureId %q != speed.NatureEffect %q", pair.apiID, pair.core)
+			t.Errorf("api.NatureId %q != domain.NatureEffect %q", pair.apiID, pair.core)
 		}
 		if !pair.apiID.Valid() {
 			t.Errorf("api.NatureId(%q).Valid() = false", pair.apiID)
@@ -739,15 +739,15 @@ func TestPositionModeEnumMatchesCore(t *testing.T) {
 
 	pairs := []struct {
 		apiID api.PositionRequestMode
-		core  speed.PositionMode
+		core  domain.PositionMode
 	}{
-		{api.Preset, speed.PositionModePreset},
-		{api.Custom, speed.PositionModeCustom},
-		{api.Raw, speed.PositionModeRaw},
+		{api.Preset, domain.PositionModePreset},
+		{api.Custom, domain.PositionModeCustom},
+		{api.Raw, domain.PositionModeRaw},
 	}
 	for _, pair := range pairs {
 		if string(pair.apiID) != string(pair.core) {
-			t.Errorf("api.PositionRequestMode %q != speed.PositionMode %q", pair.apiID, pair.core)
+			t.Errorf("api.PositionRequestMode %q != domain.PositionMode %q", pair.apiID, pair.core)
 		}
 		if !pair.apiID.Valid() {
 			t.Errorf("api.PositionRequestMode(%q).Valid() = false", pair.apiID)

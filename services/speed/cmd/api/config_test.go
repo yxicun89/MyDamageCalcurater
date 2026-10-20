@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"example.com/pokecalc/services/speed/internal/master"
+	"example.com/pokecalc/services/speed/internal/adapters/master"
 )
 
 const examplePokemonPath = "../../testdata/pokemon.example.json"
