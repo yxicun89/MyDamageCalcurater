@@ -85,3 +85,16 @@
 - e2e/balance.spec.ts は既に構築編集経由(変更なし)。
 - 未使用になった `appText.balanceTabLabel` を削除。BalancePanel が使う文言(balanceScreenText 等)は残す。
 - iOS 側の旧画面・入口の整理は iOS レーン(本 ADR §4 段階 4)。
+
+## 追記(2026-10-21): 段階 4 の残り(テスト専用の足場 balanceTestHarness の撤去)
+- `web/src/balance/balanceTestHarness.tsx`(旧画面の入力欄を再現していたテスト専用の足場)を削除した。統合テスト 4 ファイル(`BalancePanel.integration*.test.tsx`。ファイル名は BalancePanel・useTeamBalance・memberInputs と節の統合テストという内容に合うのでそのまま)は、実アプリの組み込み `team/TeamBalanceSection.tsx` を直接描画する。
+- テスト共通の `web/src/test/balanceTestBed.tsx` は、メンバーの入力欄(MemberFields)で作った下書きを本物の節に渡すだけ(仮想敵・API 呼び出し・結果表示は本物)。アプリ本体からは import しない。仮想敵は本物が 0 体から始まるため、`renderBalanceTestBed` が最初の 1 枠を開く。
+- 件数 116 → 116(`src/balance`)、全体の削除 0 件。期待値を変えたケースは次の 4 種(計 7 ケース)だけ:
+
+| テスト | 変更 | 理由 |
+|---|---|---|
+| online「…画面ごと使えないことを案内する」×4 の「パーティ・仮想敵の入力は残すが、全部 disabled にする」 | メンバーは従来どおり disabled。仮想敵は「disabled」ではなく「入力欄・追加ボタンが出ない」を確認 | 本物の節は使えないとき仮想敵の入力ごと出さない(`available &&`) |
+| recommendations「パーティが1体そろったら…limit 無しで送る」 | 素の `useTeamBalance + BalancePanel` を直接描画(期待値は不変) | 本物の節は limit 5 を足す(TeamScreen.balance B-5 が確認) |
+| recommendations「候補の表: …該当ポケモンを応答の順で出す」 | 同上(期待値は不変) | 本物の節は該当ポケモンを選ぶタイルに替える。選ぶ口の無い表示は素の BalancePanel で確認 |
+| g05「待機の状態に説明の段落(<p>)が無い」 | `p` を数える対象から節自身の案内(`.team-balance__empty`)を除く | 節は 0 体のとき自分の案内を出す。パネルに説明の段落が無いことの確認は同じ |
+

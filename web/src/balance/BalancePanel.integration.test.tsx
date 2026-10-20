@@ -11,7 +11,7 @@
 //   - 倍率・人数は応答の値をそのまま出す(Web で計算しない。ADR-0303 §1)
 //   - 計算中・エラー(role=alert)・古い応答の無視
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent, { type UserEvent } from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/balance.gen";
@@ -21,7 +21,7 @@ import type { Move } from "../engine/types";
 import { balanceErrorText, typeNameJa } from "../i18n/ja";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import { BalanceHarness } from "./balanceTestHarness";
+import { renderBalanceTestBed } from "../test/balanceTestBed";
 
 // P4-12b: 仮想敵(threats)とおすすめタイプ(recommendations)(ADR-0303 §7・§9、ADR-0400、ADR-0401)。
 // 確かめること(この節は下の「仮想敵の枠」以降):
@@ -256,9 +256,9 @@ async function selectMove(user: UserEvent, index: number, slot: number, move: Mo
   );
 }
 
-function renderScreen(client: FakeBalanceClient = createFakeBalanceClient()) {
+function renderScreen(client: FakeBalanceClient = createFakeBalanceClient(), directPanel = false) {
   const user = userEvent.setup();
-  render(<BalanceHarness master={master} client={client} />);
+  renderBalanceTestBed({ master, client, directPanel });
   return { user, client };
 }
 
@@ -1057,7 +1057,8 @@ describe("threats(仮想敵の診断)", () => {
 
 describe("recommendations(おすすめタイプ)", () => {
   test("パーティが1体そろったら、analyze と同じ内容を limit 無しで送る", async () => {
-    const { user, client } = renderScreen();
+    // 構築の節は件数 5 を足す(TeamScreen.balance の B-5)ので、素の useTeamBalance + BalancePanel を直接描画する。
+    const { user, client } = renderScreen(createFakeBalanceClient(), true);
     const { species, damaging } = speciesWithMoves();
     await selectSpecies(user, 1, species);
     await selectMove(user, 1, 1, damaging[0] ?? null);
@@ -1098,7 +1099,8 @@ describe("recommendations(おすすめタイプ)", () => {
   });
 
   test("候補の表: タイプ・ふさぐ穴・該当ポケモンを応答の順で出す(名前が無ければ ID)", async () => {
-    const { user, client } = renderScreen();
+    // 構築の節はポケモンを選ぶタイルに替えるので、選ぶ口の無い素の BalancePanel を直接描画する。
+    const { user, client } = renderScreen(createFakeBalanceClient(), true);
     await selectSpecies(user, 1, speciesAt(0));
     const candidates: Schemas["TypeCandidate"][] = [
       {
