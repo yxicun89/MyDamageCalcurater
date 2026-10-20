@@ -51,7 +51,7 @@
 | 規約 | 根拠(ファイル) |
 |---|---|
 | engine は他の何も import しない | `engine/*.go` の import に `example.com/pokecalc/...` が無い。WASM 境界は `engine/wasmapi` → `engine` の一方向 |
-| balance・speed は「純粋な内側 + アダプタ」の形 | `services/balance/internal/balance`・`services/speed/internal/speed` は HTTP・DB を import しない。`internal/master`(read model ローダ)が内側の `Provider` を実装する向き(`master` → `balance`/`speed`)。ADR-0012 決定 7 の provider 境界どおり |
+| balance・speed は「純粋な内側 + アダプタ」の形(移行前の調査時点。S8・S9 で `internal/domain`・`internal/adapters/` へ移した) | `services/balance/internal/balance`・`services/speed/internal/speed` は HTTP・DB を import しない。`internal/master`(read model ローダ)が内側の `Provider` を実装する向き(`master` → `balance`/`speed`)。ADR-0012 決定 7 の provider 境界どおり |
 | サービスが他サービスの DB に触らない | DB に触るのは pokedex・record・team の `internal/store` だけで、それぞれ自分の DSN |
 | サービス間は API / イベント経由 | judge → calc・pokedex は HTTP(`services/judge/internal/client`)。record・team は NATS のイベント(`services/internal/calcevents`)を購読 |
 | HTTP の外にポートがある所 | calc のイベント発行は `httpapi.EventPublisher`(`services/calc/internal/httpapi/server.go:42`)。record・team の `store.Store`(`store.go`)はインターフェース |
