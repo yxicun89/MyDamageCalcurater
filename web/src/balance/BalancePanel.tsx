@@ -4,7 +4,7 @@
 
 import { balanceScreenText } from "../i18n/ja";
 import type { MasterData } from "../master/types";
-import type { SpeciesResolutions } from "../screens/speciesResolution";
+import type { SpeciesResolutions } from "../ui/speciesResolution";
 import { balanceErrorMessage } from "./balanceParts";
 import { RecommendationsSection, ThreatSection } from "./balanceSections";
 import { CoverageTable, DefenseTable, TeamSummaryTable } from "./balanceTables";

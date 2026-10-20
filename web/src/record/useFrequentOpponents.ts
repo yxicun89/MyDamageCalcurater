@@ -10,7 +10,7 @@ import type {
   MasterSpeciesResolution,
   MasterSpeciesSearch,
 } from "../master/types";
-import type { RecordClient } from "./recordClient";
+import type { RecordClient } from "../api/recordClient";
 
 export interface FrequentOpponentChip {
   readonly key: string;

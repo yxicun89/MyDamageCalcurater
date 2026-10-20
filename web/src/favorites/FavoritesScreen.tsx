@@ -12,7 +12,7 @@ import { CalcHistorySection } from "./CalcHistorySection";
 import { PokemonIcon } from "../images/PokemonIcon";
 import { Icon } from "../ui/Icon";
 import { favoritesScreenText } from "../i18n/favorites";
-import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordError } from "../record/recordClient";
+import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordError } from "../api/recordClient";
 import "./FavoritesScreen.css";
 
 type Favorite = components["schemas"]["Favorite"];

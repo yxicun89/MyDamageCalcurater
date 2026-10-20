@@ -11,8 +11,8 @@
 // 架空の key だけを使う(実データは使わない。ADR-0002)。
 
 import { describe, expect, test, vi } from "vitest";
-import type { ClientIds } from "../api/clientIds";
-import type { components } from "../api/openapi.gen";
+import type { ClientIds } from "./clientIds";
+import type { components } from "./openapi.gen";
 import {
   FREQUENT_OPPONENTS_LIMIT,
   RECORD_PATHS,

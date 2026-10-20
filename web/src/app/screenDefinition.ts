@@ -8,7 +8,7 @@ import type { CalcEngine } from "../engine/types";
 import type { MasterData, MasterSource, MasterSpeciesSearch } from "../master/types";
 import type { components } from "../api/openapi.gen";
 import type { FavoriteRestoreRequest } from "../favorites/favoriteCalc";
-import type { RecordClient } from "../record/recordClient";
+import type { RecordClient } from "../api/recordClient";
 import type { SpeedComboRequest } from "../speed/SpeedScreen";
 import type { ComboOpenRequest } from "./comboOpenRequest";
 import type { NavGroup } from "./navGroups";

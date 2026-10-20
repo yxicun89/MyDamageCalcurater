@@ -23,7 +23,7 @@ import type { FavoriteRestoreRequest } from "../favorites/favoriteCalc";
 import { favoritesCalcText, favoritesRestoreText } from "../i18n/favorites";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpeciesResolution, MasterSpeciesSearch } from "../master/types";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { bulkRow, createDeferredEngine, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { MEGA_FIRE, MEGA_FIRE_STONE, withMegaFixture } from "../test/megaMaster";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";

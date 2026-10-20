@@ -12,7 +12,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, test, vi } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { favoritesScreenText } from "../i18n/favorites";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { FavoritesScreen } from "./FavoritesScreen";
 
 type Favorite = components["schemas"]["Favorite"];

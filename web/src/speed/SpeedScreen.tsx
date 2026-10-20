@@ -7,7 +7,7 @@ import { MAX_RANK, MIN_RANK } from "../domain/calcConditions";
 import { MAX_SP_PER_STAT } from "../domain/requests";
 import { rankStatNameJa } from "../i18n/common";
 import { speedPresetText, speedScreenText } from "../i18n/ja";
-import { ToggleChip } from "../screens/ToggleChip";
+import { ToggleChip } from "../ui/ToggleChip";
 import { PokemonCard } from "../ui/PokemonCard";
 import { RankMeter } from "../ui/RankMeter";
 import { SegmentedControl } from "../ui/SegmentedControl";

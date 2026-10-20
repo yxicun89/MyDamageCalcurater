@@ -19,11 +19,11 @@ import type {
 import { Icon } from "../ui/Icon";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { uiText } from "../i18n/ui";
-import { AbilitySelect } from "../screens/AbilitySelect";
-import { MovePicker } from "../screens/MovePicker";
-import { MegaItemReason } from "../screens/MegaItemReason";
+import { AbilitySelect } from "../ui/AbilitySelect";
+import { MovePicker } from "../ui/MovePicker";
+import { MegaItemReason } from "../ui/MegaItemReason";
 import { PokemonIcon } from "../images/PokemonIcon";
-import { SpeciesSearchField } from "../screens/SpeciesSearchField";
+import { SpeciesSearchField } from "../ui/SpeciesSearchField";
 import {
   MAX_MEMBER_MOVES,
   SP_STATS,

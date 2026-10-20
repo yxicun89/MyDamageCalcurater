@@ -17,7 +17,7 @@ import { firstDamagingMove } from "../domain/moves";
 import { exampleMasterSource } from "../master/exampleSource";
 import { ONLINE_MASTER_CAPABILITIES } from "../master/onlineSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import type { components } from "../api/openapi.gen";
 import { createFakeEngine, type FakeEngine } from "../test/fakeEngine";
 import { createFakeSpeciesSearch, limitedMaster } from "../test/onlineMaster";

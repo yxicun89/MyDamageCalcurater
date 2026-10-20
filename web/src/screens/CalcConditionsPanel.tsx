@@ -18,7 +18,7 @@ import { rankStatNameJa } from "../i18n/common";
 import { calcConditionsText } from "../i18n/ja";
 import { Icon } from "../ui/Icon";
 import { RankMeter } from "../ui/RankMeter";
-import { ToggleChip } from "./ToggleChip";
+import { ToggleChip } from "../ui/ToggleChip";
 
 interface CalcConditionsPanelProps {
   readonly conditions: CalcConditions;

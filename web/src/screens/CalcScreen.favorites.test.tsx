@@ -18,7 +18,7 @@ import { NEUTRAL_NATURE } from "../domain/requests";
 import { favoritesCalcText } from "../i18n/favorites";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { MEGA_FIRE, MEGA_FIRE_STONE, withMegaFixture } from "../test/megaMaster";
 import { createFakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";

@@ -16,7 +16,7 @@ import { isBalanceAvailable, useTeamBalance } from "../balance/useTeamBalance";
 import { balanceScreenText, masterOnlineText, teamBalanceText } from "../i18n/ja";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
-import type { SpeciesResolutions } from "../screens/speciesResolution";
+import type { SpeciesResolutions } from "../ui/speciesResolution";
 import { Tile } from "../ui/Tile";
 import { balanceInputFromDraft } from "./teamBalanceInput";
 import type { MemberDraft } from "./teamMember";

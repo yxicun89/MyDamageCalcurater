@@ -15,7 +15,7 @@ import type { components } from "../api/openapi.gen";
 import type { Move } from "../engine/types";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData, MasterSpecies } from "../master/types";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { bulkResultFor, createFakeEngine, ok, type FakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "./CalcScreen";
 import { chooseMove } from "../test/movePicker";

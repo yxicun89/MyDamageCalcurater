@@ -7,7 +7,7 @@ import type { MasterData } from "../master/types";
 import { Icon, type IconName } from "../ui/Icon";
 import { PokemonIcon } from "../images/PokemonIcon";
 import { TypeList } from "./balanceCells";
-import type { SpeciesResolutions } from "../screens/speciesResolution";
+import type { SpeciesResolutions } from "../ui/speciesResolution";
 import type { Schemas } from "./types";
 
 /** エラーコードを日本語の文言にする(応答の message は英語の内部メッセージなので出さない。ADR-0411)。 */

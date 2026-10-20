@@ -44,7 +44,7 @@ import { exampleMasterSource } from "./master/exampleSource";
 import type { ComboOpenRequest } from "./app/comboOpenRequest";
 import type { FavoriteRestoreRequest } from "./favorites/favoriteCalc";
 import type { SpeedComboRequest } from "./speed/SpeedScreen";
-import { createRecordClient, type RecordClient } from "./record/recordClient";
+import { createRecordClient, type RecordClient } from "./api/recordClient";
 import { createTeamClient } from "./team/teamClient";
 import type { MasterData, MasterSource, MasterSources, MasterSpeciesSearch } from "./master/types";
 import { SCREENS, instantiateScreens } from "./app/screens";

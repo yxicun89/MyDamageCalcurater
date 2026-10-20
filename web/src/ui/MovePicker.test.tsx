@@ -1,4 +1,4 @@
-// G-01(ADR-0341、docs/design.md「見た目の作り直し方針(G-05)」): 技ピッカー MovePicker(screens/MovePicker.tsx)。
+// G-01(ADR-0341、docs/design.md「見た目の作り直し方針(G-05)」): 技ピッカー MovePicker(ui/MovePicker.tsx)。
 // <select> の代わりに、トリガー(role=combobox・名前「技」)+ 検索つきの listbox パネルで出す。
 // 受け入れ条件(この単体で確かめるもの):
 //   P-1 トリガー: role=combobox・aria-haspopup=listbox・aria-expanded・名前は「技」・data-value=選択中の技 ID。

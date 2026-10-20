@@ -11,12 +11,12 @@ import { declarationMap, parseCss, type CssNode, type CssRule } from "../test/cs
 import { localPath } from "../test/localPath";
 import { speciesSearchClass } from "../test/speciesSearchClasses";
 
-const cssPath = localPath("../screens/SpeciesSearchField.css", import.meta.url);
-const componentPath = localPath("../screens/SpeciesSearchField.tsx", import.meta.url);
+const cssPath = localPath("../ui/SpeciesSearchField.css", import.meta.url);
+const componentPath = localPath("../ui/SpeciesSearchField.tsx", import.meta.url);
 
 function readCss(): string {
   if (!existsSync(cssPath)) {
-    throw new Error("screens/SpeciesSearchField.css が無い(検索欄のスタイルが未実装)");
+    throw new Error("ui/SpeciesSearchField.css が無い(検索欄のスタイルが未実装)");
   }
   return readFileSync(cssPath, "utf8");
 }
@@ -61,7 +61,7 @@ function componentSourceWithoutComments(): string {
 }
 
 describe("CSS ファイルがあり、コンポーネントが読み込む", () => {
-  test("screens/SpeciesSearchField.css がある", () => {
+  test("ui/SpeciesSearchField.css がある", () => {
     expect(existsSync(cssPath)).toBe(true);
   });
 

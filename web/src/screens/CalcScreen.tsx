@@ -107,9 +107,9 @@ import type {
 } from "../master/types";
 import { prefersReducedMotion } from "../ui/motion";
 import { favoriteOfLastCalcInput, loadLastCalcInput, saveLastCalcInput } from "../app/lastCalcInput";
-import { defaultStorage, type StorageLike } from "../app/storage";
+import { defaultStorage, type StorageLike } from "../api/storage";
 import { AddFavoriteButton } from "../favorites/AddFavoriteButton";
-import type { RecordClient } from "../record/recordClient";
+import type { RecordClient } from "../api/recordClient";
 import { useFrequentOpponents } from "../record/useFrequentOpponents";
 import { resolveNatureId } from "../api/apiEngine";
 import {
@@ -123,11 +123,11 @@ import {
 } from "../favorites/favoriteCalc";
 import { favoriteInputOf } from "../favorites/favoriteInput";
 import { favoritesRestoreText } from "../i18n/favorites";
-import { MegaItemReason } from "./MegaItemReason";
-import { SpeciesSearchField } from "./SpeciesSearchField";
-import { useSpeciesResolutions } from "./speciesResolution";
-import { MovePicker } from "./MovePicker";
-import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
+import { MegaItemReason } from "../ui/MegaItemReason";
+import { SpeciesSearchField } from "../ui/SpeciesSearchField";
+import { useSpeciesResolutions } from "../ui/speciesResolution";
+import { MovePicker } from "../ui/MovePicker";
+import { AbilitySelect, type AbilitySelectConfig } from "../ui/AbilitySelect";
 import { BattleStatePanel, HitsSelect } from "./BattleStatePanel";
 import { CalcConditionsPanel } from "./CalcConditionsPanel";
 import { ComboSection, type OpenSpeed } from "./ComboSection";
@@ -138,7 +138,7 @@ import { PokemonCard } from "../ui/PokemonCard";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { typeAccentStyle } from "../ui/typeAccent";
 import { uiText } from "../i18n/ui";
-import { ToggleChip } from "./ToggleChip";
+import { ToggleChip } from "../ui/ToggleChip";
 import "./CalcScreen.css";
 
 /**

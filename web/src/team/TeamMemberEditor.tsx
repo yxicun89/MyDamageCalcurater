@@ -17,7 +17,7 @@ import type {
   MasterSpeciesSearch,
 } from "../master/types";
 import { selectableAbilities } from "../domain/requests";
-import { useSpeciesResolutions } from "../screens/speciesResolution";
+import { useSpeciesResolutions } from "../ui/speciesResolution";
 import { Icon } from "../ui/Icon";
 import "./TeamMemberEditor.css";
 import { TeamMemberFields } from "./TeamMemberFields";

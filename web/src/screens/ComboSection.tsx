@@ -50,8 +50,8 @@ import type { SpeedClient, SpeedResult } from "../speed/speedClient";
 import type { components as SpeedComponents } from "../speed/speed.gen";
 import { Icon } from "../ui/Icon";
 import { RankMeter } from "../ui/RankMeter";
-import { MovePicker } from "./MovePicker";
-import { ToggleChip } from "./ToggleChip";
+import { MovePicker } from "../ui/MovePicker";
+import { ToggleChip } from "../ui/ToggleChip";
 import "./ComboSection.css";
 
 /** 画面が持つ 1 手(メイン = 計算画面の技。追加の手 = 技ピッカーで選んだ技)。 */

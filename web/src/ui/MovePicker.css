@@ -1,5 +1,5 @@
 /*
- * 技ピッカー(screens/MovePicker.tsx。G-01、ADR-0341)。色は必ず tokens.css の CSS 変数(--*)で参照し、
+ * 技ピッカー(ui/MovePicker.tsx。G-01、ADR-0341)。色は必ず tokens.css の CSS 変数(--*)で参照し、
  * ここに色リテラルを書かない(web/src/styles/noColorLiterals.test.ts)。常時動くアニメーションは置かない。
  */
 

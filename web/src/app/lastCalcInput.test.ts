@@ -10,7 +10,7 @@ import {
   loadLastCalcInput,
   saveLastCalcInput,
 } from "./lastCalcInput";
-import type { StorageLike } from "./storage";
+import type { StorageLike } from "../api/storage";
 
 type FavoriteInput = components["schemas"]["FavoriteInput"];
 

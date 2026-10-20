@@ -10,8 +10,8 @@
 // 架空の key だけを使う(ADR-0002)。
 
 import { describe, expect, test, vi } from "vitest";
-import type { ClientIds } from "../api/clientIds";
-import type { components } from "../api/openapi.gen";
+import type { ClientIds } from "./clientIds";
+import type { components } from "./openapi.gen";
 import {
   CALC_HISTORY_PAGE_LIMIT,
   RECORD_PATHS,

@@ -2,7 +2,7 @@
 // 既定はオンライン(ADR-0313。オフラインはオンラインで取得したマスタのキャッシュから読む)。選択は localStorage に
 // 覚え、端末ごとの好みにする。ストレージが使えない・壊れた値でも失敗させず既定に戻す。
 
-import { defaultStorage, type StorageLike } from "./storage";
+import { defaultStorage, type StorageLike } from "../api/storage";
 
 /** 計算モード。オフラインは WASM、オンラインは API(ADR-0301 §4)。 */
 export type CalcMode = "offline" | "online";

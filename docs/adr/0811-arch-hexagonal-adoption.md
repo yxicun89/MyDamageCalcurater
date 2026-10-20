@@ -48,4 +48,5 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S9 | speed の internal/speed を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(手順が無い)。振る舞い・契約 0.7.0・engine との一致テストは変えない | 2026-10-21 完了(データレーンが代行。speed を未移行の一覧から外した) |
 | S2 | judge の移行(CB-7 で judge を廃止するため対象外) | 対象外 |
 | W0 | Web の import の向きの検査。`web/eslint.boundaries.js`(`no-restricted-imports`・依存の追加なし)に §5.2 の規則、既知の違反(W1〜W5)は同ファイルの `KNOWN_VIOLATIONS` に例外として凍結。テスト(`*.test.*`)と画面の登録(`*.screen.tsx`)は検査しない。確かめ方: `web/src/test/importBoundaries.test.ts`(例外外の違反が失敗・許す向きは通る・例外ファイルの実在)と `npm run lint` | 2026-10-21 完了(データレーンが代行。コードの移動はしていない) |
-| W1・W2・I0 | `screens/` の共有部品を `ui/` へ(W1)、W2〜W5 の解消(W2)、iOS のテスト(I0) | 未着手 |
+| W1・W2 | W1: `screens/` の共有部品 6 つ(`AbilitySelect`・`MegaItemReason`・`MovePicker`・`SpeciesSearchField`・`ToggleChip`・`speciesResolution`。CSS・単体テストも)を `git mv` で `ui/` へ。計画の「一時的な再エクスポート」は残さない(開いている Web の PR が無く、全 import を同じ PR で差し替えたため。古い道を指す他ブランチは typecheck と lint の検査で気づく)。W2: `record/recordClient.ts`(と単体テスト)と `app/storage.ts` を shared の `api/`(通信・ブラウザ保存のアダプタ)へ。`FavoriteRestoreIssue` の型を `domain/favoriteRestoreIssue.ts` へ(`favorites/favoriteCalc.ts` は再エクスポート)。`domain/balanceLabels.ts` は生成型を使わず、語の表のキーから domain 側の型を持つ。`KNOWN_VIOLATIONS` は空。例外の仕組みは `buildImportBoundaryConfigs` に架空の一覧を渡してテストする。画面の挙動・文言・スタイルとテストの期待値は不変 | 2026-10-21 完了(データレーンが代行) |
+| I0 | iOS のテスト | 未着手 |
