@@ -6,6 +6,9 @@
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(scripts/lib/k3d-lock.sh)
+source scripts/lib/k3d-lock.sh
+k3d_lock_run argocd-bootstrap scripts/argocd-bootstrap.sh "$@"
 
 # --- 固定値(このファイル1箇所にだけ持つ。版を上げるときはここを明示的に更新する。ADR-0405 §1) ---
 # 比較用: v3.5.3 タグが指すコミット(2026-09-23 に refs/tags/v3.5.3 で確認)

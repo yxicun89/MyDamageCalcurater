@@ -14,6 +14,7 @@
 # manifest は実物(上流の install.yaml)ではなく、同じ image 参照だけを持つ最小の架空 YAML を使う。
 # 実物の SHA-256 とは一致しないので、「実物の期待ハッシュのまま流すと不一致で止まる」ことの検査にもなる。
 set -uo pipefail
+export K3D_SCRIPT_LOCK_DISABLE=1 # 実クラスタ用の排他ロックは無効にする(ロック自体は k3d-lock_test.sh で検証)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT
@@ -83,8 +84,9 @@ set_const() {
 # new_repo 名前 — 使い捨て git リポジトリに対象スクリプトをコピーし、そのパスを返す。
 new_repo() {
   local dir="$WORK/$1/repo"
-  mkdir -p "$dir/scripts"
+  mkdir -p "$dir/scripts/lib"
   git -C "$dir" init -q
+  cp "$ROOT/scripts/lib/k3d-lock.sh" "$dir/scripts/lib/"
   cp "$SCRIPT" "$dir/$SCRIPT_REL"
   chmod +x "$dir/$SCRIPT_REL"
   printf '%s' "$dir/$SCRIPT_REL"

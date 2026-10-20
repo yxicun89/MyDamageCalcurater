@@ -2,6 +2,7 @@
 # scripts/k3d-deploy-tagged.sh の自動テスト(issue #291)。make test-scripts から流す。
 # 使い捨ての git リポジトリにスクリプトをコピーし、docker・k3d・kubectl は偽物に差し替える(実クラスタには触らない)。
 set -uo pipefail
+export K3D_SCRIPT_LOCK_DISABLE=1 # 実クラスタ用の排他ロックは無効にする(ロック自体は k3d-lock_test.sh で検証)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT
@@ -13,8 +14,9 @@ ng() { echo "NG: $1" >&2; failures=$((failures + 1)); }
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 repo="$work/repo"
-mkdir -p "$repo/scripts" "$repo/svc" "$work/bin"
+mkdir -p "$repo/scripts/lib" "$repo/svc" "$work/bin"
 cp "$ROOT/scripts/k3d-deploy-tagged.sh" "$ROOT/scripts/image-tag.sh" "$ROOT/scripts/require-k3d-context.sh" "$repo/scripts/"
+cp "$ROOT/scripts/lib/k3d-lock.sh" "$repo/scripts/lib/"
 echo a > "$repo/svc/a.txt"
 git -C "$repo" init -q
 git -C "$repo" add -A

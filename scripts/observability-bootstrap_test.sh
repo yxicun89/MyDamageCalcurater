@@ -17,6 +17,7 @@
 # .tgz は実物ではなく架空の中身なので、実物の期待ハッシュのままでは必ず不一致になる
 # (「本物の定数のまま流すと止まる」ことの検査にもなる)。
 set -uo pipefail
+export K3D_SCRIPT_LOCK_DISABLE=1 # 実クラスタ用の排他ロックは無効にする(ロック自体は k3d-lock_test.sh で検証)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT
@@ -244,7 +245,8 @@ EOF
 # new_repo 名前 — 使い捨て git リポジトリに対象スクリプトと values・ServiceMonitor をコピーし、スクリプトのパスを返す。
 new_repo() {
   local dir="$WORK/$1/repo"
-  mkdir -p "$dir/scripts" "$dir/deploy/k8s/base"
+  mkdir -p "$dir/scripts/lib" "$dir/deploy/k8s/base"
+  cp "$ROOT/scripts/lib/k3d-lock.sh" "$dir/scripts/lib/"
   git -C "$dir" init -q
   cp "$SCRIPT" "$dir/$SCRIPT_REL"
   chmod +x "$dir/$SCRIPT_REL"

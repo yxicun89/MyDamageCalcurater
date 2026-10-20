@@ -4,6 +4,9 @@
 # 何度実行しても安全)。呼び出し側(scripts/up.sh)は、このスクリプトの失敗を非致命として扱う
 # (6レーン共通の `make up` を、record/team に無関係な理由で止めないため。ADR-0211 §3.1)。
 set -euo pipefail
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(scripts/lib/k3d-lock.sh)
+source "$(dirname "$0")/lib/k3d-lock.sh"
+k3d_lock_run tidb-operator-bootstrap "$0" "$@"
 
 TIDB_OPERATOR_VERSION="v1.6.6"
 

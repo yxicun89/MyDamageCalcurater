@@ -6,6 +6,7 @@
 #   - 非致命(ある段が失敗しても NATS は入る。後続の依存する段はスキップし、最後に非ゼロで終わる)
 #   - Secret は kubectl create で作り(apply しない)、値を出力に出さない
 set -uo pipefail
+export K3D_SCRIPT_LOCK_DISABLE=1 # 実クラスタ用の排他ロックは無効にする(ロック自体は k3d-lock_test.sh で検証)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT
@@ -18,8 +19,9 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 repo="$work/repo"
 state="$work/state"
-mkdir -p "$repo/scripts" "$repo/deploy/k8s/base" "$work/bin" "$state"
+mkdir -p "$repo/scripts/lib" "$repo/deploy/k8s/base" "$work/bin" "$state"
 cp "$ROOT/scripts/k3d-m2-deploy.sh" "$ROOT/scripts/require-k3d-context.sh" "$repo/scripts/"
+cp "$ROOT/scripts/lib/k3d-lock.sh" "$repo/scripts/lib/"
 echo "kind: Namespace" > "$repo/deploy/k8s/base/namespace.yaml"
 # TiDB Operator の導入・タグ付きデプロイは別スクリプトなので、呼ばれたことだけ記録する偽物に差し替える。
 cat > "$repo/scripts/tidb-operator-bootstrap.sh" <<'FAKE'

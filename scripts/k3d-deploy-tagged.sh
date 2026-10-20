@@ -15,6 +15,9 @@
 # 使い方(Makefile): @CLUSTER=$(CLUSTER) TAG_PATHS="services engine" ./scripts/k3d-deploy-tagged.sh api-k3d-deploy deploy/k8s/overlays/local-api pokecalc/calc pokecalc/gateway
 # 自動テスト: scripts/k3d-deploy-tagged_test.sh(make test-scripts)。
 set -euo pipefail
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(image import の衝突防止。scripts/lib/k3d-lock.sh)
+source "$(dirname "$0")/lib/k3d-lock.sh"
+k3d_lock_run k3d-deploy-tagged "$0" "$@"
 
 if [ "$#" -lt 3 ]; then
   echo "usage: k3d-deploy-tagged.sh <caller> <overlay> <image>..." >&2

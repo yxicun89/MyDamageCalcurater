@@ -10,6 +10,9 @@
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(scripts/lib/k3d-lock.sh)
+source scripts/lib/k3d-lock.sh
+k3d_lock_run observability-bootstrap scripts/observability-bootstrap.sh "$@"
 
 # --- 固定値(このファイル1箇所にだけ持つ。版を上げるときはここを明示的に更新する。ADR-0406 §4) ---
 # prometheus-community/kube-prometheus-stack(app v0.94.1)

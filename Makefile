@@ -93,6 +93,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/ai-guard/bash-guard_test.sh
 	@./scripts/pr-merge_test.sh
 	@./scripts/gitops_test.sh
+	@./scripts/k3d-lock_test.sh
 	@./scripts/make-targets_test.sh
 	@./scripts/check-master-version_test.sh
 	@./scripts/master-release_test.sh
