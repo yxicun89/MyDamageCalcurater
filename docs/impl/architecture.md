@@ -75,10 +75,10 @@
 | `services/balance/deploy/k8s/overlays/local-readmodel` | 2 | pokedex export の read model(Git 管理外)を ConfigMap で注入する overlay |
 | `services/balance/deploy/local-registry` | 3 | ローカルレジストリ(namespace balance-registry)のマニフェスト |
 | `services/balance/internal/api` | 2 | oapi-codegen 生成物と設定 |
-| `services/balance/internal/balance` | 24 | タイプバランスのドメインロジック(防御・攻撃範囲・脅威・おすすめ・技範囲)と Provider インターフェース |
-| `services/balance/internal/httpapi` | 13 | HTTP アダプタ(生成 ServerInterface 実装・ヘッダ検証・エラー整形) |
-| `services/balance/internal/master` | 9 | read model ローダ(pokemon-types・moves・abilities)と埋め込み相性表 |
-| `services/balance/internal/master/data` | 1 | 埋め込み相性表 typechart.json(testdata/golden の複製) |
+| `services/balance/internal/domain` | 24 | タイプバランスのドメインロジック(防御・攻撃範囲・脅威・おすすめ・技範囲)と Provider インターフェース |
+| `services/balance/internal/adapters/httpapi` | 13 | HTTP アダプタ(生成 ServerInterface 実装・ヘッダ検証・エラー整形) |
+| `services/balance/internal/adapters/master` | 9 | read model ローダ(pokemon-types・moves・abilities)と埋め込み相性表 |
+| `services/balance/internal/adapters/master/data` | 1 | 埋め込み相性表 typechart.json(testdata/golden の複製) |
 | `services/balance/schema` | 5 | read model の JSON Schema(4種) |
 | `services/balance/scripts` | 7 | smoke・read model デプロイ・ローカルレジストリ・イメージ公開・Argo CD 補助 |
 | `services/balance/testdata` | 3 | 架空の read model 例(3種) |
@@ -185,7 +185,7 @@ Go module(`go.work:3-10`): `./engine`・`./services`(calc・gateway・pokedex・
 | speed | 3 | なし(自前) | なし |
 | judge | 3 | なし(自前) | なし |
 
-意図: engine を純粋に保つため、DB 行 → engine 型の写像は engine の外(`services/internal/master`)に置く(ADR-0100 §6)。balance は engine に依存せず相性表を `testdata/golden/typechart.json` の複製として埋め込む(`services/balance/internal/master/type_chart_data.go`、同期は `make balance-sync-typechart` と Go テスト。ADR-0015)。
+意図: engine を純粋に保つため、DB 行 → engine 型の写像は engine の外(`services/internal/master`)に置く(ADR-0100 §6)。balance は engine に依存せず相性表を `testdata/golden/typechart.json` の複製として埋め込む(`services/balance/internal/adapters/master/type_chart_data.go`、同期は `make balance-sync-typechart` と Go テスト。ADR-0015)。
 
 ## 3. サービス間依存
 
@@ -253,7 +253,7 @@ flowchart LR
 | `store.Querier`(sqlc 生成) | `services/pokedex/internal/store/querier.go:11` | pokedex の DB アクセス唯一の口 |
 | `pokedex httpapi.Server` | `services/pokedex/internal/adapters/httpapi/server.go` | 検索 8 操作 + `/internal/pokedex/master`。手順は `app.Service`(`services/pokedex/internal/app`) |
 | `readmodel.Export` | `services/pokedex/internal/adapters/readmodel/readmodel.go` | balance・speed 用 JSON 出力(組み立ては `app.ExportReadModel`) |
-| `balance httpapi.Dependencies`(`TypeChart`・`PokemonTypes`・`Moves`・`Abilities`・`PokemonCatalog`) | `services/balance/internal/httpapi/server.go:50` | nil の依存は 503 `master_unavailable`。Provider IF は `services/balance/internal/balance/{defense,pokemon,move,ability,recommend}.go` |
+| `balance httpapi.Dependencies`(`TypeChart`・`PokemonTypes`・`Moves`・`Abilities`・`PokemonCatalog`) | `services/balance/internal/adapters/httpapi/server.go:50` | nil の依存は 503 `master_unavailable`。Provider IF は `services/balance/internal/domain/{defense,pokemon,move,ability,recommend}.go` |
 | `speed httpapi.Dependencies`・`speed.PokemonProvider` | `services/speed/internal/httpapi/server.go:33`・`services/speed/internal/speed/pokemon.go:22` | 同上 |
 | `judge httpapi.Dependencies`(`Pokedex`・`Calc`・`ChoiceScarfItemID`)・`client.Pokedex`/`client.Calc` | `CalcEngine`・`EngineResult<T>` | `web/src/engine/types.ts:306,299` | 画面が使う計算の差し替え口(WASM / API) |
 | `createWasmEngine`・`WasmLoader` | `web/src/engine/wasmEngine.ts:142` | WASM 実装。遅延ロード |
@@ -334,5 +334,5 @@ flowchart LR
 
 - 読んだ: ルート `Makefile` の include 部・`go.work`・各 `go.mod` の module/go 行、`api/openapi.yaml` のパス・ErrorCode、`deploy/**`(全 YAML)、`services/gateway/{cmd,internal/httpapi}`(全ファイル)、`services/calc/{cmd,internal/httpapi/{server,readiness,errors,limits,convert}.go,internal/master/{master,export}.go}`、`services/pokedex/cmd/pokedex/main.go`・`internal/httpapi/{server,search,master,errors}.go`・migrations の CREATE 文・sqlc クエリ名、`services/{balance,speed,judge}/cmd/api/{main,config}.go`・`internal/httpapi/server.go`(各)、`services/{balance,speed,judge}/deploy/k8s/**`・全 `Dockerfile`(7)、`engine/{model,types,damage,ko,bulk,reverse}.go` の宣言、`engine/wasmapi/{wasmapi,requests}.go`・`engine/cmd/wasm/main_js.go`、`web/{vite.config.ts,nginx.conf}`・`web/src/{main,App(抜粋),api/*,engine/wasmEngine.ts,app/routes.ts,master/types.ts}`、`scripts/{up,dev}.sh`。
 - 件数の突き合わせ: §1 は 154 ディレクトリ/866 ファイル(`git ls-files` を機械集計し、記述漏れがあれば生成が失敗する方式で確認)+ `docs/impl`。§4 は Dockerfile 7 件(`git ls-files` の `Dockerfile`)・§4 の 10 行 = base の Deployment 7・StatefulSet 1(local)・Job 1・CronJob 1。
-- 読めていない・本書で内容を保証しない: `engine` の計算本体(`modifiers.go`・`stats.go` 等の式)・テスト、`services/balance/internal/balance/*`・`services/speed/internal/speed/*`・`services/judge/internal/judge/*` のドメイン実装、`services/pokedex/importer/*` の変換・照合ロジック、`web/src/{screens,domain}` の画面実装、`ios/` の Swift 実装(README のみ参照)、`docs/adr/*` の本文(リンクのみ)。
+- 読めていない・本書で内容を保証しない: `engine` の計算本体(`modifiers.go`・`stats.go` 等の式)・テスト、`services/balance/internal/domain/*`・`services/speed/internal/speed/*`・`services/judge/internal/judge/*` のドメイン実装、`services/pokedex/importer/*` の変換・照合ロジック、`web/src/{screens,domain}` の画面実装、`ios/` の Swift 実装(README のみ参照)、`docs/adr/*` の本文(リンクのみ)。
 - 未実装・スタブ: §9。TODO の網羅検索は未実施。

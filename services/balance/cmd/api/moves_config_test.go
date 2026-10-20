@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"example.com/pokecalc/services/balance/internal/balance"
-	"example.com/pokecalc/services/balance/internal/master"
+	"example.com/pokecalc/services/balance/internal/adapters/master"
+	"example.com/pokecalc/services/balance/internal/domain"
 )
 
 // TB2: BALANCE_MOVES_PATH(ADR-0016 §3。空文字は未設定扱い、ADR-0014 §5.3 準用)。
@@ -62,11 +62,11 @@ func TestMoveProviderFromEnvLoadsExample(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Move(move-9001) error = %v", err)
 	}
-	want := balance.Move{MoveID: "move-9001", Type: balance.TypeFire, Category: balance.MoveCategorySpecial}
+	want := domain.Move{MoveID: "move-9001", Type: domain.TypeFire, Category: domain.MoveCategorySpecial}
 	if move != want {
 		t.Errorf("Move(move-9001) = %+v, want %+v", move, want)
 	}
-	if _, err := provider.Move("move-9999"); !errors.Is(err, balance.ErrUnknownMove) {
+	if _, err := provider.Move("move-9999"); !errors.Is(err, domain.ErrUnknownMove) {
 		t.Errorf("Move(move-9999) error = %v, want ErrUnknownMove", err)
 	}
 }

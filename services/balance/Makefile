@@ -58,7 +58,7 @@ balance-smoke:
 	@BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh
 
 balance-sync-typechart:
-	@cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json
+	@cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/adapters/master/data/typechart.json
 
 balance-registry-apply:
 	@kubectl apply -k $(BALANCE_DIR)/deploy/local-registry

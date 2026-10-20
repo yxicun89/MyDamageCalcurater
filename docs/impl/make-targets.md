@@ -154,7 +154,7 @@ Go は `go-version-file: go.work`、Node は `node-version-file: web/.node-versi
 | `balance-docker-push` | — | `SERVICE=balance scripts/gitops/publish-image.sh` | **レジストリへ push**(docker buildx --push。BALANCE_RELEASE_IMAGE 必須) |
 | `balance-k3d-deploy` | balance-docker-build | `scripts/k3d-deploy-tagged.sh balance-k3d-deploy <overlays/local> pokecalc/balance`(ADR-0806) | k3d ノードへ image import, **クラスタへ apply**。`-dirty` のときだけ Pod 再起動。context が k3d-<CLUSTER> でなければ中断 |
 | `balance-smoke` | — | `BALANCE_URL=$(BALANCE_URL) $(BALANCE_DIR)/scripts/smoke.sh` | なし(HTTP のみ) |
-| `balance-sync-typechart` | — | `cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/master/data/typechart.json` | balance/internal/master/data/typechart.json を上書き |
+| `balance-sync-typechart` | — | `cp testdata/golden/typechart.json $(BALANCE_DIR)/internal/adapters/master/data/typechart.json` | balance/internal/adapters/master/data/typechart.json を上書き |
 | `balance-registry-apply` | — | `kubectl apply -k $(BALANCE_DIR)/deploy/local-registry ⏎ kubectl -n balance-registry rollout status deployment/registry --timeout=120s` | **クラスタへ apply**(PVC `registry-data` を含む。ADR-0408 §3) |
 | `balance-registry-push` | — | `SERVICE=balance BALANCE_REGISTRY_PORT=$(BALANCE_REGISTRY_PORT) scripts/gitops/local-registry-push.sh` | docker build/save, レジストリへ port-forward(5001)して crane push |
 | `balance-argocd-app` | — | `SERVICE=balance scripts/gitops/argocd-local-app.sh` | **AppProject `pokecalc` と Argo CD Application を apply**(AppProject が先。ADR-0408 §1・§2) |

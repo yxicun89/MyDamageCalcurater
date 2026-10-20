@@ -2,13 +2,13 @@
 
 - 基準: `origin/main` 8368756(2026-09-25)。`path:行` はこの版の行番号(ずれたら関数名で探す)。推測は書かず、未確認は「カバレッジ」節に書く。
 - HTTP の経路・起動時の read model 読み込み・検査順は [request-flows.md](request-flows.md) の §7・§8。ここでは計算そのものを書く。engine の式は [damage-engine.md](damage-engine.md)。
-- 略記: `bal` = `services/balance/internal/balance`、`spd` = `services/speed/internal/speed`、`jd` = `services/judge/internal/judge`、`jh` = `services/judge/internal/httpapi`。
+- 略記: `bal` = `services/balance/internal/domain`、`spd` = `services/speed/internal/speed`、`jd` = `services/judge/internal/judge`、`jh` = `services/judge/internal/httpapi`。
 
 ## 0. 3 サービスの比較
 
 | サービス | engine を呼ぶか | 計算の中身 | 使うマスタ(どこから) |
 |---|---|---|---|
-| balance | **呼ばない**(独自実装。`bal` は engine を import しない) | タイプ相性の掛け算・分類・集計 | 相性表: `testdata/golden/typechart.json` の埋め込みコピー(`services/balance/internal/master/type_chart_data.go:21`)。ポケモンのタイプ・技・特性: `pokedex export` の read model(`BALANCE_{POKEMON_TYPES,MOVES,ABILITIES}_PATH`) |
+| balance | **呼ばない**(独自実装。`bal` は engine を import しない) | タイプ相性の掛け算・分類・集計 | 相性表: `testdata/golden/typechart.json` の埋め込みコピー(`services/balance/internal/adapters/master/type_chart_data.go:21`)。ポケモンのタイプ・技・特性: `pokedex export` の read model(`BALANCE_{POKEMON_TYPES,MOVES,ABILITIES}_PATH`) |
 | speed | 呼ぶ(`engine.EffectiveStat`) | 素早さ実数値・表・順位 | ポケモンの素早さ種族値: read model(`SPEED_POKEMON_PATH`) |
 | judge | 呼ぶ(素早さは `engine.EffectiveStat` を直接、ダメージは calc-svc の HTTP 経由で `engine.CalcDamage`) | 素早さ比較 × 確定数 × 行動順 | pokedex-svc(種族・性格・技の優先度)を HTTP で都度取得 |
 
@@ -21,7 +21,7 @@
 | タイプ一覧 | 18 タイプを**コードに持つ**(表示順の正)。`Valid()` もこの一覧で判定 | `bal/model.go:9-51` |
 | 倍率(型) | `Multiplier`: 等倍 = 4 の整数(0/1/2/4/8/16) | `bal/model.go:54-63` |
 | 倍率(特性込み) | `Effectiveness{Num, Den}`: 既約分数(int64)。積は交差約分・128bit でオーバーフロー検査、比較も 128bit | `bal/effectiveness.go:19,72` `Mul`、`:106` `Cmp` |
-| 相性表 | `TypeChartProvider.Matchup(攻撃, 防御)`。データのコード 0/1/2/4 を `Multiplier` 0/2/4/8 に変換。タイプ集合はちょうど 18 でないと起動エラー | `services/balance/internal/master/type_chart_data.go:57` `LoadTypeChart`、`:135` `Matchup` |
+| 相性表 | `TypeChartProvider.Matchup(攻撃, 防御)`。データのコード 0/1/2/4 を `Multiplier` 0/2/4/8 に変換。タイプ集合はちょうど 18 でないと起動エラー | `services/balance/internal/adapters/master/type_chart_data.go:57` `LoadTypeChart`、`:135` `Matchup` |
 | 防御の相性 | 1〜2 タイプ(重複不可)について `combined = combined × matchup / 4` | `bal/defense.go:22` `CalculateDefense` |
 | 特性込みの防御 | 下表 | `bal/ability.go:134` `CalculateDefenseWithAbility` |
 | 6 分類 | 0 → immune、≤1/4 → quad_resist、<1 → resist、=1 → neutral、<4 → weak、≥4 → quad_weak | `bal/effectiveness.go:137` `ClassifyEffectiveness` |
@@ -50,8 +50,8 @@
 | TB5 おすすめ(0401) | メンバー 1〜6・limit 1〜20(既定 10)・カタログ | 穴 = TB1 で resist も immune も 0 の攻撃タイプ(防御の穴)と、TB2 で effective が 0 の単タイプ(攻撃の穴。攻撃技が 1 つも無ければ穴なし)。171 通り(単 18 + 複合 153)の型について、防御の穴を型だけで ×1 未満にする数 + 攻撃の穴を自分のタイプで ×1 以上にする数を数え、合計降順 → 弱点数(×2 以上)昇順 → 定義順で並べ limit で切る。該当ポケモンと、特性で防御の穴を埋めるポケモンも返す | 候補・穴・特性の選択肢 | `bal/recommend.go:92` `RecommendTypes`、`:248` `recommendCandidates`、`:321` `matchingPokemon`、`:388` `abilityOptionsFor` |
 | TB6 技範囲(0404) | 技 1〜4(攻撃技を 1 つ以上) | 18 単タイプへの最大倍率(TB2 を 1 人の仮メンバーで呼ぶ)。カタログの全ポケモンについて型だけで最大 ≤ 1/2 なら walledBy、型だけでは超えるが特性のどれかで ≤ 1/2 なら walledByAbility | 相性表・受けられるポケモン | `bal/moverange.go:82` `AnalyzeMoveRange`、`:138` `moveRangeWalledBy` |
 
-- HTTP ハンドラ: analyze `services/balance/internal/httpapi/server.go:153`、coverage `:359`、threats `threats.go:22`、recommendations `recommendations.go:28`、move-range `moverange.go:25`。
-- カタログ(TB5・TB6)は read model の全ポケモン(`services/balance/internal/master/pokemon_types.go:197` `AllPokemon`)。レギュレーションの絞り込みは export 側の責務(`bal/recommend.go:33-34` のコメント)。特性 ID が特性の read model に無ければその特性だけ飛ばす(`bal/recommend.go:411-413`、`bal/moverange.go:176-179`)。
+- HTTP ハンドラ: analyze `services/balance/internal/adapters/httpapi/server.go:153`、coverage `:359`、threats `threats.go:22`、recommendations `recommendations.go:28`、move-range `moverange.go:25`。
+- カタログ(TB5・TB6)は read model の全ポケモン(`services/balance/internal/adapters/master/pokemon_types.go:197` `AllPokemon`)。レギュレーションの絞り込みは export 側の責務(`bal/recommend.go:33-34` のコメント)。特性 ID が特性の read model に無ければその特性だけ飛ばす(`bal/recommend.go:411-413`、`bal/moverange.go:176-179`)。
 - ダメージ量・実数値・持ち物・テラス・天候は扱わない(タイプ相性と特性だけ)。
 
 ## 2. 素早さ比較(services/speed)
@@ -103,5 +103,5 @@ flowchart TD
 ## カバレッジ
 
 - 読んだ(全行): `bal/{model,effectiveness,defense,ability,analysis,offense,move,pokemon,threat,moverange,recommend}.go`、`spd/{speed,pokemon,table,position}.go`、`jd/{speed,nature,turnorder}.go`、`jh/outspeed.go`、`services/pokedex/internal/readmodel/readmodel.go:295-340`。
-- 読んだ(一部): `services/balance/internal/master/type_chart_data.go`・`abilities.go`・`pokemon_types.go`(関数宣言とコメント)、balance / speed の httpapi(関数宣言と呼び出し行)、`services/judge/internal/client/{calc,pokedex}.go`(関数宣言と `Move` の priority 部分)。
-- 読んでいない: balance / speed の read model loader の検証本体、`services/balance/internal/httpapi/validate.go`、speed / judge の httpmetrics、各サービスのテスト、ADR-0014〜0017・0400〜0404・0600〜0605・0700〜0705 の本文(ADR 番号はコードのコメントからの引用)。
+- 読んだ(一部): `services/balance/internal/adapters/master/type_chart_data.go`・`abilities.go`・`pokemon_types.go`(関数宣言とコメント)、balance / speed の httpapi(関数宣言と呼び出し行)、`services/judge/internal/client/{calc,pokedex}.go`(関数宣言と `Move` の priority 部分)。
+- 読んでいない: balance / speed の read model loader の検証本体、`services/balance/internal/adapters/httpapi/validate.go`、speed / judge の httpmetrics、各サービスのテスト、ADR-0014〜0017・0400〜0404・0600〜0605・0700〜0705 の本文(ADR 番号はコードのコメントからの引用)。

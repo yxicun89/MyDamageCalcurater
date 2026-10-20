@@ -134,7 +134,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 
 ### 規約
 
-- `services/balance/internal/balance/` は純粋 Go(HTTP・DB・Kubernetes に依存しない)
+- `services/balance/internal/domain/` は純粋 Go(HTTP・DB・Kubernetes に依存しない)
 - 倍率は float ではなく整数表現(claude-review.md 参照)
 - TB1 の時点から `EffectSource`(タイプ由来/特性由来)を型に持たせる
 - 共通マスタの恒久正本は1つとし、balance 独自の正本や DB 直結を作らない。TB0 は ADR-0012 の
