@@ -9,15 +9,15 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 // examplePokemonPath は架空データの正(ADR-0600 §4)。
-const examplePokemonPath = "../../testdata/pokemon.example.json"
+const examplePokemonPath = "../../../testdata/pokemon.example.json"
 
 // overlayPokemonPath は local overlay が ConfigMap でマウントするコピー。Kustomize の load restrictor が
 // overlay の外のファイルを参照させないため複製し、このテストで同期を検査する(balance と同じ)。
-const overlayPokemonPath = "../../deploy/k8s/overlays/local/pokemon.example.json"
+const overlayPokemonPath = "../../../deploy/k8s/overlays/local/pokemon.example.json"
 
 func TestOverlayExampleMatchesTestdataExample(t *testing.T) {
 	t.Parallel()
@@ -52,7 +52,7 @@ func TestLoadPokemonFileReadsExample(t *testing.T) {
 	if len(roster.Pokemon) < 2 {
 		t.Fatalf("len(Pokemon) = %d, want at least 2", len(roster.Pokemon))
 	}
-	want := speed.Pokemon{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}
+	want := domain.Pokemon{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}
 	if !reflect.DeepEqual(roster.Pokemon[0], want) {
 		t.Errorf("Pokemon[0] = %+v, want %+v", roster.Pokemon[0], want)
 	}
@@ -87,7 +87,7 @@ func TestLoadPokemonPreservesFileOrder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Roster() error = %v", err)
 	}
-	want := speed.Roster{RegulationID: "m-c", Pokemon: []speed.Pokemon{
+	want := domain.Roster{RegulationID: "m-c", Pokemon: []domain.Pokemon{
 		{PokemonID: "9002-000", NameJa: "テストニバンメ", Types: []string{"water"}, BaseSpeed: 81},
 		{PokemonID: "9001-000", NameJa: "テストイチバンメ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
 	}}
@@ -110,13 +110,13 @@ func TestRosterReturnsCopy(t *testing.T) {
 	}
 	first.Pokemon[0].Types[0] = "changed"
 	first.Pokemon[0].BaseSpeed = 1
-	first.Pokemon = append(first.Pokemon, speed.Pokemon{PokemonID: "9999-999"})
+	first.Pokemon = append(first.Pokemon, domain.Pokemon{PokemonID: "9999-999"})
 
 	second, err := model.Roster()
 	if err != nil {
 		t.Fatalf("Roster() error = %v", err)
 	}
-	want := []speed.Pokemon{{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}}
+	want := []domain.Pokemon{{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100}}
 	if !reflect.DeepEqual(second.Pokemon, want) {
 		t.Errorf("Roster() after mutation = %+v, want %+v", second.Pokemon, want)
 	}

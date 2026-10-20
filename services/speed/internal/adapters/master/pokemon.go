@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 // PokemonSchemaVersion は受け付ける唯一の schemaVersion(ADR-0600 §4)。
@@ -39,10 +39,10 @@ const (
 // loader。adapter の差し替えは無い。ADR-0603 §5)。
 type PokemonReadModel struct {
 	regulationID string
-	pokemon      []speed.Pokemon
+	pokemon      []domain.Pokemon
 }
 
-var _ speed.PokemonProvider = (*PokemonReadModel)(nil)
+var _ domain.PokemonProvider = (*PokemonReadModel)(nil)
 
 // pokemonFile は on-disk の JSON の形(ADR-0600 §4)。
 type pokemonFile struct {
@@ -83,7 +83,7 @@ func LoadPokemon(r io.Reader) (*PokemonReadModel, error) {
 	}
 
 	seenIDs := make(map[string]bool, len(file.Pokemon))
-	pokemon := make([]speed.Pokemon, 0, len(file.Pokemon))
+	pokemon := make([]domain.Pokemon, 0, len(file.Pokemon))
 	for _, entry := range file.Pokemon {
 		if !pokemonIDPattern.MatchString(entry.PokemonID) {
 			return nil, fmt.Errorf("%w: pokemonId %q must use the NNNN-NNN format", ErrInvalidPokemon, entry.PokemonID)
@@ -117,7 +117,7 @@ func LoadPokemon(r io.Reader) (*PokemonReadModel, error) {
 			return nil, fmt.Errorf("%w: pokemonId %q baseSpeed must be between %d and %d", ErrInvalidPokemon, entry.PokemonID, minBaseSpeed, maxBaseSpeed)
 		}
 
-		pokemon = append(pokemon, speed.Pokemon{
+		pokemon = append(pokemon, domain.Pokemon{
 			PokemonID: entry.PokemonID,
 			NameJa:    entry.NameJa,
 			Types:     types,
@@ -138,13 +138,13 @@ func LoadPokemonFile(path string) (*PokemonReadModel, error) {
 	return LoadPokemon(f)
 }
 
-// Roster は speed.PokemonProvider の実装。ファイルの並び順のまま、呼び出し側が変更してよい複製を返す。
-func (m *PokemonReadModel) Roster() (speed.Roster, error) {
-	pokemon := make([]speed.Pokemon, len(m.pokemon))
+// Roster は domain.PokemonProvider の実装。ファイルの並び順のまま、呼び出し側が変更してよい複製を返す。
+func (m *PokemonReadModel) Roster() (domain.Roster, error) {
+	pokemon := make([]domain.Pokemon, len(m.pokemon))
 	for i, p := range m.pokemon {
 		types := make([]string, len(p.Types))
 		copy(types, p.Types)
-		pokemon[i] = speed.Pokemon{PokemonID: p.PokemonID, NameJa: p.NameJa, Types: types, BaseSpeed: p.BaseSpeed}
+		pokemon[i] = domain.Pokemon{PokemonID: p.PokemonID, NameJa: p.NameJa, Types: types, BaseSpeed: p.BaseSpeed}
 	}
-	return speed.Roster{RegulationID: m.regulationID, Pokemon: pokemon}, nil
+	return domain.Roster{RegulationID: m.regulationID, Pokemon: pokemon}, nil
 }

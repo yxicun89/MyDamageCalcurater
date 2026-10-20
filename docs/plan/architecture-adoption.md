@@ -5,7 +5,7 @@
   **S3(calc)完了(2026-10-12。S3a〈計算・一括・逆算〉と S3b〈調整。データレーンが代行〉。ADR-0252。calc は archcheck の未移行の一覧から外れた)**。S1(G1 の解消)も 2026-10-12 完了。
   **S5(pokedex)実装済み(2026-10-12。ADR-0180。G7 解消。pokedex は未移行の一覧から外れた)**。
   **S4(record)実装済み(2026-10-12。ADR-0254。データレーンが代行。record は archcheck の未移行の一覧から外れた。G6 解消)**。
-  **S6(team)完了(2026-10-12。ADR-0255。データレーンが代行。team は archcheck の未移行の一覧から外れた)**。残りは S2・S8・S9。
+  **S6(team)完了(2026-10-12。ADR-0255。データレーンが代行。team は archcheck の未移行の一覧から外れた)**。**S9(speed)完了(2026-10-21。データレーンが代行。speed は未移行の一覧から外れた)**。残りは S2・S8。
 - 日付: 2026-10-11(基準: `origin/main`)
 - 発端: ユーザーの意向(2026-10-11)「人間があとで確認しやすくなるので、正式にソフトウェアアーキテクチャを採用したい」。
 - 方式の比較(利点・欠点の表): [../architecture-comparison.md](../architecture-comparison.md)(PR #711)。この文書は調査の詳細・決定の理由・段階計画を持つ。
@@ -262,7 +262,7 @@ services/<svc>/
 | S6 team(**完了 2026-10-12・ADR-0255。データレーンが代行。I-api-4**) | API | record と同じ形(app は薄い) | `-tags tidb` を含むテストが通る |
 | S7 gateway(**完了 2026-10-12・ADR-0811**) | API(データレーンが代行) | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
 | S8 balance | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
-| S9 speed | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
+| S9 speed(**完了 2026-10-21・ADR-0811。データレーンが代行**) | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
 | W0〜W2 Web | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js` に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
 | I0 iOS | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る |
 

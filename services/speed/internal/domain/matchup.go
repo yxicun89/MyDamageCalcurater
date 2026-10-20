@@ -1,4 +1,4 @@
-package speed
+package domain
 
 // 「相手を選んで、上を取る最低ライン」と「自分の素早さの、これ以上 / これ以下」(I-speed-4。ADR-0610)。
 //

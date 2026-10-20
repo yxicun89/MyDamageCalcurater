@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"example.com/pokecalc/services/speed/internal/httpguard"
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
 	"github.com/labstack/echo/v5"
 )
 

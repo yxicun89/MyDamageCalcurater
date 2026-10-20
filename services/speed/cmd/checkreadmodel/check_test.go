@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"example.com/pokecalc/services/speed/internal/master"
+	"example.com/pokecalc/services/speed/internal/adapters/master"
 )
 
 // examplePath は架空データの read model の正(ADR-0600 §4)。pokedex export の speed-pokemon.json と同じ形。

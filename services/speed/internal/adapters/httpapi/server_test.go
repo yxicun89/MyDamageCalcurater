@@ -10,23 +10,23 @@ import (
 	"testing"
 
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 const pokemonPath = "/api/speed/v1/pokemon"
 
 // fakeProvider は順不同の Roster を返す(API が pokemonId の昇順に並べることを確かめるため)。
 type fakeProvider struct {
-	roster speed.Roster
+	roster domain.Roster
 	err    error
 }
 
-func (f fakeProvider) Roster() (speed.Roster, error) {
+func (f fakeProvider) Roster() (domain.Roster, error) {
 	return f.roster, f.err
 }
 
-func unorderedRoster() speed.Roster {
-	return speed.Roster{RegulationID: "example", Pokemon: []speed.Pokemon{
+func unorderedRoster() domain.Roster {
+	return domain.Roster{RegulationID: "example", Pokemon: []domain.Pokemon{
 		{PokemonID: "9003-000", NameJa: "テストサンバンメ", Types: []string{"rock", "ground"}, BaseSpeed: 45},
 		{PokemonID: "9001-000", NameJa: "テストカソウドリ", Types: []string{"fire", "flying"}, BaseSpeed: 100},
 		{PokemonID: "9010-000", NameJa: "テストジュウバンメ", Types: []string{"ghost"}, BaseSpeed: 81},

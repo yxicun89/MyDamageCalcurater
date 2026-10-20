@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"example.com/pokecalc/services/speed/internal/master"
+	"example.com/pokecalc/services/speed/internal/adapters/master"
 )
 
 // pokemonReadModelFile は read model のディレクトリの中のファイル名(ADR-0603 §1、ADR-0105 §120)。

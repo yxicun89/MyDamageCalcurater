@@ -1,4 +1,4 @@
-package speed
+package domain
 
 // Pokemon は素早さ比較に必要な 1 体分のマスタ(ADR-0600 §4)。
 // Types は表示用(英小文字の ID)で、計算には使わない。

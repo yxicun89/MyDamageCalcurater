@@ -2,6 +2,7 @@
 Lane: 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めてもよい)
 Active: なし(SP0〜SP5 すべて完了。次の要望待ち)
 Branch: 次は main から feat/speed-<名前> を切る(作業ディレクトリ ~/MyDamageCalcurater-speed。SP5 は feat/speed-sp5 → PR #97 で main に統合)
+Status(追記): 2026-10-21 ARCH S9 完了(データレーンが代行。ブランチ feat/arch-s9-speed)。`internal/speed` → `internal/domain`、`master`・`httpapi`・`httpguard`・`httpmetrics` → `internal/adapters/`、`internal/app` は doc.go だけ。振る舞いは不変・archcheck の未移行の一覧から speed を外した(ADR-0811)
 Status: SP0〜SP5 すべて完了・main に統合(PR #32・#36・#52・#83・#86・#93・#97)。SP4 の実データ確認はユーザーが2026-09-24 に実施:
 `mysql` Service はクラスタ内部の DNS 名で Mac からは解決できないため、`kubectl -n pokecalc port-forward svc/mysql 3306:3306` を張り、
 DSN のホストを `127.0.0.1` に付け替えて `make pokedex-export`(348 pokemon)→ `make speed-k3d-deploy-readmodel` →
