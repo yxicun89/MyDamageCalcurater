@@ -24,7 +24,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"example.com/pokecalc/services/speed/internal/httpmetrics"
+	"example.com/pokecalc/services/speed/internal/adapters/httpmetrics"
 )
 
 const (

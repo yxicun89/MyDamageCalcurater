@@ -6,9 +6,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/httpguard"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 // I-speed-4 / ADR-0610 §2 のハンドラ。判定順は /position と同じ:
@@ -39,7 +39,7 @@ func (h handler) GetSpeedMatchup(c *echo.Context, _ api.GetSpeedMatchupParams) e
 	if httpguard.Expired(c.Request().Context()) {
 		return overloaded(c)
 	}
-	result, err := speed.Matchup(roster, req)
+	result, err := domain.Matchup(roster, req)
 	if err != nil {
 		return coreError(c, err)
 	}
@@ -67,11 +67,11 @@ func (h handler) GetSpeedReach(c *echo.Context, _ api.GetSpeedReachParams) error
 		return overloaded(c)
 	}
 	// 自分の素早さ(と表示用のポケモン)は /position と同じ計算で求める。
-	position, err := speed.Position(roster, req)
+	position, err := domain.Position(roster, req)
 	if err != nil {
 		return coreError(c, err)
 	}
-	lines, err := speed.Reach(roster, position.Speed, req.TableTailwind)
+	lines, err := domain.Reach(roster, position.Speed, req.TableTailwind)
 	if err != nil {
 		return internalError(c, err)
 	}
@@ -79,16 +79,16 @@ func (h handler) GetSpeedReach(c *echo.Context, _ api.GetSpeedReachParams) error
 }
 
 // loadRoster は read model を取り出す。ok が false なら、応答(503 / 500)は書き込み済みで err を返すだけでよい。
-func (h handler) loadRoster(c *echo.Context) (roster speed.Roster, ok bool, err error) {
+func (h handler) loadRoster(c *echo.Context) (roster domain.Roster, ok bool, err error) {
 	if h.deps.Pokemon == nil {
-		return speed.Roster{}, false, c.JSON(http.StatusServiceUnavailable, api.Error{
+		return domain.Roster{}, false, c.JSON(http.StatusServiceUnavailable, api.Error{
 			Code:    api.MasterUnavailable,
 			Message: "the pokemon read model is not configured",
 		})
 	}
 	roster, loadErr := h.deps.Pokemon.Roster()
 	if loadErr != nil {
-		return speed.Roster{}, false, internalError(c, loadErr)
+		return domain.Roster{}, false, internalError(c, loadErr)
 	}
 	return roster, true, nil
 }
@@ -104,7 +104,7 @@ func bodyError(c *echo.Context, err error) error {
 // coreError はコアのエラーを 422(未知のポケモン)か 500 にする。入力はここまでに自前で検証済みなので、
 // 他のエラーは想定外(固定文言の 500。ADR-0602 §4)。
 func coreError(c *echo.Context, err error) error {
-	if errors.Is(err, speed.ErrUnknownPokemon) {
+	if errors.Is(err, domain.ErrUnknownPokemon) {
 		return c.JSON(http.StatusUnprocessableEntity, api.Error{
 			Code:    api.UnknownPokemon,
 			Message: "pokemonId is not in the read model",
@@ -115,32 +115,32 @@ func coreError(c *echo.Context, err error) error {
 
 // toMatchupRequest は生成型を検証してコアの入力に詰め替える。read model を使わずに検証できるものはここで済ませる
 // (read model 未設定でも 503 ではなく 400 を返すため)。範囲の検査はコアの Speed に任せる(上限・下限を複製しない)。
-func toMatchupRequest(body api.MatchupRequest) (speed.MatchupRequest, error) {
+func toMatchupRequest(body api.MatchupRequest) (domain.MatchupRequest, error) {
 	if !pokemonIDPattern.MatchString(body.Self.PokemonId) || !pokemonIDPattern.MatchString(body.Opponent.PokemonId) {
-		return speed.MatchupRequest{}, errInvalidMatchupBody
+		return domain.MatchupRequest{}, errInvalidMatchupBody
 	}
-	self := speed.Condition{
+	self := domain.Condition{
 		Rank:      optionalInt(body.Self.Rank),
 		Scarf:     optionalBool(body.Self.Scarf),
 		Tailwind:  optionalBool(body.Self.Tailwind),
 		Paralysis: optionalBool(body.Self.Paralysis),
 	}
-	if !validSpeedFields(0, speed.NatureNeutral, self.Rank) {
-		return speed.MatchupRequest{}, errInvalidMatchupBody
+	if !validSpeedFields(0, domain.NatureNeutral, self.Rank) {
+		return domain.MatchupRequest{}, errInvalidMatchupBody
 	}
-	var current *speed.Investment
+	var current *domain.Investment
 	if body.Self.Current != nil {
-		nature := speed.NatureEffect(body.Self.Current.Nature)
+		nature := domain.NatureEffect(body.Self.Current.Nature)
 		if !validSpeedFields(body.Self.Current.Sp, nature, 0) {
-			return speed.MatchupRequest{}, errInvalidMatchupBody
+			return domain.MatchupRequest{}, errInvalidMatchupBody
 		}
-		current = &speed.Investment{SP: body.Self.Current.Sp, Nature: nature}
+		current = &domain.Investment{SP: body.Self.Current.Sp, Nature: nature}
 	}
 	assumptions, err := toAssumptions(body.Opponent.Assumptions)
 	if err != nil {
-		return speed.MatchupRequest{}, err
+		return domain.MatchupRequest{}, err
 	}
-	return speed.MatchupRequest{
+	return domain.MatchupRequest{
 		SelfPokemonID:     body.Self.PokemonId,
 		Self:              self,
 		SelfCurrent:       current,
@@ -154,7 +154,7 @@ func toMatchupRequest(body api.MatchupRequest) (speed.MatchupRequest, error) {
 
 // toAssumptions は相手の想定を検証して詰め替える。省略(nil)は nil のまま(コアの既定)。
 // 空配列・上限超え・preset と custom の両方 / どちらも無し・未知の preset・preset の重複は拒否する。
-func toAssumptions(in *[]api.OpponentAssumption) ([]speed.OpponentAssumption, error) {
+func toAssumptions(in *[]api.OpponentAssumption) ([]domain.OpponentAssumption, error) {
 	if in == nil {
 		return nil, nil
 	}
@@ -162,7 +162,7 @@ func toAssumptions(in *[]api.OpponentAssumption) ([]speed.OpponentAssumption, er
 		return nil, errInvalidMatchupBody
 	}
 	seen := map[api.PresetId]bool{}
-	out := make([]speed.OpponentAssumption, 0, len(*in))
+	out := make([]domain.OpponentAssumption, 0, len(*in))
 	for _, a := range *in {
 		if (a.Preset == nil) == (a.Custom == nil) {
 			return nil, errInvalidMatchupBody
@@ -172,26 +172,26 @@ func toAssumptions(in *[]api.OpponentAssumption) ([]speed.OpponentAssumption, er
 				return nil, errInvalidMatchupBody
 			}
 			seen[*a.Preset] = true
-			out = append(out, speed.OpponentAssumption{Preset: speed.PresetID(*a.Preset)})
+			out = append(out, domain.OpponentAssumption{Preset: domain.PresetID(*a.Preset)})
 			continue
 		}
-		custom := speed.OpponentCustom{
+		custom := domain.OpponentCustom{
 			SP:     a.Custom.Sp,
-			Nature: speed.NatureEffect(a.Custom.Nature),
+			Nature: domain.NatureEffect(a.Custom.Nature),
 			Rank:   optionalInt(a.Custom.Rank),
 			Scarf:  optionalBool(a.Custom.Scarf),
 		}
 		if !validSpeedFields(custom.SP, custom.Nature, custom.Rank) {
 			return nil, errInvalidMatchupBody
 		}
-		out = append(out, speed.OpponentAssumption{Custom: &custom})
+		out = append(out, domain.OpponentAssumption{Custom: &custom})
 	}
 	return out, nil
 }
 
 // validSpeedFields は SP・性格・ランクの範囲を、コアの Speed に有効な種族値を渡して確かめる。
-func validSpeedFields(sp int, nature speed.NatureEffect, rank int) bool {
-	_, err := speed.Speed(speed.Input{BaseSpeed: 1, SP: sp, Nature: nature, Rank: rank})
+func validSpeedFields(sp int, nature domain.NatureEffect, rank int) bool {
+	_, err := domain.Speed(domain.Input{BaseSpeed: 1, SP: sp, Nature: nature, Rank: rank})
 	return err == nil
 }
 
@@ -202,27 +202,27 @@ func optionalInt(i *int) int {
 	return *i
 }
 
-func toSpeedPokemon(p speed.Pokemon) api.SpeedPokemon {
+func toSpeedPokemon(p domain.Pokemon) api.SpeedPokemon {
 	types := make([]string, len(p.Types))
 	copy(types, p.Types)
 	return api.SpeedPokemon{PokemonId: p.PokemonID, NameJa: p.NameJa, Types: types, BaseSpeed: p.BaseSpeed}
 }
 
-func toSpRange(r *speed.SPRange) *api.SpRange {
+func toSpRange(r *domain.SPRange) *api.SpRange {
 	if r == nil {
 		return nil
 	}
 	return &api.SpRange{Min: r.Min, Max: r.Max}
 }
 
-func toBaseSpeedRange(r *speed.BaseRange) *api.BaseSpeedRange {
+func toBaseSpeedRange(r *domain.BaseRange) *api.BaseSpeedRange {
 	if r == nil {
 		return nil
 	}
 	return &api.BaseSpeedRange{Min: r.Min, Max: r.Max}
 }
 
-func toMatchupResponse(result speed.MatchupResult, req speed.MatchupRequest) api.MatchupResponse {
+func toMatchupResponse(result domain.MatchupResult, req domain.MatchupRequest) api.MatchupResponse {
 	lines := make([]api.MatchupLine, len(result.Lines))
 	for i, l := range result.Lines {
 		natures := make([]api.NatureLine, len(l.Lines))
@@ -265,7 +265,7 @@ func toMatchupResponse(result speed.MatchupResult, req speed.MatchupRequest) api
 	return response
 }
 
-func toReachResponse(position speed.PositionResult, lines []speed.ReachLine) api.ReachResponse {
+func toReachResponse(position domain.PositionResult, lines []domain.ReachLine) api.ReachResponse {
 	out := make([]api.ReachLine, len(lines))
 	for i, l := range lines {
 		line := api.ReachLine{

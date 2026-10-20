@@ -28,7 +28,6 @@ import (
 // unmigrated は、まだ形(domain・app・adapters)をそろえていないサービスの一覧。
 // 段階の PR(docs/plan/architecture-adoption.md §6)でサービスごとに 1 行ずつ消す。空になったら仕組みごと消す。
 var unmigrated = []string{
-	"speed",
 }
 
 // layers は、形をそろえるときに必ず置く 3 つのフォルダ。

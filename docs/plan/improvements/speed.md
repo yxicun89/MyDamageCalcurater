@@ -35,3 +35,4 @@
     - [ ] クライアント: `matchup()`・`reach()` を `postJson` にする(`speedClient.matchup.test.ts`)
     - [ ] 画面: `SpeedScreen.tsx`(領域・入力・カード・「これ以上」・連続技リンク〈`onOpenCombo` があるときだけ〉)と `SpeedScreen.css` の書き直し。`App.routing`・`App.masterSources`・`App.tabPersistence` のテストも通る(領域「自分のポケモン」は常に描画)
     - [ ] 検証: `make web-lint web-test`、`cd web && npm run e2e -- speed`(chromium)
+- [x] ARCH S9(ヘキサゴナル採用。データレーンが代行): `internal/speed` → `internal/domain`、`master`・`httpapi`・`httpguard`・`httpmetrics` → `internal/adapters/`、`internal/app` は doc.go だけ。振る舞い・契約 0.7.0・engine_parity_test は変えない。archcheck の未移行の一覧から speed を外した(2026-10-21。ADR-0811 段階の記録)

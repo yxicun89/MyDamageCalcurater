@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/httpguard"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 )
 
 // blockingProvider は最初の Roster 呼び出しで止まる(そのリクエストが枠を占有し続ける)。
@@ -20,7 +20,7 @@ type blockingProvider struct {
 	once    sync.Once
 	entered chan struct{}
 	release chan struct{}
-	roster  speed.Roster
+	roster  domain.Roster
 	mu      sync.Mutex
 	calls   int
 }
@@ -29,7 +29,7 @@ func newBlockingProvider() *blockingProvider {
 	return &blockingProvider{entered: make(chan struct{}), release: make(chan struct{}), roster: unorderedRoster()}
 }
 
-func (b *blockingProvider) Roster() (speed.Roster, error) {
+func (b *blockingProvider) Roster() (domain.Roster, error) {
 	b.mu.Lock()
 	b.calls++
 	b.mu.Unlock()

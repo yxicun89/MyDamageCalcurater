@@ -44,6 +44,7 @@
 | 内容 | 場所 | 起票 | 宛先レーン |
 |---|---|---|---|
 | pokedex-import の CronJob が Mac の夜間スリープで飛ばされる(startingDeadlineSeconds を長く) | `decisions/2026-10-09-wishlist-cronjob-sleep.md` | 2026-10-09 | データ |
+| スリープ明けに CronJob の予定が起動されない(復帰時に CronJob へ注釈を付け直して評価させる) | `decisions/2026-10-21-cronjob-missed-after-sleep.md` | 2026-10-21 | 運用 |
 
 ## 直近で回答済み(行は消してよい。2026-10-03 ユーザー「既定案で OK」)
 

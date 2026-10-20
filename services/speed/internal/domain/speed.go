@@ -1,6 +1,8 @@
-// Package speed は素早さ比較の純粋なコア(I/O なし)。実数値・ランクの式は engine を呼び、
+// Package domain は speed サービスの素早さ比較の純粋なコア(I/O なし。ADR-0811。旧 internal/speed)。実数値・ランクの式は engine を呼び、
 // engine に無いこだわりスカーフの補正だけをここで持つ(ADR-0600 §3)。
-package speed
+// HTTP・ファイル・時刻を持たない。import してよいのは標準ライブラリと engine だけ。
+// read model の差し替え境界(PokemonProvider)はここで宣言し、実装は adapters/master が渡す。
+package domain
 
 import (
 	"errors"

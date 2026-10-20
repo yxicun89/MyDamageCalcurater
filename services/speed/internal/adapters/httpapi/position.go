@@ -6,9 +6,9 @@ import (
 	"io"
 	"net/http"
 
+	"example.com/pokecalc/services/speed/internal/adapters/httpguard"
 	"example.com/pokecalc/services/speed/internal/api"
-	"example.com/pokecalc/services/speed/internal/httpguard"
-	"example.com/pokecalc/services/speed/internal/speed"
+	"example.com/pokecalc/services/speed/internal/domain"
 	"github.com/labstack/echo/v5"
 )
 
@@ -61,9 +61,9 @@ func getSpeedPosition(c *echo.Context, deps Dependencies) error {
 	if httpguard.Expired(c.Request().Context()) {
 		return overloaded(c)
 	}
-	result, err := speed.Position(roster, req)
+	result, err := domain.Position(roster, req)
 	if err != nil {
-		if errors.Is(err, speed.ErrUnknownPokemon) {
+		if errors.Is(err, domain.ErrUnknownPokemon) {
 			return c.JSON(http.StatusUnprocessableEntity, api.Error{
 				Code:    api.UnknownPokemon,
 				Message: "pokemonId is not in the read model",
@@ -104,9 +104,9 @@ func decodeJSONBody[T any](request *http.Request) (T, error) {
 }
 
 // toPositionRequest は生成型の PositionRequest を mode ごとの必須・余計なフィールドと範囲について
-// 検証し、コアの speed.PositionRequest に詰め替える(ADR-0602 §2)。read model を使わずに検証できる
+// 検証し、コアの domain.PositionRequest に詰め替える(ADR-0602 §2)。read model を使わずに検証できる
 // ものはここで済ませる(read model 未設定でも 503 ではなく 400 を返すため)。
-func toPositionRequest(body api.PositionRequest) (speed.PositionRequest, error) {
+func toPositionRequest(body api.PositionRequest) (domain.PositionRequest, error) {
 	switch body.Mode {
 	case api.Preset:
 		return positionRequestFromPreset(body)
@@ -115,30 +115,30 @@ func toPositionRequest(body api.PositionRequest) (speed.PositionRequest, error) 
 	case api.Raw:
 		return positionRequestFromRaw(body)
 	default:
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 }
 
 // positionRequestFromPreset requires exactly pokemonId, preset and scarf (ADR-0602 §2). preset must
 // be one of the 3 minimal presets (api.MinimalPresetId's enum, generated from openapi.yaml, is the
 // single source for that list — not copied here).
-func positionRequestFromPreset(body api.PositionRequest) (speed.PositionRequest, error) {
+func positionRequestFromPreset(body api.PositionRequest) (domain.PositionRequest, error) {
 	if body.PokemonId == nil || body.Preset == nil || body.Scarf == nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if body.Sp != nil || body.Nature != nil || body.Rank != nil || body.Value != nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if !pokemonIDPattern.MatchString(*body.PokemonId) {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if !body.Preset.Valid() {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
-	return speed.PositionRequest{
-		Mode:          speed.PositionModePreset,
+	return domain.PositionRequest{
+		Mode:          domain.PositionModePreset,
 		PokemonID:     *body.PokemonId,
-		Preset:        speed.PresetID(*body.Preset),
+		Preset:        domain.PresetID(*body.Preset),
 		Scarf:         *body.Scarf,
 		Tailwind:      optionalBool(body.Tailwind),
 		Paralysis:     optionalBool(body.Paralysis),
@@ -147,26 +147,26 @@ func positionRequestFromPreset(body api.PositionRequest) (speed.PositionRequest,
 }
 
 // positionRequestFromCustom requires exactly pokemonId, sp, nature, rank and scarf (ADR-0602 §2). sp,
-// nature and rank are range-checked by calling speed.Speed with a valid dummy base speed: that reuses
+// nature and rank are range-checked by calling domain.Speed with a valid dummy base speed: that reuses
 // the core's own sentinel checks instead of copying the SP/rank bounds as magic numbers here.
-func positionRequestFromCustom(body api.PositionRequest) (speed.PositionRequest, error) {
+func positionRequestFromCustom(body api.PositionRequest) (domain.PositionRequest, error) {
 	if body.PokemonId == nil || body.Sp == nil || body.Nature == nil || body.Rank == nil || body.Scarf == nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if body.Preset != nil || body.Value != nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if !pokemonIDPattern.MatchString(*body.PokemonId) {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 
-	nature := speed.NatureEffect(*body.Nature)
-	if _, err := speed.Speed(speed.Input{BaseSpeed: 1, SP: *body.Sp, Nature: nature, Rank: *body.Rank, Scarf: false}); err != nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+	nature := domain.NatureEffect(*body.Nature)
+	if _, err := domain.Speed(domain.Input{BaseSpeed: 1, SP: *body.Sp, Nature: nature, Rank: *body.Rank, Scarf: false}); err != nil {
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 
-	return speed.PositionRequest{
-		Mode:          speed.PositionModeCustom,
+	return domain.PositionRequest{
+		Mode:          domain.PositionModeCustom,
 		PokemonID:     *body.PokemonId,
 		SP:            *body.Sp,
 		Nature:        nature,
@@ -179,33 +179,33 @@ func positionRequestFromCustom(body api.PositionRequest) (speed.PositionRequest,
 }
 
 // positionRequestFromRaw requires exactly value; pokemonId is optional, for display only (ADR-0602
-// §2). value is range-checked against speed.RawSpeedRange, derived from the formula, not hardcoded.
-func positionRequestFromRaw(body api.PositionRequest) (speed.PositionRequest, error) {
+// §2). value is range-checked against domain.RawSpeedRange, derived from the formula, not hardcoded.
+func positionRequestFromRaw(body api.PositionRequest) (domain.PositionRequest, error) {
 	if body.Value == nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 	if body.Preset != nil || body.Scarf != nil || body.Tailwind != nil || body.Paralysis != nil || body.Sp != nil || body.Nature != nil || body.Rank != nil {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 
-	minSpeed, maxSpeed := speed.RawSpeedRange()
+	minSpeed, maxSpeed := domain.RawSpeedRange()
 	if *body.Value < minSpeed || *body.Value > maxSpeed {
-		return speed.PositionRequest{}, errInvalidPositionBody
+		return domain.PositionRequest{}, errInvalidPositionBody
 	}
 
-	req := speed.PositionRequest{Mode: speed.PositionModeRaw, Value: *body.Value, TableTailwind: optionalBool(body.TableTailwind)}
+	req := domain.PositionRequest{Mode: domain.PositionModeRaw, Value: *body.Value, TableTailwind: optionalBool(body.TableTailwind)}
 	if body.PokemonId != nil {
 		if !pokemonIDPattern.MatchString(*body.PokemonId) {
-			return speed.PositionRequest{}, errInvalidPositionBody
+			return domain.PositionRequest{}, errInvalidPositionBody
 		}
 		req.PokemonID = *body.PokemonId
 	}
 	return req, nil
 }
 
-// toPositionResponse converts speed.PositionResult to the generated api.PositionResponse. Tie is
+// toPositionResponse converts domain.PositionResult to the generated api.PositionResponse. Tie is
 // always a non-nil slice (possibly empty) so it serializes as [] rather than null (ADR-0602 §3).
-func toPositionResponse(result speed.PositionResult) api.PositionResponse {
+func toPositionResponse(result domain.PositionResult) api.PositionResponse {
 	tie := make([]api.SpeedTableEntry, len(result.Tie))
 	for i, e := range result.Tie {
 		types := make([]string, len(e.Pokemon.Types))

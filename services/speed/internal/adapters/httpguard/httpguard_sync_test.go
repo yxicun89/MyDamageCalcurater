@@ -8,7 +8,7 @@ import (
 
 // 正は services/internal/httpguard/httpguard.go(ADR-0801。ADR-0406 §2 と同じ複製の方針)。
 // このモジュールの複製はバイト一致でなければならない。正本や複製が無い場合も失敗にする。
-const sharedHTTPGuardPath = "../../../internal/httpguard/httpguard.go"
+const sharedHTTPGuardPath = "../../../../internal/httpguard/httpguard.go"
 
 func TestCopyMatchesSharedHTTPGuard(t *testing.T) {
 	t.Parallel()
