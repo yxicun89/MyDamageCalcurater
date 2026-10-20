@@ -325,7 +325,7 @@ export const masterOnlineText = {
 } as const;
 
 /**
- * P5-5c: 記録 API(record-svc)のクライアント(record/recordClient.ts、ADR-0317)の文言。
+ * P5-5c: 記録 API(record-svc)のクライアント(api/recordClient.ts、ADR-0317)の文言。
  * 失敗は画面に出さない(黙って非表示)ので、使うのはクライアントが返す Error.message だけ。
  */
 export const recordClientText = {

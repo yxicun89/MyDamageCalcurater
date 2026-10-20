@@ -18,7 +18,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { calcHistoryText } from "../i18n/favorites";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { CalcHistorySection } from "./CalcHistorySection";
 
 type Schemas = components["schemas"];

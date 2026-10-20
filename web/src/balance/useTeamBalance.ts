@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import type { BalanceClient, BalanceResult } from "../api/balanceClient";
 import { masterCapabilities } from "../master/capabilities";
 import type { MasterData, MasterSpeciesSearch } from "../master/types";
-import type { SpeciesResolutions } from "../screens/speciesResolution";
+import type { SpeciesResolutions } from "../ui/speciesResolution";
 import type { BalanceInputMember, RequestState, Schemas, TeamBalanceState } from "./types";
 
 type AnalyzeMembers = Schemas["AnalyzeRequest"]["members"];

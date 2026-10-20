@@ -4,7 +4,7 @@
 // localStorage が使えない環境でも失敗させない(端末 ID もページごとの値で代える)。
 
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import type { StorageLike } from "../app/storage";
+import type { StorageLike } from "./storage";
 import { DEVICE_ID_STORAGE_KEY, createClientIds, generateUuidV4 } from "./clientIds";
 
 /** RFC 4122 の v4(version 4・variant 10xx)の小文字表記。 */

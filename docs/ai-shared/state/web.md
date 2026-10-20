@@ -254,3 +254,5 @@ Status(追記 2026-10-11): I-web-13h(G-05 調整の画面、ADR-0353)= `AdjustSc
 Status(追記 2026-10-11): I-web-18(調整の目標カードを見て分かる形に、ADR-0354)= 種類・振り方(4 択以下)を `SegmentedControl`、技を `MovePicker`、相手を選んだ相手の絵のタイルに、補足の文を「説明」ボタンの奥へ(`AdjustScreen.tsx`・`.css`・`MovePicker` に任意 prop 2 つ)。ロジック・API・語は不変。既存テストは helper 付け替え(意味は不変)。実装済み・コミット前。iOS は decisions/2026-10-11-web-g05-adjust.md の追記に揃える。
 
 Status(追記 2026-10-21): I-web-37(アーキテクチャ採用 W0、ADR-0811。データレーンが代行)= `web/eslint.boundaries.js` に import の向きの規則と W1〜W5 の例外一覧を凍結、設定テスト `src/test/importBoundaries.test.ts`。コードは動かしていない。W1(`screens/` の共有部品を `ui/` へ)・W2(W2〜W5 の解消)は未着手。
+
+Status(追記 2026-10-21): I-web-38(アーキテクチャ採用 W1・W2、ADR-0811。データレーンが代行)= 共有部品 6 つを `screens/` → `ui/`、`recordClient`・`storage` を `api/` へ、`FavoriteRestoreIssue` を `domain/`、`balanceLabels` の型を domain 側に。`eslint.boundaries.js` の `KNOWN_VIOLATIONS` は空。再エクスポートは残していないので、古い `screens/MovePicker` 等を import する作業中のブランチは `ui/` に差し替える。

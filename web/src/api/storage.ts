@@ -1,6 +1,7 @@
 // P4-5: localStorage 相当の最小インターフェース(ADR-0301 §3・§4)。
 // 実装(app/calcMode.ts・api/clientIds.ts)は既定で globalThis.localStorage を使うが、
 // テストや「使えない環境(プライベートブラウズ等)」向けに差し替えられるようにする。
+// 置き場所は shared の api/(ブラウザ保存へのアダプタ)。api/clientIds.ts が app/ を import しないため(ADR-0811 W3)。
 
 /** 読み書きに使う最小限のストレージ(localStorage のサブセット)。呼び出しは例外を投げてよい。 */
 export interface StorageLike {

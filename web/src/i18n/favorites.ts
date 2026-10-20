@@ -1,6 +1,6 @@
 // お気に入り(手動ピン留め。P5-3c・ADR-0327)の文言。このレーンの文言はこのファイルにだけ足す(ja.ts は触らない)。
 
-import type { FavoriteRestoreIssue } from "../favorites/favoriteCalc";
+import type { FavoriteRestoreIssue } from "../domain/favoriteRestoreIssue";
 
 /** お気に入りの画面(favorites/FavoritesScreen.tsx)の文言。サーバーの message は見出しの後ろにそのまま出す。 */
 export const favoritesScreenText = {

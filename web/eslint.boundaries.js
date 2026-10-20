@@ -4,8 +4,8 @@
 //   - features(機能)は shared だけを import する。機能 → 機能と、機能 → screens は禁止。
 //   - shared は shared の中だけ。app・screens・features を import しない。
 //   - domain/ は通信の生成型(api/*.gen)を import しない。
-// 既知の違反は下の KNOWN_VIOLATIONS に凍結する(ファイル単位の eslint-disable は使わない)。
-// 例外に無い新しい違反は `npm run lint` で失敗する。解消したら該当の行を消す。
+// 既知の違反は下の KNOWN_VIOLATIONS に凍結する(ファイル単位の eslint-disable は使わない)。今は空。
+// 例外に無い新しい違反は `npm run lint` で失敗する。
 
 const FEATURES = ["adjust", "speed", "team", "favorites", "record", "deviceData"];
 const SHARED = ["domain", "master", "engine", "api", "ui", "i18n", "images", "styles"];
@@ -28,7 +28,7 @@ function featureGroups(self) {
       FEATURES.filter((f) => f !== self),
       "機能 → 機能は禁止(§5.2)。shared に出すか、app / screens から束ねる。",
     ),
-    group("screens", ["screens"], "機能 → screens は禁止。共有部品は ui/ へ(W1)。"),
+    group("screens", ["screens"], "機能 → screens は禁止。共有部品は ui/ に置く(W1)。"),
     group("app", ["app"], "機能 → app は禁止(下 → 上)。"),
   ];
 }
@@ -48,27 +48,11 @@ const domainGenGroup = {
 };
 
 /**
- * 凍結した既知の違反(計画 W1〜W5)。file は web/ からの相対パス、allow は許す禁止グループ名。
- * 解消の段階: W1 = screens/ の共有部品を ui/ へ移す段、W2 = W2〜W5 の解消(最後に空にする)。
+ * 凍結した既知の違反。file は web/ からの相対パス、allow は許す禁止グループ名(例: features・screens・app・gen)。
+ * W0 で凍結した 11 件(W1〜W5)は W1・W2 の段で解消して空になった(ADR-0811)。新しい違反は足さず、置き場所で直す。
+ * 形の例: { wave: "W1", file: "src/adjust/AdjustScreen.tsx", allow: ["screens"] }
  */
-export const KNOWN_VIOLATIONS = [
-  // W1: 機能が screens/ の共有部品を import。共有部品を ui/ へ移す段(W1)で消す。
-  { wave: "W1", file: "src/adjust/AdjustScreen.tsx", allow: ["screens"] },
-  { wave: "W1", file: "src/speed/SpeedScreen.tsx", allow: ["screens"] },
-  { wave: "W1", file: "src/team/TeamBalanceSection.tsx", allow: ["screens"] },
-  { wave: "W1", file: "src/team/TeamMemberEditor.tsx", allow: ["screens"] },
-  { wave: "W1", file: "src/team/TeamMemberFields.tsx", allow: ["screens"] },
-  // W2: 機能 → 機能(favorites → record/recordClient)。W2 の段で解消する。
-  { wave: "W2", file: "src/favorites/AddFavoriteButton.tsx", allow: ["features"] },
-  { wave: "W2", file: "src/favorites/CalcHistorySection.tsx", allow: ["features"] },
-  { wave: "W2", file: "src/favorites/FavoritesScreen.tsx", allow: ["features"] },
-  // W3: 共有 → 骨組み(api/clientIds → app/storage)。W2 の段で解消する。
-  { wave: "W3", file: "src/api/clientIds.ts", allow: ["app"] },
-  // W4: 共有 → 機能(i18n/favorites → favorites/favoriteCalc)。W2 の段で解消する。
-  { wave: "W4", file: "src/i18n/favorites.ts", allow: ["features"] },
-  // W5: ドメイン → 通信の生成型(domain/balanceLabels → api/balance.gen)。W2 の段で解消する。
-  { wave: "W5", file: "src/domain/balanceLabels.ts", allow: ["gen"] },
-];
+export const KNOWN_VIOLATIONS = [];
 
 // 検査しない: テスト(結合テストは複数の段をまたいで組み立てる)と、画面の登録 *.screen.tsx
 // (screens の段なので app・shared を import してよい)。
@@ -82,8 +66,8 @@ const toRule = (groups) => ({
 });
 
 /** 層の規則を、例外のファイルだけ allow を抜いた形で出す。 */
-function layerConfigs(layerFiles, groups) {
-  const exceptions = KNOWN_VIOLATIONS.filter((e) => layerFiles.some((f) => matches(f, e.file)));
+function layerConfigs(layerFiles, groups, knownViolations) {
+  const exceptions = knownViolations.filter((e) => layerFiles.some((f) => matches(f, e.file)));
   const byFile = new Map();
   for (const e of exceptions) {
     byFile.set(e.file, [...(byFile.get(e.file) ?? []), ...e.allow]);
@@ -109,10 +93,15 @@ function matches(layerGlob, file) {
   return file.startsWith(prefix);
 }
 
-export const importBoundaryConfigs = [
-  ...FEATURES.flatMap((f) => layerConfigs([`src/${f}/**/*.{ts,tsx}`], featureGroups(f))),
-  ...SHARED.flatMap((d) => {
-    const groups = d === "domain" ? [...sharedGroups(), domainGenGroup] : sharedGroups();
-    return layerConfigs([`src/${d}/**/*.{ts,tsx}`], groups);
-  }),
-];
+/** 例外一覧から規則を組み立てる(例外の仕組みはテストで架空の一覧を渡して確かめる)。 */
+export function buildImportBoundaryConfigs(knownViolations) {
+  return [
+    ...FEATURES.flatMap((f) => layerConfigs([`src/${f}/**/*.{ts,tsx}`], featureGroups(f), knownViolations)),
+    ...SHARED.flatMap((d) => {
+      const groups = d === "domain" ? [...sharedGroups(), domainGenGroup] : sharedGroups();
+      return layerConfigs([`src/${d}/**/*.{ts,tsx}`], groups, knownViolations);
+    }),
+  ];
+}
+
+export const importBoundaryConfigs = buildImportBoundaryConfigs(KNOWN_VIOLATIONS);

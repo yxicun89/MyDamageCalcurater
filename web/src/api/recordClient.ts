@@ -1,8 +1,8 @@
 // P5-5c/P5-5d: 記録 API(record-svc)のクライアント(ADR-0317 §1、ADR-0318 §1)。teamClient.ts と同じ流儀:
 // 例外を投げず、常に RecordResult<T>(判別 union)で返す。型はルートの api/openapi.gen.ts を使う。
 
-import type { ClientIds } from "../api/clientIds";
-import type { components } from "../api/openapi.gen";
+import type { ClientIds } from "./clientIds";
+import type { components } from "./openapi.gen";
 import { recordClientText } from "../i18n/ja";
 
 type Schemas = components["schemas"];

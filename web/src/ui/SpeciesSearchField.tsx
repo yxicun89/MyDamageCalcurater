@@ -13,7 +13,7 @@ import {
 } from "../master/onlineSource";
 import type { MasterSpeciesResolution, MasterSpeciesSearch, MasterSpeciesSummary } from "../master/types";
 import { PokemonIcon } from "../images/PokemonIcon";
-import { HelpButton } from "../ui/HelpButton";
+import { HelpButton } from "./HelpButton";
 import "./SpeciesSearchField.css";
 
 export interface SpeciesSearchFieldProps {

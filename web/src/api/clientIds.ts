@@ -4,7 +4,7 @@
 // 端末 ID は localStorage に保存して使い回し、セッション ID は呼び出しごと(ページを開くたび)に新しくする。
 // localStorage が使えない環境(プライベートブラウズ等)でも失敗させず、端末 ID もページごとの値で代える。
 
-import { defaultStorage, type StorageLike } from "../app/storage";
+import { defaultStorage, type StorageLike } from "./storage";
 
 /** 全リクエストに付ける端末 ID・セッション ID(ADR-0301 §3)。 */
 export interface ClientIds {

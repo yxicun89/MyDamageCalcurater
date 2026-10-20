@@ -7,7 +7,7 @@ import type { components } from "../api/openapi.gen";
 import { PokemonIcon } from "../images/PokemonIcon";
 import { Icon } from "../ui/Icon";
 import { calcHistoryText } from "../i18n/favorites";
-import type { RecordClient, RecordError } from "../record/recordClient";
+import type { RecordClient, RecordError } from "../api/recordClient";
 import { historyEntryAsFavorite } from "./calcHistoryFavorite";
 
 type Schemas = components["schemas"];

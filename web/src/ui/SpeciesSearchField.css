@@ -1,5 +1,5 @@
 /*
- * 種族の検索欄(screens/SpeciesSearchField.tsx。ADR-0304 A-10・A-12)。色は必ず tokens.css の CSS 変数
+ * 種族の検索欄(ui/SpeciesSearchField.tsx。ADR-0304 A-10・A-12)。色は必ず tokens.css の CSS 変数
  * (--*)で参照し、ここに 16 進の色リテラルを書かない(web/src/styles/noColorLiterals.test.ts)。
  * 常時動くアニメーションは置かない(CLAUDE.md ドメイン規約、web/src/styles/motion.test.ts)。
  */

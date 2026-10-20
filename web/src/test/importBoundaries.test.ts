@@ -5,17 +5,19 @@ import { resolve } from "node:path";
 import { Linter } from "eslint";
 import tseslint from "typescript-eslint";
 import { describe, expect, it } from "vitest";
-import { importBoundaryConfigs, KNOWN_VIOLATIONS } from "../../eslint.boundaries.js";
+import {
+  buildImportBoundaryConfigs,
+  importBoundaryConfigs,
+  KNOWN_VIOLATIONS,
+} from "../../eslint.boundaries.js";
 
 const webRoot = resolve(import.meta.dirname, "../..");
 
-function restricted(filename: string, code: string): string[] {
+function restricted(filename: string, code: string, configs = importBoundaryConfigs): string[] {
   const linter = new Linter({ configType: "flat", cwd: webRoot });
-  const messages = linter.verify(
-    code,
-    [{ languageOptions: { parser: tseslint.parser } }, ...importBoundaryConfigs],
-    { filename: resolve(webRoot, filename) },
-  );
+  const messages = linter.verify(code, [{ languageOptions: { parser: tseslint.parser } }, ...configs], {
+    filename: resolve(webRoot, filename),
+  });
   return messages.filter((m) => m.ruleId === "no-restricted-imports").map((m) => m.message);
 }
 
@@ -44,13 +46,25 @@ describe("import の向きの検査", () => {
   });
 
   it("凍結した例外は規則を外した形でだけ許す(別の違反は検出する)", () => {
-    const [known] = KNOWN_VIOLATIONS;
-    expect(known).toBeDefined();
+    // W1・W2 で例外一覧は空になったため、仕組みは架空の例外で確かめる。
+    const configs = buildImportBoundaryConfigs([
+      { wave: "W1", file: "src/adjust/AdjustScreen.tsx", allow: ["screens"] },
+    ]);
     // src/adjust/AdjustScreen.tsx は screens だけ許す。app は禁止のまま。
     expect(
-      restricted("src/adjust/AdjustScreen.tsx", 'import { x } from "../screens/MovePicker";'),
+      restricted("src/adjust/AdjustScreen.tsx", 'import { x } from "../screens/MovePicker";', configs),
     ).toHaveLength(0);
-    expect(restricted("src/adjust/AdjustScreen.tsx", 'import { x } from "../app/storage";')).toHaveLength(1);
+    expect(
+      restricted("src/adjust/AdjustScreen.tsx", 'import { x } from "../app/storage";', configs),
+    ).toHaveLength(1);
+    // 例外の無い実際の設定では、同じ import を検出する。
+    expect(
+      restricted("src/adjust/AdjustScreen.tsx", 'import { x } from "../screens/MovePicker";'),
+    ).toHaveLength(1);
+  });
+
+  it("既知の違反(W1〜W5)は解消済みで、例外一覧は空", () => {
+    expect(KNOWN_VIOLATIONS).toEqual([]);
   });
 
   it("凍結した例外のファイルは実在する(解消したら一覧から消す)", () => {

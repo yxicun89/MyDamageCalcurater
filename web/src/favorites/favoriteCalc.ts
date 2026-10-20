@@ -21,6 +21,7 @@ import { itemsForRole } from "../domain/itemRoles";
 import { megaItemLock, megaStoneItemIds } from "../domain/mega";
 import { damagingLearnsetMoves } from "../domain/moves";
 import { BATTLE_LEVEL, NEUTRAL_NATURE, selectableAbilities } from "../domain/requests";
+import type { FavoriteRestoreIssue, FavoriteRestoreSide as Side } from "../domain/favoriteRestoreIssue";
 import type { Ability, BattleState, Move, MoveCategory } from "../engine/types";
 import type { MasterItem, MasterNature, MasterSpecies } from "../master/types";
 
@@ -61,28 +62,13 @@ export interface FavoriteRestoreLookup {
   readonly natures: readonly MasterNature[];
 }
 
+export type { FavoriteRestoreIssue };
+
 /** 画面に渡す復元の要求。token が変わったときだけ適用する(同じお気に入りでも token が進めばもう一度戻す)。 */
 export interface FavoriteRestoreRequest {
   readonly token: number;
   readonly favorite: Favorite;
 }
-
-type Side = "attacker" | "defender";
-
-/** 戻せなかった・反映しなかった項目。 */
-export type FavoriteRestoreIssue =
-  | { readonly kind: "species"; readonly side: Side; readonly id: string }
-  | { readonly kind: "move"; readonly id: string }
-  | { readonly kind: "item"; readonly side: Side; readonly id: string }
-  | { readonly kind: "ability"; readonly side: Side; readonly id: string }
-  | { readonly kind: "nature"; readonly id: string }
-  | {
-      readonly kind: "megaItem";
-      readonly side: Side;
-      readonly savedItemId: string;
-      readonly lockedItemId: string;
-    }
-  | { readonly kind: "ignored"; readonly field: string };
 
 export interface FavoriteCalcOfInput {
   readonly state: FavoriteCalcState;

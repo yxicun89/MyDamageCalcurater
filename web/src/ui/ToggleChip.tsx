@@ -3,7 +3,7 @@
 // 入力そのものは残す(role・名前・キーボード操作はネイティブのまま)。
 
 import type { ReactElement } from "react";
-import { Icon } from "../ui/Icon";
+import { Icon } from "./Icon";
 
 interface ToggleChipProps {
   readonly type: "checkbox" | "radio";

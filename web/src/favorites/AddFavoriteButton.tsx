@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { components } from "../api/openapi.gen";
 import { favoritesCalcText } from "../i18n/favorites";
-import type { RecordClient, RecordError } from "../record/recordClient";
+import type { RecordClient, RecordError } from "../api/recordClient";
 
 type FavoriteInput = components["schemas"]["FavoriteInput"];
 

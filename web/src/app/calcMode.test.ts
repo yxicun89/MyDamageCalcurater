@@ -3,7 +3,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { CALC_MODE_STORAGE_KEY, DEFAULT_CALC_MODE, loadCalcMode, saveCalcMode } from "./calcMode";
-import type { StorageLike } from "./storage";
+import type { StorageLike } from "../api/storage";
 
 const throwingStorage: StorageLike = {
   getItem() {

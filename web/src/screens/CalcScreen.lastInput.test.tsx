@@ -11,7 +11,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeAll, describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { LAST_CALC_INPUT_STORAGE_KEY, loadLastCalcInput, saveLastCalcInput } from "../app/lastCalcInput";
-import type { StorageLike } from "../app/storage";
+import type { StorageLike } from "../api/storage";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
 import { createFakeEngine } from "../test/fakeEngine";

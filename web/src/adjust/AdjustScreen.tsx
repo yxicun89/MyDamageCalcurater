@@ -57,9 +57,9 @@ import type {
   MasterSpeciesResolution,
   MasterSpeciesSearch,
 } from "../master/types";
-import { MegaItemReason } from "../screens/MegaItemReason";
-import { SpeciesSearchField } from "../screens/SpeciesSearchField";
-import { MovePicker } from "../screens/MovePicker";
+import { MegaItemReason } from "../ui/MegaItemReason";
+import { SpeciesSearchField } from "../ui/SpeciesSearchField";
+import { MovePicker } from "../ui/MovePicker";
 import { PokemonIcon } from "../images/PokemonIcon";
 import { HelpButton } from "../ui/HelpButton";
 import { SegmentedControl } from "../ui/SegmentedControl";

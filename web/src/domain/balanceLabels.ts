@@ -3,18 +3,24 @@
 // Web で計算し直さない(ADR-0303 §1)。語は応答の category(DefenseCategory)から選び、値の範囲を
 // Web 側で判定し直さない(balance-svc が既に判定済み)。
 
-import { balanceLabelText } from "../i18n/ja";
-import type { components } from "../api/balance.gen";
+// 型は domain 側に持ち、通信の生成型(api/balance.gen)を import しない(ADR-0811 W5)。値の範囲は語の表の
+// キーから取る。生成型の値が増えたときは、渡す側(balance/)の型検査と balanceLabels.test.ts で気づく。
 
-type Schemas = components["schemas"];
+import { balanceLabelText } from "../i18n/ja";
+
+/** 防御相性の区分(balance-svc の DefenseCategory と同じ値)。 */
+export type DefenseCategory = keyof typeof balanceLabelText.defenseCategoryWord;
+
+/** 攻撃範囲の倍率(balance-svc の CoverageMultiplier と同じ値。null は攻撃技なし)。 */
+export type CoverageMultiplier = keyof typeof balanceLabelText.coverageWord | null;
 
 /** 防御相性の倍率表示(「×2 弱点」のように文字で出す。DefenseMultiplier は生成型では string)。 */
-export function defenseMultiplierLabel(multiplier: string, category: Schemas["DefenseCategory"]): string {
+export function defenseMultiplierLabel(multiplier: string, category: DefenseCategory): string {
   return `×${multiplier} ${balanceLabelText.defenseCategoryWord[category]}`;
 }
 
 /** 攻撃範囲の倍率表示(「×2 抜群」のように文字で出す。攻撃技が無ければ null で「攻撃技なし」)。 */
-export function coverageMultiplierLabel(multiplier: Schemas["CoverageMultiplier"]): string {
+export function coverageMultiplierLabel(multiplier: CoverageMultiplier): string {
   if (multiplier === null) {
     return balanceLabelText.coverageNoAttackMove;
   }

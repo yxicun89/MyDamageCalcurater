@@ -11,8 +11,8 @@
 // 架空の ID だけを使う。
 
 import { describe, expect, test, vi } from "vitest";
-import type { ClientIds } from "../api/clientIds";
-import type { components } from "../api/openapi.gen";
+import type { ClientIds } from "./clientIds";
+import type { components } from "./openapi.gen";
 import { RECORD_PATHS, RECORD_UNAVAILABLE_CODE, createRecordClient } from "./recordClient";
 
 type Schemas = components["schemas"];

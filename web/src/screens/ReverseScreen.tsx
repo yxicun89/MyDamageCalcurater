@@ -108,12 +108,12 @@ import { prefersReducedMotion } from "../ui/motion";
 import { PokemonCard } from "../ui/PokemonCard";
 import { SegmentedControl } from "../ui/SegmentedControl";
 import { typeAccentStyle } from "../ui/typeAccent";
-import { MegaItemReason } from "./MegaItemReason";
-import { ToggleChip } from "./ToggleChip";
-import { SpeciesSearchField } from "./SpeciesSearchField";
-import { useSpeciesResolutions } from "./speciesResolution";
-import { AbilitySelect, type AbilitySelectConfig } from "./AbilitySelect";
-import { MovePicker } from "./MovePicker";
+import { MegaItemReason } from "../ui/MegaItemReason";
+import { ToggleChip } from "../ui/ToggleChip";
+import { SpeciesSearchField } from "../ui/SpeciesSearchField";
+import { useSpeciesResolutions } from "../ui/speciesResolution";
+import { AbilitySelect, type AbilitySelectConfig } from "../ui/AbilitySelect";
+import { MovePicker } from "../ui/MovePicker";
 import "./ReverseScreen.css";
 
 /**

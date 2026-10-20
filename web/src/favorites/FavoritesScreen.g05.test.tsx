@@ -12,7 +12,7 @@ import { act, render, screen, within } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { calcHistoryText, favoritesScreenText } from "../i18n/favorites";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { FavoritesScreen } from "./FavoritesScreen";
 
 type Schemas = components["schemas"];

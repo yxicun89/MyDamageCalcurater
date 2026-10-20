@@ -5,7 +5,7 @@
 // calcMode.ts と同じ流儀: ストレージが無い・例外・壊れた値・版違いは失敗させず、保存が無いものとして扱う。
 
 import type { components } from "../api/openapi.gen";
-import { defaultStorage, type StorageLike } from "./storage";
+import { defaultStorage, type StorageLike } from "../api/storage";
 
 type FavoriteInput = components["schemas"]["FavoriteInput"];
 type Favorite = components["schemas"]["Favorite"];

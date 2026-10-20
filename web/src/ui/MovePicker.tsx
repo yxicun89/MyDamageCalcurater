@@ -9,8 +9,8 @@ import type { Move } from "../engine/types";
 import { favoritesRestoreText } from "../i18n/favorites";
 import { calcScreenText, isTypeId, typeNameJa } from "../i18n/ja";
 import { movePickerText } from "../i18n/movePicker";
-import { Icon, type IconName } from "../ui/Icon";
-import { TypeBadge } from "../ui/TypeBadge";
+import { Icon, type IconName } from "./Icon";
+import { TypeBadge } from "./TypeBadge";
 import "./MovePicker.css";
 
 const CATEGORY_ICON: Record<Move["category"], IconName> = {

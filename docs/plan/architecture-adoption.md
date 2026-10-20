@@ -249,7 +249,7 @@ services/<svc>/
   - 着手する前日までに `docs/ai-shared/decisions/` に「<サービス> の形をそろえる PR を出す」と 1 件足し、他レーンが同じサービスを触る PR を控えられるようにする。
   - ファイルの移動は `git mv` で行い、移動と中身の変更を同じコミットに混ぜない(同じ PR の中で「移動のコミット」→「app への寄せのコミット」)。git が名前の変更として追えるので、他のブランチは `git merge origin/main` で取り込める。
   - PR は短く保ち、CI が緑になったらその日のうちにマージする(長く開いたままにしない)。
-  - Web の共有部品の移動(W1)は一時的な再エクスポートを残し、他レーンは自分の次の PR で import を差し替える。
+  - Web の共有部品の移動(W1)は一時的な再エクスポートを残し、他レーンは自分の次の PR で import を差し替える(実施時は開いている Web の PR が無く、全 import を同じ PR で差し替えたため残さなかった。ADR-0811)。
 - 担当レーンが移すのは自分のサービスだけ。他レーンのファイルは触らない。
 
 | 段階 | 担当レーン | 内容 | 受け入れ条件(機械で確かめる) |
@@ -264,7 +264,7 @@ services/<svc>/
 | S7 gateway(**完了 2026-10-12・ADR-0811**) | API(データレーンが代行) | `httpapi` → `adapters`。`domain`・`app` は `doc.go` だけ(転送だけ) | gateway のテスト・k3d スモークが通る |
 | S8 balance(**完了 2026-10-21・ADR-0423。データレーンが代行**) | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
 | S9 speed(**完了 2026-10-21・ADR-0811。データレーンが代行**) | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
-| W0〜W2 Web(**W0 完了 2026-10-21〈データレーンが代行。`web/eslint.boundaries.js`・テストは `src/test/importBoundaries.test.ts`〉。W1・W2 は未着手**) | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js`(規則と例外一覧は `eslint.boundaries.js`) に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
+| W0〜W2 Web(**W0 完了 2026-10-21〈データレーンが代行。`web/eslint.boundaries.js`・テストは `src/test/importBoundaries.test.ts`〉。W1・W2 完了 2026-10-21〈データレーンが代行。共有部品は `ui/`、例外一覧は空。再エクスポートは残さない(ADR-0811 段階の記録)〉**) | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js`(規則と例外一覧は `eslint.boundaries.js`) に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
 | I0 iOS | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る |
 
 **順番の理由**: S0 で「新しいサービス・新しい機能は最初から形がそろう」状態を先に作る(コンボ計算などはここから)。S1 は小さく、S4・S6 の前提。

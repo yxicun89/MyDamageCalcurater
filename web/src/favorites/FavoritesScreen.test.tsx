@@ -17,7 +17,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import type { components } from "../api/openapi.gen";
 import { favoritesScreenText } from "../i18n/favorites";
-import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordResult } from "../record/recordClient";
+import { MAX_FAVORITES_PER_DEVICE, type RecordClient, type RecordResult } from "../api/recordClient";
 import { FavoritesScreen } from "./FavoritesScreen";
 
 type Favorite = components["schemas"]["Favorite"];

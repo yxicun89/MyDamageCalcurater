@@ -25,10 +25,7 @@ describe("並びの切り替えの廃止", () => {
     expect(existsSync(new URL(`./${path}`, import.meta.url))).toBe(false);
   });
 
-  test.each(["screens/MovePicker.tsx", "screens/MovePicker.css", "domain/moveOrder.ts"])(
-    "%s がある",
-    (path) => {
-      expect(existsSync(new URL(`./${path}`, import.meta.url))).toBe(true);
-    },
-  );
+  test.each(["ui/MovePicker.tsx", "ui/MovePicker.css", "domain/moveOrder.ts"])("%s がある", (path) => {
+    expect(existsSync(new URL(`./${path}`, import.meta.url))).toBe(true);
+  });
 });

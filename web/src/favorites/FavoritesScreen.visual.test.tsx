@@ -11,7 +11,7 @@ import type { components } from "../api/openapi.gen";
 import { favoritesRestoreText, favoritesScreenText } from "../i18n/favorites";
 import { exampleMasterSource } from "../master/exampleSource";
 import type { MasterData } from "../master/types";
-import type { RecordClient, RecordResult } from "../record/recordClient";
+import type { RecordClient, RecordResult } from "../api/recordClient";
 import { createFakeEngine } from "../test/fakeEngine";
 import { CalcScreen } from "../screens/CalcScreen";
 import { FavoritesScreen } from "./FavoritesScreen";
