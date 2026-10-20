@@ -9,3 +9,4 @@
 - [x] DOC-speed
 - [x] DOC-ios: `ios/README.md`
 - [x] DOC-arch
+- [x] DOC-refresh-2026-10-20: 入口の文書(CLAUDE.md・AGENTS.md・README.md・docs/README.md・overview・architecture・verify・CURRENT_STATE・COORDINATION)を現状のコードに合わせる。判定の廃止(ADR-0715)・record/team/NATS の実装済み・ヘキサゴナル・read model・監視を入れていないことを反映(ユーザー依頼)
