@@ -27,6 +27,27 @@ k3d_lock_release() {
   fi
 }
 
+# 古いロックの回収。回収専用ロック(<dir>.reclaim)を mkdir で取れた 1 者だけが、その中で pid を読み直して
+# 死亡(または pid 無しで古い)を再確認してから消す。回収者以外は $dir を消さず、移動もしない(入れ子にならない)。
+# 回収者が死んで .reclaim だけ残った場合は、1 分以上たったものを消す。
+k3d_lock_reclaim() {
+  local label="$1" dir="$2" rdir pid
+  rdir="$dir.reclaim"
+  if mkdir "$rdir" 2>/dev/null; then
+    pid="$(cat "$dir/pid" 2>/dev/null || true)"
+    if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+      echo "$label: 保持者(pid $pid)が終了しているロックを解除します" >&2
+      rm -rf "$dir"
+    elif [ -z "$pid" ] && [ -d "$dir" ] && [ -n "$(find "$dir" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+      echo "$label: pid の無い古いロックを解除します" >&2
+      rm -rf "$dir"
+    fi
+    rmdir "$rdir" 2>/dev/null || true
+  elif [ -d "$rdir" ] && [ -n "$(find "$rdir" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
+    rmdir "$rdir" 2>/dev/null || true
+  fi
+}
+
 k3d_lock_acquire() {
   local label="${1:-k3d}" dir waited=0 timeout poll holder_pid holder_info
   dir="$(k3d_lock_dir)"
@@ -35,22 +56,10 @@ k3d_lock_acquire() {
   while ! mkdir "$dir" 2>/dev/null; do
     holder_pid="$(cat "$dir/pid" 2>/dev/null || true)"
     holder_info="$(cat "$dir/info" 2>/dev/null || true)"
-    if [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; then
-      # 読んでから消すまでに別のセッションが新しく取ることがあるので、別名へ移して(原子的)pid を確かめてから消す。
-      if mv "$dir" "$dir.stale.$$" 2>/dev/null; then
-        if [ "$(cat "$dir.stale.$$/pid" 2>/dev/null || true)" = "$holder_pid" ]; then
-          echo "$label: 保持者(pid $holder_pid)が終了しているロックを解除します" >&2
-          rm -rf "$dir.stale.$$"
-        elif ! mv "$dir.stale.$$" "$dir" 2>/dev/null; then
-          rm -rf "$dir.stale.$$"
-        fi
-      fi
-      continue
-    fi
-    # mkdir 直後に pid を書く前の一瞬を除き、pid が書かれないまま 1 分以上残るロックは古いとみなす。
-    if [ -z "$holder_pid" ] && [ -d "$dir" ] && [ -n "$(find "$dir" -maxdepth 0 -mmin +1 2>/dev/null)" ]; then
-      echo "$label: pid の無い古いロックを解除します" >&2
-      rm -rf "$dir"
+    # 保持者が死んでいる、または pid が書かれないまま 1 分以上残っているロックは、回収専用ロックを取れた 1 者だけが消す。
+    if { [ -n "$holder_pid" ] && ! kill -0 "$holder_pid" 2>/dev/null; } \
+      || { [ -z "$holder_pid" ] && [ -d "$dir" ] && [ -n "$(find "$dir" -maxdepth 0 -mmin +1 2>/dev/null)" ]; }; then
+      k3d_lock_reclaim "$label" "$dir"
       continue
     fi
     if [ "$waited" -ge "$timeout" ]; then
@@ -79,7 +88,8 @@ k3d_lock_run() {
     return 0
   fi
   k3d_lock_acquire "$label" || exit 1
-  trap 'k3d_lock_release; exit 143' INT TERM
+  trap 'k3d_lock_release; exit 130' INT
+  trap 'k3d_lock_release; exit 143' TERM
   K3D_LOCK_HELD=1 "$@" || status=$?
   trap - INT TERM
   k3d_lock_release

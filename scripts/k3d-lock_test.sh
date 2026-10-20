@@ -61,6 +61,21 @@ out=$(K3D_SCRIPT_LOCK_TIMEOUT=10 bash -c "source '$LIB'; k3d_lock_run t5 echo re
 rc=$?
 if [ "$rc" = 0 ] && grep -q reclaimed <<<"$out" && grep -q "解除します" <<<"$out" && [ ! -e "$K3D_SCRIPT_LOCK_DIR" ]; then ok "死んだ保持者のロックを回収する"; else ng "回収 rc=$rc out=$out"; fi
 
+# 5b. 死んだ保持者のロックがある状態で 6 並列に取りに行っても、同時に保持するのは常に 1 者(in/out が厳密に交互)
+mkdir "$K3D_SCRIPT_LOCK_DIR"
+sleep 0.1 &
+dead=$!
+wait "$dead"
+printf '%s' "$dead" >"$K3D_SCRIPT_LOCK_DIR/pid"
+log="$work/par.log"
+: >"$log"
+for _ in 1 2 3 4 5 6; do
+  K3D_SCRIPT_LOCK_TIMEOUT=60 bash -c "source '$LIB'; k3d_lock_run par bash -c 'echo in >>\"$log\"; sleep 0.3; echo out >>\"$log\"'" >/dev/null 2>&1 &
+done
+wait
+expected=$(printf 'in\nout\n%.0s' 1 2 3 4 5 6)
+if [ "$(cat "$log")" = "$expected" ] && [ ! -e "$K3D_SCRIPT_LOCK_DIR" ] && [ ! -e "$K3D_SCRIPT_LOCK_DIR.reclaim" ]; then ok "回収を伴う 6 並列でも二重取得しない"; else ng "並列: $(tr '\n' ' ' <"$log") 残り=$(ls "$work")"; fi
+
 # 6. SIGTERM で終了してもロックを解放する
 bash -c "source '$LIB'; k3d_lock_run t6 sleep 30" >/dev/null 2>&1 &
 runner=$!
