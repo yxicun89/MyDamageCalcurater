@@ -47,4 +47,5 @@ Go のサービスは「手順がハンドラに溜まる」「サービスご�
 | S8 | balance の internal/balance を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(判断は ADR-0423) | 2026-10-21 完了(データレーンが代行。balance を未移行の一覧から外した) |
 | S9 | speed の internal/speed を domain へ、master・httpapi・httpguard・httpmetrics を adapters へ。app は doc.go だけ(手順が無い)。振る舞い・契約 0.7.0・engine との一致テストは変えない | 2026-10-21 完了(データレーンが代行。speed を未移行の一覧から外した) |
 | S2 | judge の移行(CB-7 で judge を廃止するため対象外) | 対象外 |
-| W0〜W2・I0 | Web の import の向きの検査、iOS のテスト | 未着手 |
+| W0 | Web の import の向きの検査。`web/eslint.boundaries.js`(`no-restricted-imports`・依存の追加なし)に §5.2 の規則、既知の違反(W1〜W5)は同ファイルの `KNOWN_VIOLATIONS` に例外として凍結。テスト(`*.test.*`)と画面の登録(`*.screen.tsx`)は検査しない。確かめ方: `web/src/test/importBoundaries.test.ts`(例外外の違反が失敗・許す向きは通る・例外ファイルの実在)と `npm run lint` | 2026-10-21 完了(データレーンが代行。コードの移動はしていない) |
+| W1・W2・I0 | `screens/` の共有部品を `ui/` へ(W1)、W2〜W5 の解消(W2)、iOS のテスト(I0) | 未着手 |
