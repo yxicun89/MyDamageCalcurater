@@ -265,7 +265,7 @@ services/<svc>/
 | S8 balance(**完了 2026-10-21・ADR-0423。データレーンが代行**) | タイプバランス | `internal/balance` → `domain`。`master`・`httpapi`・`httpguard`・`httpmetrics` → `adapters`。app は薄い | `go test ./services/balance/...` が通る。GitOps の overlay は image だけなので影響なし |
 | S9 speed(**完了 2026-10-21・ADR-0811。データレーンが代行**) | 素早さ | balance と同じ | `go test ./services/speed/...` が通る |
 | W0〜W2 Web | Web(W1 の import 差し替えは各レーン) | W0: `eslint.config.js` に §5.2 の規則と例外一覧。W1: `screens/` の共有部品を `ui/` へ(再エクスポートを残す)。W2: W2〜W5 を解消 | `npm run lint`(eslint + prettier)・vitest・Playwright が通る。最後に例外一覧が空 |
-| I0 iOS | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る |
+| I0 iOS(**完了 2026-10-21。データレーンが代行**。`GeneratedImportRulesTests`。既知の違反なし) | iOS | §5.3 のテスト 1 本と README の 1 節 | `swift test` と `make ios-test` が通る |
 
 **順番の理由**: S0 で「新しいサービス・新しい機能は最初から形がそろう」状態を先に作る(コンボ計算などはここから)。S1 は小さく、S4・S6 の前提。
 大きいサービスは、手順がハンドラに一番溜まっていて担当が 1 レーンで閉じる judge で型を決め、calc・record・pokedex がそれをなぞる。

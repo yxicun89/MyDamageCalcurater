@@ -90,4 +90,5 @@ Next(後続): (a) 判定の素早さの反映/無視(`*SpeedApplied`/`*SpeedIgno
 運用メモ: UI テストの 2 並列(ゲート既定)は AX5 系が毎回別の 1〜2 件落ちたため、直列(`IOS_TEST_PARALLEL=0`)で流すと安定した(約 1.5 時間)。ナビゲーションバーの下に潜った要素を上から 25% で押すとバーに当たる不具合は、テスト補助で引き戻して直した(`settleBelowNavigationBar`)。高さの検査は 36pt ちょうどだと浮動小数誤差で 35.99… になるため、アイコンだけのボタンと入力欄は 37pt を渡す。
 2026-10-15(残りの実施): #786 検索シートの技の分類アイコンを `PopSymbol.moveCategory` に一本化・#790 I-ios-21 素早さ画面の「この相手で連続技を計算」から計算タブの連続技へ引き継ぎ(ADR-0542。ルートの token〈`AppNavigationModel.openCombo`〉・計算画面は種族だけ入れる・連続技の節は自分の素早さを上書き・スカーフは反映せず 1 行・引き継ぎは画面の取り消しから切り離して最後まで走らせる)をマージ。
 運用メモ(追加): ゲートの `make ios-test-ui` が実行中に SIGTERM(`Terminated: 15`)で 2 回中断した原因は、実装担当の `pkill -f xcodebuild test` が他セッションのテストを巻き込んだこと。テストを止めたいときは自分の pid だけを kill する(`pkill` で xcodebuild・simctl を名指ししない)。
+Status(2026-10-21 データレーンが代行): ヘキサゴナル採用 I0 完了。`GeneratedImportRulesTests`(`API*.swift` 以外は生成モジュールを import しない。既知の違反なし)。
 Next: 実機での目視確認(`docs/verify.md`。ランクのメーターの縦スクロール・VoiceOver の adjustable・G-05 全画面・連続技・素早さの折りたたみ・素早さ → 計算の引き継ぎ)。
