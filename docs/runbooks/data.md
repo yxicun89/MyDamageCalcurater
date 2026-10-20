@@ -166,6 +166,14 @@ kubectl -n pokecalc delete job pokedex-import-manual-race1 pokedex-import-manual
 ```
 確認: 両方とも `job.batch "pokedex-import-manual-raceN" deleted` と表示される。
 
+## Mac のスリープと CronJob の取りこぼし(ADR-0104 追記)
+
+`pokedex-import` は週1回(土曜 12:00 JST)で、`startingDeadlineSeconds: 518400`(6日)・`concurrencyPolicy: Forbid`。
+Mac(k3d)が予定時刻に寝ていても、6日以内に起きれば1回だけ追いついて走る。期限を 12 時間未満に短くすると夜間のスリープで飛ぶので短くしない
+(`services/pokedex/importer/cronjob_layout_test.go` が 12 時間以上 7 日未満を固定している)。
+起きた直後の実行が手動の import Job と重なっても、排他は `tools/importer/cronjob.sh` の flock(ADR-0109、上の §6)で働き、片方は何もせず終わる。
+追いついた回が不要なら、その Job を削除すればよい(投入は版が同じなら DB を変えない)。
+
 ## importer の PVC の容量(issue #111・ADR-0104 追記)
 
 CronJob は取得の前に PVC の空きを確かめ(予約容量 既定 400 MiB)、足りなければ終了コード 3 で止まる(取得・DB 更新・prune のどれにも進まない)。

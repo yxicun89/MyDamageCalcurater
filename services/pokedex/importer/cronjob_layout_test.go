@@ -167,8 +167,9 @@ func TestImportCronJobSchedule(t *testing.T) {
 	if s.ConcurrencyPolicy != "Forbid" {
 		t.Errorf("concurrencyPolicy = %q, want Forbid", s.ConcurrencyPolicy)
 	}
-	if !intIn(s.StartingDeadlineSeconds, 1, 7*24*3600-1) {
-		t.Errorf("startingDeadlineSeconds は 0 より大きく7日未満(次の予定と重ねない): %v", s.StartingDeadlineSeconds)
+	// 下限 12 時間: ノート PC の夜間スリープで予定時刻に止まっていても、起きたあとに追いつけるようにする。
+	if !intIn(s.StartingDeadlineSeconds, 12*3600, 7*24*3600-1) {
+		t.Errorf("startingDeadlineSeconds は 12時間以上7日未満(スリープで飛ばさない・次の予定と重ねない): %v", s.StartingDeadlineSeconds)
 	}
 	if !intIn(s.SuccessfulJobsHistoryLimit, 1, 5) || !intIn(s.FailedJobsHistoryLimit, 1, 5) {
 		t.Errorf("履歴の保持数は 1〜5: successful=%v failed=%v", s.SuccessfulJobsHistoryLimit, s.FailedJobsHistoryLimit)
