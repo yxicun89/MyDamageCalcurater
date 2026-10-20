@@ -9,6 +9,9 @@
 # balance・speed は実データの read model(data/generated/readmodel。`make pokedex-export` の出力)で入れる。
 # 無ければ balance・speed は入れ替えず、理由を表示して最後に非ゼロで終わる(黙って成功扱いにしない)。
 set -euo pipefail
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(image import の衝突防止。scripts/lib/k3d-lock.sh)
+source "$(dirname "$0")/lib/k3d-lock.sh"
+k3d_lock_run k3d-deploy-latest "$0" "$@"
 
 cd "$(git rev-parse --show-toplevel)"
 # API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)

@@ -2,6 +2,9 @@
 # k3d クラスタを作成(なければ)し、ローカル overlay を適用する。
 # サービスの Deployment はフェーズ進行に応じて base/kustomization.yaml へ追加される。
 set -euo pipefail
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(image import の衝突防止。scripts/lib/k3d-lock.sh)
+source "$(dirname "$0")/lib/k3d-lock.sh"
+k3d_lock_run up "$0" "$@"
 cd "$(dirname "$0")/.."
 # API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)
 ./scripts/ensure-gen.sh check

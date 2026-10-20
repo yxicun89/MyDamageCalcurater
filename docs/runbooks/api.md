@@ -150,3 +150,14 @@ kubectl -n pokecalc get tidbinitializer pokecalc -o jsonpath='{.status.phase}{"\
 ```
 確認: `context` が `k3d-pokecalc`、`job/tidb-root-reset-once condition met`、最後の出力が `Completed`、
 `k3d-m2-deploy: NATS・TiDB・record・team を入れた`。原因・背景は docs/adr/0226-api-m2-k3d-deploy.md。
+
+## k3d 操作の排他ロック
+
+k3d を触るスクリプト(`make up`・`make deploy-latest`・`make api-k3d-deploy` 等)は、同じクラスタに対して同時に 1 つだけ動く。
+複数のセッションが同時に流すと k3d のイメージ取り込みで k3d-tools コンテナ名が衝突するため。後から起動した側は
+「他のセッションの k3d 操作が終わるのを待っています」と表示して順番を待つ(既定 30 分でタイムアウトして失敗)。
+
+- ロックの場所: `/tmp/pokecalc-k3d-pokecalc.lock`(`CLUSTER` ごと。`K3D_SCRIPT_LOCK_DIR` で変更、`K3D_SCRIPT_LOCK_TIMEOUT` で待ち秒数)。中の `pid`・`info` が保持者。
+- 保持者のプロセスが死んでいれば、次に取る側が自動で回収する。
+- 他に操作が無いと確かめたうえで待たずに進めるときだけ `K3D_SCRIPT_LOCK_DISABLE=1 make deploy-latest` のように無効化する。
+- 仕組みと決定: `scripts/lib/k3d-lock.sh`・`docs/ai-shared/decisions/2026-10-21-k3d-script-lock.md`。

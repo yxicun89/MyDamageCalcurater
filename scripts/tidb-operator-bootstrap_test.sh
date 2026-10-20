@@ -3,6 +3,7 @@
 # kubectl・curl・shasum・tar・helm は偽物に差し替える(ネットワーク・クラスタに触れない)。
 # 確かめること: アーカイブの sha256 が固定値と違えば helm を呼ばず非ゼロで終わる(fail closed)。一致すれば helm upgrade --install を呼ぶ。
 set -uo pipefail
+export K3D_SCRIPT_LOCK_DISABLE=1 # 実クラスタ用の排他ロックは無効にする(ロック自体は k3d-lock_test.sh で検証)
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 readonly ROOT

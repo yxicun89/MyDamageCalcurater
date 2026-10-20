@@ -20,6 +20,9 @@
 #           RECORD_MIGRATE_IMAGE・TEAM_MIGRATE_IMAGE(migrate Job のイメージ。既定は base の 0.1.0)。
 # 自動テスト: scripts/k3d-m2-deploy_test.sh(make test-scripts)。
 set -euo pipefail
+# 同じクラスタへの k3d 操作を同時に1つにする排他ロック(image import の衝突防止。scripts/lib/k3d-lock.sh)
+source "$(dirname "$0")/lib/k3d-lock.sh"
+k3d_lock_run k3d-m2-deploy "$0" "$@"
 
 cd "$(git rev-parse --show-toplevel)"
 
