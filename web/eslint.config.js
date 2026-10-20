@@ -3,6 +3,8 @@ import globals from "globals";
 import reactHooks from "eslint-plugin-react-hooks";
 import tseslint from "typescript-eslint";
 
+import { importBoundaryConfigs } from "./eslint.boundaries.js";
+
 export default tseslint.config(
   { ignores: ["dist", "public", "node_modules", "playwright-report", "test-results"] },
   {
@@ -22,6 +24,7 @@ export default tseslint.config(
       "@typescript-eslint/restrict-template-expressions": ["error", { allowNumber: true }],
     },
   },
+  ...importBoundaryConfigs,
   {
     files: ["**/*.js", "**/*.mjs"],
     extends: [js.configs.recommended],
