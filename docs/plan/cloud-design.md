@@ -495,6 +495,7 @@ infra/terraform/
 - Q3 の方向: **TiDB は使う・使わないを切り替えられる**ようにし、DB は**クラウドのマネージドサービス**を使う方向(段階ごとの費用は未決)。
 - CD: **Terraform(インフラ)+ Argo CD(アプリ)**。クラウドでは `make deploy-latest` の手動配備を使わない。
 - 併せて直す: issue #237(Argo CD 管理の balance・speed の 503)、監視の導入、calc の起動順依存、単一障害点(gateway 1 台など)。
+- 2026-10-22 追記: ADR-0814 との関係は **B**。record・team は**クラスタ内 TiDB が既定**で、**TiDB Cloud へ切り替え可能**にする(MySQL への切り替えは採らない)。
 
 
 各質問は「推奨」を先頭に置く。記号で答えれば足りる形にしている。
