@@ -13,7 +13,7 @@
 - サービス: gateway・calc・pokedex(マスタ取込を含む)・balance・speed・record・team(k3d。各レーンの overlay は docs/runbooks/)。`make dev` が起動するのは calc と gateway だけ
 - iOS アプリ(SwiftUI。`make ios-test`)
 - 別アプリ「欲しいものリスト」: 欲しいものを画像で並べ、各サイトの目安価格と検索リンクを出す(Web〈PWA〉・iOS・API・夜間の価格取得。[apps/wishlist/README.md](apps/wishlist/README.md))
-- 未実装: `make assets`(画像の変換・配信。終了コード 2)と、k3d の有無で変わる E2E の一部(クラスタ分は `make up` が前提)
+- 画像の変換は `make assets`(手元の画像を WebP と manifest に。画像なしでも成功。ADR-0808)。k3d の有無で E2E の範囲が変わる(クラスタ分は `make up` が前提)
 - 進捗と残りの作業は [docs/plan.md](docs/plan.md)(索引)から辿る区画のファイル `docs/plan/`(状態の正)。要件・テスト・設計の入口は [docs/README.md](docs/README.md)
 
 ## 起動する
@@ -102,7 +102,7 @@ kubectl の現在のコンテキストが `k3d-$CLUSTER` のときだけ既存�
 を追加で実行します。クラスタが無ければスキップして成功しますが、`E2E_REQUIRE_K3D=1` を付けるとスキップせず失敗で
 終わります(リリース前などクラスタ分まで確かめたいとき用)。詳細は [ADR-0306](docs/adr/0306-root-e2e-wiring.md)。
 
-正常終了でも未実装メッセージやテスト 0 件を合格として記録しません(未実装は `make assets` のみ)。
+正常終了でも未実装メッセージやテスト 0 件を合格として記録しません(2026-10-20 時点で未実装のターゲットはありません)。
 
 ## 構成
 
