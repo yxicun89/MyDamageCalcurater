@@ -84,7 +84,7 @@ flowchart LR
 ## サービス内部の構造(ヘキサゴナル)
 
 各サービスの `internal/` は `adapters/`(HTTP・DB・NATS)・`app/`(ユースケース)・`domain/`(純粋なルール)に分ける(ADR-0811。計画は [plan/architecture-adoption.md](plan/architecture-adoption.md))。
-calc・gateway・pokedex・record・team は移行済み。balance・speed は未移行で、`tools/archcheck` の検査対象から外している。
+calc・gateway・pokedex・record・team・balance・speed の全サービスが移行済みで、`tools/archcheck` が形を検査する(未移行の一覧は空)。Web も依存の向きを ESLint で検査する(ADR-0811 W0〜W2)。
 
 ## データの流れ(マスタ)
 

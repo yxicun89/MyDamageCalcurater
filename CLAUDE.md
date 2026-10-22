@@ -33,7 +33,7 @@ services/team/          # 構築(TiDB: team DB)。NATS の計算イベントで�
 services/balance/       # タイプバランス(設計: docs/type-balance-design.md)。read model を読む。Argo CD の GitOps 対象。別 Go モジュール
 services/speed/         # 素早さ比較(設計: docs/speed-design.md)。read model を読む。Argo CD の Application 定義あり。別 Go モジュール
 services/internal/      # サービス間の共有 Go パッケージ(master・api 生成物・dbmigrate・httpguard 等)
-                        # 各サービスの internal/ はヘキサゴナル(adapters/app/domain。ADR-0811)。balance・speed は未移行
+                        # 各サービスの internal/ はヘキサゴナル(adapters/app/domain。ADR-0811)。全サービス移行済み(tools/archcheck で検査)
                         # 判定(services/judge)は 2026-10-15 に廃止(ADR-0715)。機能は calc の連続技と調整の目標へ
 tools/importer/         # マスタの取得(Node。data/generated/ へ。変換・投入は services/pokedex/importer。ADR-0101)
 tools/golden/           # @smogon/calc からテストベクタ生成(Node)
