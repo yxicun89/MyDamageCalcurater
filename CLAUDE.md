@@ -25,18 +25,16 @@ engine/                 # 計算エンジン(純粋Go、I/O・外部依存なし
 engine/cmd/wasm/        # ブラウザ用WASMビルド(syscall/js の登録のみ)
 engine/wasmapi/         # WASM/JS 境界の DTO・検証・エラー整形(純粋。ネイティブでテスト可)
 engine/cmd/wasmexpect/  # Go/WASM 一致テストの期待値生成(ネイティブ Go の開発用ツール)
-services/gateway/       # Echo。クライアントの唯一の入口。画像は GATEWAY_IMAGES_DIR から /images/* で配信(ADR-0808)
-services/pokedex/       # マスタ参照(MySQL)
-services/calc/          # 計算(ステートレス)
-services/balance/       # タイプバランス(設計: docs/type-balance-design.md)
-services/speed/         # 素早さ比較(設計: docs/speed-design.md)
-services/judge/         # 判定。素早さ×ダメージ(設計: docs/judge-design.md)
-services/record/        # 計算イベント・お気に入り(TiDB: record DB)
-services/team/          # 構築(TiDB: team DB)
-services/balance/       # タイプバランス(analyze・coverage。Argo CD の GitOps 対象。services/balance/README.md)
-services/speed/         # 素早さ比較(docs/speed-design.md。gitops overlay と Application 定義あり・実クラスタへは未適用)
-services/judge/         # 素早さ×確定数の判定(docs/judge-design.md。gitops overlay と Application 定義あり・実クラスタへは未適用)
+services/gateway/       # Echo。クライアントの唯一の入口。calc・pokedex・record・team・balance・speed・web へ振り分け。画像は GATEWAY_IMAGES_DIR から /images/* で配信(ADR-0808)
+services/pokedex/       # マスタ参照(MySQL)。calc へ内部 API でマスタを渡し、balance・speed 向けに read model を export
+services/calc/          # 計算(ステートレス)。連続技(/api/calc/combo)・調整の目標もここ。計算イベントを NATS へ発行
+services/record/        # 計算履歴・お気に入り(TiDB: record DB)。NATS の計算イベントを購読
+services/team/          # 構築(TiDB: team DB)。NATS の計算イベントで端末の最終利用日時を更新
+services/balance/       # タイプバランス(設計: docs/type-balance-design.md)。read model を読む。Argo CD の GitOps 対象。別 Go モジュール
+services/speed/         # 素早さ比較(設計: docs/speed-design.md)。read model を読む。Argo CD の Application 定義あり。別 Go モジュール
 services/internal/      # サービス間の共有 Go パッケージ(master・api 生成物・dbmigrate・httpguard 等)
+                        # 各サービスの internal/ はヘキサゴナル(adapters/app/domain。ADR-0811)。全サービス移行済み(tools/archcheck で検査)
+                        # 判定(services/judge)は 2026-10-15 に廃止(ADR-0715)。機能は calc の連続技と調整の目標へ
 tools/importer/         # マスタの取得(Node。data/generated/ へ。変換・投入は services/pokedex/importer。ADR-0101)
 tools/golden/           # @smogon/calc からテストベクタ生成(Node)
 tools/assets/           # 手元画像の WebP 変換と manifest 生成(Node・sharp。ADR-0808)
@@ -88,15 +86,16 @@ apps/wishlist/          # 別アプリ「欲しいものリスト」(Wishlist �
 ```
 make doctor       # 前提ツールの確認(scripts/doctor.sh)
 make up / down    # k3d クラスタ作成+全デプロイ / 削除
-make dev          # k8s を使わずローカルで全サービス起動(高速な開発ループ用)
+make deploy-latest # いまのチェックアウトで全サービスを作り直して k3d へ入れ替える(動作確認の前に毎回)
+make dev          # k8s を使わずローカルで calc と gateway を起動(高速な開発ループ用)
 make gen          # OpenAPI / sqlc のコード生成
-make test         # 実装済みユニットテスト(engine/services。Webは後続)
+make test         # ユニットテスト(engine・golden・services・tools・scripts。Web は make web-test、balance・speed は各ディレクトリ)
 make lint         # Go整形/vet、shell/Node構文
-make build        # 実装済みGoモジュールのビルド
+make build        # Go モジュールのビルド(engine・services・tools。Web は make web-build)
 make golden-generate # 外部実装の期待値を再生成(先にtools/goldenでnpm ci)
 make test-golden  # engine のゴールデンテスト
 make test-all-species # 全ポケモン網羅テスト
-make e2e          # k3d 上のスモーク + Playwright
+make e2e          # Playwright(k3d のコンテキストがあればクラスタ上のスモークも追加)
 make ios-test     # iOS シミュレータでテスト
 make wasm         # engine を WASM にビルドして web/public へ
 make import       # マスタデータ取込
@@ -132,7 +131,7 @@ ADR-0003 の適応を維持する。Codex では ADR-0007 と共通ワークフ�
 ### Codexブランチの取り込み(廃止)とレーン制
 
 2026-09-21 に、Claude Code がマージコーディネーターを務める運用は**廃止**した。同日、担当を AI ではなくレーン
-(データ・API・Web・iOS・タイプバランス・素早さ・判定)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
+(データ・API・Web・iOS・タイプバランス・素早さ。判定は 2026-10-15 に廃止。ADR-0715)に持たせる運用に改めた。どちらの AI もどちらのレーンを進めてよく、止まった側の続きを
 同じレーンのブランチの `Next` から続ける。手順・条件・競合の扱い・止まるときの作法は
 [docs/ai-shared/COORDINATION.md](docs/ai-shared/COORDINATION.md) を正とする。
 

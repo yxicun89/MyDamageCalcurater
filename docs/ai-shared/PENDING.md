@@ -12,7 +12,7 @@
 
 | 内容 | 場所 | 起票 | 宛先レーン |
 |---|---|---|---|
-| クラウド選定(AWS/GCP)・月額上限(設計案と質問 Q1〜Q10: docs/plan/cloud-design.md §8) | issue #149 | 2026-09-23 | 運用(データ) |
+| クラウド選定(AWS/GCP/マルチ)・予算段階ごとの構成(設計案と質問: docs/plan/cloud-design.md §8。2026-10-20 に要件を追加: `decisions/2026-10-20-cloud-requirements.md`) | issue #149 | 2026-09-23 | 運用(データ) |
 | クラウド公開前のアクセス境界と認証方針 | issue #148 | 2026-09-23 | 全レーン |
 | リポジトリの公開状態(公開するか。LICENSE・クリーンコピー・第三者データを含まない確認。R-2-9) | docs/plan/blockers.md・issue #328 | 2026-09-21 | データ(ユーザー) |
 | Argo CD のリポジトリ認証(PAT 等の登録。非公開のままなら必要。balance・speed・judge の Application が取得できる状態) | state/type-balance.md Next ③・ADR-0605 | 2026-09-24 | データ(ユーザー) |

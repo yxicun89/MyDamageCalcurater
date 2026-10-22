@@ -15,7 +15,7 @@
 | iOS | [state/ios.md](state/ios.md) | iOS(`ios/`。M3 の Phase 6。どの AI が進めてもよい) |
 | Type Balance Checker | [state/type-balance.md](state/type-balance.md) | タイプバランス(どの AI が進めてもよい。COORDINATION.md) |
 | Speed | [state/speed.md](state/speed.md) | 素早さ(素早さ比較サービス。`services/speed/`・`web/src/speed/`。どの AI が進めても |
-| Judge | [state/judge.md](state/judge.md) | 判定(素早さ×ダメージ連動。`services/judge/`・`web/src/judge/`。どの AI が進めても |
+| Judge | [state/judge.md](state/judge.md) | 判定(**廃止済み**。ADR-0715。`services/judge/`・`web/src/judge/` は削除済みで、機能は calc の連続技と調整の目標へ。どの AI が進めても |
 | Ops | [state/ops.md](state/ops.md) | 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の |
 | Shared Interfaces | [state/shared-interfaces.md](state/shared-interfaces.md) |  |
 | Wishlist | [state/wishlist.md](state/wishlist.md) | 欲しいものリスト(別アプリ。`apps/wishlist/` だけを変更する。仕様は `apps/wishlist/CLAUDE.md`。どの AI が進めてもよい) |
