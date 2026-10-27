@@ -19,3 +19,4 @@
 | Ops | [state/ops.md](state/ops.md) | 運用(deploy・scripts・AIエージェントの権限設定。専任セッションなし。空席時は手が空いたレーンが調整役の |
 | Shared Interfaces | [state/shared-interfaces.md](state/shared-interfaces.md) |  |
 | Wishlist | [state/wishlist.md](state/wishlist.md) | 欲しいものリスト(別アプリ。`apps/wishlist/` だけを変更する。仕様は `apps/wishlist/CLAUDE.md`。どの AI が進めてもよい) |
+| Digest | [state/digest.md](state/digest.md) | 技術トレンド・ダイジェスト(別アプリ。`apps/digest/` だけを変更する。仕様は `apps/digest/SPEC.md`、起動指示は `apps/digest/KICKOFF.md`。どの AI が進めてもよい) |

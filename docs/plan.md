@@ -5,13 +5,14 @@
 完了したタスクの経過(critic の往復・テスト件数・実装の詳細)と解決済みのブロッカーは [plan-archive.md](plan-archive.md) に移す。plan.md と区画のファイル(`docs/plan/`)には、各タスクの1行の状態と未完了の受け入れ条件だけを置く。issue にした軽微指摘は issue を正とし、ここには書かない(二重管理しない)。
 
 別アプリ「欲しいものリスト」(Wishlist レーン)の計画と進み具合は、このファイルではなく `apps/wishlist/CLAUDE.md`(§12 フェーズ)と `docs/ai-shared/state/wishlist.md` にある。
+別アプリ「技術トレンド・ダイジェスト」(Digest レーン)は `apps/digest/SPEC.md`・`apps/digest/KICKOFF.md` と `docs/ai-shared/state/digest.md` にある。
 
 ## 区画(docs/plan/)
 
 タスクの行は区画ごとのファイルにある(ADR-0172。レーンの PR が同じファイルで衝突しないため)。このファイルにはタスクの行を置かない。
 
 - 自分のレーンが担当する区画のファイルの、自分のレーンの行だけを編集する(他レーンの行は整形・並べ替えしない)。新しいタスクは区画の末尾にまとめて足さず、自分のレーンの行の近くに足す。
-- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。`<レーン>` は `docs/ai-shared/state/` のファイル名と同じ(data〈ダメージ計算・データ〉・api・web・ios・type-balance・speed・judge・ops・wishlist。無ければ同じ形で新規作成する)(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
+- 改善要望・ブロッカーの**新しい項目**は、レーン別のファイル `docs/plan/improvements/<レーン>.md`・`docs/plan/blockers/<レーン>.md` に足す。`<レーン>` は `docs/ai-shared/state/` のファイル名と同じ(data〈ダメージ計算・データ〉・api・web・ios・type-balance・speed・judge・ops・wishlist・digest。無ければ同じ形で新規作成する)(既存の `improvements.md`・`blockers.md` は状態の更新と解決済みの削除だけ)。
 - 見出しは分割前の plan.md のまま。「docs/plan.md「SP: 素早さ比較」」「plan.md AJ4」のような既存の参照は、この表から区画のファイルを引く。
 - 「最初の未完了タスク」は、この表の上から順に区画のファイルを見て探す。整合は `scripts/check-plan.sh`(`make lint`)で検査する。
 

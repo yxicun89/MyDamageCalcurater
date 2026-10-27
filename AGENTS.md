@@ -41,7 +41,7 @@ Claude Code と Codex は記憶を共有しない。共有記憶は `docs/ai-sha
 ## Git ブランチ運用
 
 - ブランチはレーン単位で切る(AI 単位ではない)。データ: `feat/calc-<phase名>`、API: `feat/api-<phase名>`、Web: `feat/web-<phase名>`、iOS: `feat/ios-<phase名>`、
-  タイプバランス: `feat/tb-<stage名>`、素早さ: `feat/speed-<stage名>`(判定レーンは 2026-10-15 に廃止。ADR-0715)、Wishlist(別アプリ): `lane/wishlist`(正は COORDINATION.md)、単発の修正: `fix/<レーン>-...`。既存の `feat/claude-p1-engine` / `feat/codex-tb0-foundation` はマージまでそのまま使う
+  タイプバランス: `feat/tb-<stage名>`、素早さ: `feat/speed-<stage名>`(判定レーンは 2026-10-15 に廃止。ADR-0715)、Wishlist(別アプリ): `lane/wishlist`、Digest(別アプリ): `lane/digest`(正は COORDINATION.md)、単発の修正: `fix/<レーン>-...`。既存の `feat/claude-p1-engine` / `feat/codex-tb0-foundation` はマージまでそのまま使う
 - 1つのブランチに複数の Phase/ステージ分の作業を積み上げない。Phase/ステージが終わったら PR でマージしてブランチを削除する
 - レートリミットや上限で一方の AI が止まったら、**もう一方の AI が同じレーンのブランチの `Next` から続けてよい**
   (前任の記録はうのみにせず検証する)。引き継ぎ資料は作らない
