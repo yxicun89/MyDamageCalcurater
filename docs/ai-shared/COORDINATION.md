@@ -48,8 +48,9 @@
 | **素早さ**(speed) | `~/MyDamageCalcurater-speed` | `feat/speed-<stage名>` | 素早さ比較サービス(`services/speed/` とその Kustomize、Web の素早さ画面 `web/src/speed/`)。設計の正は `docs/speed-design.md`(このレーンが作る)。Web のタブ登録(`web/src/App.tsx` 等のアプリの骨組み)は共有ファイルとして自分の1項目を足すだけにし、骨組みの変更が要るときは Web レーンに DECISIONS.md で提案する |
 | ~~**判定**(judge。素早さ×ダメージ連動)~~ **2026-10-15 廃止(ADR-0715)。機能は calc の連続技と調整の目標へ。この行は経緯のために残す** | `~/MyDamageCalcurater-judge` | `feat/judge-<stage名>` | 素早さと確定数を1回で判定するサービス(`services/judge/` とその Kustomize)。設計の正は `docs/judge-design.md`(このレーンが作る)。calc-svc の公開 API と pokedex-svc の公開 API を呼ぶ(speed-svc には依存しない)。Web/iOS の画面は着手時に判断する |
 | **Wishlist**(別アプリ「欲しいものリスト」) | `~/MyDamageCalcurater-wishlist` | `lane/wishlist` | `apps/wishlist/` の中すべて(API・Web・iOS・k8s・手順書)。仕様の正は `apps/wishlist/CLAUDE.md`。ダメ計の画面・API・データとは共有しない。外で変えてよいのはルート `Makefile` の `include apps/wishlist/Makefile` の 1 行と、`state/wishlist.md`・`decisions/` だけ。共通基盤(Ingress・MySQL・監視)は提案だけ(2026-10-03 ユーザー決定) |
+| **Digest**(別アプリ「技術トレンド・ダイジェスト」) | `~/MyDamageCalcurater-digest` | `lane/digest` | `apps/digest/` の中すべて。仕様の正は `apps/digest/SPEC.md`、起動指示は `apps/digest/KICKOFF.md`。ダメ計とは共有しない。外で変えてよいのはルート `Makefile` の `include apps/digest/Makefile` の 1 行と、`state/digest.md`・`decisions/`・`docs/plan/blockers/digest.md` だけ(2026-10-27 ユーザー決定) |
 
-- ディレクトリはレーンの数だけ(いまは8つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
+- ディレクトリはレーンの数だけ(いまは9つ)にする。レーンの作業ディレクトリは、どの AI が使ってもよい(同時に2つのセッションで開かない)。
 - レーンの worktree が無いときは作る: `git -C ~/MyDamageCalcurater worktree add ~/MyDamageCalcurater-<レーン> <ブランチ>`
 
 ### レーン間の依存と共有ファイル(2026-09-21 ユーザー決定)
