@@ -385,7 +385,7 @@ GCP で同じ形(e2-standard-2 8GB 等)にする場合、東京の VM 単価が�
 
 ### 5.1 Terraform の構成(案)
 
-作る場所の案: `infra/terraform/`(新規。**この PR では作らない**。決定後、人間がマージする PR で作る)。
+作る場所: `infra/terraform/`。2026-11-13 に `aws/10-network`・`gcp/10-network` を作った(手元での確かめ方は ADR-0815。`infra/terraform/README.md`)。他のスタックは未作成。
 
 ```
 infra/terraform/
@@ -448,7 +448,7 @@ infra/terraform/
 | Argo CD | balance だけ GitOps。リポジトリは public なので取得に認証は不要(非公開に戻すなら PAT が要る。PENDING) | VM 上にも入れられる(メモリ要実測)。damage calc 系は今の `make deploy-latest` 相当を tailnet 越しに人間が実行 |
 | レジストリ | ローカルレジストリ(k3d)と digest 固定 | ECR / Artifact Registry / GHCR の**非公開**。画像・実マスタをイメージに入れない(既存方針の確認) |
 | バックアップ | `make db-backup`・復元訓練(ADR-0225・0227)。クラウドの保存先は未実施 | 保存先を暗号化バケットに(VM のインスタンスロールで書き込みだけ) |
-| CI(`.github/workflows/ci.yml`) | クラウドの認証情報なし | 当面そのまま。将来 `terraform fmt -check`・`validate` だけ追加(認証不要)。plan を CI で回すなら OIDC の `readonly` ロール。**apply は CI でも AI でも行わない**。workflows の変更は人間がマージ |
+| CI(`.github/workflows/ci.yml`) | クラウドの認証情報なし | 当面そのまま(ADR-0815: `make tf-test`〈モック〉・`make tf-aws-emulator`〈AWS Emulator〉は手元で流し、CI にはまだ入れない)。将来 `terraform fmt -check`・`validate`・`test` を追加(認証不要)。plan を CI で回すなら OIDC の `readonly` ロール。**apply は CI でも AI でも行わない**。workflows の変更は人間がマージ |
 | AI のガード(ADR-0800 bash-guard・`.claude/settings.json`) | `aws`・`gcloud`・`terraform` を検査していない(2026-10-11 確認) | ADR-0812(予定)で、クラウドの変更系コマンドを「人間の確認」に追加し、認証情報ファイルの読み取りを拒否。**この変更は人間がマージする** |
 | 公開前検査(`make check-publishable`) | 固有値・秘密の検査 | `*.tfstate`・`*.tfvars`・アカウント ID 形式の検出を足す案(別 PR) |
 

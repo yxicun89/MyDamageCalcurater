@@ -98,6 +98,7 @@ test-scripts: ## ルート scripts/ のシェルスクリプトのテスト(Argo
 	@./scripts/check-master-version_test.sh
 	@./scripts/master-release_test.sh
 	@./scripts/require-k3d-context_test.sh
+	@./scripts/tf-aws-emulator_test.sh
 	@./scripts/image-tag_test.sh
 	@./scripts/k3d-deploy-tagged_test.sh
 	@./scripts/up-secrets_test.sh
@@ -400,6 +401,34 @@ assets-fetch: ## 取り込み済みの種族の画像を Pokémon Showdown か�
 .PHONY: images-k3d
 images-k3d: ## make assets の出力(data/generated/images/dist)を k3d のノードへ置き、gateway の /images/* で配信する(make up 済み。画像が無ければ何もせず成功。ADR-0808)
 	@./scripts/images-k3d.sh
+
+## --- Terraform(infra/terraform。ADR-0815) -----------------------------
+# terraform が要る(版は各 versions.tf の required_version。infra/terraform/README.md)。CI にはまだ入れていないので
+# make test / lint には合成しない。本物のクラウドへの apply・destroy は人間だけ(cloud-design.md §6.1)。
+TF_STACKS := $(patsubst %/versions.tf,%,$(wildcard infra/terraform/*/*/versions.tf))
+TF_LOCK_PLATFORMS := -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_arm64
+
+.PHONY: tf-fmt-check tf-validate tf-test tf-lock tf-aws-emulator
+tf-fmt-check: ## Terraform の整形の検査(terraform fmt -check)
+	@terraform fmt -check -recursive infra/terraform
+
+tf-validate: ## 各スタックの terraform validate(backend なし。クラウドに触らない)
+	@set -e; for s in $(TF_STACKS); do \
+	  echo "== $$s"; terraform -chdir=$$s init -input=false -backend=false >/dev/null; terraform -chdir=$$s validate; \
+	done
+
+tf-test: ## 各スタックの terraform test(mock_provider。クラウドにもエミュレータにも触らない)
+	@set -e; for s in $(TF_STACKS); do \
+	  echo "== $$s"; terraform -chdir=$$s init -input=false -backend=false >/dev/null; terraform -chdir=$$s test; \
+	done
+
+tf-lock: ## provider の版を上げたあと .terraform.lock.hcl を作り直す(Linux・Mac のハッシュ)
+	@set -e; for s in $(TF_STACKS); do \
+	  terraform -chdir=$$s providers lock $(TF_LOCK_PLATFORMS); \
+	done
+
+tf-aws-emulator: ## AWS の Terraform を AWS Emulator に apply → 差分 0 の plan → destroy(本物の AWS に触れない。STACK= で対象を変える)
+	@./scripts/tf-aws-emulator.sh
 
 ## --- 公開前の検査 -----------------------------------------------------
 .PHONY: check-publishable

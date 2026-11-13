@@ -43,6 +43,7 @@ web/                    # Vite + React + TypeScript
 ios/                    # SwiftUI アプリ
 deploy/k8s/             # Kustomize(base / overlays/local, local-api, local-web, cloud。各サービスは services/*/deploy/k8s にも)
 deploy/argocd/          # Argo CD の AppProject
+infra/terraform/        # クラウドの Terraform(aws/・gcp/ の 10-network。手元で mock と AWS Emulator で確かめる。ADR-0815)
 scripts/                # 環境チェック・補助スクリプト(scripts/ai-guard は AI の権限ガード)
 docs/                   # docs/history/ は役目を終えた起動指示(参照用)
 apps/wishlist/          # 別アプリ「欲しいものリスト」(Wishlist レーン)。仕様は apps/wishlist/CLAUDE.md。ダメ計とは機能・データを共有しない

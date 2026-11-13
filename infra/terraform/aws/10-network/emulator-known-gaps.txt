@@ -1,0 +1,8 @@
+# AWS Emulator で apply できないリソース(エミュレータ側の再現の差。本物の AWS では作れる)。
+# make tf-aws-emulator はここに書いたリソースと、それを参照するリソースを除いて apply・plan し、「エミュレータで未検証」と表示する。
+# エミュレータの版を上げたら、この行を消して make tf-aws-emulator が通るか確かめる。
+#
+# AWS Emulator 1.0.343: CreateSecurityGroup の後に provider が既定の送信ルールを
+# RevokeSecurityGroupEgress(IpProtocol=-1・FromPort=0・ToPort=0)で外すと、エミュレータはポートまで照合して
+# InvalidPermission.NotFound を返す(本物の AWS は -1 のときポートを無視する)。
+aws_security_group.vm

@@ -76,3 +76,12 @@ web/src/speed/speed.gen.ts
 # iOS の生成物は対象(ios/scripts/openapi-targets.sh)が増えても漏れないよう、まとめて無視する
 ios/PokeCalcKit/Sources/*/Generated
 ios/.gen-stamps/
+
+# Terraform(infra/terraform。state・固有値の tfvars・作業ディレクトリは Git に入れない。.terraform.lock.hcl はコミットする)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!example.tfvars
+crash.log
