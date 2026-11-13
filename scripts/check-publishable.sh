@@ -92,7 +92,9 @@ readonly B_BEARER_ALLOW='Bearer[[:space:]]+00000000-'
 readonly EMAIL_ALLOW='^noreply@anthropic\.com$|@example\.(com|org)$'
 # 許可する IPv4(ERE。前後の区切り文字ごと評価)。
 #   127.0.0.1 : ループバック / 0.0.0.0 : 全インターフェースの bind 指定(どちらも個人を特定しない)
-readonly IPV4_ALLOW='(^|[^0-9.])(127\.0\.0\.1|0\.0\.0\.0)([^0-9.]|$)'
+#   10.x.x.x/nn : Terraform の VPC・サブネットの範囲(RFC 1918 のプライベートアドレスの CIDR。どの環境でも同じ値を使え、
+#                 個人を特定しない。ADR-0815)。/ の付かない 10.x.x.x(個々のホスト)は許可しない
+readonly IPV4_ALLOW='(^|[^0-9.])(127\.0\.0\.1|0\.0\.0\.0)([^0-9.]|$)|(^|[^0-9.])10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}/$'
 
 # サイズ上限(バイト)。ゴールデンのテストベクタ(.gz)は許可リストで別扱い。
 readonly MAX_FILE_BYTES=3145728
@@ -512,7 +514,7 @@ selftest_new_repo() {
   (
     cd "$dir"
     git init -q
-    printf 'Co-Authored-By: Claude <noreply@anthropic.com>\ncontact: dev@example.com\nbind 127.0.0.1 and 0.0.0.0\n' >README.md
+    printf 'Co-Authored-By: Claude <noreply@anthropic.com>\ncontact: dev@example.com\nbind 127.0.0.1 and 0.0.0.0\nvpc_cidr = 10.20.0.0/16\n' >README.md
     : >.env.example
     printf '{"name":"x","dependencies":{"pkg":"1.2.3"}}\n' >tools/golden/package.json
     printf '{}\n' >tools/golden/package-lock.json
@@ -630,8 +632,10 @@ selftest() {
   selftest_add "host: dummy-MacBook-Pro" "$dir" a7.txt
   selftest_add "host: dummy.tail1234.ts.net" "$dir" a8.txt
   selftest_add "ip: 192.0.2.10" "$dir" a9.txt
+  selftest_add "ip: 10.20.0.5" "$dir" a10.txt
+  selftest_add "cidr: 192.0.2.0/24" "$dir" a11.txt
   selftest_run "A" "$dir"
-  selftest_expect_hits "A" a1.txt:1 a2.txt:1 a3.txt:1 a4.txt:1 a5.txt:1 a6.txt:1 a7.txt:1 a8.txt:1 a9.txt:1
+  selftest_expect_hits "A" a1.txt:1 a2.txt:1 a3.txt:1 a4.txt:1 a5.txt:1 a6.txt:1 a7.txt:1 a8.txt:1 a9.txt:1 a10.txt:1 a11.txt:1
   selftest_expect_no_leak "A" dummyuser "$email" dummy-MacBook tail1234 192.0.2.10
 
   echo "自己テスト: B 秘密らしき文字列"

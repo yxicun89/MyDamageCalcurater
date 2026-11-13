@@ -18,8 +18,10 @@ resource "aws_internet_gateway" "this" {
 # --- VM 用(インターネットゲートウェイで外へ出る。受信は SG で閉じる) ---
 
 resource "aws_subnet" "public" {
-  vpc_id                  = aws_vpc.this.id
-  cidr_block              = var.public_subnet_cidr
+  vpc_id     = aws_vpc.this.id
+  cidr_block = var.public_subnet_cidr
+  # NAT を使わずに外へ出る(k3s・Tailscale・イメージの取得)ため公開 IPv4 を付ける(時間課金。cloud-design.md §3.2)。
+  # 受信は SG で閉じるので、入口にはならない
   map_public_ip_on_launch = true
 
   tags = { Name = "pokecalc-${var.env}-public" }

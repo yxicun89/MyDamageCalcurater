@@ -27,14 +27,15 @@ Linux(Docker を使わずパッケージを入れる場合。x86_64):
 
 ```
 cd "$(git rev-parse --show-toplevel)"
-curl -fsSLO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator_1.0.343-1_amd64.deb
-curl -fsSLO https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator_1.0.343-1_amd64.deb.sig
-curl -fsSLo aws-publishing.asc https://downloads.aws.com/keys/gpg/current.asc
-gpg --import aws-publishing.asc
-gpg --fingerprint ssm-publishing@amazon.com
-gpg --verify aws-emulator_1.0.343-1_amd64.deb.sig aws-emulator_1.0.343-1_amd64.deb
-sudo apt-get install -y ./aws-emulator_1.0.343-1_amd64.deb
-rm aws-emulator_1.0.343-1_amd64.deb aws-emulator_1.0.343-1_amd64.deb.sig aws-publishing.asc
+DL=$(mktemp -d)
+curl -fsSLo "$DL/emu.deb" https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator_1.0.343-1_amd64.deb
+curl -fsSLo "$DL/emu.deb.sig" https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator_1.0.343-1_amd64.deb.sig
+curl -fsSLo "$DL/aws-publishing.asc" https://downloads.aws.com/keys/gpg/current.asc
+gpg --import "$DL/aws-publishing.asc"
+gpg --fingerprint 98BCF336A3BE53B734E967C52E5BF49BD940F624
+gpg --verify "$DL/emu.deb.sig" "$DL/emu.deb"
+sudo apt-get install -y "$DL/emu.deb"
+rm -rf "$DL"
 make tf-aws-emulator
 ```
 
@@ -49,3 +50,15 @@ make tf-lock tf-validate tf-test
 ```
 
 確認点: 各スタックの `.terraform.lock.hcl` が更新され、テストが通る。
+
+## AWS Emulator の版を上げたとき
+
+`scripts/tf-aws-emulator.sh` の `AWS_EMULATOR_VERSION` と、Docker 用の RPM のハッシュ `AWS_EMULATOR_SHA256_*` を書き換える。ハッシュは次で出す(`<版>` は新しい版):
+
+```
+cd "$(git rev-parse --show-toplevel)"
+for a in x86_64 aarch64; do curl -fsSL "https://downloads.aws.com/aws-emulator/packages/aws-emulator/LTS/aws-emulator-<版>-1-$a.rpm" | sha256sum; done
+```
+
+そのあと各スタックの `emulator-known-gaps.txt` の行を消して `make tf-aws-emulator` を流し、通るものは消したままにする。
+確認点: `tf-aws-emulator: OK(...)` が出る。

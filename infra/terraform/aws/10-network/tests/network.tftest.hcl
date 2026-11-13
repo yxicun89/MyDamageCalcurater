@@ -56,7 +56,7 @@ run "rejects_invalid_cidr" {
   command = plan
 
   variables {
-    vpc_cidr = "10.20.0.0"
+    vpc_cidr = "not-a-cidr"
   }
 
   expect_failures = [var.vpc_cidr]
