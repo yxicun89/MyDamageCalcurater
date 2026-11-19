@@ -240,6 +240,7 @@ xcrun simctl shutdown all
 ```
 → `docker ps` に `k3d-pokecalc-*` が出ない。DB・マスタ・欲しいものリストのデータは残る(止めるだけで消さない)。
 `make dev` で起動していたときは、そのターミナルで Ctrl-C。Xcode のアプリは通常どおり終了してよい。
+`make deploy-latest`・`make up` は終了時に docker のタグ無しイメージ・古いビルドキャッシュ・k3d ノードの未使用イメージを自動で掃除する(ボリューム・DB は消さない)。止めるには `DOCKER_CLEANUP=0`、キャッシュの保持時間は `DOCKER_CLEANUP_CACHE_AGE`(既定 24h)。
 
 次に動作確認するとき:
 

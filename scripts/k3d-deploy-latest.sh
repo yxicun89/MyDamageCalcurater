@@ -14,6 +14,9 @@ source "$(dirname "$0")/lib/k3d-lock.sh"
 k3d_lock_run k3d-deploy-latest "$0" "$@"
 
 cd "$(git rev-parse --show-toplevel)"
+# 終了時(成功・失敗とも)に docker のゴミを掃除する(ストレージ圧迫の防止。scripts/lib/docker-cleanup.sh)
+source scripts/lib/docker-cleanup.sh
+trap docker_cleanup EXIT
 # API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)
 ./scripts/ensure-gen.sh check
 
@@ -43,7 +46,7 @@ if nc -z 127.0.0.1 "$MIGRATE_LOCAL_PORT" 2>/dev/null; then
 fi
 kubectl -n pokecalc port-forward svc/mysql "$MIGRATE_LOCAL_PORT:3306" >/dev/null 2>&1 &
 pf_pid=$!
-trap 'kill "$pf_pid" 2>/dev/null || true' EXIT
+trap 'kill "$pf_pid" 2>/dev/null || true; docker_cleanup' EXIT
 ready=0
 for _ in $(seq 1 20); do
   if ! kill -0 "$pf_pid" 2>/dev/null; then break; fi
@@ -76,7 +79,7 @@ POKEDEX_DATABASE_DSN="$migrator_dsn" make --no-print-directory migrate-version
 unset migrator_dsn provision_dsn reader_dsn importer_dsn
 kill "$pf_pid" 2>/dev/null || true
 wait "$pf_pid" 2>/dev/null || true
-trap - EXIT
+trap docker_cleanup EXIT
 
 echo "== pokedex-importer(CronJob・make import-k8s が使うイメージ)"
 docker build -q --label "pokecalc.deploy-latest.commit=$deploy_commit" -f services/pokedex/Dockerfile --target importer -t "$POKEDEX_IMPORTER_IMAGE" . >/dev/null

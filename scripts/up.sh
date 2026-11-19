@@ -6,6 +6,8 @@ set -euo pipefail
 source "$(dirname "$0")/lib/k3d-lock.sh"
 k3d_lock_run up "$0" "$@"
 cd "$(dirname "$0")/.."
+# 正常終了時に docker のゴミを掃除する(ストレージ圧迫の防止。scripts/lib/docker-cleanup.sh)
+source scripts/lib/docker-cleanup.sh
 # API 契約・SQL の生成物は Git に置かない。無ければ make gen を案内して止まる(make 経由なら先に生成済み。ADR-0807)
 ./scripts/ensure-gen.sh check
 
@@ -195,3 +197,5 @@ echo "pokedex は初回 import が済むまで Ready にならない(readiness �
   "'kubectl get pods' で pokedex が 0/1 でも異常ではない。"
 echo "pokedex-import の初回投入は 'make import-k8s' で手動で1回流してください" \
   "(CronJob は週1回・土曜 12:00 JST に自動実行されます。初回はネットワークが要るため自動では流しません)。"
+
+docker_cleanup
